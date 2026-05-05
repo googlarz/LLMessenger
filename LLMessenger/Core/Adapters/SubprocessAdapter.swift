@@ -12,6 +12,8 @@ final class SubprocessAdapter: MessengerAdapter {
     private var writeHandle: FileHandle?
     private var readHandle: FileHandle?
 
+    private let ioQueue: DispatchQueue
+
     private let iso8601: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
@@ -24,6 +26,7 @@ final class SubprocessAdapter: MessengerAdapter {
         self.adapterPath = adapterPath
         self.adapterArgs = adapterArgs
         self.config = config
+        self.ioQueue = DispatchQueue(label: "com.llmessenger.adapter.\(serviceID)")
     }
 
     func start() async throws {
@@ -32,6 +35,7 @@ final class SubprocessAdapter: MessengerAdapter {
     }
 
     private func launchProcess() throws {
+        guard process == nil else { return }
         let p = Process()
         let inPipe = Pipe()
         let outPipe = Pipe()
@@ -117,7 +121,7 @@ final class SubprocessAdapter: MessengerAdapter {
         }
 
         return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            ioQueue.async {
                 do {
                     var data = try JSONSerialization.data(withJSONObject: request)
                     data.append(UInt8(ascii: "\n"))

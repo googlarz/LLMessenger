@@ -72,5 +72,21 @@ final class SubprocessAdapterTests: XCTestCase {
         try await adapter.start()
         let health = await adapter.healthCheck()
         XCTAssertEqual(health.status, .ok)
+        XCTAssertEqual(adapter.healthStatus, .ok)
+    }
+
+    func testFetchByTime() async throws {
+        let adapter = SubprocessAdapter(
+            serviceID: "test",
+            adapterPath: "/usr/bin/python3",
+            adapterArgs: [scriptURL.path],
+            config: [:]
+        )
+        try await adapter.start()
+        let since = Date(timeIntervalSinceReferenceDate: 0)
+        let result = try await adapter.fetch(
+            config: FetchConfig(mode: .byTime(since: since))
+        )
+        XCTAssertEqual(result.conversations.count, 1)
     }
 }
