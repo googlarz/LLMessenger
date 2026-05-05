@@ -21,7 +21,7 @@ async def handle_fetch(app: Client, req: dict) -> dict:
     limit = req.get("limit", 50)
     since = None
     if mode == "time":
-        since = datetime.fromisoformat(req["since"].replace("Z", "+00:00"))
+        since = datetime.fromisoformat(req["since"].replace("Z", "+00:00")).replace(tzinfo=None)
 
     conversations = []
 
@@ -29,10 +29,11 @@ async def handle_fetch(app: Client, req: dict) -> dict:
         messages = []
         chat_id = dialog.chat.id
 
-        async for msg in app.get_chat_history(chat_id, limit=(None if since else limit)):
+        async for msg in app.get_chat_history(chat_id, limit=(200 if since else limit)):
             if not msg.text:
                 continue
-            if since and msg.date.replace(tzinfo=timezone.utc) < since:
+            msg_date = msg.date.replace(tzinfo=None) if msg.date.tzinfo else msg.date
+            if since and msg_date < since:
                 break
             sender = "Unknown"
             if msg.from_user:
@@ -74,7 +75,11 @@ async def main():
         print(json.dumps({"success": False, "error": "no init received"}), flush=True)
         return
 
-    init = json.loads(init_line)
+    try:
+        init = json.loads(init_line)
+    except json.JSONDecodeError as e:
+        print(json.dumps({"success": False, "error": f"invalid init JSON: {e}"}), flush=True)
+        return
     cfg = init.get("config", {})
     api_id       = int(cfg["api_id"])
     api_hash     = cfg["api_hash"]
