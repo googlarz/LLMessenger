@@ -63,7 +63,13 @@ final class BriefEngine {
                 ],
                 maxTokens: 2000
             )
-            openingSummary = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            var text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.hasPrefix("```") {
+                text = text
+                    .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
+                    .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
+            }
+            openingSummary = text
         }
 
         // Step 4: Create the Brief

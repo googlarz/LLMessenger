@@ -148,8 +148,15 @@ struct BriefProseView: View {
     @State private var filter: String = "all"
 
     private var parsedJSON: BriefJSON? {
-        guard let summary = brief.openingSummary,
-              let data = summary.data(using: .utf8) else { return nil }
+        guard var summary = brief.openingSummary else { return nil }
+        // Strip markdown code fences if the LLM wrapped the JSON
+        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("```") {
+            summary = trimmed
+                .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
+        }
+        guard let data = summary.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(BriefJSON.self, from: data)
     }
 
