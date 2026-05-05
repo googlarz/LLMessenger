@@ -1,0 +1,36 @@
+name: LLMessenger
+options:
+  bundleIdPrefix: com.llmessenger
+  deploymentTarget:
+    macOS: "13.0"
+  defaultConfig: Debug
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: "6.0.0"
+targets:
+  LLMessenger:
+    type: application
+    platform: macOS
+    sources:
+      - path: LLMessenger
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.llmessenger.app
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        INFOPLIST_FILE: LLMessenger/Info.plist
+    dependencies:
+      - package: GRDB
+  LLMessengerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: LLMessengerTests
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+    dependencies:
+      - target: LLMessenger
+      - package: GRDB

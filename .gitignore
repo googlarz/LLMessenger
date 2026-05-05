@@ -1,0 +1,9 @@
+.DS_Store
+*.xcuserstate
+xcuserdata/
+DerivedData/
+.build/
+adapters/telegram/.venv/
+adapters/telegram/dist/
+adapters/telegram/__pycache__/
+*.pyc
