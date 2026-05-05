@@ -90,4 +90,19 @@ struct BriefRepository {
                 .fetchAll(db)
         }
     }
+
+    func fetchUnreadCount() throws -> Int {
+        try database.dbQueue.read { db in
+            try Brief.filter(Column("status") == "ready").fetchCount(db)
+        }
+    }
+
+    func markAsOpen(briefID: Int64) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE briefs SET status = 'open' WHERE id = ?",
+                arguments: [briefID]
+            )
+        }
+    }
 }

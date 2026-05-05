@@ -91,6 +91,28 @@ final class BriefRepositoryTests: XCTestCase {
         XCTAssertNil(try repo.fetchLatestUncompressedBrief())
     }
 
+    func testFetchUnreadCountReturnsOnlyReadyBriefs() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        _ = try repo.insertBrief(makeBrief(status: "ready"))
+        _ = try repo.insertBrief(makeBrief(status: "open"))
+        XCTAssertEqual(try repo.fetchUnreadCount(), 1)
+    }
+
+    func testMarkAsOpenChangesStatus() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let id = try repo.insertBrief(makeBrief(status: "ready"))
+        try repo.markAsOpen(briefID: id)
+        let fetched = try repo.fetchBrief(id: id)
+        XCTAssertEqual(fetched?.status, "open")
+    }
+
+    private func makeBrief(status: String) -> Brief {
+        Brief(id: nil, createdAt: Date(), status: status, services: "[]",
+              openingSummary: nil, notificationText: "test", episodicSummary: nil)
+    }
+
     func testRecentEpisodicSummariesReturnsMostRecentFirst() throws {
         let db = try AppDatabase(inMemory: true)
         try db.dbQueue.write { db in
