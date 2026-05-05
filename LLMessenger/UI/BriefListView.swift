@@ -36,19 +36,26 @@ private struct BriefRowView: View {
     let brief: Brief
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(brief.notificationText)
-                .font(.callout)
-                .lineLimit(1)
-            if let summary = brief.openingSummary {
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+        HStack(alignment: .top, spacing: 6) {
+            Circle()
+                .fill(brief.status == "ready" ? Color.accentColor : Color.clear)
+                .frame(width: 7, height: 7)
+                .padding(.top, 5)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(brief.notificationText)
+                    .font(brief.status == "ready" ? .callout.bold() : .callout)
+                    .lineLimit(1)
+                if let summary = brief.openingSummary {
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Text(brief.createdAt, style: .relative)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
-            Text(brief.createdAt, style: .relative)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)
     }
