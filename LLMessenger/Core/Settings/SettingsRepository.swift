@@ -32,6 +32,24 @@ struct SettingsRepository {
         try keychainStore.delete(account: provider.rawValue)
     }
 
+    // MARK: - Signal Account
+
+    func saveSignalAccount(_ number: String) throws {
+        if number.isEmpty {
+            try? keychainStore.delete(account: "signal_account")
+        } else {
+            try keychainStore.set(account: "signal_account", value: number)
+        }
+    }
+
+    func loadSignalAccount() throws -> String? {
+        do {
+            return try keychainStore.get(account: "signal_account")
+        } catch KeychainError.itemNotFound {
+            return nil
+        }
+    }
+
     // MARK: - Service Config
 
     func saveServiceConfig(_ config: ServiceConfig) throws {

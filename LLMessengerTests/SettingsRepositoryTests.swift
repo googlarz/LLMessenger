@@ -58,4 +58,19 @@ final class SettingsRepositoryTests: XCTestCase {
         let loaded = try repo.loadServiceConfig(for: "telegram")
         XCTAssertEqual(loaded?.pollIntervalMinutes, 60)
     }
+
+    func testSaveAndLoadSignalAccount() throws {
+        let repo = SettingsRepository(keychainStore: KeychainStore(), database: nil)
+        try repo.saveSignalAccount("+12345678900")
+        let loaded = try repo.loadSignalAccount()
+        XCTAssertEqual(loaded, "+12345678900")
+        try repo.saveSignalAccount("")  // clean up
+    }
+
+    func testLoadSignalAccountReturnsNilWhenNotSet() throws {
+        let repo = SettingsRepository(keychainStore: KeychainStore(), database: nil)
+        try repo.saveSignalAccount("")  // ensure cleared
+        let loaded = try repo.loadSignalAccount()
+        XCTAssertNil(loaded)
+    }
 }

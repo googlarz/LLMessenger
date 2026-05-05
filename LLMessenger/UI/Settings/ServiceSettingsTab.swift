@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ServiceSettingsTab: View {
     @State private var configs: [ServiceConfig] = []
+    @State private var signalAccount: String = ""
     @State private var saveStatus: String = ""
     private let repo: SettingsRepository
 
@@ -34,6 +35,10 @@ struct ServiceSettingsTab: View {
                         }
                     }
 
+                    Section("Signal") {
+                        TextField("Phone number (+1234567890)", text: $signalAccount)
+                    }
+
                     HStack {
                         Spacer()
                         if !saveStatus.isEmpty {
@@ -55,6 +60,7 @@ struct ServiceSettingsTab: View {
         if configs.isEmpty {
             configs = [ServiceConfig.default(for: "telegram")]
         }
+        signalAccount = (try? repo.loadSignalAccount()) ?? ""
     }
 
     private func save() {
@@ -62,6 +68,7 @@ struct ServiceSettingsTab: View {
             for cfg in configs {
                 try repo.saveServiceConfig(cfg)
             }
+            try repo.saveSignalAccount(signalAccount)
             saveStatus = "Saved ✓"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }
         } catch {
