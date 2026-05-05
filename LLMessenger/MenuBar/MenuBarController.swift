@@ -6,6 +6,7 @@ final class MenuBarController {
     private var unreadCount: Int = 0 {
         didSet { updateButton() }
     }
+    private var serviceHealthStatus: [String: AdapterHealthResult.Status] = [:]
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -18,6 +19,7 @@ final class MenuBarController {
     }
 
     func setServiceHealth(_ health: AdapterHealthResult.Status, for service: String) {
+        serviceHealthStatus[service] = health
         rebuildServiceItems()
     }
 
@@ -36,18 +38,27 @@ final class MenuBarController {
 
     private func buildMenu() {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Open LLMessenger",
-                                action: #selector(openApp),
-                                keyEquivalent: "o"))
+
+        let openItem = NSMenuItem(title: "Open LLMessenger",
+                                  action: #selector(openApp),
+                                  keyEquivalent: "o")
+        openItem.target = self
+        menu.addItem(openItem)
+
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Settings…",
-                                action: #selector(openSettings),
-                                keyEquivalent: ","))
+
+        let settingsItem = NSMenuItem(title: "Settings…",
+                                      action: #selector(openSettings),
+                                      keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         menu.addItem(.separator())
+
         menu.addItem(NSMenuItem(title: "Quit",
                                 action: #selector(NSApplication.terminate(_:)),
                                 keyEquivalent: "q"))
-        for item in menu.items { item.target = self }
+
         statusItem.menu = menu
     }
 

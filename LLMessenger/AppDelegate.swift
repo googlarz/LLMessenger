@@ -1,9 +1,11 @@
 import AppKit
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     var menuBarController: MenuBarController?
     var pollEngine: PollEngine?
     var database: AppDatabase?
+    var startTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -27,7 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             pollEngine = engine
-            Task { await engine.start() }
+            startTask = Task { await engine.start() }
 
         } catch {
             let alert = NSAlert()
