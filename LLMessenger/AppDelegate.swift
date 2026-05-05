@@ -4,6 +4,7 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     var menuBarController: MenuBarController?
     var pollEngine: PollEngine?
+    var briefEngine: BriefEngine?
     var database: AppDatabase?
     var startTask: Task<Void, Never>?
 
@@ -12,7 +13,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let db = try AppDatabase()
             database = db
             menuBarController = MenuBarController()
+
+            let llmClient = makeLLMClient()
+            let model = preferredModel()
+            briefEngine = BriefEngine(
+                database: db,
+                client: llmClient,
+                model: model,
+                basePrompt: PromptBuilder.defaultBasePrompt
+            )
+
             let engine = PollEngine(database: db)
+            engine.onPollSucceeded = { [weak self] in
+                _ = try? await self?.briefEngine?.processNewMessages()
+            }
 
             let telegramBinary = telegramAdapterPath()
             let telegramConfig = (try? db.dbQueue.read { db in
@@ -38,6 +52,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.runModal()
             NSApp.terminate(nil)
         }
+    }
+
+    private func makeLLMClient() -> LLMClient {
+        let store = KeychainStore()
+        if let key = try? store.get(account: "anthropic"), !key.isEmpty {
+            return LLMProvider.anthropic.makeClient(apiKey: key)
+        }
+        if let key = try? store.get(account: "openai"), !key.isEmpty {
+            return LLMProvider.openai.makeClient(apiKey: key)
+        }
+        return LLMProvider.ollama.makeClient(apiKey: nil)
+    }
+
+    private func preferredModel() -> String {
+        let store = KeychainStore()
+        if (try? store.get(account: "anthropic")) != nil {
+            return LLMProvider.anthropic.defaultModel
+        }
+        if (try? store.get(account: "openai")) != nil {
+            return LLMProvider.openai.defaultModel
+        }
+        return LLMProvider.ollama.defaultModel
     }
 
     private func telegramAdapterPath() -> String? {

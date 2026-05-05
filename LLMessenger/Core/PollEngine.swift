@@ -10,6 +10,7 @@ final class PollEngine {
     private var timers: [String: Timer] = [:]
     private var inFlight: Set<String> = []
     var failureCounts: [String: Int] = [:]
+    var onPollSucceeded: (() async -> Void)?
 
     init(database: AppDatabase) {
         self.database = database
@@ -48,6 +49,7 @@ final class PollEngine {
             try store(result: result, service: serviceID)
             failureCounts[serviceID] = 0
             writeHealth(service: serviceID, status: "ok", error: nil)
+            await onPollSucceeded?()
         } catch {
             let failures = (failureCounts[serviceID] ?? 0) + 1
             failureCounts[serviceID] = failures
