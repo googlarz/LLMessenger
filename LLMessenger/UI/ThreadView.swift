@@ -46,7 +46,7 @@ struct ThreadView: View {
     }
 }
 
-private struct LoadingIndicatorView: View {
+struct LoadingIndicatorView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Rectangle()

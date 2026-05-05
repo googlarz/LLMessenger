@@ -69,6 +69,7 @@
 		DD300001DD300001DD300001 /* AutoLaunchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD300002DD300002DD300002 /* AutoLaunchManager.swift */; };
 		DD300003DD300003DD300003 /* AutoLaunchManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD300004DD300004DD300004 /* AutoLaunchManagerTests.swift */; };
 		EE400001EE400001EE400001 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE400002EE400002EE400002 /* Theme.swift */; };
+		FF500001FF500001FF500001 /* BriefProseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF500002FF500002FF500002 /* BriefProseView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -128,6 +129,7 @@
 		AF78E0F5A9144EBABA9D849F /* ReplyDraftView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyDraftView.swift; sourceTree = "<group>"; };
 		12C5FE699D974D7780C59168 /* ChatInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		EE400002EE400002EE400002 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		FF500002FF500002FF500002 /* BriefProseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefProseView.swift; sourceTree = "<group>"; };
 		38C42E6666B245F881842069 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		5D1DBFE72BC54C2AA4B39271 /* SettingsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepository.swift; sourceTree = "<group>"; };
 		37397235693349A38185E102 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -204,6 +206,7 @@
 				AF78E0F5A9144EBABA9D849F /* ReplyDraftView.swift */,
 				12C5FE699D974D7780C59168 /* ChatInputView.swift */,
 				EE400002EE400002EE400002 /* Theme.swift */,
+				FF500002FF500002FF500002 /* BriefProseView.swift */,
 				B208931B5D4544D49FA40498 /* Settings */,
 			);
 			path = UI;
@@ -485,6 +488,7 @@
 				2B1F5C6A04D64AD68885C051 /* AssistantResponseView.swift in Sources */,
 				D1F953A8E249428C89CB5F03 /* ChatInputView.swift in Sources */,
 				EE400001EE400001EE400001 /* Theme.swift in Sources */,
+				FF500001FF500001FF500001 /* BriefProseView.swift in Sources */,
 				BB100001BB100001BB100001 /* NotificationManager.swift in Sources */,
 				CC200001CC200001CC200001 /* SignalCLIAdapter.swift in Sources */,
 				DD300001DD300001DD300001 /* AutoLaunchManager.swift in Sources */,

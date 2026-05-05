@@ -19,6 +19,29 @@ enum Theme {
 
     static let unread      = accent
     static let separator   = border
+
+    // Messenger service colors — oklch(0.72 0.16 145), (0.70 0.13 235), (0.65 0.16 270)
+    static let serviceIMessage = Color(red: 0.29, green: 0.73, blue: 0.38)
+    static let serviceTelegram = Color(red: 0.25, green: 0.60, blue: 0.85)
+    static let serviceSignal   = Color(red: 0.38, green: 0.48, blue: 0.88)
+
+    static func serviceName(_ service: String) -> String {
+        switch service {
+        case "imessage": return "iMessage"
+        case "telegram": return "Telegram"
+        case "signal":   return "Signal"
+        default:         return service.capitalized
+        }
+    }
+
+    static func serviceColor(_ service: String) -> Color {
+        switch service {
+        case "imessage": return serviceIMessage
+        case "telegram": return serviceTelegram
+        case "signal":   return serviceSignal
+        default:         return accent
+        }
+    }
 }
 
 // MARK: - NSAppearance helper
