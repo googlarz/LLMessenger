@@ -19,10 +19,23 @@ struct AdapterMessage: Decodable {
     let timestamp: Date
 }
 
+enum ConversationType: String, Decodable {
+    case dm
+    case group
+    case channel
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        self = ConversationType(rawValue: raw) ?? .unknown
+    }
+}
+
 struct AdapterConversation: Decodable {
     let id: String
     let name: String
-    let type: String    // "dm" | "group" | "channel"
+    let type: ConversationType
     let messages: [AdapterMessage]
 }
 

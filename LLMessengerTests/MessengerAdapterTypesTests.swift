@@ -46,6 +46,8 @@ final class MessengerAdapterTypesTests: XCTestCase {
         XCTAssertEqual(conversation.id, "abc")
         XCTAssertEqual(conversation.messages.count, 1)
         XCTAssertEqual(conversation.messages[0].sender, "João")
+        XCTAssertEqual(conversation.name, "João")
+        XCTAssertEqual(conversation.type, .dm)
     }
 
     func testAdapterHealthResultStatus() {
