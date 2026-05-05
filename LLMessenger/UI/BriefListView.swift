@@ -24,6 +24,7 @@ struct BriefListView: View {
             guard let id = newID,
                   let brief = appState.briefs.first(where: { $0.id == id })
             else { return }
+            appState.markAsOpen(briefID: id)
             Task {
                 try? await chatViewModel.loadBrief(brief)
             }
