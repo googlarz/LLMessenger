@@ -100,6 +100,19 @@ final class AppState: ObservableObject {
         return briefs.first { $0.id == id }
     }
 
+    var unreadCount: Int {
+        briefs.filter { $0.status == "ready" }.count
+    }
+
+    func markAsOpen(briefID: Int64) {
+        do {
+            try repository.markAsOpen(briefID: briefID)
+            refreshBriefs()
+        } catch {
+            // silently ignore — UI state will be stale at worst
+        }
+    }
+
     func refreshBriefs() {
         do {
             briefs = try repository.fetchAllBriefs()

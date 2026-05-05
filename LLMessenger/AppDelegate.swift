@@ -9,6 +9,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var chatWindowController: ChatWindowController?
     var appState: AppState?
     var database: AppDatabase?
+    var notificationManager: NotificationManager?
     var startTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -37,6 +38,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let windowController = ChatWindowController(appState: state)
             chatWindowController = windowController
 
+            let notifications = NotificationManager()
+            notifications.requestPermission()
+            notifications.onNotificationTap = { [weak windowController, weak state] briefID in
+                state?.selectedBriefID = briefID
+                state?.markAsOpen(briefID: briefID)
+                windowController?.show(selectingBriefID: briefID)
+            }
+            notificationManager = notifications
+
             let menuBar = MenuBarController()
             menuBar.onTogglePanel = { [weak windowController] in
                 windowController?.toggle()
@@ -46,11 +56,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let engine = PollEngine(database: db)
             engine.onPollSucceeded = { [weak self] in
                 guard let self else { return }
-                _ = try? await self.briefEngine?.processNewMessages()
+                let newID: Int64? = (try? await self.briefEngine?.processNewMessages()) ?? nil
                 self.appState?.refreshBriefs()
-                if let count = try? self.appState?.repository.fetchAllBriefs().count {
-                    self.menuBarController?.setUnreadCount(count)
+                if let id = newID {
+                    let brief = try? self.appState?.repository.fetchBrief(id: id)
+                    let body = brief?.notificationText ?? "You have new messages"
+                    self.notificationManager?.post(briefID: id, title: "New messages", body: body)
                 }
+                let unread = self.appState?.unreadCount ?? 0
+                self.menuBarController?.setUnreadCount(unread)
             }
 
             let telegramBinary = telegramAdapterPath()

@@ -31,6 +31,11 @@ final class ChatWindowController {
         installClickOutsideMonitor()
     }
 
+    func show(selectingBriefID briefID: Int64) {
+        appState.selectedBriefID = briefID
+        show()
+    }
+
     func hide() {
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.22
