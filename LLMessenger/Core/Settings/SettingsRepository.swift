@@ -32,6 +32,27 @@ struct SettingsRepository {
         try keychainStore.delete(account: provider.rawValue)
     }
 
+    // MARK: - Telegram Credentials (stored in keychain)
+
+    func saveTelegramCredentials(apiId: String, apiHash: String) throws {
+        if apiId.isEmpty {
+            try? keychainStore.delete(account: "telegram_api_id")
+        } else {
+            try keychainStore.set(account: "telegram_api_id", value: apiId)
+        }
+        if apiHash.isEmpty {
+            try? keychainStore.delete(account: "telegram_api_hash")
+        } else {
+            try keychainStore.set(account: "telegram_api_hash", value: apiHash)
+        }
+    }
+
+    func loadTelegramCredentials() -> (apiId: String, apiHash: String) {
+        let apiId   = (try? keychainStore.get(account: "telegram_api_id"))  ?? ""
+        let apiHash = (try? keychainStore.get(account: "telegram_api_hash")) ?? ""
+        return (apiId, apiHash)
+    }
+
     // MARK: - Signal Account (stored in UserDefaults — not sensitive)
 
     func saveSignalAccount(_ number: String) throws {

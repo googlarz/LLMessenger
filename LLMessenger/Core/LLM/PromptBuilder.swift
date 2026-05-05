@@ -124,7 +124,6 @@ struct PromptBuilder {
             - quotes: 1-3 representative messages with actual HH:mm timestamps; omit [] if no good quotes
             - callback: only fill if the episodic context contains a directly relevant prior thread; otherwise null
             - summary: plain prose, no markdown formatting
-            - Write in English
             """
         case .conversationalist:
             return "Answer the user's questions about the messages. Be concise and direct."

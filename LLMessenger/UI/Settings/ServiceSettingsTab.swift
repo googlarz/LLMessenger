@@ -4,6 +4,8 @@ import SwiftUI
 struct ServiceSettingsTab: View {
     @State private var configs: [ServiceConfig] = []
     @State private var signalAccount: String = ""
+    @State private var telegramApiId: String = ""
+    @State private var telegramApiHash: String = ""
     @State private var saveStatus: String = ""
     private let repo: SettingsRepository
 
@@ -39,6 +41,16 @@ struct ServiceSettingsTab: View {
                         TextField("Phone number (+1234567890)", text: $signalAccount)
                     }
 
+                    Section("Telegram") {
+                        TextField("API ID", text: $telegramApiId)
+                            .textFieldStyle(.roundedBorder)
+                        SecureField("API Hash", text: $telegramApiHash)
+                            .textFieldStyle(.roundedBorder)
+                        Text("Get these from my.telegram.org → API development tools.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     HStack {
                         Spacer()
                         if !saveStatus.isEmpty {
@@ -61,6 +73,9 @@ struct ServiceSettingsTab: View {
             configs = [ServiceConfig.default(for: "telegram")]
         }
         signalAccount = (try? repo.loadSignalAccount()) ?? ""
+        let tgCreds = repo.loadTelegramCredentials()
+        telegramApiId   = tgCreds.apiId
+        telegramApiHash = tgCreds.apiHash
     }
 
     private func save() {
@@ -69,6 +84,7 @@ struct ServiceSettingsTab: View {
                 try repo.saveServiceConfig(cfg)
             }
             try repo.saveSignalAccount(signalAccount)
+            try repo.saveTelegramCredentials(apiId: telegramApiId, apiHash: telegramApiHash)
             saveStatus = "Saved ✓"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }
         } catch {

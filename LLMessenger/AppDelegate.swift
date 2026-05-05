@@ -21,11 +21,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let llmClient = makeLLMClient()
             let model = preferredModel()
 
+            let savedPrompt = SettingsRepository(database: db).loadBasePrompt()
+            let basePrompt = savedPrompt.isEmpty ? PromptBuilder.defaultBasePrompt : savedPrompt
+
             let state = AppState(
                 database: db,
                 llmClient: llmClient,
                 llmModel: model,
-                basePrompt: PromptBuilder.defaultBasePrompt
+                basePrompt: basePrompt
             )
             appState = state
 
@@ -33,7 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 database: db,
                 client: llmClient,
                 model: model,
-                basePrompt: PromptBuilder.defaultBasePrompt
+                basePrompt: basePrompt
             )
 
             let windowController = ChatWindowController(appState: state)
@@ -181,9 +184,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func telegramAdapterConfig() -> [String: Any] {
         let sessionPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".config/llmessenger/data/telegram/session").path
+        let creds = SettingsRepository().loadTelegramCredentials()
+        let apiId   = creds.apiId.isEmpty   ? (ProcessInfo.processInfo.environment["TELEGRAM_API_ID"]   ?? "") : creds.apiId
+        let apiHash = creds.apiHash.isEmpty ? (ProcessInfo.processInfo.environment["TELEGRAM_API_HASH"] ?? "") : creds.apiHash
         return [
-            "api_id":       ProcessInfo.processInfo.environment["TELEGRAM_API_ID"] ?? "",
-            "api_hash":     ProcessInfo.processInfo.environment["TELEGRAM_API_HASH"] ?? "",
+            "api_id":       apiId,
+            "api_hash":     apiHash,
             "session_path": sessionPath
         ]
     }
