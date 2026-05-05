@@ -1,0 +1,10 @@
+{
+  "service": "telegram",
+  "name": "Telegram",
+  "version": "1.0.0",
+  "entry": "telegram-adapter",
+  "config_fields": [
+    { "key": "api_id",    "label": "API ID",   "type": "number" },
+    { "key": "api_hash",  "label": "API Hash", "type": "string" }
+  ]
+}
