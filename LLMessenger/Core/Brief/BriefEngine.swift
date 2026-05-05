@@ -49,8 +49,11 @@ final class BriefEngine {
                 episodicSummaries: recent,
                 now: Date()
             )
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "EEE, d MMM HH:mm"
             let threadText = messages
-                .map { "[\($0.service)] \($0.sender): \($0.text)" }
+                .sorted { $0.timestamp < $1.timestamp }
+                .map { "[\(dateFormatter.string(from: $0.timestamp))] [\($0.service)] \($0.sender): \($0.text)" }
                 .joined(separator: "\n")
             let response = try await client.complete(
                 model: model,
@@ -58,7 +61,7 @@ final class BriefEngine {
                     LLMMessage(role: .system, content: systemPrompt),
                     LLMMessage(role: .user,   content: threadText)
                 ],
-                maxTokens: 600
+                maxTokens: 2000
             )
             openingSummary = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
         }

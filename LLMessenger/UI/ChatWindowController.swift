@@ -3,102 +3,61 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class ChatWindowController {
-    private var panel: NSPanel?
-    private var eventMonitor: Any?
+final class ChatWindowController: NSWindowController, NSWindowDelegate {
     private let appState: AppState
     private let chatViewModel: ChatViewModel
 
     init(appState: AppState) {
         self.appState = appState
         self.chatViewModel = appState.makeChatViewModel()
-    }
 
-    func toggle() {
-        if panel?.isVisible == true {
-            hide()
-        } else {
-            show()
-        }
-    }
-
-    func show() {
-        if panel == nil { buildPanel() }
-        guard let panel else { return }
-        appState.refreshBriefs()
-        panel.makeKeyAndOrderFront(nil)
-        installEscapeHandler()
-        installClickOutsideMonitor()
-    }
-
-    func show(selectingBriefID briefID: Int64) {
-        appState.selectedBriefID = briefID
-        show()
-    }
-
-    func hide() {
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.22
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            panel?.animator().alphaValue = 0
-        } completionHandler: { [weak self] in
-            self?.panel?.orderOut(nil)
-            self?.panel?.alphaValue = 1
-        }
-        removeMonitors()
-    }
-
-    // MARK: - Private
-
-    private func buildPanel() {
-        guard let screen = NSScreen.main else { return }
-        let panelWidth: CGFloat = 380
-        let panelHeight = screen.visibleFrame.height
-        let origin = CGPoint(x: screen.visibleFrame.maxX - panelWidth,
-                             y: screen.visibleFrame.minY)
-        let frame = CGRect(origin: origin, size: CGSize(width: panelWidth, height: panelHeight))
-
-        let p = NSPanel(
-            contentRect: frame,
-            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+        let window = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 620),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView,
+                        .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        p.level = .popUpMenu
-        p.isOpaque = false
-        p.backgroundColor = .clear
-        p.hasShadow = true
-        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        p.isMovable = false
+        window.title = "LLMessenger"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.toolbarStyle = .unified
+        window.appearance = .dark
+        window.backgroundColor = NSColor(Theme.bg)
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        window.setFrameAutosaveName("LLMessengerMain")
+        window.minSize = NSSize(width: 600, height: 420)
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.hasShadow = true
 
-        let contentView = ContentView()
+        super.init(window: window)
+        window.delegate = self
+
+        let content = ContentView()
             .environmentObject(appState)
             .environmentObject(chatViewModel)
+        window.contentView = NSHostingView(rootView: content)
 
-        p.contentView = NSHostingView(rootView: contentView)
-        panel = p
-    }
-
-    private func installEscapeHandler() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 {  // Escape
-                self?.hide()
-                return nil
-            }
-            return event
+        if window.frame.size == NSSize(width: 900, height: 620) {
+            window.center()
         }
     }
 
-    private func installClickOutsideMonitor() {
-        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            guard let self, let panel = self.panel, panel.isVisible else { return }
-            if !panel.frame.contains(NSEvent.mouseLocation) {
-                Task { @MainActor in self.hide() }
-            }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func show(selectingBriefID briefID: Int64? = nil) {
+        if let id = briefID {
+            appState.selectedBriefID = id
         }
+        appState.refreshBriefs()
+        showWindow(nil)
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func removeMonitors() {
-        if let m = eventMonitor { NSEvent.removeMonitor(m); eventMonitor = nil }
+    func windowWillClose(_ notification: Notification) {
+        // Cleanup if needed
     }
 }

@@ -7,14 +7,17 @@ struct ChatPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Invisible titlebar spacer — content begins under it
+            Spacer().frame(height: 38)
+
             if let brief = appState.selectedBrief {
                 BriefHeaderView(brief: brief)
-                Divider()
+                Divider().background(Theme.border)
             }
 
             ThreadView()
 
-            Divider()
+            Divider().background(Theme.border)
             ChatInputView()
         }
     }

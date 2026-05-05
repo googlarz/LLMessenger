@@ -7,38 +7,45 @@ struct ChatInputView: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextEditor(text: $chatViewModel.inputText)
-                .font(.body)
-                .frame(minHeight: 36, maxHeight: 120)
-                .fixedSize(horizontal: false, vertical: true)
-                .focused($isFocused)
-                .overlay(
-                    Group {
-                        if chatViewModel.inputText.isEmpty {
-                            Text("Ask about these messages…")
-                                .foregroundStyle(.tertiary)
-                                .font(.body)
-                                .padding(.leading, 4)
-                                .padding(.top, 8)
-                                .allowsHitTesting(false)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        }
-                    }
-                )
+            // Input field
+            ZStack(alignment: .topLeading) {
+                if chatViewModel.inputText.isEmpty {
+                    Text("Ask about these messages…")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.top, 8)
+                        .padding(.leading, 4)
+                        .allowsHitTesting(false)
+                }
+                TextEditor(text: $chatViewModel.inputText)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textPrimary)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 36, maxHeight: 120)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .focused($isFocused)
+                    .tint(Theme.accent)
+            }
 
-            Button {
-                sendIfPossible()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(canSend ? .blue : .secondary)
+            // Send button
+            Button { sendIfPossible() } label: {
+                ZStack {
+                    Circle()
+                        .fill(canSend ? Theme.accent : Theme.surfaceHigh)
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(canSend ? .white : Theme.textTertiary)
+                }
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
+            .animation(.easeInOut(duration: 0.15), value: canSend)
             .keyboardShortcut(.return, modifiers: .command)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Theme.surface)
     }
 
     private var canSend: Bool {

@@ -7,53 +7,66 @@ struct ReplyDraftView: View {
     let draft: ReplyDraft
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "pencil.circle.fill")
-                    .foregroundStyle(.orange)
-                Text("Draft reply to \(draft.senderName.isEmpty ? "conversation" : draft.senderName)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    chatViewModel.discardDraft(id: draftID)
-                } label: {
-                    Image(systemName: "xmark.circle")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
+        HStack(alignment: .top, spacing: 12) {
+            Rectangle()
+                .fill(Theme.accent)
+                .frame(width: 2)
+                .cornerRadius(1)
+                .padding(.vertical, 2)
 
-            Text(draft.text)
-                .font(.body)
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
-
-            HStack {
-                Spacer()
-                Button("Discard") {
-                    chatViewModel.discardDraft(id: draftID)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    HStack(spacing: 5) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                        Text("Draft reply" + (draft.senderName.isEmpty ? "" : " to \(draft.senderName)"))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    Spacer()
+                    Button { chatViewModel.discardDraft(id: draftID) } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
 
-                Button("Send Reply") {
-                    Task { try? await chatViewModel.sendDraft(draft) }
+                Text(draft.text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textPrimary)
+                    .textSelection(.enabled)
+
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button("Discard") { chatViewModel.discardDraft(id: draftID) }
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
+                        .buttonStyle(.plain)
+
+                    Button("Send Reply") {
+                        Task { try? await chatViewModel.sendDraft(draft) }
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(draft.conversationID == "unknown" ? Theme.surfaceHigh : Theme.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .buttonStyle(.plain)
+                    .disabled(draft.conversationID == "unknown")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .disabled(draft.conversationID == "unknown")
             }
         }
         .padding(12)
-        .background(Color.orange.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .background(Theme.accentMuted)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Theme.accent.opacity(0.25), lineWidth: 1)
         )
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 12)
         .padding(.vertical, 4)
     }
 }

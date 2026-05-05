@@ -13,16 +13,8 @@ struct ThreadView: View {
                             .id(item.id)
                     }
                     if chatViewModel.isLoading {
-                        HStack {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                            Text("Thinking…")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .id("loading")
+                        LoadingIndicatorView()
+                            .id("loading")
                     }
                 }
                 .padding(.vertical, 8)
@@ -38,6 +30,7 @@ struct ThreadView: View {
                 }
             }
         }
+        .background(Theme.bg)
     }
 
     @ViewBuilder
@@ -50,5 +43,29 @@ struct ThreadView: View {
         case .replyDraft(let id, let draft):
             ReplyDraftView(draftID: id, draft: draft)
         }
+    }
+}
+
+private struct LoadingIndicatorView: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Rectangle()
+                .fill(Theme.accent)
+                .frame(width: 2)
+                .cornerRadius(1)
+                .frame(height: 20)
+
+            HStack(spacing: 6) {
+                ProgressView()
+                    .scaleEffect(0.65)
+                    .tint(Theme.accent)
+                Text("Thinking…")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Theme.accentMuted)
     }
 }

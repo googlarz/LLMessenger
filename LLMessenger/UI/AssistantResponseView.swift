@@ -5,23 +5,34 @@ struct AssistantResponseView: View {
     let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "cpu.fill")
-                .foregroundStyle(.blue)
-                .font(.caption)
-                .padding(.top, 3)
+        HStack(alignment: .top, spacing: 12) {
+            // Anthropic-style accent bar
+            Rectangle()
+                .fill(Theme.accent)
+                .frame(width: 2)
+                .cornerRadius(1)
+                .padding(.vertical, 2)
 
-            Text(text)
-                .font(.body)
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                    Text("LLMessenger")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+                Text(text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textPrimary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-            Spacer(minLength: 40)
+            Spacer(minLength: 32)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.blue.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Theme.accentMuted)
     }
 }
