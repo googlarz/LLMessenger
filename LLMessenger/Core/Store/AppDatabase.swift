@@ -1,6 +1,7 @@
 import GRDB
 import Foundation
 
+// Thread-safe: DatabaseQueue serializes all access internally.
 final class AppDatabase: @unchecked Sendable {
     let dbQueue: DatabaseQueue
 

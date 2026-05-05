@@ -32,7 +32,7 @@ final class MockAdapter: MessengerAdapter {
     }
 }
 
-final class PollEngineTests: XCTestCase {
+@MainActor final class PollEngineTests: XCTestCase {
 
     func testFetchStoresMessagesInDatabase() async throws {
         let db = try AppDatabase(inMemory: true)
@@ -78,5 +78,6 @@ final class PollEngineTests: XCTestCase {
             try ServiceHealth.fetchOne(db, key: "mock")
         }
         XCTAssertEqual(health?.status, "error")
+        XCTAssertEqual(engine.failureCounts["mock"], 1)
     }
 }

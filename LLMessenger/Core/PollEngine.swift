@@ -1,6 +1,7 @@
 import Foundation
 import GRDB
 
+@MainActor
 final class PollEngine {
     private let database: AppDatabase
     // State accessed only from async contexts — no concurrent access in single-adapter tests
@@ -8,7 +9,7 @@ final class PollEngine {
     private var configs: [String: ServiceConfig] = [:]
     private var timers: [String: Timer] = [:]
     private var inFlight: Set<String> = []
-    private var failureCounts: [String: Int] = [:]
+    var failureCounts: [String: Int] = [:]
 
     init(database: AppDatabase) {
         self.database = database
@@ -116,15 +117,19 @@ final class PollEngine {
     }
 
     private func writeHealth(service: String, status: String, error: String?) {
-        try? database.dbQueue.write { db in
-            var health = ServiceHealth(
-                service: service,
-                status: status,
-                lastCheck: Date(),
-                lastError: error,
-                retryAfter: nil
-            )
-            try health.save(db)
+        do {
+            try database.dbQueue.write { db in
+                var health = ServiceHealth(
+                    service: service,
+                    status: status,
+                    lastCheck: Date(),
+                    lastError: error,
+                    retryAfter: nil
+                )
+                try health.save(db)
+            }
+        } catch {
+            assertionFailure("writeHealth failed: \(error)")
         }
     }
 }
