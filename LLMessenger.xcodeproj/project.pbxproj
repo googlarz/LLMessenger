@@ -43,6 +43,11 @@
 		F4A203E914BDB2F60BF276E4 /* ServiceConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB2F4FDD502C4B9477B9BCE /* ServiceConfig.swift */; };
 		FB19EB3855A919C4B8DCB7C4 /* BriefEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC762565E52A3E618204CC24 /* BriefEngine.swift */; };
 		FA2E635F668D4F769811D331 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB6C76CED5204C53B9661213 /* AppState.swift */; };
+		00AC35B3952246009C73E164 /* SettingsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D1DBFE72BC54C2AA4B39271 /* SettingsRepository.swift */; };
+		DF3D126AF89C467A82B54807 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37397235693349A38185E102 /* SettingsView.swift */; };
+		C90BC46FE4F34E4DAE71ACF4 /* LLMSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 639F9A53B53A409787D4AFE1 /* LLMSettingsTab.swift */; };
+		716164422C7A4995AE8BD89D /* ServiceSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3670B4D8B8444969A1FFD1A /* ServiceSettingsTab.swift */; };
+		F7E8E67C6F40485DA31716CB /* SettingsRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34734C4C9D5F417C946DDB41 /* SettingsRepositoryTests.swift */; };
 		780BBF4FC5424720AA63F386 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65B5F62CF5843DF987E66A5 /* ChatViewModel.swift */; };
 		5602AECAAC88401D834A72BC /* ChatWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD8AEF8C2144A978588B75E /* ChatWindowController.swift */; };
 		053C1E457AC2428FAD5F96C0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D02C27796C70417CA5A01043 /* ContentView.swift */; };
@@ -115,6 +120,11 @@
 		AF78E0F5A9144EBABA9D849F /* ReplyDraftView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyDraftView.swift; sourceTree = "<group>"; };
 		12C5FE699D974D7780C59168 /* ChatInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		38C42E6666B245F881842069 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
+		5D1DBFE72BC54C2AA4B39271 /* SettingsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepository.swift; sourceTree = "<group>"; };
+		37397235693349A38185E102 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		639F9A53B53A409787D4AFE1 /* LLMSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMSettingsTab.swift; sourceTree = "<group>"; };
+		F3670B4D8B8444969A1FFD1A /* ServiceSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceSettingsTab.swift; sourceTree = "<group>"; };
+		34734C4C9D5F417C946DDB41 /* SettingsRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepositoryTests.swift; sourceTree = "<group>"; };
 		41636AD8770243FCAD928306 /* ChatViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModelTests.swift; sourceTree = "<group>"; };
 		F108F4654D64EC797F01A083 /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
 		F2480065C366A43445195D28 /* LLMClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMClient.swift; sourceTree = "<group>"; };
@@ -177,8 +187,19 @@
 				C9B73E8E1B3A4646B6C7C88C /* AssistantResponseView.swift */,
 				AF78E0F5A9144EBABA9D849F /* ReplyDraftView.swift */,
 				12C5FE699D974D7780C59168 /* ChatInputView.swift */,
+				B208931B5D4544D49FA40498 /* Settings */,
 			);
 			path = UI;
+			sourceTree = "<group>";
+		};
+		B208931B5D4544D49FA40498 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				37397235693349A38185E102 /* SettingsView.swift */,
+				639F9A53B53A409787D4AFE1 /* LLMSettingsTab.swift */,
+				F3670B4D8B8444969A1FFD1A /* ServiceSettingsTab.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 		13D677F767D3499CEF015E0C /* Store */ = {
@@ -207,9 +228,18 @@
 				7F888C79963C323AB6E6BBD4 /* Brief */,
 				056590AA9FD9D74E056176B5 /* Keychain */,
 				364507FCF3614EFBB0D459DF /* LLM */,
+				51484823F73E4929A50BE96A /* Settings */,
 				13D677F767D3499CEF015E0C /* Store */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		51484823F73E4929A50BE96A /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				5D1DBFE72BC54C2AA4B39271 /* SettingsRepository.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 		364507FCF3614EFBB0D459DF /* LLM */ = {
@@ -233,6 +263,7 @@
 				306739C4ABE143E1957D677D /* BriefEngineTests.swift */,
 				9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */,
 				41636AD8770243FCAD928306 /* ChatViewModelTests.swift */,
+				34734C4C9D5F417C946DDB41 /* SettingsRepositoryTests.swift */,
 				97C7886911F46E51E0EE1B2B /* KeychainStoreTests.swift */,
 				E0E83C3D7F5BA8B73D9EF54F /* LLMClientTypesTests.swift */,
 				04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */,
@@ -393,6 +424,10 @@
 				EBF9D849F71DA7874D3F96DD /* PollEngine.swift in Sources */,
 				34ACCAF6781DDF51A663A56F /* PromptBuilder.swift in Sources */,
 				8E423AD6AE474E3E9FCB31FF /* ReplyDraftView.swift in Sources */,
+				00AC35B3952246009C73E164 /* SettingsRepository.swift in Sources */,
+				DF3D126AF89C467A82B54807 /* SettingsView.swift in Sources */,
+				C90BC46FE4F34E4DAE71ACF4 /* LLMSettingsTab.swift in Sources */,
+				716164422C7A4995AE8BD89D /* ServiceSettingsTab.swift in Sources */,
 				F4A203E914BDB2F60BF276E4 /* ServiceConfig.swift in Sources */,
 				2A11383BA014D49F2D898CA7 /* ServiceHealth.swift in Sources */,
 				EAB0DE7548B574521670DA15 /* SubprocessAdapter.swift in Sources */,
@@ -418,6 +453,7 @@
 				EE89AE6498BD42DB97AC789C /* AppStateTests.swift in Sources */,
 				89D9474481B146BB8EFB761C /* BriefEngineTests.swift in Sources */,
 				BEEE37989C2A49DFBA75E033 /* ChatViewModelTests.swift in Sources */,
+				F7E8E67C6F40485DA31716CB /* SettingsRepositoryTests.swift in Sources */,
 				74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */,
 				2528022DB189F9F99041972C /* KeychainStoreTests.swift in Sources */,
 				E2C8F8B6CA8E66B74B528FB1 /* LLMClientTypesTests.swift in Sources */,

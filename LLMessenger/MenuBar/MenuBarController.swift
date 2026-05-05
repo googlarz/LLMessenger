@@ -67,7 +67,26 @@ final class MenuBarController {
     }
 
     private func rebuildServiceItems() {
-        // Expanded in Plan 4 (Settings) to show per-service health dots
+        guard let menu = statusItem.menu else { return }
+        // Remove existing health items (between separator at index 1 and settings at index 2)
+        while menu.items.count > 4 && menu.items[2].isSeparatorItem == false
+              && menu.items[2].action == nil {
+            menu.removeItem(at: 2)
+        }
+        var insertAt = 2
+        for (service, status) in serviceHealthStatus.sorted(by: { $0.key < $1.key }) {
+            let dot: String
+            switch status {
+            case .ok:      dot = "●"
+            case .warning: dot = "◐"
+            case .error:   dot = "○"
+            }
+            let item = NSMenuItem(title: "\(dot) \(service.capitalized)",
+                                  action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.insertItem(item, at: insertAt)
+            insertAt += 1
+        }
     }
 
     @objc private func buttonClicked() {
@@ -79,6 +98,7 @@ final class MenuBarController {
     }
 
     @objc private func openSettings() {
-        // Implemented in Plan 4
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

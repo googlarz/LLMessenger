@@ -111,4 +111,12 @@ final class AppState: ObservableObject {
     func makeChatViewModel() -> ChatViewModel {
         ChatViewModel(appState: self)
     }
+
+    func makeSettingsRepository() -> SettingsRepository {
+        SettingsRepository(database: database)
+    }
+
+    func reloadConfig() {
+        refreshBriefs()
+    }
 }
