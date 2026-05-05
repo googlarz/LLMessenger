@@ -1,3 +1,4 @@
+// LLMessenger/MenuBar/MenuBarController.swift
 import AppKit
 
 @MainActor
@@ -7,6 +8,7 @@ final class MenuBarController {
         didSet { updateButton() }
     }
     private var serviceHealthStatus: [String: AdapterHealthResult.Status] = [:]
+    var onTogglePanel: (() -> Void)?
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -27,6 +29,8 @@ final class MenuBarController {
         guard let button = statusItem.button else { return }
         let icon = NSImage(systemSymbolName: "envelope.fill", accessibilityDescription: nil)
         button.image = icon
+        button.action = #selector(buttonClicked)
+        button.target = self
 
         if unreadCount > 0 {
             button.title = " \(unreadCount)"
@@ -66,8 +70,12 @@ final class MenuBarController {
         // Expanded in Plan 4 (Settings) to show per-service health dots
     }
 
+    @objc private func buttonClicked() {
+        onTogglePanel?()
+    }
+
     @objc private func openApp() {
-        NSApp.activate(ignoringOtherApps: true)
+        onTogglePanel?()
     }
 
     @objc private func openSettings() {

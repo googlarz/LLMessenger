@@ -1,3 +1,4 @@
+// LLMessenger/AppDelegate.swift
 import AppKit
 
 @MainActor
@@ -5,6 +6,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var menuBarController: MenuBarController?
     var pollEngine: PollEngine?
     var briefEngine: BriefEngine?
+    var chatWindowController: ChatWindowController?
+    var appState: AppState?
     var database: AppDatabase?
     var startTask: Task<Void, Never>?
 
@@ -12,10 +15,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let db = try AppDatabase()
             database = db
-            menuBarController = MenuBarController()
 
             let llmClient = makeLLMClient()
             let model = preferredModel()
+
+            let state = AppState(
+                database: db,
+                llmClient: llmClient,
+                llmModel: model,
+                basePrompt: PromptBuilder.defaultBasePrompt
+            )
+            appState = state
+
             briefEngine = BriefEngine(
                 database: db,
                 client: llmClient,
@@ -23,9 +34,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 basePrompt: PromptBuilder.defaultBasePrompt
             )
 
+            let windowController = ChatWindowController(appState: state)
+            chatWindowController = windowController
+
+            let menuBar = MenuBarController()
+            menuBar.onTogglePanel = { [weak windowController] in
+                windowController?.toggle()
+            }
+            menuBarController = menuBar
+
             let engine = PollEngine(database: db)
             engine.onPollSucceeded = { [weak self] in
-                _ = try? await self?.briefEngine?.processNewMessages()
+                guard let self else { return }
+                _ = try? await self.briefEngine?.processNewMessages()
+                self.appState?.refreshBriefs()
+                if let count = try? self.appState?.repository.fetchAllBriefs().count {
+                    self.menuBarController?.setUnreadCount(count)
+                }
             }
 
             let telegramBinary = telegramAdapterPath()
@@ -40,10 +65,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     config: telegramAdapterConfig()
                 )
                 engine.register(adapter: adapter, config: telegramConfig)
+                state.adapters["telegram"] = adapter
             }
 
             pollEngine = engine
             startTask = Task { await engine.start() }
+
+            state.refreshBriefs()
 
         } catch {
             let alert = NSAlert()

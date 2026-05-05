@@ -82,4 +82,12 @@ struct BriefRepository {
                 .fetchAll(db)
         }
     }
+
+    func fetchAllBriefs() throws -> [Brief] {
+        try database.dbQueue.read { db in
+            try Brief
+                .order(Column("createdAt").desc)
+                .fetchAll(db)
+        }
+    }
 }
