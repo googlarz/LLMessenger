@@ -3,7 +3,7 @@
 xcuserdata/
 DerivedData/
 .build/
-adapters/telegram/.venv/
+.venv/
 adapters/telegram/dist/
 adapters/telegram/__pycache__/
 *.pyc

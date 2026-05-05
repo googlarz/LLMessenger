@@ -31,6 +31,7 @@ targets:
       base:
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "13.0"
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: LLMessenger
       - package: GRDB
