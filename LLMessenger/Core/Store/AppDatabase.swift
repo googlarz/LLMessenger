@@ -1,7 +1,7 @@
 import GRDB
 import Foundation
 
-final class AppDatabase {
+final class AppDatabase: @unchecked Sendable {
     let dbQueue: DatabaseQueue
 
     /// Production init — stores DB in ~/Library/Application Support/LLMessenger/
