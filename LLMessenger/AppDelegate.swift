@@ -82,6 +82,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 state.adapters["telegram"] = adapter
             }
 
+            let settingsRepo = SettingsRepository(database: db)
+            if let account = try? settingsRepo.loadSignalAccount(), !account.isEmpty {
+                let cliPath = SignalCLIAdapter.detectCLIPath() ?? "/usr/local/bin/signal-cli"
+                let signalConfig = (try? db.dbQueue.read { db in
+                    try ServiceConfig.fetchOne(db, key: "signal")
+                }) ?? ServiceConfig.default(for: "signal")
+                let signalAdapter = SignalCLIAdapter(accountNumber: account, cliPath: cliPath)
+                engine.register(adapter: signalAdapter, config: signalConfig)
+                state.adapters["signal"] = signalAdapter
+            }
+
             pollEngine = engine
             startTask = Task { await engine.start() }
 
