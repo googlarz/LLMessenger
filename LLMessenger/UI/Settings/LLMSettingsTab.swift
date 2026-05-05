@@ -6,7 +6,7 @@ struct LLMSettingsTab: View {
     @State private var anthropicKey: String = ""
     @State private var openAIKey: String = ""
     @State private var ollamaModel: String = ""
-    @State private var launchAtLogin: Bool = AutoLaunchManager.isEnabled
+    @State private var launchAtLogin: Bool = false
     @State private var saveStatus: String = ""
 
     private let repo = SettingsRepository()
@@ -52,14 +52,15 @@ struct LLMSettingsTab: View {
     private func load() {
         anthropicKey = (try? repo.loadLLMKey(provider: .anthropic)) ?? ""
         openAIKey    = (try? repo.loadLLMKey(provider: .openai))    ?? ""
-        ollamaModel  = (try? repo.loadLLMKey(provider: .ollama))    ?? ""
+        ollamaModel  = UserDefaults.standard.string(forKey: "ollama_model") ?? ""
+        launchAtLogin = AutoLaunchManager.isEnabled
     }
 
     private func save() {
         do {
             try repo.saveLLMKey(provider: .anthropic, key: anthropicKey)
             try repo.saveLLMKey(provider: .openai,    key: openAIKey)
-            try repo.saveLLMKey(provider: .ollama,    key: ollamaModel)
+            UserDefaults.standard.set(ollamaModel, forKey: "ollama_model")
             saveStatus = "Saved ✓"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }
         } catch {

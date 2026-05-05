@@ -35,6 +35,12 @@ final class PollEngine {
         }
     }
 
+    func pollAll() async {
+        for serviceID in adapters.keys {
+            try? await pollNow(serviceID: serviceID)
+        }
+    }
+
     func pollNow(serviceID: String) async throws {
         guard !inFlight.contains(serviceID) else { return }
         inFlight.insert(serviceID)

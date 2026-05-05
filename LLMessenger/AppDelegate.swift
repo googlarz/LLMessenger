@@ -52,9 +52,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menuBar.onNewBrief = { [weak self] in
                 guard let self else { return }
                 Task {
+                    await self.pollEngine?.pollAll()
                     _ = try? await self.briefEngine?.processNewMessages()
                     self.appState?.refreshBriefs()
                     self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
+                    let unread = self.appState?.unreadCount ?? 0
+                    self.menuBarController?.setUnreadCount(unread)
                 }
             }
             menuBar.onSelectBrief = { [weak windowController, weak state] briefID in
@@ -137,13 +140,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func preferredModel() -> String {
         let store = KeychainStore()
-        if (try? store.get(account: "anthropic")) != nil {
+        if let key = try? store.get(account: "anthropic"), !key.isEmpty {
             return LLMProvider.anthropic.defaultModel
         }
-        if (try? store.get(account: "openai")) != nil {
+        if let key = try? store.get(account: "openai"), !key.isEmpty {
             return LLMProvider.openai.defaultModel
         }
-        return LLMProvider.ollama.defaultModel
+        let udModel = UserDefaults.standard.string(forKey: "ollama_model")
+        return (udModel?.isEmpty == false ? udModel! : nil) ?? LLMProvider.ollama.defaultModel
     }
 
     private func telegramAdapterPath() -> String? {
