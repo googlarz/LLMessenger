@@ -20,18 +20,15 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         super.init(window: window)
         window.delegate = self
+
+        let content = SettingsView(database: database)
+        window.contentView = NSHostingView(rootView: content)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     func show() {
-        if window?.contentView == nil {
-            let content = SettingsView(database: database)
-            window?.contentView = NSHostingView(rootView: content)
-            window?.center()
-        } else if window?.isVisible == false {
-            window?.center()
-        }
+        if window?.isVisible == false { window?.center() }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
