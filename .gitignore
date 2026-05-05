@@ -7,3 +7,5 @@ DerivedData/
 adapters/telegram/dist/
 adapters/telegram/__pycache__/
 *.pyc
+build/
+/tmp/llm-build
