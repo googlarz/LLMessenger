@@ -45,6 +45,7 @@
 		FA2E635F668D4F769811D331 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB6C76CED5204C53B9661213 /* AppState.swift */; };
 		00AC35B3952246009C73E164 /* SettingsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D1DBFE72BC54C2AA4B39271 /* SettingsRepository.swift */; };
 		DF3D126AF89C467A82B54807 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37397235693349A38185E102 /* SettingsView.swift */; };
+		3A8804E5847E49BAAB595F5E /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5EF0D91E3694EC8AD64830B /* SettingsWindowController.swift */; };
 		C90BC46FE4F34E4DAE71ACF4 /* LLMSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 639F9A53B53A409787D4AFE1 /* LLMSettingsTab.swift */; };
 		716164422C7A4995AE8BD89D /* ServiceSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3670B4D8B8444969A1FFD1A /* ServiceSettingsTab.swift */; };
 		F7E8E67C6F40485DA31716CB /* SettingsRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34734C4C9D5F417C946DDB41 /* SettingsRepositoryTests.swift */; };
@@ -128,6 +129,7 @@
 		38C42E6666B245F881842069 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		5D1DBFE72BC54C2AA4B39271 /* SettingsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepository.swift; sourceTree = "<group>"; };
 		37397235693349A38185E102 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A5EF0D91E3694EC8AD64830B /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
 		639F9A53B53A409787D4AFE1 /* LLMSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMSettingsTab.swift; sourceTree = "<group>"; };
 		F3670B4D8B8444969A1FFD1A /* ServiceSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceSettingsTab.swift; sourceTree = "<group>"; };
 		34734C4C9D5F417C946DDB41 /* SettingsRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepositoryTests.swift; sourceTree = "<group>"; };
@@ -208,6 +210,7 @@
 			isa = PBXGroup;
 			children = (
 				37397235693349A38185E102 /* SettingsView.swift */,
+				A5EF0D91E3694EC8AD64830B /* SettingsWindowController.swift */,
 				639F9A53B53A409787D4AFE1 /* LLMSettingsTab.swift */,
 				F3670B4D8B8444969A1FFD1A /* ServiceSettingsTab.swift */,
 			);
@@ -461,6 +464,7 @@
 				8E423AD6AE474E3E9FCB31FF /* ReplyDraftView.swift in Sources */,
 				00AC35B3952246009C73E164 /* SettingsRepository.swift in Sources */,
 				DF3D126AF89C467A82B54807 /* SettingsView.swift in Sources */,
+				3A8804E5847E49BAAB595F5E /* SettingsWindowController.swift in Sources */,
 				C90BC46FE4F34E4DAE71ACF4 /* LLMSettingsTab.swift in Sources */,
 				716164422C7A4995AE8BD89D /* ServiceSettingsTab.swift in Sources */,
 				F4A203E914BDB2F60BF276E4 /* ServiceConfig.swift in Sources */,

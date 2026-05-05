@@ -7,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var pollEngine: PollEngine?
     var briefEngine: BriefEngine?
     var chatWindowController: ChatWindowController?
+    var settingsWindowController: SettingsWindowController?
     var appState: AppState?
     var database: AppDatabase?
     var notificationManager: NotificationManager?
@@ -48,8 +49,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             notificationManager = notifications
 
             let menuBar = MenuBarController()
-            menuBar.onTogglePanel = { [weak windowController] in
-                windowController?.toggle()
+            menuBar.onNewBrief = { [weak self] in
+                guard let self else { return }
+                Task {
+                    _ = try? await self.briefEngine?.processNewMessages()
+                    self.appState?.refreshBriefs()
+                    self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
+                }
+            }
+            menuBar.onSelectBrief = { [weak windowController, weak state] briefID in
+                state?.selectedBriefID = briefID
+                state?.markAsOpen(briefID: briefID)
+                windowController?.show(selectingBriefID: briefID)
+            }
+            let settingsController = SettingsWindowController(database: db)
+            settingsWindowController = settingsController
+            menuBar.onOpenSettings = { [weak settingsController] in
+                settingsController?.show()
             }
             menuBarController = menuBar
 
@@ -65,6 +81,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 let unread = self.appState?.unreadCount ?? 0
                 self.menuBarController?.setUnreadCount(unread)
+                self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
             }
 
             let telegramBinary = telegramAdapterPath()
@@ -96,6 +113,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             startTask = Task { await engine.start() }
 
             state.refreshBriefs()
+            menuBar.setBriefs(state.briefs)
 
         } catch {
             let alert = NSAlert()

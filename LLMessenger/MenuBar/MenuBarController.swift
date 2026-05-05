@@ -4,101 +4,104 @@ import AppKit
 @MainActor
 final class MenuBarController {
     private let statusItem: NSStatusItem
-    private var unreadCount: Int = 0 {
-        didSet { updateButton() }
-    }
-    private var serviceHealthStatus: [String: AdapterHealthResult.Status] = [:]
-    var onTogglePanel: (() -> Void)?
+    private var unreadCount: Int = 0 { didSet { updateButton() } }
+    private var recentBriefs: [Brief] = []
+
+    var onNewBrief: (() -> Void)?
+    var onSelectBrief: ((Int64) -> Void)?
+    var onOpenSettings: (() -> Void)?
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         updateButton()
-        buildMenu()
+        rebuildMenu()
     }
 
     func setUnreadCount(_ count: Int) {
         unreadCount = count
     }
 
-    func setServiceHealth(_ health: AdapterHealthResult.Status, for service: String) {
-        serviceHealthStatus[service] = health
-        rebuildServiceItems()
+    func setBriefs(_ briefs: [Brief]) {
+        recentBriefs = Array(briefs.prefix(10))
+        rebuildMenu()
     }
+
+    // MARK: - Private
 
     private func updateButton() {
         guard let button = statusItem.button else { return }
-        let icon = NSImage(systemSymbolName: "envelope.fill", accessibilityDescription: nil)
-        button.image = icon
-        button.action = #selector(buttonClicked)
+        button.image = NSImage(systemSymbolName: "envelope.fill", accessibilityDescription: nil)
+        button.action = nil   // menu attached, action not used
         button.target = self
-
-        if unreadCount > 0 {
-            button.title = " \(unreadCount)"
-            button.imagePosition = .imageLeft
-        } else {
-            button.title = ""
-        }
+        button.title = unreadCount > 0 ? " \(unreadCount)" : ""
+        button.imagePosition = unreadCount > 0 ? .imageLeft : .imageOnly
     }
 
-    private func buildMenu() {
+    private func rebuildMenu() {
         let menu = NSMenu()
 
-        let openItem = NSMenuItem(title: "Open LLMessenger",
-                                  action: #selector(openApp),
-                                  keyEquivalent: "o")
-        openItem.target = self
-        menu.addItem(openItem)
+        // New Brief
+        let newItem = NSMenuItem(title: "New Brief", action: #selector(newBrief), keyEquivalent: "n")
+        newItem.target = self
+        menu.addItem(newItem)
 
         menu.addItem(.separator())
 
-        let settingsItem = NSMenuItem(title: "Settings…",
-                                      action: #selector(openSettings),
-                                      keyEquivalent: ",")
+        // Last 10 briefs
+        if recentBriefs.isEmpty {
+            let empty = NSMenuItem(title: "No briefs yet", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            menu.addItem(empty)
+        } else {
+            for brief in recentBriefs {
+                let title = brief.notificationText
+                let item = NSMenuItem(title: title, action: #selector(briefSelected(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = brief.id
+                if brief.status == "ready" {
+                    item.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)
+                    item.image?.size = NSSize(width: 8, height: 8)
+                }
+                // Subtitle via attributed title
+                if let summary = brief.openingSummary {
+                    let attr = NSMutableAttributedString(string: title + "\n")
+                    let sub = NSAttributedString(
+                        string: summary,
+                        attributes: [.font: NSFont.systemFont(ofSize: 10),
+                                     .foregroundColor: NSColor.secondaryLabelColor]
+                    )
+                    attr.append(sub)
+                    item.attributedTitle = attr
+                }
+                menu.addItem(item)
+            }
+        }
+
+        menu.addItem(.separator())
+
+        // Settings
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
 
         menu.addItem(.separator())
 
-        menu.addItem(NSMenuItem(title: "Quit",
-                                action: #selector(NSApplication.terminate(_:)),
-                                keyEquivalent: "q"))
+        // Quit
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         statusItem.menu = menu
     }
 
-    private func rebuildServiceItems() {
-        guard let menu = statusItem.menu else { return }
-        // Remove existing health items (between separator at index 1 and settings at index 2)
-        while menu.items.count > 4 && menu.items[2].isSeparatorItem == false
-              && menu.items[2].action == nil {
-            menu.removeItem(at: 2)
-        }
-        var insertAt = 2
-        for (service, status) in serviceHealthStatus.sorted(by: { $0.key < $1.key }) {
-            let dot: String
-            switch status {
-            case .ok:      dot = "●"
-            case .warning: dot = "◐"
-            case .error:   dot = "○"
-            }
-            let item = NSMenuItem(title: "\(dot) \(service.capitalized)",
-                                  action: nil, keyEquivalent: "")
-            item.isEnabled = false
-            menu.insertItem(item, at: insertAt)
-            insertAt += 1
-        }
+    @objc private func newBrief() {
+        onNewBrief?()
     }
 
-    @objc private func buttonClicked() {
-        onTogglePanel?()
-    }
-
-    @objc private func openApp() {
-        onTogglePanel?()
+    @objc private func briefSelected(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? Int64 else { return }
+        onSelectBrief?(id)
     }
 
     @objc private func openSettings() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
+        onOpenSettings?()
     }
 }
