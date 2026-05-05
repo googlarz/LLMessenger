@@ -65,6 +65,8 @@
 		BB100003BB100003BB100003 /* NotificationManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB100004BB100004BB100004 /* NotificationManagerTests.swift */; };
 		CC200001CC200001CC200001 /* SignalCLIAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC200002CC200002CC200002 /* SignalCLIAdapter.swift */; };
 		CC200003CC200003CC200003 /* SignalCLIAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC200004CC200004CC200004 /* SignalCLIAdapterTests.swift */; };
+		DD300001DD300001DD300001 /* AutoLaunchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD300002DD300002DD300002 /* AutoLaunchManager.swift */; };
+		DD300003DD300003DD300003 /* AutoLaunchManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD300004DD300004DD300004 /* AutoLaunchManagerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -133,6 +135,8 @@
 		BB100004BB100004BB100004 /* NotificationManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManagerTests.swift; sourceTree = "<group>"; };
 		CC200002CC200002CC200002 /* SignalCLIAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalCLIAdapter.swift; sourceTree = "<group>"; };
 		CC200004CC200004CC200004 /* SignalCLIAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalCLIAdapterTests.swift; sourceTree = "<group>"; };
+		DD300002DD300002DD300002 /* AutoLaunchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoLaunchManager.swift; sourceTree = "<group>"; };
+		DD300004DD300004DD300004 /* AutoLaunchManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoLaunchManagerTests.swift; sourceTree = "<group>"; };
 		41636AD8770243FCAD928306 /* ChatViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModelTests.swift; sourceTree = "<group>"; };
 		F108F4654D64EC797F01A083 /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
 		F2480065C366A43445195D28 /* LLMClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMClient.swift; sourceTree = "<group>"; };
@@ -236,11 +240,20 @@
 				7F888C79963C323AB6E6BBD4 /* Brief */,
 				056590AA9FD9D74E056176B5 /* Keychain */,
 				364507FCF3614EFBB0D459DF /* LLM */,
+				DD300005DD300005DD300005 /* AutoLaunch */,
 				BB100005BB100005BB100005 /* Notifications */,
 				51484823F73E4929A50BE96A /* Settings */,
 				13D677F767D3499CEF015E0C /* Store */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		DD300005DD300005DD300005 /* AutoLaunch */ = {
+			isa = PBXGroup;
+			children = (
+				DD300002DD300002DD300002 /* AutoLaunchManager.swift */,
+			);
+			path = AutoLaunch;
 			sourceTree = "<group>";
 		};
 		BB100005BB100005BB100005 /* Notifications */ = {
@@ -283,7 +296,9 @@
 				34734C4C9D5F417C946DDB41 /* SettingsRepositoryTests.swift */,
 				BB100004BB100004BB100004 /* NotificationManagerTests.swift */,
 				CC200004CC200004CC200004 /* SignalCLIAdapterTests.swift */,
+				DD300004DD300004DD300004 /* AutoLaunchManagerTests.swift */,
 				97C7886911F46E51E0EE1B2B /* KeychainStoreTests.swift */,
+
 				E0E83C3D7F5BA8B73D9EF54F /* LLMClientTypesTests.swift */,
 				04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */,
 				81F98163F2B0DC06E29DF2EB /* LLMProviderTests.swift */,
@@ -464,6 +479,7 @@
 				D1F953A8E249428C89CB5F03 /* ChatInputView.swift in Sources */,
 				BB100001BB100001BB100001 /* NotificationManager.swift in Sources */,
 				CC200001CC200001CC200001 /* SignalCLIAdapter.swift in Sources */,
+				DD300001DD300001DD300001 /* AutoLaunchManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -478,6 +494,7 @@
 				F7E8E67C6F40485DA31716CB /* SettingsRepositoryTests.swift in Sources */,
 				BB100003BB100003BB100003 /* NotificationManagerTests.swift in Sources */,
 				CC200003CC200003CC200003 /* SignalCLIAdapterTests.swift in Sources */,
+				DD300003DD300003DD300003 /* AutoLaunchManagerTests.swift in Sources */,
 				74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */,
 				2528022DB189F9F99041972C /* KeychainStoreTests.swift in Sources */,
 				E2C8F8B6CA8E66B74B528FB1 /* LLMClientTypesTests.swift in Sources */,

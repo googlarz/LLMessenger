@@ -1,10 +1,12 @@
 // LLMessenger/UI/Settings/LLMSettingsTab.swift
 import SwiftUI
+import ServiceManagement
 
 struct LLMSettingsTab: View {
     @State private var anthropicKey: String = ""
     @State private var openAIKey: String = ""
     @State private var ollamaModel: String = ""
+    @State private var launchAtLogin: Bool = AutoLaunchManager.isEnabled
     @State private var saveStatus: String = ""
 
     private let repo = SettingsRepository()
@@ -24,6 +26,13 @@ struct LLMSettingsTab: View {
             Section("Ollama (local)") {
                 TextField("Model name (e.g. llama3)", text: $ollamaModel)
                     .textFieldStyle(.roundedBorder)
+            }
+
+            Section("General") {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { enabled in
+                        try? AutoLaunchManager.setEnabled(enabled)
+                    }
             }
 
             HStack {
