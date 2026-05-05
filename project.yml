@@ -35,3 +35,12 @@ targets:
     dependencies:
       - target: LLMessenger
       - package: GRDB
+schemes:
+  LLMessenger:
+    build:
+      targets:
+        LLMessenger: all
+        LLMessengerTests: [testing]
+    test:
+      targets:
+        - LLMessengerTests

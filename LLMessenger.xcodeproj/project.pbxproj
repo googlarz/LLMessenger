@@ -89,18 +89,18 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		"TEMP_E759AD2E-A4B8-4530-8F17-D25E23FD47A2" /* Core */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Core;
-			sourceTree = "<group>";
-		};
-		"TEMP_FB1DDC5A-731D-456B-A87B-9E4A16FCB3C9" /* Store */ = {
+		"TEMP_727F1F33-C410-42B8-B3D9-64121B682B38" /* Store */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = Store;
+			sourceTree = "<group>";
+		};
+		"TEMP_D72E88B4-3CDD-426F-B4AB-8A8FD225DFC4" /* Core */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Core;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -310,6 +310,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -384,6 +385,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
