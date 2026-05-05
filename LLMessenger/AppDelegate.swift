@@ -67,9 +67,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let settingsController = SettingsWindowController(database: db)
             settingsWindowController = settingsController
-            menuBar.onOpenSettings = { [weak settingsController] in
-                settingsController?.show()
-            }
+            let openSettings: () -> Void = { [weak settingsController] in settingsController?.show() }
+            menuBar.onOpenSettings = openSettings
+            state.onOpenSettings = openSettings
+
+            // Apply saved theme
+            let savedTheme = UserDefaults.standard.string(forKey: "app_theme") ?? "system"
+            applyTheme(savedTheme)
             menuBarController = menuBar
 
             let engine = PollEngine(database: db)
@@ -77,6 +81,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 let newID: Int64? = (try? await self.briefEngine?.processNewMessages()) ?? nil
                 self.appState?.refreshBriefs()
+                self.appState?.nextPollDate = self.pollEngine?.nextFireDate
                 if let id = newID {
                     let brief = try? self.appState?.repository.fetchBrief(id: id)
                     let body = brief?.notificationText ?? "You have new messages"
@@ -113,7 +118,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             pollEngine = engine
-            startTask = Task { await engine.start() }
+            startTask = Task {
+                await engine.start()
+                state.nextPollDate = engine.nextFireDate
+            }
 
             state.refreshBriefs()
             menuBar.setBriefs(state.briefs)
@@ -125,6 +133,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.runModal()
             NSApp.terminate(nil)
         }
+    }
+
+    private func applyTheme(_ theme: String) {
+        let appearance: NSAppearance? = switch theme {
+        case "light": NSAppearance(named: .aqua)
+        case "dark":  NSAppearance(named: .darkAqua)
+        default:      nil
+        }
+        NSApp.appearance = appearance
     }
 
     private func makeLLMClient() -> LLMClient {

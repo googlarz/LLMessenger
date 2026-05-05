@@ -222,16 +222,6 @@ struct BriefProseView: View {
                 }
             }
 
-            if !cards.isEmpty {
-                Text("Summaries are AI-generated and may miss nuance")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
-                    .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 20)
-                    .padding(.bottom, 4)
-                    .padding(.horizontal, 28)
-            }
         }
     }
 
@@ -359,16 +349,6 @@ struct BriefProseView: View {
                 }
             }
 
-            if !messages.isEmpty {
-                Text("Summaries are AI-generated and may miss nuance")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
-                    .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 22)
-                    .padding(.bottom, 4)
-                    .padding(.horizontal, 28)
-            }
         }
     }
 

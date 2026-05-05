@@ -72,6 +72,7 @@ final class AppState: ObservableObject {
     @Published var briefs: [Brief] = []
     @Published var selectedBriefID: Int64?
     @Published var serviceHealth: [String: AdapterHealthResult.Status] = [:]
+    @Published var nextPollDate: Date?
 
     let database: AppDatabase
     let repository: BriefRepository
@@ -79,6 +80,7 @@ final class AppState: ObservableObject {
     let llmModel: String
     let basePrompt: String
     var adapters: [String: any MessengerAdapter] = [:]
+    var onOpenSettings: (() -> Void)?
 
     init(database: AppDatabase,
          llmClient: LLMClient,

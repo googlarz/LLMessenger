@@ -6,15 +6,23 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            LLMSettingsTab()
-                .tabItem { Label("AI Model", systemImage: "cpu") }
+            InstructionsSettingsTab()
+                .tabItem { Label("Instructions", systemImage: "text.bubble") }
                 .tag(0)
+
+            AISettingsTab()
+                .tabItem { Label("AI", systemImage: "cpu") }
+                .tag(1)
 
             ServiceSettingsTab(database: database)
                 .tabItem { Label("Services", systemImage: "antenna.radiowaves.left.and.right") }
-                .tag(1)
+                .tag(2)
+
+            AboutSettingsTab()
+                .tabItem { Label("About", systemImage: "info.circle") }
+                .tag(3)
         }
-        .frame(width: 480, height: 340)
+        .frame(width: 520, height: 420)
         .padding()
     }
 }

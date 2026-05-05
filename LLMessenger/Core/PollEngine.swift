@@ -8,6 +8,7 @@ final class PollEngine {
     private var adapters: [String: MessengerAdapter] = [:]
     private var configs: [String: ServiceConfig] = [:]
     private var timers: [String: Timer] = [:]
+    private var nextFireDates: [String: Date] = [:]
     private var inFlight: Set<String> = []
     var failureCounts: [String: Int] = [:]
     var onPollSucceeded: (() async -> Void)?
@@ -68,11 +69,17 @@ final class PollEngine {
     private func scheduleTimer(serviceID: String, intervalMinutes: Int) {
         timers[serviceID]?.invalidate()
         let interval = TimeInterval(intervalMinutes * 60)
+        nextFireDates[serviceID] = Date().addingTimeInterval(interval)
         let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             guard let self else { return }
+            self.nextFireDates[serviceID] = Date().addingTimeInterval(interval)
             Task { try? await self.pollNow(serviceID: serviceID) }
         }
         timers[serviceID] = timer
+    }
+
+    var nextFireDate: Date? {
+        nextFireDates.values.min()
     }
 
     private func readLastCheck(serviceID: String) -> Date? {

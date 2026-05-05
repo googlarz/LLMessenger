@@ -2,7 +2,7 @@
 import SwiftUI
 import ServiceManagement
 
-struct LLMSettingsTab: View {
+struct AISettingsTab: View {
     @State private var anthropicKey: String = ""
     @State private var openAIKey: String = ""
     @State private var ollamaModel: String = ""
@@ -16,16 +16,25 @@ struct LLMSettingsTab: View {
             Section("Anthropic") {
                 SecureField("API Key (sk-ant-…)", text: $anthropicKey)
                     .textFieldStyle(.roundedBorder)
+                Text("Powers claude-3-5-sonnet and other Anthropic models.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("OpenAI") {
                 SecureField("API Key (sk-…)", text: $openAIKey)
                     .textFieldStyle(.roundedBorder)
+                Text("Fallback when no Anthropic key is set.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Ollama (local)") {
-                TextField("Model name (e.g. llama3)", text: $ollamaModel)
+                TextField("Model name (e.g. llama3, mistral)", text: $ollamaModel)
                     .textFieldStyle(.roundedBorder)
+                Text("Runs locally via Ollama. Used when no cloud keys are set.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("General") {

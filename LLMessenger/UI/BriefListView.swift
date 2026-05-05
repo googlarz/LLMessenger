@@ -4,70 +4,156 @@ import SwiftUI
 struct BriefListView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
+    @State private var searchQuery = ""
+
+    private var filteredGroups: [BriefListGroup] {
+        guard !searchQuery.isEmpty else { return appState.briefGroups }
+        let q = searchQuery.lowercased()
+        return appState.briefGroups.compactMap { group in
+            let filtered = group.briefs.filter { brief in
+                briefTimeLabel(brief).lowercased().contains(q) ||
+                briefSyncDate(brief).lowercased().contains(q) ||
+                (brief.notificationText.lowercased().contains(q))
+            }
+            return filtered.isEmpty ? nil :
+                BriefListGroup(id: group.id, label: group.label, briefs: filtered)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            SidebarHeaderView()
+            // Widgets below the header bar
+            VStack(spacing: 6) {
+                NextRefreshWidget()
+                SearchBarView(query: $searchQuery)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
 
             Divider().background(Theme.border)
 
-            // Brief list
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(appState.briefGroups, id: \.id) { group in
+                    ForEach(filteredGroups, id: \.id) { group in
                         SectionHeaderView(label: group.label)
                         ForEach(group.briefs, id: \.id) { brief in
-                            BriefRowView(brief: brief,
-                                         isSelected: appState.selectedBriefID == brief.id)
-                                .onTapGesture {
-                                    appState.selectedBriefID = brief.id
-                                    appState.markAsOpen(briefID: brief.id!)
-                                    Task { try? await chatViewModel.loadBrief(brief) }
-                                }
+                            BriefRowView(
+                                brief: brief,
+                                isSelected: appState.selectedBriefID == brief.id
+                            )
+                            .onTapGesture {
+                                appState.selectedBriefID = brief.id
+                                appState.markAsOpen(briefID: brief.id!)
+                                Task { try? await chatViewModel.loadBrief(brief) }
+                            }
                         }
                     }
                 }
             }
+
+            Divider().background(Theme.border)
+
+            SettingsButtonView()
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
         }
+    }
+
+    private func briefTimeLabel(_ brief: Brief) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        let end = brief.createdAt
+        let start = end.addingTimeInterval(-3600)
+        return "\(f.string(from: start)) – \(f.string(from: end))"
+    }
+
+    private func briefSyncDate(_ brief: Brief) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE d MMM"
+        return f.string(from: brief.createdAt)
     }
 }
 
-// MARK: - Subviews
+// MARK: - Next refresh countdown widget
 
-private struct SidebarHeaderView: View {
+private struct NextRefreshWidget: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Anthropic wordmark-style logo placeholder
+        HStack(spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Theme.accent)
-                    .frame(width: 22, height: 22)
-                Text("L")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
+                    .fill(Theme.accentMuted)
+                    .frame(width: 28, height: 28)
+                Image(systemName: "clock")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.accent)
             }
-            Text("LLMessenger")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("NEXT REFRESH")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .tracking(0.5)
+
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    Text(countdownText)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .monospacedDigit()
+                }
+            }
             Spacer()
-            if appState.unreadCount > 0 {
-                Text("\(appState.unreadCount)")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Theme.accent)
-                    .clipShape(Capsule())
-            }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 48)   // space for the invisible title bar
-        .padding(.bottom, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
+    }
+
+    private var countdownText: String {
+        guard let next = appState.nextPollDate else { return "—" }
+        let secs = max(0, Int(next.timeIntervalSinceNow))
+        if secs == 0 { return "Now" }
+        let m = secs / 60
+        let s = secs % 60
+        return String(format: "%dm %02ds", m, s)
     }
 }
+
+// MARK: - Search bar
+
+private struct SearchBarView: View {
+    @Binding var query: String
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textTertiary)
+
+            TextField("Search", text: $query)
+                .font(.system(size: 13))
+                .textFieldStyle(.plain)
+                .foregroundStyle(Theme.textPrimary)
+                .focused($focused)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(focused ? Theme.accent : Theme.border, lineWidth: 1)
+        )
+        .animation(.easeInOut(duration: 0.12), value: focused)
+    }
+}
+
+// MARK: - Section header
 
 private struct SectionHeaderView: View {
     let label: String
@@ -77,14 +163,16 @@ private struct SectionHeaderView: View {
             Text(label.uppercased())
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(Theme.textTertiary)
-                .kerning(0.8)
+                .kerning(0.6)
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 14)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 3)
     }
 }
+
+// MARK: - Brief row
 
 private struct BriefRowView: View {
     let brief: Brief
@@ -93,36 +181,93 @@ private struct BriefRowView: View {
     var isUnread: Bool { brief.status == "ready" }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            // Unread / selection indicator
+        HStack(alignment: .center, spacing: 0) {
+            // Active indicator bar
             Rectangle()
-                .fill(isUnread && !isSelected ? Theme.accent : Color.clear)
+                .fill(isSelected ? Theme.accent : Color.clear)
                 .frame(width: 2)
-                .padding(.vertical, 6)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(brief.notificationText)
-                        .font(.system(size: 12, weight: isUnread ? .semibold : .regular))
-                        .foregroundStyle(isUnread ? Theme.textPrimary : Theme.textSecondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(brief.createdAt, style: .relative)
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.textTertiary)
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    // Row 1: sync date + sync time
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text(syncDate)
+                            .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
+                            .foregroundStyle(Theme.textPrimary)
+                        Text(syncTime)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.textTertiary)
+                            .monospacedDigit()
+                    }
+                    // Row 2: time range · relative
+                    HStack(spacing: 3) {
+                        Text(timeRange)
+                        Text("·")
+                        Text(brief.createdAt, style: .relative)
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .monospacedDigit()
                 }
-                if let summary = brief.openingSummary, !summary.isEmpty {
-                    Text(summary)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .lineLimit(2)
+
+                Spacer(minLength: 4)
+
+                if isUnread {
+                    Circle()
+                        .fill(isSelected ? Theme.accent : Theme.accent.opacity(0.7))
+                        .frame(width: 7, height: 7)
                 }
             }
             .padding(.leading, 10)
             .padding(.trailing, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
         }
-        .background(isSelected ? Theme.selection : Color.clear)
+        .background(isSelected ? Theme.surfaceHigh : Color.clear)
         .contentShape(Rectangle())
+    }
+
+    private var syncDate: String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE d MMM"
+        return f.string(from: brief.createdAt)
+    }
+
+    private var syncTime: String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: brief.createdAt)
+    }
+
+    private var timeRange: String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        let start = brief.createdAt.addingTimeInterval(-3600)
+        return "\(f.string(from: start)) – \(f.string(from: brief.createdAt))"
+    }
+}
+
+// MARK: - Settings button
+
+private struct SettingsButtonView: View {
+    @EnvironmentObject var appState: AppState
+
+    var body: some View {
+        Button {
+            appState.onOpenSettings?()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textTertiary)
+                Text("Settings")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

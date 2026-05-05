@@ -62,6 +62,37 @@ struct SettingsRepository {
         }
     }
 
+    // MARK: - Base Prompt
+
+    func saveBasePrompt(_ prompt: String) {
+        UserDefaults.standard.set(prompt, forKey: "base_prompt")
+    }
+
+    func loadBasePrompt() -> String {
+        UserDefaults.standard.string(forKey: "base_prompt") ?? ""
+    }
+
+    // MARK: - Theme
+
+    func saveTheme(_ theme: String) {
+        UserDefaults.standard.set(theme, forKey: "app_theme")
+    }
+
+    func loadTheme() -> String {
+        UserDefaults.standard.string(forKey: "app_theme") ?? "system"
+    }
+
+    // MARK: - Default poll interval (minutes)
+
+    func savePollInterval(_ minutes: Int) {
+        UserDefaults.standard.set(minutes, forKey: "default_poll_interval")
+    }
+
+    func loadPollInterval() -> Int {
+        let v = UserDefaults.standard.integer(forKey: "default_poll_interval")
+        return v > 0 ? v : 60
+    }
+
     func loadAllServiceConfigs() throws -> [ServiceConfig] {
         guard let db = database else { return [] }
         return try db.dbQueue.read { db in

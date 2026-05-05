@@ -17,7 +17,6 @@ struct ChatPanelView: View {
         }
     }
 
-    // Stats derived from messages (or parsed JSON if available)
     private var headerStats: (messages: Int, services: Int, threads: Int, people: Int) {
         let msgs = briefMessages
         if let summary = appState.selectedBrief?.openingSummary,
@@ -37,8 +36,6 @@ struct ChatPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer().frame(height: 38)
-
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -89,6 +86,9 @@ struct ChatPanelView: View {
                 }
             }
 
+            // Footer: countdown + disclaimer
+            BriefFooterView()
+
             Divider().background(Theme.border)
             ChatInputView()
         }
@@ -104,5 +104,38 @@ struct ChatPanelView: View {
         case .replyDraft(let id, let draft):
             ReplyDraftView(draftID: id, draft: draft)
         }
+    }
+}
+
+// MARK: - Footer
+
+private struct BriefFooterView: View {
+    @EnvironmentObject var appState: AppState
+
+    var body: some View {
+        Divider().background(Theme.border.opacity(0.4))
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            Text(footerText)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+        }
+    }
+
+    private var footerText: String {
+        var parts: [String] = []
+        if let next = appState.nextPollDate {
+            let secs = max(0, Int(next.timeIntervalSinceNow))
+            if secs > 0 {
+                let m = secs / 60
+                let s = secs % 60
+                parts.append("Next brief in \(String(format: "%dm %02ds", m, s))")
+            }
+        }
+        parts.append("Summaries are AI-generated and may miss nuance")
+        return parts.joined(separator: " · ")
     }
 }
