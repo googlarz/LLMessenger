@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0AA8FC1D3F625AABF5777C9F /* SubprocessAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */; };
 		2A11383BA014D49F2D898CA7 /* ServiceHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B01BD5888FD90D28050A644 /* ServiceHealth.swift */; };
 		44401121145FDD4E5FDFB90A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */; };
 		570A01C0F98874233CA618A5 /* MessengerAdapterTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */; };
@@ -17,6 +18,7 @@
 		8F6E46E1E8A362D1B0918AE5 /* MessengerAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */; };
 		A487772BFE11B21472DAB15E /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DF82DF450F3BE04F68ACE24 /* Message.swift */; };
 		DE0C17AEBEECDE55B14BD784 /* LLMessengerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */; };
+		EAB0DE7548B574521670DA15 /* SubprocessAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */; };
 		ED026EB71E8074D35FCC0477 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 053BC1D531581B41EE1FF9FC /* GRDB */; };
 		ED58A99EF4403B466D24E7FF /* Brief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3982B388A984024FBEEA9C82 /* Brief.swift */; };
 		F4A203E914BDB2F60BF276E4 /* ServiceConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB2F4FDD502C4B9477B9BCE /* ServiceConfig.swift */; };
@@ -35,6 +37,7 @@
 /* Begin PBXFileReference section */
 		04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerTests.swift; sourceTree = "<group>"; };
 		077FE5D051B4131476BEDD07 /* LLMessenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LLMessenger.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubprocessAdapter.swift; sourceTree = "<group>"; };
 		0B01BD5888FD90D28050A644 /* ServiceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealth.swift; sourceTree = "<group>"; };
 		3982B388A984024FBEEA9C82 /* Brief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brief.swift; sourceTree = "<group>"; };
 		3DB2F4FDD502C4B9477B9BCE /* ServiceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceConfig.swift; sourceTree = "<group>"; };
@@ -44,6 +47,7 @@
 		982FB6E746994CADC872ABF9 /* AppDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabaseTests.swift; sourceTree = "<group>"; };
 		999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessengerAdapter.swift; sourceTree = "<group>"; };
 		BCE1A2AD60D1E42D7AAB4F4A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubprocessAdapterTests.swift; sourceTree = "<group>"; };
 		E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerApp.swift; sourceTree = "<group>"; };
 		F108F4654D64EC797F01A083 /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
 		FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessengerAdapterTypesTests.swift; sourceTree = "<group>"; };
@@ -113,6 +117,7 @@
 				982FB6E746994CADC872ABF9 /* AppDatabaseTests.swift */,
 				04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */,
 				FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */,
+				D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */,
 			);
 			path = LLMessengerTests;
 			sourceTree = "<group>";
@@ -130,6 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */,
+				08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */,
 			);
 			path = Adapters;
 			sourceTree = "<group>";
@@ -234,6 +240,7 @@
 				8F6E46E1E8A362D1B0918AE5 /* MessengerAdapter.swift in Sources */,
 				F4A203E914BDB2F60BF276E4 /* ServiceConfig.swift in Sources */,
 				2A11383BA014D49F2D898CA7 /* ServiceHealth.swift in Sources */,
+				EAB0DE7548B574521670DA15 /* SubprocessAdapter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -244,6 +251,7 @@
 				5D699EFC3B5C38ED70CDAE9D /* AppDatabaseTests.swift in Sources */,
 				7B7A3506F3DF564A1595A4A8 /* LLMessengerTests.swift in Sources */,
 				570A01C0F98874233CA618A5 /* MessengerAdapterTypesTests.swift in Sources */,
+				0AA8FC1D3F625AABF5777C9F /* SubprocessAdapterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
