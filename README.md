@@ -2,31 +2,21 @@
 
 **A macOS menu bar app that reads your Signal, Telegram, and iMessage conversations and turns them into structured, AI-generated briefs — so you can catch up in seconds instead of scrolling for minutes.**
 
+![LLMessenger screenshot](docs/screenshot.png)
+
 ---
 
 ## What it does
 
-LLMessenger sits in your menu bar. Every hour (or on demand) it polls your connected messaging services, feeds the messages to a local or cloud LLM, and produces a structured brief:
+LLMessenger sits in your menu bar. Every hour (or on demand) it polls your connected messaging services, feeds the messages to a local or cloud LLM, and produces per-conversation cards — each with a headline, prose summary, key quotes, and action items:
 
-```
-## MU11 Weddinger Wiesel – Group Chat Summary
+- **iMessage** — *Mum confirmed Sunday lunch — needs a reply* — REPLY NEEDED
+  > Mum sent six messages confirming she's bringing the casserole and asking if you can pick up wine on the way.
+  > **NEXT** Reply by 12:00 · Pick up wine
 
-### Timeline of Key Events
-
-Mon, 5 May
-- Ephraim confirmed training at Pankstraße 21, 16:00
-
-Yesterday
-- Last-minute venue change to Wiesenstraße — Gernot noted Ilan arrives 10 min late
-
-### ⚡ Action Items
-| # | Action | Owner | Status |
-|---|--------|-------|--------|
-| 1 | Share Teamplus access code | Ephraim | ⚠️ Pending |
-
-### 🔔 Notable Notes
-- gulizemzem033 left the group — M/W split is now permanent
-```
+- **Telegram** — *Lisbon trip group narrowed dates to May 22–26* — HEADS-UP
+  > The five of you converged on May 22–26 after Priya pushed back on the late-May option. Sam booked refundable flights.
+  > **NEXT** Confirm flights by tonight · Vote on Airbnb
 
 Click any brief in the sidebar to open it. Ask follow-up questions ("who confirmed attendance?"), or let the app draft a reply you can review and send.
 
@@ -165,13 +155,23 @@ LLMessenger/
 
 ---
 
-## Privacy
+## Privacy & Safety
 
-- Messages are stored locally in SQLite (`~/Library/Application Support/LLMessenger/llmessenger.db`)
-- With `on_demand` privacy mode, message text is **never sent to the LLM** unless you explicitly request a summary
-- With `eager` mode, messages are sent to whichever LLM backend you configured
-- No data leaves your machine unless you use a cloud LLM (Anthropic / OpenAI)
-- Signal credentials are stored in `UserDefaults` (not Keychain) to avoid macOS permission dialogs on rebuilt binaries
+Your messages never leave your machine silently. Here's exactly what happens:
+
+| Data | Where it goes |
+|------|--------------|
+| Raw message text | Stored locally in SQLite — never sent anywhere unless you trigger a summary |
+| Messages → LLM | **Only** when you click "New Brief" or "Refresh" (with `on_demand` mode) or on each hourly poll (with `eager` mode) |
+| LLM backend: Ollama | Processed entirely on your machine — nothing leaves |
+| LLM backend: Anthropic / OpenAI | Message text is sent to the API over HTTPS to generate the brief, then discarded |
+| Brief content | Stored locally in the same SQLite database |
+| Signal credentials | Stored in `UserDefaults` on-device (not sent anywhere) |
+
+**The summary generation pipeline:**  
+`Messages in DB` → `PromptBuilder` → `LLM API call` → `JSON brief stored locally` → `UI renders cards`
+
+No telemetry, no analytics, no third-party SDKs beyond the LLM API you choose. If you use Ollama, zero bytes of your messages ever reach the internet.
 
 ---
 

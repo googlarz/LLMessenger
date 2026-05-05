@@ -1,19 +1,52 @@
 // LLMessenger/UI/BriefProseView.swift
 import SwiftUI
 
+// MARK: - Parsed JSON structures
+
+struct BriefCard: Decodable {
+    let service: String
+    let conversation: String?
+    let headline: String
+    let priority: String
+    let counts: Counts
+    let summary: String
+    let callback: String?
+    let actions: [String]
+    let quotes: [Quote]
+
+    struct Counts: Decodable {
+        let messages: Int
+        let threads: Int
+        let people: Int
+    }
+
+    struct Quote: Decodable {
+        let from: String
+        let time: String
+        let text: String
+    }
+}
+
+struct BriefJSON: Decodable {
+    let total_messages: Int?
+    let total_threads: Int?
+    let total_people: Int?
+    let cards: [BriefCard]
+}
+
 // MARK: - Inline service badge (iM / Tg / Sg)
 
 struct SourceGlyphView: View {
     let service: String
+    var size: CGFloat = 20
 
     var body: some View {
         Text(initial)
-            .font(.system(size: 8, weight: .bold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
+            .font(.system(size: size <= 18 ? 8.5 : 10, weight: .bold))
+            .foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
+            .frame(width: size, height: size)
             .background(Theme.serviceColor(service))
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .clipShape(RoundedRectangle(cornerRadius: 5))
     }
 
     private var initial: String {
@@ -36,7 +69,7 @@ struct SourceFilterView: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                chip(id: "all", label: "All", count: counts.values.reduce(0, +), color: nil)
+                chip(id: "all", label: "All sources", count: counts.values.reduce(0, +), color: nil)
                 ForEach(services, id: \.self) { svc in
                     chip(id: svc, label: Theme.serviceName(svc),
                          count: counts[svc] ?? 0, color: Theme.serviceColor(svc))
@@ -77,12 +110,48 @@ struct SourceFilterView: View {
     }
 }
 
+// MARK: - Priority pill
+
+private struct PriorityPill: View {
+    let priority: String
+
+    var body: some View {
+        Text("— \(label)")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(color)
+            .tracking(0.4)
+            .textCase(.uppercase)
+    }
+
+    private var label: String {
+        switch priority {
+        case "high": return "reply needed"
+        case "med":  return "heads-up"
+        default:     return "fyi"
+        }
+    }
+
+    private var color: Color {
+        switch priority {
+        case "high": return Color(red: 0.95, green: 0.45, blue: 0.25)
+        case "med":  return Color(red: 0.90, green: 0.72, blue: 0.30)
+        default:     return Theme.textTertiary
+        }
+    }
+}
+
 // MARK: - Main prose view
 
 struct BriefProseView: View {
     let brief: Brief
     let messages: [Message]
     @State private var filter: String = "all"
+
+    private var parsedJSON: BriefJSON? {
+        guard let summary = brief.openingSummary,
+              let data = summary.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(BriefJSON.self, from: data)
+    }
 
     private var services: [String] {
         Array(Set(messages.map(\.service))).sorted()
@@ -92,59 +161,209 @@ struct BriefProseView: View {
         Dictionary(grouping: messages, by: \.service).mapValues(\.count)
     }
 
-    private var visible: [Message] {
+    private var cardCounts: [String: Int] {
+        guard let json = parsedJSON else { return counts }
+        return Dictionary(
+            json.cards.map { ($0.service, $0.counts.messages) },
+            uniquingKeysWith: +
+        )
+    }
+
+    private var visibleCards: [BriefCard]? {
+        guard let json = parsedJSON else { return nil }
+        return filter == "all" ? json.cards : json.cards.filter { $0.service == filter }
+    }
+
+    private var visibleMessages: [Message] {
         let sorted = messages.sorted { $0.timestamp < $1.timestamp }
         return filter == "all" ? sorted : sorted.filter { $0.service == filter }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Filter chips — only shown when more than one service
-            if services.count > 1 {
-                SourceFilterView(services: services, counts: counts, active: $filter)
-                    .padding(.bottom, 16)
+            if services.count > 1 || (parsedJSON?.cards.count ?? 0) > 1 {
+                SourceFilterView(
+                    services: services,
+                    counts: cardCounts,
+                    active: $filter
+                )
+                .padding(.bottom, 12)
             }
 
-            VStack(alignment: .leading, spacing: 0) {
-                // AI summary block
-                if let summary = brief.openingSummary, !summary.isEmpty {
-                    summaryBlock(summary)
-                        .padding(.bottom, 22)
-                }
-
-                // Messages grouped by service, blockquote style
-                let grouped = Dictionary(grouping: visible, by: \.service)
-                let sortedServices = grouped.keys.sorted()
-
-                ForEach(Array(sortedServices.enumerated()), id: \.element) { idx, svc in
-                    if let msgs = grouped[svc] {
-                        serviceGroup(service: svc, messages: msgs)
-                        if idx < sortedServices.count - 1 {
-                            Divider()
-                                .background(Theme.border.opacity(0.4))
-                                .padding(.vertical, 16)
-                        }
-                    }
-                }
-
-                // Footer
-                if !messages.isEmpty {
-                    Text("Summaries are AI-generated and may miss nuance")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .frame(maxWidth: .infinity)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 22)
-                        .padding(.bottom, 4)
-                }
+            if let cards = visibleCards {
+                cardsView(cards)
+            } else {
+                fallbackView
             }
-            .padding(.horizontal, 28)
         }
-        .padding(.top, 16)
+        .padding(.top, 12)
         .padding(.bottom, 8)
     }
 
-    // MARK: - Sub-views
+    // MARK: - JSON card rendering
+
+    @ViewBuilder
+    private func cardsView(_ cards: [BriefCard]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(cards.enumerated()), id: \.offset) { idx, card in
+                cardView(card)
+                if idx < cards.count - 1 {
+                    Divider()
+                        .background(Theme.border.opacity(0.4))
+                        .padding(.vertical, 16)
+                        .padding(.horizontal, 28)
+                }
+            }
+
+            if !cards.isEmpty {
+                Text("Summaries are AI-generated and may miss nuance")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 20)
+                    .padding(.bottom, 4)
+                    .padding(.horizontal, 28)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func cardView(_ card: BriefCard) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Service + headline + priority
+            HStack(alignment: .center, spacing: 6) {
+                SourceGlyphView(service: card.service, size: 22)
+                Text(Theme.serviceName(card.service))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("—")
+                    .foregroundStyle(Theme.textTertiary)
+                Text(card.headline)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                PriorityPill(priority: card.priority)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+
+            // Metadata
+            HStack(spacing: 4) {
+                Text("\(card.counts.messages) message\(card.counts.messages == 1 ? "" : "s")")
+                Text("·")
+                Text("\(card.counts.threads) thread\(card.counts.threads == 1 ? "" : "s")")
+                Text("·")
+                Text("\(card.counts.people) \(card.counts.people == 1 ? "person" : "people")")
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.textTertiary)
+            .monospacedDigit()
+
+            // Summary prose
+            Text(card.summary)
+                .font(.system(size: 13.5))
+                .foregroundStyle(Theme.textPrimary)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+
+            // From earlier callback
+            if let callback = card.callback, !callback.isEmpty {
+                HStack(alignment: .top, spacing: 4) {
+                    Text("From earlier")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                    Text("—")
+                        .foregroundStyle(Theme.accent)
+                    Text(callback)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            // Quotes
+            if !card.quotes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(card.quotes.enumerated()), id: \.offset) { _, quote in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(quote.time)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(Theme.textTertiary)
+                                .frame(width: 36, alignment: .leading)
+                                .padding(.top, 1)
+                            SourceGlyphView(service: card.service, size: 16)
+                                .padding(.top, 1)
+                            (Text("\(quote.from): ").fontWeight(.semibold) + Text("\"\(quote.text)\"").italic())
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.textPrimary)
+                        }
+                    }
+                }
+                .padding(.leading, 2)
+            }
+
+            // Action items (NEXT)
+            if !card.actions.isEmpty {
+                HStack(spacing: 6) {
+                    Text("NEXT")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .tracking(0.5)
+                    ForEach(Array(card.actions.enumerated()), id: \.offset) { idx, action in
+                        if idx > 0 {
+                            Text("·")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.textTertiary)
+                        }
+                        Text(action)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.accent)
+                            .underline(pattern: .dash)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 28)
+    }
+
+    // MARK: - Fallback: grouped by service
+
+    @ViewBuilder
+    private var fallbackView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let summary = brief.openingSummary, !summary.isEmpty {
+                summaryBlock(summary)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 22)
+            }
+
+            let grouped = Dictionary(grouping: visibleMessages, by: \.service)
+            let sortedServices = grouped.keys.sorted()
+
+            ForEach(Array(sortedServices.enumerated()), id: \.element) { idx, svc in
+                if let msgs = grouped[svc] {
+                    serviceGroup(service: svc, messages: msgs)
+                    if idx < sortedServices.count - 1 {
+                        Divider()
+                            .background(Theme.border.opacity(0.4))
+                            .padding(.vertical, 16)
+                    }
+                }
+            }
+
+            if !messages.isEmpty {
+                Text("Summaries are AI-generated and may miss nuance")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 22)
+                    .padding(.bottom, 4)
+                    .padding(.horizontal, 28)
+            }
+        }
+    }
 
     @ViewBuilder
     private func summaryBlock(_ text: String) -> some View {
@@ -164,7 +383,6 @@ struct BriefProseView: View {
     @ViewBuilder
     private func serviceGroup(service: String, messages: [Message]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Service header row
             HStack(spacing: 6) {
                 SourceGlyphView(service: service)
                 Text(Theme.serviceName(service))
@@ -178,7 +396,6 @@ struct BriefProseView: View {
                     .monospacedDigit()
             }
 
-            // Blockquote messages
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(messages, id: \.messageId) { msg in
                     quoteRow(msg)
@@ -191,6 +408,7 @@ struct BriefProseView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 1))
             }
         }
+        .padding(.horizontal, 28)
     }
 
     @ViewBuilder

@@ -5,40 +5,58 @@ struct ChatPanelView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
 
-    // Messages from the thread (excluding AI items)
     private var briefMessages: [Message] {
         chatViewModel.threadItems.compactMap {
             if case .message(let m) = $0 { return m } else { return nil }
         }
     }
 
-    // AI responses + reply drafts only
     private var aiItems: [ThreadItem] {
         chatViewModel.threadItems.filter {
             if case .message = $0 { return false } else { return true }
         }
     }
 
+    // Stats derived from messages (or parsed JSON if available)
+    private var headerStats: (messages: Int, services: Int, threads: Int, people: Int) {
+        let msgs = briefMessages
+        if let summary = appState.selectedBrief?.openingSummary,
+           let data = summary.data(using: .utf8),
+           let json = try? JSONDecoder().decode(BriefJSON.self, from: data) {
+            let totalMsgs = json.total_messages ?? msgs.count
+            let svcs = Set(json.cards.map(\.service)).count
+            let threads = json.total_threads ?? json.cards.reduce(0) { $0 + $1.counts.threads }
+            let people = json.total_people ?? json.cards.reduce(0) { $0 + $1.counts.people }
+            return (totalMsgs, svcs, threads, people)
+        }
+        let svcs = Set(msgs.map(\.service)).count
+        let convs = Set(msgs.map(\.conversationId)).count
+        let senders = Set(msgs.map(\.sender)).count
+        return (msgs.count, svcs, convs, senders)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Invisible titlebar spacer
             Spacer().frame(height: 38)
 
-            // Scrollable content: brief prose + AI thread
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Brief header with AI summary bar
                         if let brief = appState.selectedBrief {
-                            BriefHeaderView(brief: brief)
+                            let stats = headerStats
+                            BriefHeaderView(
+                                brief: brief,
+                                messageCount: stats.messages,
+                                serviceCount: stats.services,
+                                threadCount: stats.threads,
+                                peopleCount: stats.people
+                            )
 
                             Divider().background(Theme.border.opacity(0.6))
 
-                            // Flowing prose: source filter + summary + blockquote quotes
                             BriefProseView(brief: brief, messages: briefMessages)
                         }
 
-                        // AI conversation items (responses + drafts)
                         if !aiItems.isEmpty {
                             Divider()
                                 .background(Theme.border.opacity(0.5))
@@ -72,8 +90,6 @@ struct ChatPanelView: View {
             }
 
             Divider().background(Theme.border)
-
-            // Always-visible composer
             ChatInputView()
         }
     }
