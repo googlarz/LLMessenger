@@ -7,17 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2A11383BA014D49F2D898CA7 /* ServiceHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B01BD5888FD90D28050A644 /* ServiceHealth.swift */; };
 		44401121145FDD4E5FDFB90A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */; };
+		570A01C0F98874233CA618A5 /* MessengerAdapterTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */; };
+		5D6362E0E7358191E879A9FC /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = F108F4654D64EC797F01A083 /* AppDatabase.swift */; };
+		5D699EFC3B5C38ED70CDAE9D /* AppDatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982FB6E746994CADC872ABF9 /* AppDatabaseTests.swift */; };
 		68558FFF6748D2321631327B /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D2A719FBD90D2E75C687F20F /* GRDB */; };
 		7B7A3506F3DF564A1595A4A8 /* LLMessengerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */; };
-		AA000001000000000000001A /* AppDatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000000000001B /* AppDatabaseTests.swift */; };
-		AA000002000000000000001A /* Brief.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000001B /* Brief.swift */; };
-		AA000003000000000000001A /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000003000000000000001B /* Message.swift */; };
-		AA000004000000000000001A /* ServiceConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000004000000000000001B /* ServiceConfig.swift */; };
-		AA000005000000000000001A /* ServiceHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000005000000000000001B /* ServiceHealth.swift */; };
-		AA000006000000000000001A /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000006000000000000001B /* AppDatabase.swift */; };
+		8F6E46E1E8A362D1B0918AE5 /* MessengerAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */; };
+		A487772BFE11B21472DAB15E /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DF82DF450F3BE04F68ACE24 /* Message.swift */; };
 		DE0C17AEBEECDE55B14BD784 /* LLMessengerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */; };
 		ED026EB71E8074D35FCC0477 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 053BC1D531581B41EE1FF9FC /* GRDB */; };
+		ED58A99EF4403B466D24E7FF /* Brief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3982B388A984024FBEEA9C82 /* Brief.swift */; };
+		F4A203E914BDB2F60BF276E4 /* ServiceConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB2F4FDD502C4B9477B9BCE /* ServiceConfig.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,16 +35,18 @@
 /* Begin PBXFileReference section */
 		04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerTests.swift; sourceTree = "<group>"; };
 		077FE5D051B4131476BEDD07 /* LLMessenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LLMessenger.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0B01BD5888FD90D28050A644 /* ServiceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealth.swift; sourceTree = "<group>"; };
+		3982B388A984024FBEEA9C82 /* Brief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brief.swift; sourceTree = "<group>"; };
+		3DB2F4FDD502C4B9477B9BCE /* ServiceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceConfig.swift; sourceTree = "<group>"; };
+		4DF82DF450F3BE04F68ACE24 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		94378A6C5DDBC9A9A076B97D /* LLMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LLMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		AA000001000000000000001B /* AppDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabaseTests.swift; sourceTree = "<group>"; };
-		AA000002000000000000001B /* Brief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brief.swift; sourceTree = "<group>"; };
-		AA000003000000000000001B /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
-		AA000004000000000000001B /* ServiceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceConfig.swift; sourceTree = "<group>"; };
-		AA000005000000000000001B /* ServiceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealth.swift; sourceTree = "<group>"; };
-		AA000006000000000000001B /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
+		982FB6E746994CADC872ABF9 /* AppDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabaseTests.swift; sourceTree = "<group>"; };
+		999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessengerAdapter.swift; sourceTree = "<group>"; };
 		BCE1A2AD60D1E42D7AAB4F4A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerApp.swift; sourceTree = "<group>"; };
+		F108F4654D64EC797F01A083 /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
+		FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessengerAdapterTypesTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,9 +75,18 @@
 				7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */,
 				BCE1A2AD60D1E42D7AAB4F4A /* Info.plist */,
 				E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */,
-				"TEMP_D72E88B4-3CDD-426F-B4AB-8A8FD225DFC4" /* Core */,
+				1958C796DA475A22D89DE79A /* Core */,
 			);
 			path = LLMessenger;
+			sourceTree = "<group>";
+		};
+		13D677F767D3499CEF015E0C /* Store */ = {
+			isa = PBXGroup;
+			children = (
+				F108F4654D64EC797F01A083 /* AppDatabase.swift */,
+				F6B2A081A9581FA441C819D0 /* Models */,
+			);
+			path = Store;
 			sourceTree = "<group>";
 		};
 		14FF6D9A4D2EB4CFFC1C603F = {
@@ -85,11 +98,21 @@
 			);
 			sourceTree = "<group>";
 		};
+		1958C796DA475A22D89DE79A /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				CBD7C66B317B27709DA2E883 /* Adapters */,
+				13D677F767D3499CEF015E0C /* Store */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
 		473CFBEE838299AE8AC2E70A /* LLMessengerTests */ = {
 			isa = PBXGroup;
 			children = (
+				982FB6E746994CADC872ABF9 /* AppDatabaseTests.swift */,
 				04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */,
-				AA000001000000000000001B /* AppDatabaseTests.swift */,
+				FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */,
 			);
 			path = LLMessengerTests;
 			sourceTree = "<group>";
@@ -103,32 +126,23 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		AA000007000000000000001B /* Models */ = {
+		CBD7C66B317B27709DA2E883 /* Adapters */ = {
 			isa = PBXGroup;
 			children = (
-				AA000002000000000000001B /* Brief.swift */,
-				AA000003000000000000001B /* Message.swift */,
-				AA000004000000000000001B /* ServiceConfig.swift */,
-				AA000005000000000000001B /* ServiceHealth.swift */,
+				999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */,
+			);
+			path = Adapters;
+			sourceTree = "<group>";
+		};
+		F6B2A081A9581FA441C819D0 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				3982B388A984024FBEEA9C82 /* Brief.swift */,
+				4DF82DF450F3BE04F68ACE24 /* Message.swift */,
+				3DB2F4FDD502C4B9477B9BCE /* ServiceConfig.swift */,
+				0B01BD5888FD90D28050A644 /* ServiceHealth.swift */,
 			);
 			path = Models;
-			sourceTree = "<group>";
-		};
-		"TEMP_727F1F33-C410-42B8-B3D9-64121B682B38" /* Store */ = {
-			isa = PBXGroup;
-			children = (
-				AA000006000000000000001B /* AppDatabase.swift */,
-				AA000007000000000000001B /* Models */,
-			);
-			path = Store;
-			sourceTree = "<group>";
-		};
-		"TEMP_D72E88B4-3CDD-426F-B4AB-8A8FD225DFC4" /* Core */ = {
-			isa = PBXGroup;
-			children = (
-				"TEMP_727F1F33-C410-42B8-B3D9-64121B682B38" /* Store */,
-			);
-			path = Core;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -212,13 +226,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5D6362E0E7358191E879A9FC /* AppDatabase.swift in Sources */,
 				44401121145FDD4E5FDFB90A /* AppDelegate.swift in Sources */,
+				ED58A99EF4403B466D24E7FF /* Brief.swift in Sources */,
 				DE0C17AEBEECDE55B14BD784 /* LLMessengerApp.swift in Sources */,
-				AA000002000000000000001A /* Brief.swift in Sources */,
-				AA000003000000000000001A /* Message.swift in Sources */,
-				AA000004000000000000001A /* ServiceConfig.swift in Sources */,
-				AA000005000000000000001A /* ServiceHealth.swift in Sources */,
-				AA000006000000000000001A /* AppDatabase.swift in Sources */,
+				A487772BFE11B21472DAB15E /* Message.swift in Sources */,
+				8F6E46E1E8A362D1B0918AE5 /* MessengerAdapter.swift in Sources */,
+				F4A203E914BDB2F60BF276E4 /* ServiceConfig.swift in Sources */,
+				2A11383BA014D49F2D898CA7 /* ServiceHealth.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -226,8 +241,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5D699EFC3B5C38ED70CDAE9D /* AppDatabaseTests.swift in Sources */,
 				7B7A3506F3DF564A1595A4A8 /* LLMessengerTests.swift in Sources */,
-				AA000001000000000000001A /* AppDatabaseTests.swift in Sources */,
+				570A01C0F98874233CA618A5 /* MessengerAdapterTypesTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
