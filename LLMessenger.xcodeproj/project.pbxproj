@@ -63,6 +63,8 @@
 		BEEE37989C2A49DFBA75E033 /* ChatViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41636AD8770243FCAD928306 /* ChatViewModelTests.swift */; };
 		BB100001BB100001BB100001 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB100002BB100002BB100002 /* NotificationManager.swift */; };
 		BB100003BB100003BB100003 /* NotificationManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB100004BB100004BB100004 /* NotificationManagerTests.swift */; };
+		CC200001CC200001CC200001 /* SignalCLIAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC200002CC200002CC200002 /* SignalCLIAdapter.swift */; };
+		CC200003CC200003CC200003 /* SignalCLIAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC200004CC200004CC200004 /* SignalCLIAdapterTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -129,6 +131,8 @@
 		34734C4C9D5F417C946DDB41 /* SettingsRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepositoryTests.swift; sourceTree = "<group>"; };
 		BB100002BB100002BB100002 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		BB100004BB100004BB100004 /* NotificationManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManagerTests.swift; sourceTree = "<group>"; };
+		CC200002CC200002CC200002 /* SignalCLIAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalCLIAdapter.swift; sourceTree = "<group>"; };
+		CC200004CC200004CC200004 /* SignalCLIAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalCLIAdapterTests.swift; sourceTree = "<group>"; };
 		41636AD8770243FCAD928306 /* ChatViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModelTests.swift; sourceTree = "<group>"; };
 		F108F4654D64EC797F01A083 /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
 		F2480065C366A43445195D28 /* LLMClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMClient.swift; sourceTree = "<group>"; };
@@ -278,6 +282,7 @@
 				41636AD8770243FCAD928306 /* ChatViewModelTests.swift */,
 				34734C4C9D5F417C946DDB41 /* SettingsRepositoryTests.swift */,
 				BB100004BB100004BB100004 /* NotificationManagerTests.swift */,
+				CC200004CC200004CC200004 /* SignalCLIAdapterTests.swift */,
 				97C7886911F46E51E0EE1B2B /* KeychainStoreTests.swift */,
 				E0E83C3D7F5BA8B73D9EF54F /* LLMClientTypesTests.swift */,
 				04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */,
@@ -323,6 +328,7 @@
 			children = (
 				999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */,
 				08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */,
+				CC200002CC200002CC200002 /* SignalCLIAdapter.swift */,
 			);
 			path = Adapters;
 			sourceTree = "<group>";
@@ -457,6 +463,7 @@
 				2B1F5C6A04D64AD68885C051 /* AssistantResponseView.swift in Sources */,
 				D1F953A8E249428C89CB5F03 /* ChatInputView.swift in Sources */,
 				BB100001BB100001BB100001 /* NotificationManager.swift in Sources */,
+				CC200001CC200001CC200001 /* SignalCLIAdapter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -470,6 +477,7 @@
 				BEEE37989C2A49DFBA75E033 /* ChatViewModelTests.swift in Sources */,
 				F7E8E67C6F40485DA31716CB /* SettingsRepositoryTests.swift in Sources */,
 				BB100003BB100003BB100003 /* NotificationManagerTests.swift in Sources */,
+				CC200003CC200003CC200003 /* SignalCLIAdapterTests.swift in Sources */,
 				74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */,
 				2528022DB189F9F99041972C /* KeychainStoreTests.swift in Sources */,
 				E2C8F8B6CA8E66B74B528FB1 /* LLMClientTypesTests.swift in Sources */,
