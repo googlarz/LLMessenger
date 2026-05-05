@@ -28,6 +28,34 @@ final class MenuBarController {
 
     // MARK: - Private
 
+    private func menuPreview(_ summary: String) -> String {
+        var text = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Strip markdown code fences
+        if text.hasPrefix("```") {
+            text = text
+                .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        // For JSON briefs, extract the first card headline
+        if text.hasPrefix("{") || text.hasPrefix("["),
+           let data = text.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let cards = json["cards"] as? [[String: Any]],
+           let first = cards.first,
+           let headline = first["headline"] as? String {
+            return headline
+        }
+        // Otherwise use first non-empty line, strip markdown formatting, truncate
+        var plain = text.components(separatedBy: .newlines)
+            .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? text
+        plain = plain
+            .replacingOccurrences(of: #"^#+\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\*{1,2}([^*]+)\*{1,2}"#, with: "$1", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        return plain.count > 80 ? String(plain.prefix(80)) + "…" : plain
+    }
+
     private func updateButton() {
         guard let button = statusItem.button else { return }
         button.image = NSImage(systemSymbolName: "envelope.fill", accessibilityDescription: nil)
@@ -62,11 +90,12 @@ final class MenuBarController {
                     item.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)
                     item.image?.size = NSSize(width: 8, height: 8)
                 }
-                // Subtitle via attributed title
+                // Subtitle via attributed title (truncated)
                 if let summary = brief.openingSummary {
+                    let preview = menuPreview(summary)
                     let attr = NSMutableAttributedString(string: title + "\n")
                     let sub = NSAttributedString(
-                        string: summary,
+                        string: preview,
                         attributes: [.font: NSFont.systemFont(ofSize: 10),
                                      .foregroundColor: NSColor.secondaryLabelColor]
                     )
