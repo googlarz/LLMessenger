@@ -10,6 +10,12 @@
 		44401121145FDD4E5FDFB90A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */; };
 		68558FFF6748D2321631327B /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D2A719FBD90D2E75C687F20F /* GRDB */; };
 		7B7A3506F3DF564A1595A4A8 /* LLMessengerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */; };
+		AA000001000000000000001A /* AppDatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000000000001B /* AppDatabaseTests.swift */; };
+		AA000002000000000000001A /* Brief.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000001B /* Brief.swift */; };
+		AA000003000000000000001A /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000003000000000000001B /* Message.swift */; };
+		AA000004000000000000001A /* ServiceConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000004000000000000001B /* ServiceConfig.swift */; };
+		AA000005000000000000001A /* ServiceHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000005000000000000001B /* ServiceHealth.swift */; };
+		AA000006000000000000001A /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000006000000000000001B /* AppDatabase.swift */; };
 		DE0C17AEBEECDE55B14BD784 /* LLMessengerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */; };
 		ED026EB71E8074D35FCC0477 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 053BC1D531581B41EE1FF9FC /* GRDB */; };
 /* End PBXBuildFile section */
@@ -29,6 +35,12 @@
 		077FE5D051B4131476BEDD07 /* LLMessenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LLMessenger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		94378A6C5DDBC9A9A076B97D /* LLMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LLMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000001000000000000001B /* AppDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabaseTests.swift; sourceTree = "<group>"; };
+		AA000002000000000000001B /* Brief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brief.swift; sourceTree = "<group>"; };
+		AA000003000000000000001B /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
+		AA000004000000000000001B /* ServiceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceConfig.swift; sourceTree = "<group>"; };
+		AA000005000000000000001B /* ServiceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealth.swift; sourceTree = "<group>"; };
+		AA000006000000000000001B /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
 		BCE1A2AD60D1E42D7AAB4F4A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -59,6 +71,7 @@
 				7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */,
 				BCE1A2AD60D1E42D7AAB4F4A /* Info.plist */,
 				E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */,
+				"TEMP_D72E88B4-3CDD-426F-B4AB-8A8FD225DFC4" /* Core */,
 			);
 			path = LLMessenger;
 			sourceTree = "<group>";
@@ -76,6 +89,7 @@
 			isa = PBXGroup;
 			children = (
 				04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */,
+				AA000001000000000000001B /* AppDatabaseTests.swift */,
 			);
 			path = LLMessengerTests;
 			sourceTree = "<group>";
@@ -89,9 +103,22 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		AA000007000000000000001B /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AA000002000000000000001B /* Brief.swift */,
+				AA000003000000000000001B /* Message.swift */,
+				AA000004000000000000001B /* ServiceConfig.swift */,
+				AA000005000000000000001B /* ServiceHealth.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		"TEMP_727F1F33-C410-42B8-B3D9-64121B682B38" /* Store */ = {
 			isa = PBXGroup;
 			children = (
+				AA000006000000000000001B /* AppDatabase.swift */,
+				AA000007000000000000001B /* Models */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -99,6 +126,7 @@
 		"TEMP_D72E88B4-3CDD-426F-B4AB-8A8FD225DFC4" /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				"TEMP_727F1F33-C410-42B8-B3D9-64121B682B38" /* Store */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -186,6 +214,11 @@
 			files = (
 				44401121145FDD4E5FDFB90A /* AppDelegate.swift in Sources */,
 				DE0C17AEBEECDE55B14BD784 /* LLMessengerApp.swift in Sources */,
+				AA000002000000000000001A /* Brief.swift in Sources */,
+				AA000003000000000000001A /* Message.swift in Sources */,
+				AA000004000000000000001A /* ServiceConfig.swift in Sources */,
+				AA000005000000000000001A /* ServiceHealth.swift in Sources */,
+				AA000006000000000000001A /* AppDatabase.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -194,6 +227,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7B7A3506F3DF564A1595A4A8 /* LLMessengerTests.swift in Sources */,
+				AA000001000000000000001A /* AppDatabaseTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
