@@ -1,64 +1,95 @@
 // LLMessengerTests/SignalCLIAdapterTests.swift
 import XCTest
+import GRDB
 @testable import LLMessenger
 
 final class SignalCLIAdapterTests: XCTestCase {
 
-    func testParseDMLine() throws {
-        let line = """
-        {"envelope":{"source":"+12345","sourceNumber":"+12345","sourceName":"Alice","sourceDevice":1,"timestamp":1700000000000,"dataMessage":{"timestamp":1700000000000,"message":"Hello","expiresInSeconds":0,"viewOnce":false}}}
-        """
-        let convos = SignalCLIAdapter.parse(lines: [line])
-        XCTAssertEqual(convos.count, 1)
-        XCTAssertEqual(convos[0].id, "+12345")
-        XCTAssertEqual(convos[0].type, .dm)
-        XCTAssertEqual(convos[0].messages.count, 1)
-        XCTAssertEqual(convos[0].messages[0].sender, "Alice")
-        XCTAssertEqual(convos[0].messages[0].text, "Hello")
+    // MARK: - group() helpers
+
+    func testGroupEmptyRows() {
+        let result = SignalCLIAdapter.group(rows: [])
+        XCTAssertTrue(result.isEmpty)
     }
 
-    func testParseGroupLine() throws {
-        let line = """
-        {"envelope":{"source":"+12345","sourceName":"Alice","timestamp":1700000000000,"dataMessage":{"message":"Hi group","groupInfo":{"groupId":"abc123==","name":"My Group","type":"DELIVER"}}}}
-        """
-        let convos = SignalCLIAdapter.parse(lines: [line])
-        XCTAssertEqual(convos.count, 1)
-        XCTAssertEqual(convos[0].id, "abc123==")
-        XCTAssertEqual(convos[0].type, .group)
-        XCTAssertEqual(convos[0].name, "My Group")
-        XCTAssertEqual(convos[0].messages[0].text, "Hi group")
+    func testGroupSingleDM() {
+        let tsMs: Int64 = 1_700_000_000_000
+        let row: [String: DatabaseValue] = [
+            "sender": "+491629053673".databaseValue,
+            "recipient": "+491739048003".databaseValue,
+            "body": "Hello".databaseValue,
+            "timestamp": tsMs.databaseValue,
+            "group_id": DatabaseValue.null
+        ]
+        let result = SignalCLIAdapter.group(rows: [row])
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].type, .dm)
+        XCTAssertEqual(result[0].messages[0].text, "Hello")
+        XCTAssertEqual(result[0].messages[0].sender, "+491629053673")
     }
 
-    func testSkipsNonDataMessageLines() {
-        let receipt = """
-        {"envelope":{"source":"+12345","timestamp":1700000000000,"receiptMessage":{"when":1700000000000,"isDelivery":true}}}
-        """
-        let convos = SignalCLIAdapter.parse(lines: [receipt])
-        XCTAssertEqual(convos.count, 0)
+    func testGroupMultipleMessagesSameConversation() {
+        let ts1: Int64 = 1_700_000_000_000
+        let ts2: Int64 = 1_700_000_001_000
+        let rows: [[String: DatabaseValue]] = [
+            ["sender": "+4915100000001".databaseValue, "recipient": "+491739048003".databaseValue,
+             "body": "First".databaseValue, "timestamp": ts1.databaseValue, "group_id": DatabaseValue.null],
+            ["sender": "+4915100000001".databaseValue, "recipient": "+491739048003".databaseValue,
+             "body": "Second".databaseValue, "timestamp": ts2.databaseValue, "group_id": DatabaseValue.null],
+        ]
+        let result = SignalCLIAdapter.group(rows: rows)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].messages.count, 2)
     }
 
-    func testSkipsMalformedLines() {
-        let convos = SignalCLIAdapter.parse(lines: ["not json at all", ""])
-        XCTAssertEqual(convos.count, 0)
+    func testGroupGroupMessage() {
+        let ts: Int64 = 1_700_000_000_000
+        let row: [String: DatabaseValue] = [
+            "sender": "+4915100000001".databaseValue,
+            "recipient": DatabaseValue.null,
+            "body": "Hey group!".databaseValue,
+            "timestamp": ts.databaseValue,
+            "group_id": "UiMIGOgYuhVAFLoZtWOZuXy4e2SUKc5pbAGNkTRuSWA=".databaseValue
+        ]
+        let result = SignalCLIAdapter.group(rows: [row])
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].type, .group)
+        XCTAssertEqual(result[0].messages[0].text, "Hey group!")
     }
 
-    func testGroupsMessagesFromSameConversation() {
-        let line1 = """
-        {"envelope":{"source":"+12345","sourceNumber":"+12345","sourceName":"Alice","sourceDevice":1,"timestamp":1700000000000,"dataMessage":{"timestamp":1700000000000,"message":"First","expiresInSeconds":0,"viewOnce":false}}}
-        """
-        let line2 = """
-        {"envelope":{"source":"+12345","sourceNumber":"+12345","sourceName":"Alice","sourceDevice":1,"timestamp":1700000001000,"dataMessage":{"timestamp":1700000001000,"message":"Second","expiresInSeconds":0,"viewOnce":false}}}
-        """
-        let convos = SignalCLIAdapter.parse(lines: [line1, line2])
-        XCTAssertEqual(convos.count, 1)
-        XCTAssertEqual(convos[0].messages.count, 2)
+    func testGroupSkipsEmptyBody() {
+        let row: [String: DatabaseValue] = [
+            "sender": "+4915100000001".databaseValue,
+            "recipient": "+491739048003".databaseValue,
+            "body": "".databaseValue,
+            "timestamp": Int64(1_700_000_000_000).databaseValue,
+            "group_id": DatabaseValue.null
+        ]
+        XCTAssertTrue(SignalCLIAdapter.group(rows: [row]).isEmpty)
     }
 
-    func testFallsBackToSourceWhenNoSourceName() {
-        let line = """
-        {"envelope":{"source":"+12345","sourceNumber":"+12345","sourceDevice":1,"timestamp":1700000000000,"dataMessage":{"timestamp":1700000000000,"message":"Hi","expiresInSeconds":0,"viewOnce":false}}}
-        """
-        let convos = SignalCLIAdapter.parse(lines: [line])
-        XCTAssertEqual(convos[0].messages[0].sender, "+12345")
+    func testGroupPreservesConversationOrder() {
+        let rows: [[String: DatabaseValue]] = [
+            ["sender": "+111".databaseValue, "recipient": DatabaseValue.null,
+             "body": "A".databaseValue, "timestamp": Int64(1000).databaseValue, "group_id": DatabaseValue.null],
+            ["sender": "+222".databaseValue, "recipient": DatabaseValue.null,
+             "body": "B".databaseValue, "timestamp": Int64(2000).databaseValue, "group_id": DatabaseValue.null],
+        ]
+        let result = SignalCLIAdapter.group(rows: rows)
+        XCTAssertEqual(result.map(\.id), ["+111", "+222"])
+    }
+
+    func testTimestampConvertedCorrectly() {
+        let tsMs: Int64 = 1_700_000_000_000
+        let row: [String: DatabaseValue] = [
+            "sender": "+4915100000001".databaseValue,
+            "recipient": "+491739048003".databaseValue,
+            "body": "hi".databaseValue,
+            "timestamp": tsMs.databaseValue,
+            "group_id": DatabaseValue.null
+        ]
+        let result = SignalCLIAdapter.group(rows: [row])
+        let expected = Date(timeIntervalSince1970: TimeInterval(tsMs) / 1000)
+        XCTAssertEqual(result[0].messages[0].timestamp, expected)
     }
 }

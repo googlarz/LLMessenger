@@ -84,11 +84,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             let settingsRepo = SettingsRepository(database: db)
             if let account = try? settingsRepo.loadSignalAccount(), !account.isEmpty {
-                let cliPath = SignalCLIAdapter.detectCLIPath() ?? "/usr/local/bin/signal-cli"
                 let signalConfig = (try? db.dbQueue.read { db in
                     try ServiceConfig.fetchOne(db, key: "signal")
                 }) ?? ServiceConfig.default(for: "signal")
-                let signalAdapter = SignalCLIAdapter(accountNumber: account, cliPath: cliPath)
+                let signalAdapter = SignalCLIAdapter(accountNumber: account)
                 engine.register(adapter: signalAdapter, config: signalConfig)
                 state.adapters["signal"] = signalAdapter
             }
