@@ -2,6 +2,17 @@
 import Foundation
 import GRDB
 
+enum BriefRepositoryError: Error, LocalizedError {
+    case briefCardMissingSources
+
+    var errorDescription: String? {
+        switch self {
+        case .briefCardMissingSources:
+            return "Brief card must include at least one source message ID"
+        }
+    }
+}
+
 struct BriefRepository {
     let database: AppDatabase
 
@@ -161,6 +172,32 @@ struct BriefRepository {
         }
     }
 
+    func fetchRecentContextMessages(
+        service: String,
+        conversationID: String,
+        before date: Date,
+        since: Date? = nil,
+        limit: Int
+    ) throws -> [Message] {
+        try database.dbQueue.read { db in
+            var request = Message
+                .filter(Column("service") == service)
+                .filter(Column("conversationId") == conversationID)
+                .filter(Column("timestamp") < date)
+                .filter(Column("isSent") == false)
+
+            if let since {
+                request = request.filter(Column("timestamp") >= since)
+            }
+
+            return try request
+                .order(Column("timestamp").desc)
+                .limit(limit)
+                .fetchAll(db)
+                .reversed()
+        }
+    }
+
     func fetchAllBriefs() throws -> [Brief] {
         try database.dbQueue.read { db in
             try Brief
@@ -182,5 +219,98 @@ struct BriefRepository {
                 arguments: [BriefStatus.open.rawValue, briefID]
             )
         }
+    }
+
+    func upsertConversationState(_ state: ConversationState) throws {
+        try database.dbQueue.write { db in
+            try state.save(db)
+        }
+    }
+
+    func fetchConversationState(service: String, conversationID: String) throws -> ConversationState? {
+        try database.dbQueue.read { db in
+            try ConversationState
+                .filter(Column("service") == service)
+                .filter(Column("conversationId") == conversationID)
+                .fetchOne(db)
+        }
+    }
+
+    func insertBriefCard(_ card: BriefCardRecord) throws {
+        let sourceIDs = decodedStringArray(card.sourceMessageIds)
+        guard !sourceIDs.isEmpty else { throw BriefRepositoryError.briefCardMissingSources }
+
+        try database.dbQueue.write { db in
+            try card.insert(db)
+        }
+    }
+
+    func fetchBriefCards(briefID: Int64) throws -> [BriefCardRecord] {
+        try database.dbQueue.read { db in
+            try BriefCardRecord
+                .filter(Column("briefId") == briefID)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+        }
+    }
+
+    func fetchLatestBriefCard(service: String, conversationID: String) throws -> BriefCardRecord? {
+        try database.dbQueue.read { db in
+            try BriefCardRecord
+                .filter(Column("service") == service)
+                .filter(Column("conversationId") == conversationID)
+                .order(Column("createdAt").desc)
+                .fetchOne(db)
+        }
+    }
+
+    func insertBriefCardSources(_ sources: [BriefCardSource]) throws {
+        try database.dbQueue.write { db in
+            for var source in sources {
+                try source.insert(db)
+            }
+        }
+    }
+
+    func fetchSources(briefCardID: String) throws -> [BriefCardSource] {
+        try database.dbQueue.read { db in
+            try BriefCardSource
+                .filter(Column("briefCardId") == briefCardID)
+                .order(Column("id").asc)
+                .fetchAll(db)
+        }
+    }
+
+    func fetchSourcesWithMessages(briefCardID: String) throws -> [(source: BriefCardSource, message: Message?)] {
+        try database.dbQueue.read { db in
+            let sources = try BriefCardSource
+                .filter(Column("briefCardId") == briefCardID)
+                .order(Column("id").asc)
+                .fetchAll(db)
+
+            var results: [(source: BriefCardSource, message: Message?)] = []
+            for source in sources {
+                let message = try Message.fetchOne(db, key: source.messageRowId)
+                results.append((source: source, message: message))
+            }
+            return results
+        }
+    }
+
+    func insertLLMRunRecord(_ run: LLMRunRecord) throws -> Int64 {
+        try database.dbQueue.write { db in
+            var record = run
+            try record.insert(db)
+            guard let id = record.id else { throw DatabaseError(message: "insertLLMRunRecord: no rowid after insert") }
+            return id
+        }
+    }
+
+    private func decodedStringArray(_ json: String) -> [String] {
+        guard let data = json.data(using: .utf8),
+              let array = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return array.filter { !$0.isEmpty }
     }
 }

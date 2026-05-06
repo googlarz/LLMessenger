@@ -12,6 +12,7 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
     var createdAt: Date
     var status: String          // stored as raw string for DB compat; use BriefStatus for logic
     var services: String        // JSON-encoded [String]
+    var failedServices: String?  // JSON-encoded [String]
     var openingSummary: String?
     var notificationText: String
     var episodicSummary: String?

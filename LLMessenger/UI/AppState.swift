@@ -45,6 +45,16 @@ struct BriefListGroup: Identifiable {
     let briefs: [Brief]
 }
 
+enum BriefGenerationState: String {
+    case cached
+    case fetching
+    case summarizing
+    case partial
+    case complete
+    case noNewMessages
+    case failed
+}
+
 // MARK: - BriefListGrouper
 
 struct BriefListGrouper {
@@ -92,11 +102,14 @@ final class AppState: ObservableObject {
     @Published var serviceHealth: [String: AdapterHealthResult.Status] = [:]
     @Published var nextPollDate: Date?
     @Published var lastError: String?
+    @Published var briefGenerationState: BriefGenerationState = .cached
 
     let database: AppDatabase
     let repository: BriefRepository
     let llmClient: LLMClient
     let llmModel: String
+    let llmProvider: LLMProvider?
+    let isLLMConfigured: Bool
     let basePrompt: String
     var adapters: [String: any MessengerAdapter] = [:]
     var onOpenSettings: (() -> Void)?
@@ -104,11 +117,15 @@ final class AppState: ObservableObject {
     init(database: AppDatabase,
          llmClient: LLMClient,
          llmModel: String,
+         llmProvider: LLMProvider? = nil,
+         isLLMConfigured: Bool = true,
          basePrompt: String) {
         self.database = database
         self.repository = BriefRepository(database: database)
         self.llmClient = llmClient
         self.llmModel = llmModel
+        self.llmProvider = llmProvider
+        self.isLLMConfigured = isLLMConfigured
         self.basePrompt = basePrompt
     }
 
@@ -132,6 +149,7 @@ final class AppState: ObservableObject {
     func markAsOpen(briefID: Int64) {
         do {
             try repository.markAsOpen(briefID: briefID)
+            InstrumentationManager.shared.track(event: .briefOpened, metadata: ["briefID": briefID])
             refreshBriefs()
         } catch {
             // silently ignore — UI state will be stale at worst

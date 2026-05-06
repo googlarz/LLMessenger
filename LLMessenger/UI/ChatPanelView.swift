@@ -17,8 +17,10 @@ struct ChatPanelView: View {
         }
     }
 
-    private var headerStats: (messages: Int, services: Int, threads: Int, people: Int) {
+    private var headerStats: (messages: Int, services: Int, threads: Int, people: Int, highPriority: Int, failed: [String]) {
         let msgs = briefMessages
+        let failed = decodedStringArray(appState.selectedBrief?.failedServices)
+
         if var summary = appState.selectedBrief?.openingSummary {
             let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.hasPrefix("```") {
@@ -32,13 +34,14 @@ struct ChatPanelView: View {
                 let svcs = Set(json.cards.map(\.service)).count
                 let threads = json.total_threads ?? json.cards.reduce(0) { $0 + $1.counts.threads }
                 let people = json.total_people ?? json.cards.reduce(0) { $0 + $1.counts.people }
-                return (totalMsgs, svcs, threads, people)
+                let highPriority = json.cards.filter { $0.priority == "high" }.count
+                return (totalMsgs, svcs, threads, people, highPriority, failed)
             }
         }
         let svcs = Set(msgs.map(\.service)).count
         let convs = Set(msgs.map(\.conversationId)).count
         let senders = Set(msgs.map(\.sender)).count
-        return (msgs.count, svcs, convs, senders)
+        return (msgs.count, svcs, convs, senders, 0, failed)
     }
 
     var body: some View {
@@ -53,7 +56,11 @@ struct ChatPanelView: View {
                                 messageCount: stats.messages,
                                 serviceCount: stats.services,
                                 threadCount: stats.threads,
-                                peopleCount: stats.people
+                                peopleCount: stats.people,
+                                highPriorityCount: stats.highPriority,
+                                failedServices: stats.failed,
+                                generationState: appState.briefGenerationState,
+                                errorText: appState.lastError
                             )
 
                             Divider().background(Theme.border.opacity(0.6))
@@ -115,6 +122,14 @@ struct ChatPanelView: View {
         case .conversationPicker(let id, let req, let opts):
             ConversationPickerView(pickerID: id, originalRequest: req, options: opts)
         }
+    }
+
+    private func decodedStringArray(_ json: String?) -> [String] {
+        guard let json, let data = json.data(using: .utf8),
+              let array = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return array
     }
 }
 

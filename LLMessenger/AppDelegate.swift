@@ -22,23 +22,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let db = try AppDatabase()
             database = db
 
-            let (llmClient, model) = resolvedProvider()
+            let llm = resolvedProvider()
 
             let savedPrompt = SettingsRepository(database: db).loadBasePrompt()
             let basePrompt = savedPrompt.isEmpty ? PromptBuilder.defaultBasePrompt : savedPrompt
 
             let state = AppState(
                 database: db,
-                llmClient: llmClient,
-                llmModel: model,
+                llmClient: llm.client,
+                llmModel: llm.model,
+                llmProvider: llm.provider,
+                isLLMConfigured: llm.isConfigured,
                 basePrompt: basePrompt
             )
             appState = state
 
             briefEngine = BriefEngine(
                 database: db,
-                client: llmClient,
-                model: model,
+                client: llm.client,
+                model: llm.model,
                 basePrompt: basePrompt
             )
 
@@ -57,15 +59,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let menuBar = MenuBarController()
             menuBar.onNewBrief = { [weak self] in
                 guard let self else { return }
+                InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "menuBar"])
                 Task {
+                    self.appState?.briefGenerationState = .fetching
                     self.menuBarController?.setLoading(true)
                     let start = Date()
                     await self.pollEngine?.pollAll()
                     do {
-                        _ = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
+                        self.appState?.briefGenerationState = .summarizing
+                        let newID = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
                         self.appState?.lastError = nil
+                        self.appState?.briefGenerationState = newID == nil ? .noNewMessages : .complete
                     } catch {
                         self.appState?.lastError = error.localizedDescription
+                        self.appState?.briefGenerationState = .failed
                     }
                     // Keep animation visible for at least 1.5s so user sees activity
                     let elapsed = Date().timeIntervalSince(start)
@@ -83,18 +90,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menuBar.onLast24h = { [weak self] in
                 guard let self else { return }
                 Task {
+                    self.appState?.briefGenerationState = .fetching
                     self.menuBarController?.setLoading(true)
                     let start = Date()
                     let adapters = self.appState?.adapters ?? [:]
                     do {
+                        self.appState?.briefGenerationState = .summarizing
                         if let briefID = try await self.briefEngine?.summarizeLast(hours: 48, adapters: adapters) {
                             let brief = try? self.appState?.repository.fetchBrief(id: briefID)
                             let body = brief?.notificationText ?? "48h summary ready"
                             self.notificationManager?.post(briefID: briefID, title: "48h Summary", body: body)
+                            self.appState?.briefGenerationState = .complete
+                        } else {
+                            self.appState?.briefGenerationState = .noNewMessages
                         }
                         self.appState?.lastError = nil
                     } catch {
                         self.appState?.lastError = error.localizedDescription
+                        self.appState?.briefGenerationState = .failed
                     }
                     let elapsed = Date().timeIntervalSince(start)
                     if elapsed < 1.5 {
@@ -128,9 +141,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             engine.onPollSucceeded = { [weak self] in
                 guard let self else { return }
                 self.menuBarController?.setLoading(true)
+                self.appState?.briefGenerationState = .summarizing
                 do {
                     let newID = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
                     self.appState?.lastError = nil
+                    self.appState?.briefGenerationState = newID == nil ? .noNewMessages : .complete
                     self.appState?.refreshBriefs()
                     self.appState?.nextPollDate = self.pollEngine?.nextFireDate
                     self.menuBarController?.setLoading(false)
@@ -141,6 +156,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 } catch {
                     self.appState?.lastError = error.localizedDescription
+                    self.appState?.briefGenerationState = .failed
                     self.appState?.refreshBriefs()
                     self.appState?.nextPollDate = self.pollEngine?.nextFireDate
                     self.menuBarController?.setLoading(false)
@@ -205,6 +221,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             state.refreshBriefs()
+            state.briefGenerationState = state.briefs.isEmpty ? .noNewMessages : .cached
             menuBar.setBriefs(state.briefs)
 
         } catch {
@@ -232,17 +249,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.appearance = appearance
     }
 
-    private func resolvedProvider() -> (client: LLMClient, model: String) {
-        let store = KeychainStore()
-        if let key = try? store.get(account: "anthropic"), !key.isEmpty {
-            return (LLMProvider.anthropic.makeClient(apiKey: key), LLMProvider.anthropic.defaultModel)
+    private struct ResolvedProvider {
+        let provider: LLMProvider?
+        let client: LLMClient
+        let model: String
+        let isConfigured: Bool
+    }
+
+    private func resolvedProvider() -> ResolvedProvider {
+        let repo = SettingsRepository()
+        guard let provider = repo.loadSelectedLLMProvider() else {
+            return ResolvedProvider(
+                provider: nil,
+                client: UnconfiguredLLMClient(),
+                model: "",
+                isConfigured: false
+            )
         }
-        if let key = try? store.get(account: "openai"), !key.isEmpty {
-            return (LLMProvider.openai.makeClient(apiKey: key), LLMProvider.openai.defaultModel)
+
+        switch provider {
+        case .anthropic, .openai:
+            guard let key = try? repo.loadLLMKey(provider: provider), !key.isEmpty else {
+                return ResolvedProvider(
+                    provider: provider,
+                    client: UnconfiguredLLMClient(),
+                    model: provider.defaultModel,
+                    isConfigured: false
+                )
+            }
+            return ResolvedProvider(
+                provider: provider,
+                client: provider.makeClient(apiKey: key),
+                model: provider.defaultModel,
+                isConfigured: true
+            )
+        case .ollama:
+            let savedModel = repo.loadOllamaModel()
+            let model = savedModel.isEmpty ? provider.defaultModel : savedModel
+            return ResolvedProvider(
+                provider: provider,
+                client: provider.makeClient(apiKey: nil),
+                model: model,
+                isConfigured: true
+            )
         }
-        let udModel = UserDefaults.standard.string(forKey: "ollama_model")
-        let model = (udModel?.isEmpty == false ? udModel! : nil) ?? LLMProvider.ollama.defaultModel
-        return (LLMProvider.ollama.makeClient(apiKey: nil), model)
     }
 
     private func telegramAdapterPath() -> String? {

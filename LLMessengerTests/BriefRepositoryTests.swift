@@ -132,4 +132,208 @@ final class BriefRepositoryTests: XCTestCase {
         XCTAssertEqual(recent[1].summary, "summary 1")
         XCTAssertEqual(recent[2].summary, "summary 2")
     }
+
+    func testUpsertAndFetchConversationState() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let first = ConversationState(
+            service: "telegram",
+            conversationId: "c1",
+            lastSeenMessageId: "m1",
+            lastSummarizedMessageId: nil,
+            rollingSummary: "Initial summary",
+            participants: #"["Joanna"]"#,
+            knownEntities: nil,
+            unresolvedActions: nil,
+            lastBriefCardId: nil,
+            prioritySignals: nil,
+            sourceMessageIds: #"["m1"]"#,
+            updatedAt: Date()
+        )
+
+        try repo.upsertConversationState(first)
+        var updated = first
+        updated.rollingSummary = "Updated summary"
+        updated.lastSummarizedMessageId = "m2"
+        try repo.upsertConversationState(updated)
+
+        let fetched = try repo.fetchConversationState(service: "telegram", conversationID: "c1")
+        XCTAssertEqual(fetched?.rollingSummary, "Updated summary")
+        XCTAssertEqual(fetched?.lastSummarizedMessageId, "m2")
+    }
+
+    func testInsertBriefCardRequiresSourceMessageIds() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let briefID = try repo.insertBrief(makeBrief(status: "ready"))
+        let card = BriefCardRecord(
+            id: "card-1",
+            briefId: briefID,
+            service: "telegram",
+            conversationId: "c1",
+            conversationTitle: "Joanna",
+            headline: "Joanna asked about timing.",
+            priority: "high",
+            summary: "Joanna asked when you will arrive.",
+            actionItems: #"["Reply with ETA."]"#,
+            callbackText: nil,
+            sourceMessageIds: "[]",
+            createdAt: Date()
+        )
+
+        XCTAssertThrowsError(try repo.insertBriefCard(card)) { error in
+            XCTAssertTrue(error is BriefRepositoryError)
+        }
+    }
+
+    func testInsertBriefCardAndSources() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let briefID = try repo.insertBrief(makeBrief(status: "ready"))
+        var messageID: Int64 = 0
+        try db.dbQueue.write { db in
+            var msg = Message(
+                briefId: briefID,
+                service: "telegram",
+                conversationId: "c1",
+                conversationName: "Joanna",
+                messageId: "m1",
+                sender: "Joanna",
+                text: "When are you arriving?",
+                timestamp: Date(),
+                isSent: false
+            )
+            try msg.insert(db)
+            messageID = msg.id!
+        }
+        let card = BriefCardRecord(
+            id: "card-1",
+            briefId: briefID,
+            service: "telegram",
+            conversationId: "c1",
+            conversationTitle: "Joanna",
+            headline: "Joanna asked about timing.",
+            priority: "high",
+            summary: "Joanna asked when you will arrive.",
+            actionItems: #"["Reply with ETA."]"#,
+            callbackText: nil,
+            sourceMessageIds: #"["m1"]"#,
+            createdAt: Date()
+        )
+        let source = BriefCardSource(
+            briefCardId: "card-1",
+            messageRowId: messageID,
+            service: "telegram",
+            messageId: "m1",
+            sourceRole: BriefCardSourceRole.newMessage.rawValue,
+            quoteText: "When are you arriving?",
+            createdAt: Date()
+        )
+
+        try repo.insertBriefCard(card)
+        try repo.insertBriefCardSources([source])
+
+        let cards = try repo.fetchBriefCards(briefID: briefID)
+        let sources = try repo.fetchSources(briefCardID: "card-1")
+        XCTAssertEqual(cards.count, 1)
+        XCTAssertEqual(cards[0].sourceMessageIds, #"["m1"]"#)
+        XCTAssertEqual(sources.count, 1)
+        XCTAssertEqual(sources[0].sourceRole, BriefCardSourceRole.newMessage.rawValue)
+    }
+
+    func testFetchRecentContextMessagesReturnsChronologicalSlice() throws {
+        let db = try AppDatabase(inMemory: true)
+        try db.dbQueue.write { db in
+            for i in 0..<5 {
+                var msg = Message(
+                    briefId: nil,
+                    service: "telegram",
+                    conversationId: "c1",
+                    conversationName: "Joanna",
+                    messageId: "m\(i)",
+                    sender: "Joanna",
+                    text: "msg \(i)",
+                    timestamp: Date(timeIntervalSince1970: Double(100 + i)),
+                    isSent: false
+                )
+                try msg.insert(db)
+            }
+        }
+
+        let repo = BriefRepository(database: db)
+        let context = try repo.fetchRecentContextMessages(
+            service: "telegram",
+            conversationID: "c1",
+            before: Date(timeIntervalSince1970: 104),
+            since: nil,
+            limit: 2
+        )
+
+        XCTAssertEqual(context.map(\.messageId), ["m2", "m3"])
+    }
+
+    func testFetchLatestBriefCardReturnsNewestForConversation() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let briefID = try repo.insertBrief(makeBrief(status: "ready"))
+        try repo.insertBriefCard(
+            BriefCardRecord(
+                id: "card-1",
+                briefId: briefID,
+                service: "telegram",
+                conversationId: "c1",
+                conversationTitle: "Joanna",
+                headline: "Old headline",
+                priority: "low",
+                summary: "Old summary",
+                actionItems: "[]",
+                callbackText: nil,
+                sourceMessageIds: #"["m1"]"#,
+                createdAt: Date(timeIntervalSince1970: 100)
+            )
+        )
+        try repo.insertBriefCard(
+            BriefCardRecord(
+                id: "card-2",
+                briefId: briefID,
+                service: "telegram",
+                conversationId: "c1",
+                conversationTitle: "Joanna",
+                headline: "New headline",
+                priority: "high",
+                summary: "New summary",
+                actionItems: "[]",
+                callbackText: nil,
+                sourceMessageIds: #"["m2"]"#,
+                createdAt: Date(timeIntervalSince1970: 200)
+            )
+        )
+
+        let card = try repo.fetchLatestBriefCard(service: "telegram", conversationID: "c1")
+        XCTAssertEqual(card?.id, "card-2")
+    }
+
+    func testInsertLLMRunRecordStoresMetadataOnly() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let run = LLMRunRecord(
+            briefId: nil,
+            service: "telegram",
+            conversationId: "c1",
+            backend: "ollama",
+            model: "llama3.1",
+            startedAt: Date(),
+            completedAt: nil,
+            status: "started",
+            errorCategory: nil,
+            promptHash: "prompt-hash",
+            responseHash: nil,
+            inputTokenEstimate: nil,
+            outputTokenEstimate: nil
+        )
+
+        let id = try repo.insertLLMRunRecord(run)
+
+        XCTAssertGreaterThan(id, 0)
+    }
 }

@@ -79,6 +79,7 @@ final class ChatViewModel: ObservableObject {
         // Case 3 — Normal: let the LLM understand intent and decide what to do.
         let userMsgID = UUID()
         threadItems.append(.userMessage(id: userMsgID, text: rawInput))
+        InstrumentationManager.shared.track(event: .followUpQuestionAsked, metadata: ["textLength": rawInput.count])
         isLoading = true
         defer { isLoading = false }
 
@@ -179,19 +180,6 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    func sendDraft(_ draft: ReplyDraft) async throws {
-        guard let adapter = appState.adapters[draft.serviceID] else {
-            throw AdapterError.notRunning
-        }
-        try await adapter.send(conversationID: draft.conversationID, text: draft.text)
-        try? appState.repository.storeSentMessage(
-            service: draft.serviceID,
-            conversationID: draft.conversationID,
-            text: draft.text
-        )
-        discardDraft(id: draft.id)
-    }
-
     // MARK: - Draft helper
 
     private func draftReply(brief: Brief,
@@ -244,6 +232,7 @@ final class ChatViewModel: ObservableObject {
             let draft = ReplyDraft(id: UUID(), text: draftText,
                                    serviceID: service, conversationID: convId, senderName: "")
             threadItems.append(.replyDraft(id: draft.id, draft: draft))
+            InstrumentationManager.shared.track(event: .draftCreated, metadata: ["service": service, "draftLength": draftText.count])
         } catch {
             threadItems.append(.assistantResponse(id: UUID(),
                                                    text: "Error: \(error.localizedDescription)"))

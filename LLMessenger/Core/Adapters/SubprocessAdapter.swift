@@ -27,7 +27,7 @@ final class SubprocessAdapter: MessengerAdapter {
         self.adapterPath = adapterPath
         self.adapterArgs = adapterArgs
         self.config = config
-        self.ioQueue = DispatchQueue(label: "com.llmessenger.adapter.\(serviceID)")
+        self.ioQueue = DispatchQueue(label: "com.llmessenger.adapter.\(serviceID)", qos: .userInitiated)
     }
 
     func start() async throws {

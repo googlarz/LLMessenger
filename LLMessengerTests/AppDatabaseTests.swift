@@ -11,6 +11,10 @@ final class AppDatabaseTests: XCTestCase {
             XCTAssertTrue(try db.tableExists("messages"))
             XCTAssertTrue(try db.tableExists("serviceConfig"))
             XCTAssertTrue(try db.tableExists("serviceHealth"))
+            XCTAssertTrue(try db.tableExists("conversationState"))
+            XCTAssertTrue(try db.tableExists("briefCards"))
+            XCTAssertTrue(try db.tableExists("briefCardSources"))
+            XCTAssertTrue(try db.tableExists("llmRuns"))
         }
     }
 
@@ -45,7 +49,7 @@ final class AppDatabaseTests: XCTestCase {
         XCTAssertEqual(config.service, "telegram")
         XCTAssertTrue(config.enabled)
         XCTAssertEqual(config.pollIntervalMinutes, 30)
-        XCTAssertEqual(config.fetchMode, "count")
+        XCTAssertEqual(config.fetchMode, "time")
         XCTAssertEqual(config.fetchLimit, 50)
         XCTAssertEqual(config.privacyMode, "on_demand")
     }

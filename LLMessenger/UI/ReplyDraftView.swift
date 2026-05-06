@@ -1,5 +1,6 @@
 // LLMessenger/UI/ReplyDraftView.swift
 import SwiftUI
+import AppKit
 
 struct ReplyDraftView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
@@ -48,6 +49,10 @@ struct ReplyDraftView: View {
                     .foregroundStyle(Theme.textPrimary)
                     .textSelection(.enabled)
 
+                Text("Nothing has been sent. Copy the draft and review it in the target app.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+
                 HStack(spacing: 8) {
                     Spacer()
                     Button("Discard") { chatViewModel.discardDraft(id: draftID) }
@@ -55,17 +60,24 @@ struct ReplyDraftView: View {
                         .foregroundStyle(Theme.textSecondary)
                         .buttonStyle(.plain)
 
-                    Button("Send Reply") {
-                        Task { try? await chatViewModel.sendDraft(draft) }
+                    Button("Open App") {
+                        openTargetApp()
+                    }
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .buttonStyle(.plain)
+                    .disabled(!canOpenTargetApp)
+
+                    Button("Copy") {
+                        copyDraft()
                     }
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
-                    .background(draft.conversationID == "unknown" ? Theme.surfaceHigh : Theme.accent)
+                    .background(Theme.accent)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .buttonStyle(.plain)
-                    .disabled(draft.conversationID == "unknown")
                 }
             }
         }
@@ -78,5 +90,32 @@ struct ReplyDraftView: View {
         )
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
+    }
+
+    private var canOpenTargetApp: Bool {
+        targetURL != nil
+    }
+
+    private var targetURL: URL? {
+        switch draft.serviceID {
+        case "telegram":
+            return URL(string: "tg://")
+        case "signal":
+            return URL(string: "sgnl://")
+        case "imessage":
+            return URL(string: "imessage://")
+        default:
+            return nil
+        }
+    }
+
+    private func copyDraft() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(draft.text, forType: .string)
+    }
+
+    private func openTargetApp() {
+        guard let targetURL else { return }
+        NSWorkspace.shared.open(targetURL)
     }
 }

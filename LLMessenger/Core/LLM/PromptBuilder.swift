@@ -42,24 +42,29 @@ struct PromptBuilder {
        If the user has already replied in the thread, there is no action — leave actions empty. \
        Zero action items is correct when nothing is required.
 
-    5. Quotes earn their place. Include a quote only if it captures something that prose can't: \
+    5. Continuity and Memory. You are part of a continuous conversation. \
+       If the 'Recent context' section contains unresolved action items, determine if they were \
+       addressed in the new messages. If not, carry them forward into the new brief. \
+       Maintain consistency with recurring topics and entities across briefs.
+
+    6. Quotes earn their place. Include a quote only if it captures something that prose can't: \
        a key decision, a strong opinion, an emotional beat, or a specific fact. \
        "Ok cool" is not a quote. "She nailed the bridge! 🥰💗" is. \
        Max 3 quotes per card; omit the field entirely if no quote adds value.
 
-    6. Context carries forward. If the episodic context contains a directly related prior thread, \
+    7. Context carries forward. If the episodic context contains a directly related prior thread, \
        reference it naturally: "Following up on yesterday's outage discussion…" or \
        "Closes the loop on Sunday's run thread." Don't force a callback when there isn't one.
 
-    7. Voice fidelity when drafting. If asked to draft a reply, match the user's register — \
+    8. Voice fidelity when drafting. If asked to draft a reply, match the user's register — \
        short and direct for quick chats, warmer for close friends, professional for work contacts. \
        Never send anything without the user's explicit confirmation.
 
-    8. Language follows the conversation. Write each card in the language the conversation is in. \
+    9. Language follows the conversation. Write each card in the language the conversation is in. \
        If a thread mixes languages, use the dominant one. Do not translate — \
        the user knows what language their contacts speak.
 
-    9. Privacy by default. Treat all message content as sensitive. \
+    10. Privacy by default. Treat all message content as sensitive. \
        Never repeat personal details beyond what the current brief requires.
     """
 
@@ -112,17 +117,20 @@ struct PromptBuilder {
               "total_people": <int>,
               "cards": [
                 {
+                  "id": "<stable unique card id, e.g. telegram-c123-1>",
                   "service": "<imessage|telegram|signal>",
-                  "conversation": "<conversation or group name>",
+                  "conversationId": "<exact conversation id from the === conversationId | title === header>",
+                  "conversationTitle": "<conversation or group name>",
                   "headline": "<one-line summary of what happened — be specific and concrete>",
                   "priority": "<high|med|low>",
                   "counts": {"messages": <int>, "threads": <int>, "people": <int>},
                   "summary": "<2-3 sentence prose summary, plain text, no markdown>",
                   "callback": "<reference to prior context from the Recent context section, or null if none>",
-                  "actions": ["<action item>"],
+                  "actionItems": ["<action item>"],
                   "quotes": [
-                    {"from": "<sender name>", "time": "<HH:mm>", "text": "<verbatim or near-verbatim quote>"}
-                  ]
+                    {"messageId": "<message id from an input line>", "from": "<sender name>", "time": "<HH:mm>", "text": "<verbatim or near-verbatim quote>"}
+                  ],
+                  "sourceMessageIds": ["<message id from input line>"]
                 }
               ]
             }
@@ -131,10 +139,13 @@ struct PromptBuilder {
             - One card per distinct conversation or group
             - Group all messages from the same conversationId into one card
             - priority: "high" = needs a reply, "med" = good to know, "low" = FYI
-            - actions: concrete next steps for the user, max 3; empty array [] if none
+            - actionItems: concrete next steps for the user, max 3; empty array [] if none
             - quotes: 1-3 representative messages with actual HH:mm timestamps; omit [] if no good quotes
             - callback: only fill if the episodic context contains a directly relevant prior thread; otherwise null
             - summary: plain prose, no markdown formatting
+            - sourceMessageIds is mandatory and must contain at least one exact message id from the input lines for this card
+            - Every quote.messageId must be an exact message id from the input lines for this card
+            - Do not cite omitted messages or prior context as sourceMessageIds; prior context can only appear in callback
             """
         case .conversationalist:
             return "Answer the user's questions about the messages. Be concise and direct."

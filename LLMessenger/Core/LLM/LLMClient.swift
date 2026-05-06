@@ -36,3 +36,9 @@ enum LLMError: Error, LocalizedError {
 protocol LLMClient {
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse
 }
+
+struct UnconfiguredLLMClient: LLMClient {
+    func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
+        throw LLMError.providerError("Choose an AI backend in Settings before generating briefs.")
+    }
+}

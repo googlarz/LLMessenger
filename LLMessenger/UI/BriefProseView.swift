@@ -1,39 +1,6 @@
 // LLMessenger/UI/BriefProseView.swift
 import SwiftUI
 
-// MARK: - Parsed JSON structures
-
-struct BriefCard: Decodable {
-    let service: String
-    let conversation: String?
-    let headline: String
-    let priority: String
-    let counts: Counts
-    let summary: String
-    let callback: String?
-    let actions: [String]
-    let quotes: [Quote]
-
-    struct Counts: Decodable {
-        let messages: Int
-        let threads: Int
-        let people: Int
-    }
-
-    struct Quote: Decodable {
-        let from: String
-        let time: String
-        let text: String
-    }
-}
-
-struct BriefJSON: Decodable {
-    let total_messages: Int?
-    let total_threads: Int?
-    let total_people: Int?
-    let cards: [BriefCard]
-}
-
 // MARK: - Inline service badge (iM / Tg / Sg)
 
 struct SourceGlyphView: View {
@@ -116,18 +83,26 @@ private struct PriorityPill: View {
     let priority: String
 
     var body: some View {
-        Text("— \(label)")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(color)
-            .tracking(0.4)
-            .textCase(.uppercase)
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(label)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(color)
+                .textCase(.uppercase)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.12))
+        .clipShape(Capsule())
     }
 
     private var label: String {
         switch priority {
-        case "high": return "reply needed"
-        case "med":  return "heads-up"
-        default:     return "fyi"
+        case "high": return "Action needed"
+        case "med":  return "Heads-up"
+        default:     return "FYI"
         }
     }
 
@@ -140,12 +115,104 @@ private struct PriorityPill: View {
     }
 }
 
+// MARK: - Evidence detail view
+
+struct BriefCardEvidenceView: View {
+    let card: BriefCard
+    let repository: BriefRepository
+    @State private var sources: [(source: BriefCardSource, message: Message?)] = []
+    @State private var isLoading = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if isLoading {
+                HStack {
+                    ProgressView().scaleEffect(0.5)
+                    Text("Loading evidence...")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(.vertical, 4)
+            } else {
+                let items = sources
+                if items.isEmpty {
+                    Text("No direct evidence found in database.")
+                        .font(.system(size: 12))
+                        .italic()
+                        .foregroundStyle(Theme.textTertiary)
+                } else {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
+                                Text(item.message?.sender ?? "Unknown")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(Theme.textSecondary)
+                                Text(item.message.map { timeStr($0.timestamp) } ?? "")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Theme.textTertiary)
+                                    .monospacedDigit()
+                                Spacer()
+                                Text(roleLabel(item.source.sourceRole))
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Theme.textTertiary)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(Theme.surfaceHigh)
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                            }
+                            
+                            Text(item.message?.text ?? item.source.quoteText ?? "(No message text)")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.textPrimary)
+                                .lineSpacing(2)
+                                .padding(.leading, 10)
+                                .overlay(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 1)
+                                        .fill(item.source.sourceRole == "quote" ? Theme.accent : Theme.border)
+                                        .frame(width: 2)
+                                }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.top, 4)
+        .onAppear {
+            Task {
+                do {
+                    sources = try repository.fetchSourcesWithMessages(briefCardID: card.id)
+                } catch {
+                    print("Evidence error: \(error)")
+                }
+                isLoading = false
+            }
+        }
+    }
+    
+    private func roleLabel(_ role: String) -> String {
+        switch role {
+        case "quote": return "DIRECT QUOTE"
+        case "new_message": return "SUPPORTING"
+        case "recent_context": return "CONTEXT"
+        default: return role.uppercased().replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
+    private func timeStr(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: date)
+    }
+}
+
 // MARK: - Main prose view
 
 struct BriefProseView: View {
+    @EnvironmentObject var appState: AppState
     let brief: Brief
     let messages: [Message]
     @State private var filter: String = "all"
+    @State private var expandedCards: Set<String> = []
 
     private var parsedJSON: BriefJSON? {
         guard var summary = brief.openingSummary else { return nil }
@@ -184,6 +251,21 @@ struct BriefProseView: View {
         return filter == "all" ? json.cards : json.cards.filter { $0.service == filter }
     }
 
+    private var highPriorityCards: [BriefCard] {
+        visibleCards?.filter { $0.priority == "high" }
+            .sorted { $0.headline < $1.headline } ?? []
+    }
+
+    private var otherCards: [BriefCard] {
+        visibleCards?.filter { $0.priority != "high" }
+            .sorted { lhs, rhs in
+                if priorityRank(lhs.priority) == priorityRank(rhs.priority) {
+                    return lhs.headline < rhs.headline
+                }
+                return priorityRank(lhs.priority) < priorityRank(rhs.priority)
+            } ?? []
+    }
+
     private var visibleMessages: [Message] {
         let sorted = messages.sorted { $0.timestamp < $1.timestamp }
         return filter == "all" ? sorted : sorted.filter { $0.service == filter }
@@ -200,8 +282,39 @@ struct BriefProseView: View {
                 .padding(.bottom, 12)
             }
 
-            if let cards = visibleCards {
-                cardsView(cards)
+            if let _ = parsedJSON {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !highPriorityCards.isEmpty {
+                        Text("ATTENTION NEEDED")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.25))
+                            .tracking(0.8)
+                            .padding(.horizontal, 28)
+                            .padding(.bottom, 12)
+                        
+                        cardsView(highPriorityCards)
+                            .padding(.bottom, 24)
+                        
+                        if !otherCards.isEmpty {
+                            Divider()
+                                .background(Theme.border.opacity(0.4))
+                                .padding(.horizontal, 28)
+                                .padding(.bottom, 24)
+                        }
+                    }
+                    
+                    if !otherCards.isEmpty {
+                        if !highPriorityCards.isEmpty {
+                            Text("FOR LATER")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Theme.textTertiary)
+                                .tracking(0.8)
+                                .padding(.horizontal, 28)
+                                .padding(.bottom, 12)
+                        }
+                        cardsView(otherCards)
+                    }
+                }
             } else {
                 fallbackView
             }
@@ -214,124 +327,116 @@ struct BriefProseView: View {
 
     @ViewBuilder
     private func cardsView(_ cards: [BriefCard]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(cards.enumerated()), id: \.offset) { idx, card in
+        VStack(alignment: .leading, spacing: 20) {
+            ForEach(Array(cards.enumerated()), id: \.element.id) { idx, card in
                 cardView(card)
-                if idx < cards.count - 1 {
+                if idx < cards.count - 1 && card.priority == "high" {
                     Divider()
-                        .background(Theme.border.opacity(0.4))
-                        .padding(.vertical, 16)
+                        .background(Theme.border.opacity(0.3))
+                        .padding(.top, 4)
                         .padding(.horizontal, 28)
                 }
             }
-
         }
     }
 
     @ViewBuilder
     private func cardView(_ card: BriefCard) -> some View {
+        let isExpanded = expandedCards.contains(card.id)
+        
         VStack(alignment: .leading, spacing: 10) {
             // Service + conversation + headline + priority
             HStack(alignment: .center, spacing: 6) {
-                SourceGlyphView(service: card.service, size: 22)
-                Text(Theme.serviceName(card.service))
-                    .font(.system(size: 14, weight: .semibold))
+                SourceGlyphView(service: card.service, size: 20)
+                Text(card.conversation ?? Theme.serviceName(card.service))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
-                if let conv = card.conversation, !conv.isEmpty {
-                    Text("·")
-                        .foregroundStyle(Theme.textTertiary)
-                    Text(conv)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Theme.textSecondary)
-                }
-                Text("—")
-                    .foregroundStyle(Theme.textTertiary)
-                Text(card.headline)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
+                
+                Spacer()
+                
                 PriorityPill(priority: card.priority)
             }
-            .fixedSize(horizontal: false, vertical: true)
 
-            // Metadata
-            HStack(spacing: 4) {
-                Text("\(card.counts.messages) message\(card.counts.messages == 1 ? "" : "s")")
-                Text("·")
-                Text("\(card.counts.threads) thread\(card.counts.threads == 1 ? "" : "s")")
-                Text("·")
-                Text("\(card.counts.people) \(card.counts.people == 1 ? "person" : "people")")
-            }
-            .font(.system(size: 12))
-            .foregroundStyle(Theme.textTertiary)
-            .monospacedDigit()
+            Text(card.headline)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
 
             // Summary prose
             Text(card.summary)
-                .font(.system(size: 13.5))
-                .foregroundStyle(Theme.textPrimary)
-                .lineSpacing(2)
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textPrimary.opacity(0.9))
+                .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
 
             // From earlier callback
             if let callback = card.callback, !callback.isEmpty {
-                HStack(alignment: .top, spacing: 4) {
-                    Text("From earlier")
-                        .font(.system(size: 13, weight: .semibold))
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(Theme.accent)
-                    Text("—")
-                        .foregroundStyle(Theme.accent)
+                        .padding(.top, 3)
                     Text(callback)
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-
-            // Quotes
-            if !card.quotes.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(card.quotes.enumerated()), id: \.offset) { _, quote in
-                        HStack(alignment: .top, spacing: 8) {
-                            Text(quote.time)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(Theme.textTertiary)
-                                .frame(width: 36, alignment: .leading)
-                                .padding(.top, 1)
-                            SourceGlyphView(service: card.service, size: 16)
-                                .padding(.top, 1)
-                            (Text("\(quote.from): ").fontWeight(.semibold) + Text("\"\(quote.text)\"").italic())
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.textPrimary)
-                        }
-                    }
-                }
-                .padding(.leading, 2)
+                .padding(.vertical, 2)
             }
 
             // Action items (NEXT)
             if !card.actions.isEmpty {
-                HStack(spacing: 6) {
-                    Text("NEXT")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.textTertiary)
-                        .tracking(0.5)
-                    ForEach(Array(card.actions.enumerated()), id: \.offset) { idx, action in
-                        if idx > 0 {
-                            Text("·")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.textTertiary)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(card.actions, id: \.self) { action in
+                        HStack(spacing: 8) {
+                            Image(systemName: "circle")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Theme.accent)
+                            Text(action)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Theme.textPrimary)
                         }
-                        Text(action)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Theme.accent)
-                            .underline(pattern: .dash)
                     }
                 }
+                .padding(.vertical, 4)
+            }
+
+            // Trust / Evidence Toggle
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    if isExpanded {
+                        expandedCards.remove(card.id)
+                    } else {
+                        expandedCards.insert(card.id)
+                        InstrumentationManager.shared.track(event: .sourceExpanded, metadata: ["cardID": card.id, "conversationID": card.conversationId])
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                    Text(isExpanded ? "Hide evidence" : "Show evidence (\(card.sourceMessageIds.count))")
+                    if !card.quotes.isEmpty && !isExpanded {
+                        Text("· \(card.quotes.count) quotes")
+                    }
+                }
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                BriefCardEvidenceView(card: card, repository: appState.repository)
+                    .padding(.leading, 12)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(.horizontal, 28)
+        .padding(.vertical, 8)
+        .background(card.priority == "high" ? Theme.accent.opacity(0.03) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Fallback: grouped by service
@@ -437,5 +542,13 @@ struct BriefProseView: View {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f.string(from: date)
+    }
+
+    private func priorityRank(_ priority: String) -> Int {
+        switch priority {
+        case "high": return 0
+        case "med": return 1
+        default: return 2
+        }
     }
 }

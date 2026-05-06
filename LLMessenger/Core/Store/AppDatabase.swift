@@ -82,6 +82,76 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "conversationName", .text)
             }
         }
+        migrator.registerMigration("v4_source_backed_briefs") { db in
+            try db.create(table: "conversationState") { t in
+                t.column("service", .text).notNull()
+                t.column("conversationId", .text).notNull()
+                t.column("lastSeenMessageId", .text)
+                t.column("lastSummarizedMessageId", .text)
+                t.column("rollingSummary", .text)
+                t.column("participants", .text)
+                t.column("knownEntities", .text)
+                t.column("unresolvedActions", .text)
+                t.column("lastBriefCardId", .text)
+                t.column("prioritySignals", .text)
+                t.column("sourceMessageIds", .text)
+                t.column("updatedAt", .datetime).notNull()
+                t.primaryKey(["service", "conversationId"])
+            }
+
+            try db.create(table: "briefCards") { t in
+                t.column("id", .text).primaryKey()
+                t.column("briefId", .integer).notNull().references("briefs", onDelete: .cascade)
+                t.column("service", .text).notNull()
+                t.column("conversationId", .text).notNull()
+                t.column("conversationTitle", .text)
+                t.column("headline", .text).notNull()
+                t.column("priority", .text).notNull()
+                t.column("summary", .text).notNull()
+                t.column("actionItems", .text).notNull()
+                t.column("callbackText", .text)
+                t.column("sourceMessageIds", .text).notNull()
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.create(table: "briefCardSources") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("briefCardId", .text).notNull().references("briefCards", onDelete: .cascade)
+                t.column("messageRowId", .integer).references("messages", onDelete: .setNull)
+                t.column("service", .text).notNull()
+                t.column("messageId", .text).notNull()
+                t.column("sourceRole", .text).notNull()
+                t.column("quoteText", .text)
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.create(table: "llmRuns") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("briefId", .integer).references("briefs", onDelete: .setNull)
+                t.column("service", .text)
+                t.column("conversationId", .text)
+                t.column("backend", .text).notNull()
+                t.column("model", .text).notNull()
+                t.column("startedAt", .datetime).notNull()
+                t.column("completedAt", .datetime)
+                t.column("status", .text).notNull()
+                t.column("errorCategory", .text)
+                t.column("promptHash", .text)
+                t.column("responseHash", .text)
+                t.column("inputTokenEstimate", .integer)
+                t.column("outputTokenEstimate", .integer)
+            }
+
+            try db.create(index: "briefCards_on_briefId", on: "briefCards", columns: ["briefId"])
+            try db.create(index: "briefCards_on_service_conversation", on: "briefCards", columns: ["service", "conversationId"])
+            try db.create(index: "briefCardSources_on_card", on: "briefCardSources", columns: ["briefCardId"])
+            try db.create(index: "llmRuns_on_briefId", on: "llmRuns", columns: ["briefId"])
+        }
+        migrator.registerMigration("v5_failed_services") { db in
+            try db.alter(table: "briefs") { t in
+                t.add(column: "failedServices", .text)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

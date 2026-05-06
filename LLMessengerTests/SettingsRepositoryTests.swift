@@ -73,4 +73,47 @@ final class SettingsRepositoryTests: XCTestCase {
         let loaded = try repo.loadSignalAccount()
         XCTAssertNil(loaded)
     }
+
+    func testSaveAndLoadSelectedLLMProvider() throws {
+        let defaults = try makeIsolatedDefaults()
+        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
+        let repo = SettingsRepository(keychainStore: store, userDefaults: defaults)
+
+        repo.saveSelectedLLMProvider(.openai)
+
+        XCTAssertEqual(repo.loadSelectedLLMProvider(), .openai)
+    }
+
+    func testMissingSelectedLLMProviderReturnsNilEvenWhenKeyExists() throws {
+        let defaults = try makeIsolatedDefaults()
+        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
+        let repo = SettingsRepository(keychainStore: store, userDefaults: defaults)
+
+        try repo.saveLLMKey(provider: .anthropic, key: "sk-ant-test")
+
+        XCTAssertNil(repo.loadSelectedLLMProvider())
+    }
+
+    func testCloudAutoBriefConsentDefaultsFalse() throws {
+        let defaults = try makeIsolatedDefaults()
+        let repo = SettingsRepository(userDefaults: defaults)
+
+        XCTAssertFalse(repo.loadCloudAutoBriefsConsent())
+    }
+
+    func testSaveAndLoadCloudAutoBriefConsent() throws {
+        let defaults = try makeIsolatedDefaults()
+        let repo = SettingsRepository(userDefaults: defaults)
+
+        repo.saveCloudAutoBriefsConsent(true)
+
+        XCTAssertTrue(repo.loadCloudAutoBriefsConsent())
+    }
+
+    private func makeIsolatedDefaults() throws -> UserDefaults {
+        let suiteName = "llmessenger-tests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }
 }

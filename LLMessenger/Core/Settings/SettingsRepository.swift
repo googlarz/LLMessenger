@@ -10,10 +10,14 @@ enum SettingsError: Error, LocalizedError {
 struct SettingsRepository {
     private let keychainStore: KeychainStore
     private let database: AppDatabase?
+    private let userDefaults: UserDefaults
 
-    init(keychainStore: KeychainStore = KeychainStore(), database: AppDatabase? = nil) {
+    init(keychainStore: KeychainStore = KeychainStore(),
+         database: AppDatabase? = nil,
+         userDefaults: UserDefaults = .standard) {
         self.keychainStore = keychainStore
         self.database = database
+        self.userDefaults = userDefaults
     }
 
     // MARK: - LLM Keys
@@ -36,6 +40,39 @@ struct SettingsRepository {
 
     func deleteLLMKey(provider: LLMProvider) throws {
         try keychainStore.delete(account: provider.rawValue)
+    }
+
+    func saveSelectedLLMProvider(_ provider: LLMProvider?) {
+        if let provider {
+            userDefaults.set(provider.rawValue, forKey: "selected_llm_provider")
+        } else {
+            userDefaults.removeObject(forKey: "selected_llm_provider")
+        }
+    }
+
+    func loadSelectedLLMProvider() -> LLMProvider? {
+        guard let raw = userDefaults.string(forKey: "selected_llm_provider") else { return nil }
+        return LLMProvider(rawValue: raw)
+    }
+
+    func saveCloudAutoBriefsConsent(_ consent: Bool) {
+        userDefaults.set(consent, forKey: "cloud_auto_briefs_consent")
+    }
+
+    func loadCloudAutoBriefsConsent() -> Bool {
+        userDefaults.bool(forKey: "cloud_auto_briefs_consent")
+    }
+
+    func saveOllamaModel(_ model: String) {
+        if model.isEmpty {
+            userDefaults.removeObject(forKey: "ollama_model")
+        } else {
+            userDefaults.set(model, forKey: "ollama_model")
+        }
+    }
+
+    func loadOllamaModel() -> String {
+        userDefaults.string(forKey: "ollama_model") ?? ""
     }
 
     // MARK: - Telegram Credentials (stored in keychain)
@@ -105,31 +142,31 @@ struct SettingsRepository {
     // MARK: - Base Prompt
 
     func saveBasePrompt(_ prompt: String) {
-        UserDefaults.standard.set(prompt, forKey: "base_prompt")
+        userDefaults.set(prompt, forKey: "base_prompt")
     }
 
     func loadBasePrompt() -> String {
-        UserDefaults.standard.string(forKey: "base_prompt") ?? ""
+        userDefaults.string(forKey: "base_prompt") ?? ""
     }
 
     // MARK: - Theme
 
     func saveTheme(_ theme: String) {
-        UserDefaults.standard.set(theme, forKey: "app_theme")
+        userDefaults.set(theme, forKey: "app_theme")
     }
 
     func loadTheme() -> String {
-        UserDefaults.standard.string(forKey: "app_theme") ?? "system"
+        userDefaults.string(forKey: "app_theme") ?? "system"
     }
 
     // MARK: - Default poll interval (minutes)
 
     func savePollInterval(_ minutes: Int) {
-        UserDefaults.standard.set(minutes, forKey: "default_poll_interval")
+        userDefaults.set(minutes, forKey: "default_poll_interval")
     }
 
     func loadPollInterval() -> Int {
-        let v = UserDefaults.standard.integer(forKey: "default_poll_interval")
+        let v = userDefaults.integer(forKey: "default_poll_interval")
         return v > 0 ? v : 60
     }
 
