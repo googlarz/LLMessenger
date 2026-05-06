@@ -172,7 +172,63 @@ final class SignalCLIAdapter: MessengerAdapter {
                 }
             }
         }
+        // Fill remaining gaps from signal-cli's own profile store (has names for contacts
+        // who never accepted a message request or have no phone number in group membership).
+        let cliNames = await loadNamesFromSignalCliDB()
+        for (key, name) in cliNames where names[key] == nil {
+            names[key] = name
+        }
         return names
+    }
+
+    /// Reads ACI → display name from signal-cli's local recipient store.
+    /// This covers group members whose phone number is not exposed via the RPC API.
+    private func loadNamesFromSignalCliDB() async -> [String: String] {
+        guard let dbPath = signalCliAccountDBPath,
+              FileManager.default.fileExists(atPath: dbPath) else { return [:] }
+        var config = Configuration()
+        config.readonly = true
+        guard let db = try? DatabaseQueue(path: dbPath, configuration: config) else { return [:] }
+        var names: [String: String] = [:]
+        try? await db.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT aci, number, given_name, family_name, profile_given_name, profile_family_name
+                FROM recipient
+                WHERE aci IS NOT NULL
+            """)
+            for row in rows {
+                guard let aci = row["aci"] as? String, !aci.isEmpty else { continue }
+                // Prefer explicit given/family over profile fields.
+                let given  = (row["given_name"]  as? String ?? "").isEmpty
+                    ? (row["profile_given_name"]  as? String ?? "")
+                    : (row["given_name"]  as? String ?? "")
+                let family = (row["family_name"] as? String ?? "").isEmpty
+                    ? (row["profile_family_name"] as? String ?? "")
+                    : (row["family_name"] as? String ?? "")
+                let name = family.isEmpty ? given : "\(given) \(family)"
+                let trimmed = name.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { continue }
+                names[aci] = trimmed
+                if let phone = row["number"] as? String, !phone.isEmpty {
+                    names[phone] = trimmed
+                }
+            }
+        }
+        return names
+    }
+
+    /// Path to signal-cli's account database for this account number.
+    private var signalCliAccountDBPath: String? {
+        let jsonPath = NSHomeDirectory() + "/.local/share/signal-cli/data/accounts.json"
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: jsonPath)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let accounts = json["accounts"] as? [[String: Any]] else { return nil }
+        for account in accounts {
+            guard let number = account["number"] as? String, number == accountNumber,
+                  let path = account["path"] as? String else { continue }
+            return NSHomeDirectory() + "/.local/share/signal-cli/data/\(path).d/account.db"
+        }
+        return nil
     }
 
     /// Extracts the best available display name from a contact dict.

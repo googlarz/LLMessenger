@@ -87,10 +87,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     let start = Date()
                     let adapters = self.appState?.adapters ?? [:]
                     do {
-                        if let briefID = try await self.briefEngine?.summarizeLast(hours: 24, adapters: adapters) {
+                        if let briefID = try await self.briefEngine?.summarizeLast(hours: 48, adapters: adapters) {
                             let brief = try? self.appState?.repository.fetchBrief(id: briefID)
-                            let body = brief?.notificationText ?? "24h summary ready"
-                            self.notificationManager?.post(briefID: briefID, title: "24h Summary", body: body)
+                            let body = brief?.notificationText ?? "48h summary ready"
+                            self.notificationManager?.post(briefID: briefID, title: "48h Summary", body: body)
                         }
                         self.appState?.lastError = nil
                     } catch {

@@ -152,7 +152,7 @@ final class MenuBarController {
         newItem.isEnabled = !isLoading
         menu.addItem(newItem)
 
-        let last24hItem = NSMenuItem(title: "Brief Last 24h", action: isLoading ? nil : #selector(MenuActionProxy.last24h), keyEquivalent: "")
+        let last24hItem = NSMenuItem(title: "Brief Last 48h", action: isLoading ? nil : #selector(MenuActionProxy.last24h), keyEquivalent: "")
         last24hItem.target = proxy
         last24hItem.isEnabled = !isLoading
         menu.addItem(last24hItem)
