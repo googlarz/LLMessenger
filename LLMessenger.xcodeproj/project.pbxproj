@@ -58,6 +58,7 @@
 		AA6E78AED377D90FC3EBAA02 /* AutoLaunchManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD6470BF1FD4618456E18C6D /* AutoLaunchManagerTests.swift */; };
 		ACD272260C85A265D50055A1 /* ServiceSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6366D0E1F8A72B71A9F530 /* ServiceSettingsTab.swift */; };
 		ADE6785F10D5F0FB2A55C6C6 /* BriefRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */; };
+		AE1F3B8A38C350D22D81407E /* OnboardingWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C1B7A7D24D3AF2FF2E6FC84 /* OnboardingWindowController.swift */; };
 		AEC6BDAAE9B2D3A6348B68CB /* MemoryCompressorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0035F3076DFE68F7CFF2F8BF /* MemoryCompressorTests.swift */; };
 		AF6BE9979D35F02876AF59D8 /* AutoLaunchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 806576F921F0C0A99AB00DC3 /* AutoLaunchManager.swift */; };
 		B3CF5BF36060C33F25099D53 /* ChatViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B8A33ADE90F0EC79A61D4D /* ChatViewModelTests.swift */; };
@@ -106,6 +107,7 @@
 		173C28CE4F72A153E9132291 /* TelegramSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelegramSignInView.swift; sourceTree = "<group>"; };
 		17E2FC6E580C483A5220F007 /* BriefListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefListView.swift; sourceTree = "<group>"; };
 		1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepository.swift; sourceTree = "<group>"; };
+		1C1B7A7D24D3AF2FF2E6FC84 /* OnboardingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWindowController.swift; sourceTree = "<group>"; };
 		2415F8132629B43CC77A08F8 /* ChatWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWindowController.swift; sourceTree = "<group>"; };
 		306739C4ABE143E1957D677D /* BriefEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefEngineTests.swift; sourceTree = "<group>"; };
 		309F6600675F13496583B3AA /* SettingsRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepositoryTests.swift; sourceTree = "<group>"; };
@@ -249,6 +251,14 @@
 			path = Core;
 			sourceTree = "<group>";
 		};
+		23E7C80E85919A30BD261817 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				1C1B7A7D24D3AF2FF2E6FC84 /* OnboardingWindowController.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
 		305B620F4D1C883A66A7D035 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
@@ -376,6 +386,7 @@
 				C20CEA789D8047744320CFBF /* ReplyDraftView.swift */,
 				47B676DE198355D9388A6399 /* Theme.swift */,
 				4A14FF85C448907397AC9412 /* ThreadView.swift */,
+				23E7C80E85919A30BD261817 /* Onboarding */,
 				DDC8B6540D7585E7A808DB29 /* Settings */,
 			);
 			path = UI;
@@ -529,6 +540,7 @@
 				8F6E46E1E8A362D1B0918AE5 /* MessengerAdapter.swift in Sources */,
 				85D75B32679B8196954EE50E /* NotificationManager.swift in Sources */,
 				2608EF8CE0CD660F8AA89425 /* OllamaClient.swift in Sources */,
+				AE1F3B8A38C350D22D81407E /* OnboardingWindowController.swift in Sources */,
 				7A1C42ABBA573144C4FF9C7F /* OpenAIClient.swift in Sources */,
 				EBF9D849F71DA7874D3F96DD /* PollEngine.swift in Sources */,
 				34ACCAF6781DDF51A663A56F /* PromptBuilder.swift in Sources */,

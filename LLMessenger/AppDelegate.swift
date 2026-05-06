@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var database: AppDatabase?
     var notificationManager: NotificationManager?
     var startTask: Task<Void, Never>?
+    var onboardingWindowController: OnboardingWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -223,6 +224,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             state.refreshBriefs()
             state.briefGenerationState = state.briefs.isEmpty ? .noNewMessages : .cached
             menuBar.setBriefs(state.briefs)
+
+            // Show onboarding on first launch
+            if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                let onboardingController = OnboardingWindowController(database: db)
+                onboardingController.onComplete = { [weak self] in
+                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                    self?.onboardingWindowController = nil
+                }
+                self.onboardingWindowController = onboardingController
+                onboardingController.show()
+            }
 
         } catch {
             let alert = NSAlert()
