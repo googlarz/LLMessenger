@@ -121,6 +121,7 @@
 		4AD49D8511186D6C7D97DCE1 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		4DF82DF450F3BE04F68ACE24 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		5505C31BEA21DA121B801309 /* AnthropicClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicClient.swift; sourceTree = "<group>"; };
+		595169617BDF071C68E4B357 /* LLMessenger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LLMessenger.entitlements; sourceTree = "<group>"; };
 		5B7AAA3D7B964F21F64A8D29 /* BriefCardSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefCardSource.swift; sourceTree = "<group>"; };
 		5BD35DAA3149EDABD48268EB /* PollEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollEngineTests.swift; sourceTree = "<group>"; };
 		5F1ADA68A6D2F9D76588BF7A /* iMessageAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iMessageAdapter.swift; sourceTree = "<group>"; };
@@ -202,6 +203,7 @@
 			children = (
 				7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */,
 				BCE1A2AD60D1E42D7AAB4F4A /* Info.plist */,
+				595169617BDF071C68E4B357 /* LLMessenger.entitlements */,
 				E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */,
 				1958C796DA475A22D89DE79A /* Core */,
 				8418CC4CB8ADF8512F3A2299 /* MenuBar */,
@@ -582,7 +584,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = LLMessenger/LLMessenger.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = LLMessenger/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -662,7 +666,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = LLMessenger/LLMessenger.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = LLMessenger/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

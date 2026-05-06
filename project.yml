@@ -20,6 +20,8 @@ targets:
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "13.0"
         INFOPLIST_FILE: LLMessenger/Info.plist
+        CODE_SIGN_ENTITLEMENTS: LLMessenger/LLMessenger.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
     dependencies:
       - package: GRDB
   LLMessengerTests:

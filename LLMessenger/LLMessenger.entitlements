@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- LLM API calls (Anthropic, OpenAI, Ollama) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- PyInstaller Telegram adapter loads Python framework code at runtime -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- Signal JSON-RPC daemon (localhost) is covered by network.client above -->
+</dict>
+</plist>
