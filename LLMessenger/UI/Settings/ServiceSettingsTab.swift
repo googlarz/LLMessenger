@@ -97,6 +97,10 @@ private struct ServiceCard: View {
     @Binding var telegramApiId: String
     @Binding var telegramApiHash: String
 
+    @State private var showingTelegramSignIn = false
+    @State private var telegramSignInAdapter: SubprocessAdapter? = nil
+    @State private var telegramSignInError: String? = nil
+
     private var service: String { config.service }
 
     var body: some View {
@@ -231,6 +235,40 @@ private struct ServiceCard: View {
                          destination: URL(string: "https://my.telegram.org")!)
                         .font(.caption)
                 }
+                if isConnected && !sessionFileExists {
+                    Divider()
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Session not found")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if let err = telegramSignInError {
+                                Text(err)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        Spacer()
+                        Button("Connect Telegram") {
+                            startTelegramSignIn()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                    .sheet(isPresented: $showingTelegramSignIn, onDismiss: {
+                        telegramSignInAdapter?.stop()
+                        telegramSignInAdapter = nil
+                    }) {
+                        if let adapter = telegramSignInAdapter {
+                            TelegramSignInView(adapter: adapter) {
+                                NotificationCenter.default.post(
+                                    name: .serviceConfigDidChange, object: nil)
+                            }
+                        } else {
+                            ProgressView("Starting adapter…").padding(40)
+                        }
+                    }
+                }
             }
         }
     }
@@ -292,9 +330,46 @@ private struct ServiceCard: View {
         case "signal":
             return isConnected ? signalAccount : "Phone number required"
         case "telegram":
+            if isConnected && !sessionFileExists { return "Session required" }
             return isConnected ? "Credentials configured" : "API credentials required"
         default:
             return isConnected ? "Connected" : "Not configured"
+        }
+    }
+
+    private var sessionFileExists: Bool {
+        FileManager.default.fileExists(
+            atPath: NSHomeDirectory() + "/.config/llmessenger/data/telegram/session.session"
+        )
+    }
+
+    private func startTelegramSignIn() {
+        telegramSignInError = nil
+        // Resolve adapter binary path (mirrors AppDelegate.telegramAdapterPath).
+        var binaryPath: String? = Bundle.main.path(forResource: "telegram-adapter", ofType: nil)
+        let communityPath = NSHomeDirectory() + "/.config/llmessenger/adapters/telegram/telegram-adapter"
+        if binaryPath == nil && FileManager.default.fileExists(atPath: communityPath) {
+            binaryPath = communityPath
+        }
+        guard let path = binaryPath else {
+            telegramSignInError = "Telegram adapter binary not found."
+            return
+        }
+        let sessionPath = NSHomeDirectory() + "/.config/llmessenger/data/telegram/session"
+        let adapterConfig: [String: Any] = [
+            "api_id":       telegramApiId,
+            "api_hash":     telegramApiHash,
+            "session_path": sessionPath
+        ]
+        let adapter = SubprocessAdapter(serviceID: "telegram-auth", adapterPath: path, config: adapterConfig)
+        Task { @MainActor in
+            do {
+                try await adapter.start()
+                telegramSignInAdapter = adapter
+                showingTelegramSignIn = true
+            } catch {
+                telegramSignInError = "Failed to start adapter: \(error.localizedDescription)"
+            }
         }
     }
 }

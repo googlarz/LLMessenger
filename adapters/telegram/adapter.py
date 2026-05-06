@@ -9,6 +9,7 @@ import asyncio
 from datetime import datetime, timezone
 from pyrogram import Client
 from pyrogram.enums import ChatType
+from pyrogram.errors import SessionPasswordNeeded
 
 def ts(dt) -> str:
     """Convert datetime to ISO8601 UTC string."""
@@ -78,6 +79,48 @@ async def handle_send(app: Client, req: dict) -> dict:
     await app.send_message(int(req["conversation_id"]), req["text"])
     return {"success": True}
 
+async def handle_auth_loop(app: Client):
+    """Serve auth_* actions on a connected-but-unauthorized client, then return."""
+    for raw_line in sys.stdin:
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+        except json.JSONDecodeError as e:
+            print(json.dumps({"success": False, "error": f"invalid JSON: {e}"}), flush=True)
+            continue
+
+        action = req.get("action")
+        try:
+            if action == "auth_send_code":
+                phone = req["phone"]
+                sent = await app.send_code(phone)
+                result = {"success": True, "phone_code_hash": sent.phone_code_hash}
+            elif action == "auth_sign_in":
+                phone          = req["phone"]
+                phone_code_hash = req["phone_code_hash"]
+                code           = req["code"]
+                try:
+                    await app.sign_in(phone, phone_code_hash, code)
+                    result = {"success": True}
+                    print(json.dumps(result), flush=True)
+                    return  # session established — exit auth loop
+                except SessionPasswordNeeded:
+                    result = {"success": False, "needs_2fa": True}
+            elif action == "auth_check_password":
+                await app.check_password(req["password"])
+                result = {"success": True}
+                print(json.dumps(result), flush=True)
+                return  # session established — exit auth loop
+            else:
+                result = {"success": False, "error": f"unknown auth action: {action}"}
+        except Exception as e:
+            result = {"success": False, "error": str(e)}
+
+        print(json.dumps(result), flush=True)
+
+
 async def main():
     # Read init line
     init_line = sys.stdin.readline().strip()
@@ -95,8 +138,30 @@ async def main():
     api_hash     = cfg["api_hash"]
     session_path = cfg.get("session_path", "telegram_session")
 
+    # Connect without calling authorize() so stdin stays available for auth actions.
+    app = Client(session_path, api_id=api_id, api_hash=api_hash)
+    await app.connect()
+    try:
+        is_authorized = await app.is_user_authorized()
+    except Exception:
+        is_authorized = False
+
+    if not is_authorized:
+        # Tell the Swift side we're ready but need auth.
+        print(json.dumps({"success": True, "needs_auth": True}), flush=True)
+        await handle_auth_loop(app)
+        # After auth, disconnect and reconnect via the normal path so session is flushed.
+        await app.disconnect()
+        # Fall through to the normal `async with` block below.
+    else:
+        await app.disconnect()
+
     async with Client(session_path, api_id=api_id, api_hash=api_hash) as app:
-        print(json.dumps({"success": True}), flush=True)
+        if not is_authorized:
+            # Reconnection after auth — no second init response needed; Swift already got success.
+            pass
+        else:
+            print(json.dumps({"success": True}), flush=True)
 
         for raw_line in sys.stdin:
             line = raw_line.strip()

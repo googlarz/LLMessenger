@@ -40,6 +40,7 @@
 		6AA8C3866C3D66763E25B60A /* MediaPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC689A6D5F7D05E452154B4 /* MediaPanelView.swift */; };
 		6FD560709B01F26879B0C14C /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D44892CD851C4994CEA012 /* LLMProvider.swift */; };
 		7177450F9E2D6DC65A094DA5 /* LLMRunRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C8397AA9C0E4BF6BE370EB9 /* LLMRunRecord.swift */; };
+		7485667FD9BB75A498987D0F /* TelegramSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173C28CE4F72A153E9132291 /* TelegramSignInView.swift */; };
 		74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */; };
 		7A1C42ABBA573144C4FF9C7F /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DE9B36EDDE0DDEA40BC7DB /* OpenAIClient.swift */; };
 		7B7A3506F3DF564A1595A4A8 /* LLMessengerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */; };
@@ -102,6 +103,7 @@
 		0B01BD5888FD90D28050A644 /* ServiceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealth.swift; sourceTree = "<group>"; };
 		14DE9B36EDDE0DDEA40BC7DB /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		1551568E73E6646226FE66C3 /* BriefCardRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefCardRecord.swift; sourceTree = "<group>"; };
+		173C28CE4F72A153E9132291 /* TelegramSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelegramSignInView.swift; sourceTree = "<group>"; };
 		17E2FC6E580C483A5220F007 /* BriefListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefListView.swift; sourceTree = "<group>"; };
 		1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepository.swift; sourceTree = "<group>"; };
 		2415F8132629B43CC77A08F8 /* ChatWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWindowController.swift; sourceTree = "<group>"; };
@@ -388,6 +390,7 @@
 				DF6366D0E1F8A72B71A9F530 /* ServiceSettingsTab.swift */,
 				E310D3698200C661D0937036 /* SettingsView.swift */,
 				874EAADE41BC00D431B7655A /* SettingsWindowController.swift */,
+				173C28CE4F72A153E9132291 /* TelegramSignInView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -538,6 +541,7 @@
 				6515871374A6975B0B2432DF /* SettingsWindowController.swift in Sources */,
 				95A2593B4891EC65019E1568 /* SignalCLIAdapter.swift in Sources */,
 				EAB0DE7548B574521670DA15 /* SubprocessAdapter.swift in Sources */,
+				7485667FD9BB75A498987D0F /* TelegramSignInView.swift in Sources */,
 				40B16522FD6D885CF5BA5741 /* Theme.swift in Sources */,
 				A4AAEAA892F516B7F9D4B3B7 /* ThreadView.swift in Sources */,
 				F37C2D2EABCEB3FA7BF41E5D /* iMessageAdapter.swift in Sources */,

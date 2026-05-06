@@ -127,6 +127,10 @@ final class SubprocessAdapter: MessengerAdapter {
         }
     }
 
+    func authRoundTrip(_ request: [String: Any]) async throws -> [String: Any] {
+        try await roundTrip(request)
+    }
+
     private func roundTrip(_ request: [String: Any]) async throws -> [String: Any] {
         guard process?.isRunning == true,
               let writeHandle, let readHandle else {
