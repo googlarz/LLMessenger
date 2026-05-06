@@ -23,13 +23,23 @@ async def handle_fetch(app: Client, req: dict) -> dict:
     if mode == "time":
         since = datetime.fromisoformat(req["since"].replace("Z", "+00:00")).replace(tzinfo=None)
 
+    # Per-dialog fetch limit: tighter in time mode since we break on old messages anyway.
+    per_dialog_limit = 50 if since else limit
+
     conversations = []
 
     async for dialog in app.get_dialogs():
+        # Fast-path: skip dialogs with no activity since `since`.
+        if since and dialog.top_message and dialog.top_message.date:
+            top_date = dialog.top_message.date
+            top_date = top_date.replace(tzinfo=None) if top_date.tzinfo else top_date
+            if top_date < since:
+                continue
+
         messages = []
         chat_id = dialog.chat.id
 
-        async for msg in app.get_chat_history(chat_id, limit=(200 if since else limit)):
+        async for msg in app.get_chat_history(chat_id, limit=per_dialog_limit):
             if not msg.text:
                 continue
             msg_date = msg.date.replace(tzinfo=None) if msg.date.tzinfo else msg.date

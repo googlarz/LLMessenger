@@ -60,9 +60,20 @@ final class BriefEngine {
                 now: Date()
             )
             let byConversation: [String: [Message]] = Dictionary(grouping: serviceMessages, by: { $0.conversationId })
+            // Keep at most 30 conversations per service, ranked by message count (most active first).
+            // This prevents a huge Telegram brief from drowning the LLM prompt.
+            let maxConversations = 30
+            let rankedConvIds = byConversation.keys
+                .sorted { (byConversation[$0]?.count ?? 0) > (byConversation[$1]?.count ?? 0) }
+                .prefix(maxConversations)
+            let skippedConvCount = byConversation.keys.count - rankedConvIds.count
+
             var conversationBlocks: [String] = []
+            if skippedConvCount > 0 {
+                conversationBlocks.append("[\(skippedConvCount) lower-activity conversations omitted]")
+            }
             let signalAdapter = adapters[service] as? SignalCLIAdapter
-            for convId in byConversation.keys.sorted() {
+            for convId in rankedConvIds {
                 let convMessages = byConversation[convId]!.sorted { $0.timestamp < $1.timestamp }
                 // Cap at 100 most-recent messages per conversation to keep prompts manageable.
                 let capped = convMessages.count > 100 ? Array(convMessages.suffix(100)) : convMessages
