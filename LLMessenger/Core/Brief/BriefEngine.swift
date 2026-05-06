@@ -154,13 +154,46 @@ final class BriefEngine {
         var activeServices: [String] = []
         var messagesToAttach: [Message] = []
 
-        for (serviceID, adapter) in adapters.sorted(by: { $0.key < $1.key }) {
-            do {
-                let result = try await adapter.fetch(config: fetchConfig)
-                guard !result.conversations.isEmpty else { continue }
+        // Collect service IDs from both live adapters and DB (covers adapters that failed to start).
+        var serviceIDs = Set(adapters.keys)
+        // Also include any services that have stored messages in the window (e.g. iMessage polled
+        // in the background but whose adapter isn't running at brief-generation time).
+        if let storedServices = try? await database.dbQueue.read({ db in
+            try String.fetchAll(db, sql:
+                "SELECT DISTINCT service FROM messages WHERE timestamp > ? AND isSent = 0",
+                arguments: [since])
+        }) { storedServices.forEach { serviceIDs.insert($0) } }
 
-                // Persist rows so the chat panel can display them regardless of LLM outcome.
-                let newlyStored = try repository.storeMessages(from: result, service: serviceID)
+        for serviceID in serviceIDs.sorted() {
+            do {
+                // 1. Try live adapter fetch.
+                var adapterResult: AdapterFetchResult? = nil
+                if let adapter = adapters[serviceID] {
+                    adapterResult = try? await adapter.fetch(config: fetchConfig)
+                }
+
+                // 2. If adapter returned nothing, fall back to stored DB messages.
+                let newlyStored: [Message]
+                let conversations: [AdapterConversation]
+                if let result = adapterResult, !result.conversations.isEmpty {
+                    newlyStored = try repository.storeMessages(from: result, service: serviceID)
+                    conversations = result.conversations
+                } else {
+                    // Adapter unavailable or empty — use messages already stored by the poll loop.
+                    let dbMessages = try repository.fetchMessages(service: serviceID, since: since)
+                    guard !dbMessages.isEmpty else { continue }
+                    newlyStored = dbMessages
+                    // Reconstruct AdapterConversation-like grouping from stored messages.
+                    var byConv: [String: [Message]] = [:]
+                    for m in dbMessages { byConv[m.conversationId, default: []].append(m) }
+                    conversations = byConv.map { convId, msgs in
+                        AdapterConversation(
+                            id: convId, name: convId, type: .dm,
+                            messages: msgs.map { AdapterMessage(id: $0.messageId, sender: $0.sender,
+                                                                text: $0.text, timestamp: $0.timestamp) }
+                        )
+                    }
+                }
 
                 let recent = try repository.recentEpisodicSummaries(service: serviceID, limit: 3)
                 let systemPrompt = PromptBuilder.build(
@@ -173,7 +206,7 @@ final class BriefEngine {
 
                 var conversationBlocks: [String] = []
                 var msgCount = 0
-                for conv in result.conversations {
+                for conv in conversations {
                     let sorted = conv.messages.sorted { $0.timestamp < $1.timestamp }
                     // Cap at 100 most-recent messages per conversation to keep prompts manageable.
                     let capped = sorted.count > 100 ? Array(sorted.suffix(100)) : sorted
