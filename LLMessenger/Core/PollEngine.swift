@@ -4,7 +4,6 @@ import GRDB
 @MainActor
 final class PollEngine {
     private let database: AppDatabase
-    // State accessed only from async contexts — no concurrent access in single-adapter tests
     private var adapters: [String: MessengerAdapter] = [:]
     private var configs: [String: ServiceConfig] = [:]
     private var timers: [String: Timer] = [:]
@@ -22,6 +21,19 @@ final class PollEngine {
         configs[adapter.serviceID] = config
     }
 
+    // Apply updated config for a running service without restarting the engine.
+    func reload(config: ServiceConfig) {
+        let serviceID = config.service
+        configs[serviceID] = config
+        if config.enabled {
+            scheduleTimer(serviceID: serviceID, intervalMinutes: config.pollIntervalMinutes)
+        } else {
+            timers[serviceID]?.invalidate()
+            timers[serviceID] = nil
+            nextFireDates.removeValue(forKey: serviceID)
+        }
+    }
+
     func start() async {
         for (serviceID, config) in configs where config.enabled {
             guard let adapter = adapters[serviceID] else { continue }
@@ -36,27 +48,47 @@ final class PollEngine {
         }
     }
 
+    // Poll all adapters; fire onPollSucceeded exactly once if any new messages were stored.
     func pollAll() async {
+        var anyNew = false
         for serviceID in adapters.keys {
-            try? await pollNow(serviceID: serviceID)
+            if (try? await pollOnce(serviceID: serviceID)) == true {
+                anyNew = true
+            }
+        }
+        if anyNew {
+            await onPollSucceeded?()
         }
     }
 
+    // Public: poll one service and fire onPollSucceeded if new messages arrived.
+    // Only fires for eager services — on_demand services store messages without auto-briefing.
     func pollNow(serviceID: String) async throws {
-        guard !inFlight.contains(serviceID) else { return }
+        let isEager = configs[serviceID]?.resolvedPrivacyMode == .eager
+        if try await pollOnce(serviceID: serviceID) && isEager {
+            await onPollSucceeded?()
+        }
+    }
+
+    // MARK: - Private
+
+    // Core poll: fetch, store, update health. Returns true iff new messages were inserted.
+    @discardableResult
+    private func pollOnce(serviceID: String) async throws -> Bool {
+        guard !inFlight.contains(serviceID) else { return false }
         inFlight.insert(serviceID)
         defer { inFlight.remove(serviceID) }
 
         guard let adapter = adapters[serviceID],
-              let config = configs[serviceID] else { return }
+              let config = configs[serviceID] else { return false }
 
         do {
-            let fetchConfig = makeFetchConfig(config: config)
+            let fetchConfig = makeFetchConfig(config: config, serviceID: serviceID)
             let result = try await adapter.fetch(config: fetchConfig)
-            try store(result: result, service: serviceID)
+            let hadNew = try store(result: result, service: serviceID)
             failureCounts[serviceID] = 0
             writeHealth(service: serviceID, status: "ok", error: nil)
-            await onPollSucceeded?()
+            return hadNew
         } catch {
             let failures = (failureCounts[serviceID] ?? 0) + 1
             failureCounts[serviceID] = failures
@@ -72,14 +104,21 @@ final class PollEngine {
         nextFireDates[serviceID] = Date().addingTimeInterval(interval)
         let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             guard let self else { return }
-            self.nextFireDates[serviceID] = Date().addingTimeInterval(interval)
-            Task { try? await self.pollNow(serviceID: serviceID) }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.nextFireDates[serviceID] = Date().addingTimeInterval(interval)
+                try? await self.pollNow(serviceID: serviceID)
+            }
         }
         timers[serviceID] = timer
     }
 
     var nextFireDate: Date? {
         nextFireDates.values.min()
+    }
+
+    var currentServiceHealth: [String: AdapterHealthResult.Status] {
+        adapters.mapValues { $0.healthStatus }
     }
 
     private func readLastCheck(serviceID: String) -> Date? {
@@ -101,17 +140,27 @@ final class PollEngine {
         }
     }
 
-    private func makeFetchConfig(config: ServiceConfig) -> FetchConfig {
-        switch config.fetchMode {
-        case "time":
+    private func makeFetchConfig(config: ServiceConfig, serviceID: String) -> FetchConfig {
+        switch config.resolvedFetchMode {
+        case .time:
+            let since = readLastCheck(serviceID: serviceID)
+                ?? Date().addingTimeInterval(-Double(config.pollIntervalMinutes) * 60)
+            return FetchConfig(mode: .byTime(since: since))
+        case .count:
+            // Always include a time anchor so adapters that respect `since` don't
+            // return unlimited history on first run (when lastCheck is nil).
+            if let lastCheck = readLastCheck(serviceID: serviceID) {
+                return FetchConfig(mode: .byTime(since: lastCheck))
+            }
+            // No prior check: fetch only the last poll-interval window.
             let since = Date().addingTimeInterval(-Double(config.pollIntervalMinutes) * 60)
             return FetchConfig(mode: .byTime(since: since))
-        default:
-            return FetchConfig(mode: .byCount(last: config.fetchLimit))
         }
     }
 
-    private func store(result: AdapterFetchResult, service: String) throws {
+    // Returns true if at least one new message was inserted (not a duplicate).
+    private func store(result: AdapterFetchResult, service: String) throws -> Bool {
+        var hadNew = false
         try database.dbQueue.write { db in
             for conv in result.conversations {
                 for msg in conv.messages {
@@ -126,15 +175,17 @@ final class PollEngine {
                         isSent: false
                     )
                     try record.insert(db, onConflict: .ignore)
+                    if db.changesCount > 0 { hadNew = true }
                 }
             }
         }
+        return hadNew
     }
 
     private func writeHealth(service: String, status: String, error: String?) {
         do {
             try database.dbQueue.write { db in
-                var health = ServiceHealth(
+                let health = ServiceHealth(
                     service: service,
                     status: status,
                     lastCheck: Date(),

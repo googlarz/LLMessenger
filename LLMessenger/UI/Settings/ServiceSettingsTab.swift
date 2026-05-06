@@ -69,8 +69,8 @@ struct ServiceSettingsTab: View {
 
     private func load() {
         configs = (try? repo.loadAllServiceConfigs()) ?? []
-        if configs.isEmpty {
-            configs = [ServiceConfig.default(for: "telegram")]
+        for service in ["telegram", "signal", "imessage"] where !configs.contains(where: { $0.service == service }) {
+            configs.append(ServiceConfig.default(for: service))
         }
         signalAccount = (try? repo.loadSignalAccount()) ?? ""
         let tgCreds = repo.loadTelegramCredentials()
@@ -85,6 +85,7 @@ struct ServiceSettingsTab: View {
             }
             try repo.saveSignalAccount(signalAccount)
             try repo.saveTelegramCredentials(apiId: telegramApiId, apiHash: telegramApiHash)
+            NotificationCenter.default.post(name: .serviceConfigDidChange, object: nil)
             saveStatus = "Saved ✓"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }
         } catch {
