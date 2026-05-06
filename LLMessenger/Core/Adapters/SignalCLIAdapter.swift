@@ -147,30 +147,50 @@ final class SignalCLIAdapter: MessengerAdapter {
     }
 
     private func loadContactNames() async -> [String: String] {
-        guard let contacts = try? await rpc("listContacts") as? [[String: Any]] else { return [:] }
+        // allNumbers: true returns phone-book contacts (97) not just Signal-known ones (39).
+        guard let contacts = try? await rpc("listContacts", params: ["allNumbers": true])
+                as? [[String: Any]] else { return [:] }
         var names: [String: String] = [:]
         for c in contacts {
-            let name: String = {
-                // 1. Top-level given+family name
-                if let g = c["givenName"] as? String, !g.isEmpty {
-                    let f = c["familyName"] as? String ?? ""
-                    return f.isEmpty ? g : "\(g) \(f)"
-                }
-                // 2. Profile given+family name (Signal stores display names here)
-                if let p = c["profile"] as? [String: Any],
-                   let g = p["givenName"] as? String, !g.isEmpty {
-                    let f = p["familyName"] as? String ?? ""
-                    return f.isEmpty ? g : "\(g) \(f)"
-                }
-                // 3. Top-level "name" field (some contacts have full name here)
-                if let n = c["name"] as? String, !n.isEmpty { return n }
-                return ""
-            }()
+            let name = extractContactName(from: c)
             guard !name.isEmpty else { continue }
             if let uuid = c["uuid"] as? String, !uuid.isEmpty { names[uuid] = name }
             if let num  = c["number"] as? String, !num.isEmpty  { names[num]  = name }
         }
+        // Cross-reference group members: a group member UUID with a known phone number
+        // can be resolved even when that UUID isn't in the contacts list directly.
+        if let groups = try? await rpc("listGroups") as? [[String: Any]] {
+            for group in groups {
+                guard let members = group["members"] as? [[String: Any]] else { continue }
+                for member in members {
+                    guard let uuid  = member["uuid"]   as? String, !uuid.isEmpty,
+                          names[uuid] == nil,                    // not already resolved
+                          let phone = member["number"] as? String, !phone.isEmpty,
+                          let name  = names[phone]               // phone IS resolved
+                    else { continue }
+                    names[uuid] = name
+                }
+            }
+        }
         return names
+    }
+
+    /// Extracts the best available display name from a contact dict.
+    private func extractContactName(from c: [String: Any]) -> String {
+        // 1. Top-level given+family
+        if let g = c["givenName"] as? String, !g.isEmpty {
+            let f = c["familyName"] as? String ?? ""
+            return f.isEmpty ? g : "\(g) \(f)"
+        }
+        // 2. Profile given+family (Signal stores display names here)
+        if let p = c["profile"] as? [String: Any],
+           let g = p["givenName"] as? String, !g.isEmpty {
+            let f = p["familyName"] as? String ?? ""
+            return f.isEmpty ? g : "\(g) \(f)"
+        }
+        // 3. Top-level "name" field
+        if let n = c["name"] as? String, !n.isEmpty { return n }
+        return ""
     }
 
     private func loadGroupNames() async -> [String: String] {
@@ -225,7 +245,8 @@ final class SignalCLIAdapter: MessengerAdapter {
                 convType = .dm
             }
 
-            let senderName = contactNames[sender] ?? sender
+            // Fall back to "Unknown" for unresolvable UUIDs (long hex strings, not names).
+            let senderName = contactNames[sender] ?? (sender.count > 20 ? "Unknown" : sender)
             let msg = AdapterMessage(
                 id: "\(sender)-\(tsMs)",
                 sender: senderName,

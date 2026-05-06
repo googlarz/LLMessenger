@@ -83,7 +83,9 @@ final class BriefEngine {
                     ?? signalAdapter?.contactName(for: convId)
                     ?? convId
                 let lines = capped.map { msg -> String in
-                    let senderName = signalAdapter?.contactName(for: msg.sender) ?? msg.sender
+                    let resolved = signalAdapter?.contactName(for: msg.sender)
+                    // Raw UUID (>20 chars of hex) → "Unknown" rather than a noise string.
+                    let senderName = resolved ?? (msg.sender.count > 20 ? "Unknown" : msg.sender)
                     return "[\(dateFormatter.string(from: msg.timestamp))] \(senderName): \(msg.text)"
                 }
                 let omitted = convMessages.count - capped.count
