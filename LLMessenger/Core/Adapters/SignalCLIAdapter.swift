@@ -9,6 +9,12 @@ final class SignalCLIAdapter: MessengerAdapter {
     private let accountNumber: String
     private let daemonURL: URL
     private let storeDBPath: String
+    private var dbQueue: DatabaseQueue?
+
+    // Resolved at start(); keyed by UUID (ACI) or phone number.
+    private var contactNames: [String: String] = [:]
+    // Resolved at start(); keyed by base64 group ID.
+    private var groupNames: [String: String] = [:]
 
     init(accountNumber: String, daemonPort: Int = 7583) {
         self.accountNumber = accountNumber
@@ -22,17 +28,34 @@ final class SignalCLIAdapter: MessengerAdapter {
         guard FileManager.default.fileExists(atPath: storeDBPath) else {
             throw AdapterError.initFailed("signal-mcp store not found at \(storeDBPath). Ensure the signal-mcp watch daemon is running.")
         }
+        var grdbConfig = Configuration()
+        grdbConfig.readonly = true
+        dbQueue = try DatabaseQueue(path: storeDBPath, configuration: grdbConfig)
+        // Load names non-fatally — missing daemon just means raw IDs are shown.
+        async let contacts = loadContactNames()
+        async let groups   = loadGroupNames()
+        (contactNames, groupNames) = await (contacts, groups)
         healthStatus = .ok
     }
 
+    func stop() {
+        dbQueue = nil
+        healthStatus = .warning
+    }
+
     func fetch(config: FetchConfig) async throws -> AdapterFetchResult {
-        guard FileManager.default.fileExists(atPath: storeDBPath) else {
+        guard let dbQueue else {
             return AdapterFetchResult(conversations: [])
         }
 
-        var grdbConfig = Configuration()
-        grdbConfig.readonly = true
-        let dbQueue = try DatabaseQueue(path: storeDBPath, configuration: grdbConfig)
+        // Retry name loading if start() ran before the daemon was available.
+        if contactNames.isEmpty || groupNames.isEmpty {
+            async let contacts = loadContactNames()
+            async let groups   = loadGroupNames()
+            let (c, g) = await (contacts, groups)
+            if !c.isEmpty { contactNames = c }
+            if !g.isEmpty { groupNames   = g }
+        }
 
         let rows: [[String: DatabaseValue]]
         switch config.mode {
@@ -60,7 +83,11 @@ final class SignalCLIAdapter: MessengerAdapter {
             }
         }
 
-        return AdapterFetchResult(conversations: Self.group(rows: rows))
+        return AdapterFetchResult(conversations: Self.group(
+            rows: rows,
+            contactNames: contactNames,
+            groupNames: groupNames
+        ))
     }
 
     func send(conversationID: String, text: String) async throws {
@@ -79,7 +106,10 @@ final class SignalCLIAdapter: MessengerAdapter {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = payload
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw AdapterError.sendFailed("HTTP \(http.statusCode)")
+        }
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let error = json["error"] as? [String: Any],
            let message = error["message"] as? String {
@@ -97,9 +127,72 @@ final class SignalCLIAdapter: MessengerAdapter {
         )
     }
 
+    // MARK: - Private RPC helpers
+
+    private func rpc(_ method: String, params: [String: Any] = [:]) async throws -> Any? {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "jsonrpc": "2.0", "method": method, "id": 1, "params": params
+        ])
+        var req = URLRequest(url: daemonURL)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        let (data, _) = try await URLSession.shared.data(for: req)
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["result"]
+    }
+
+    private func loadContactNames() async -> [String: String] {
+        guard let contacts = try? await rpc("listContacts") as? [[String: Any]] else { return [:] }
+        var names: [String: String] = [:]
+        for c in contacts {
+            let name: String = {
+                // 1. Top-level given+family name
+                if let g = c["givenName"] as? String, !g.isEmpty {
+                    let f = c["familyName"] as? String ?? ""
+                    return f.isEmpty ? g : "\(g) \(f)"
+                }
+                // 2. Profile given+family name (Signal stores display names here)
+                if let p = c["profile"] as? [String: Any],
+                   let g = p["givenName"] as? String, !g.isEmpty {
+                    let f = p["familyName"] as? String ?? ""
+                    return f.isEmpty ? g : "\(g) \(f)"
+                }
+                // 3. Top-level "name" field (some contacts have full name here)
+                if let n = c["name"] as? String, !n.isEmpty { return n }
+                return ""
+            }()
+            guard !name.isEmpty else { continue }
+            if let uuid = c["uuid"] as? String, !uuid.isEmpty { names[uuid] = name }
+            if let num  = c["number"] as? String, !num.isEmpty  { names[num]  = name }
+        }
+        return names
+    }
+
+    private func loadGroupNames() async -> [String: String] {
+        guard let groups = try? await rpc("listGroups") as? [[String: Any]] else { return [:] }
+        var names: [String: String] = [:]
+        for g in groups {
+            guard let id = g["id"] as? String, !id.isEmpty else { continue }
+            // "name" is the standard field; fall back to "title" used by some versions.
+            let name = (g["name"] as? String ?? "").isEmpty
+                ? (g["title"] as? String ?? "")
+                : (g["name"] as? String ?? "")
+            if !name.isEmpty { names[id] = name }
+        }
+        return names
+    }
+
     // MARK: - Grouping (static for testability)
 
-    static func group(rows: [[String: DatabaseValue]]) -> [AdapterConversation] {
+    /// Groups raw signal-mcp rows into adapter conversations.
+    /// `contactNames` maps UUID (ACI) or phone number → display name.
+    /// `groupNames`   maps base64 group ID → group title.
+    /// Both default to empty so callers in tests need no changes.
+    static func group(
+        rows: [[String: DatabaseValue]],
+        contactNames: [String: String] = [:],
+        groupNames: [String: String] = [:]
+    ) -> [AdapterConversation] {
         var byID: [String: (name: String, type: ConversationType, messages: [AdapterMessage])] = [:]
         var order: [String] = []
 
@@ -116,19 +209,21 @@ final class SignalCLIAdapter: MessengerAdapter {
             let convName: String
             let convType: ConversationType
 
-            if let gid = groupID {
+            // signal-mcp stores group_id as "" (empty string) for DMs, not NULL
+            if let gid = groupID, !gid.isEmpty {
                 convID = gid
-                convName = gid
+                convName = groupNames[gid] ?? gid
                 convType = .group
             } else {
                 convID = sender
-                convName = sender
+                convName = contactNames[sender] ?? sender
                 convType = .dm
             }
 
+            let senderName = contactNames[sender] ?? sender
             let msg = AdapterMessage(
                 id: "\(sender)-\(tsMs)",
-                sender: sender,
+                sender: senderName,
                 text: body,
                 timestamp: date
             )
