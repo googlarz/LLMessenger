@@ -65,6 +65,7 @@
 		E2C8F8B6CA8E66B74B528FB1 /* LLMClientTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E83C3D7F5BA8B73D9EF54F /* LLMClientTypesTests.swift */; };
 		E76EA4B470CC880F2800F3F3 /* LLMProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F98163F2B0DC06E29DF2EB /* LLMProviderTests.swift */; };
 		EAB0DE7548B574521670DA15 /* SubprocessAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */; };
+		D1A74883E80245D851C7CF7A /* iMessageAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 543F07480C7862ED87F549E4 /* iMessageAdapter.swift */; };
 		EBF9D849F71DA7874D3F96DD /* PollEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91DCC83C90E2B73383588FD1 /* PollEngine.swift */; };
 		ED026EB71E8074D35FCC0477 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 053BC1D531581B41EE1FF9FC /* GRDB */; };
 		ED58A99EF4403B466D24E7FF /* Brief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3982B388A984024FBEEA9C82 /* Brief.swift */; };
@@ -91,6 +92,7 @@
 		04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerTests.swift; sourceTree = "<group>"; };
 		077FE5D051B4131476BEDD07 /* LLMessenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LLMessenger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubprocessAdapter.swift; sourceTree = "<group>"; };
+		543F07480C7862ED87F549E4 /* iMessageAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iMessageAdapter.swift; sourceTree = "<group>"; };
 		09D44892CD851C4994CEA012 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
 		0B01BD5888FD90D28050A644 /* ServiceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealth.swift; sourceTree = "<group>"; };
 		14DE9B36EDDE0DDEA40BC7DB /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
@@ -325,6 +327,7 @@
 				999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */,
 				FB4B8C1E7C4BDF5C7E5490F0 /* SignalCLIAdapter.swift */,
 				08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */,
+				543F07480C7862ED87F549E4 /* iMessageAdapter.swift */,
 			);
 			path = Adapters;
 			sourceTree = "<group>";
@@ -501,6 +504,7 @@
 				6515871374A6975B0B2432DF /* SettingsWindowController.swift in Sources */,
 				95A2593B4891EC65019E1568 /* SignalCLIAdapter.swift in Sources */,
 				EAB0DE7548B574521670DA15 /* SubprocessAdapter.swift in Sources */,
+				D1A74883E80245D851C7CF7A /* iMessageAdapter.swift in Sources */,
 				40B16522FD6D885CF5BA5741 /* Theme.swift in Sources */,
 				A4AAEAA892F516B7F9D4B3B7 /* ThreadView.swift in Sources */,
 			);

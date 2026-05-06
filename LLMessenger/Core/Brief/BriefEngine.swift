@@ -20,7 +20,7 @@ final class BriefEngine {
     }
 
     @discardableResult
-    func processNewMessages() async throws -> Int64? {
+    func processNewMessages(adapters: [String: any MessengerAdapter] = [:]) async throws -> Int64? {
         guard !briefingInFlight else { return nil }
         briefingInFlight = true
         defer { briefingInFlight = false }
@@ -61,13 +61,22 @@ final class BriefEngine {
             )
             let byConversation: [String: [Message]] = Dictionary(grouping: serviceMessages, by: { $0.conversationId })
             var conversationBlocks: [String] = []
+            let signalAdapter = adapters[service] as? SignalCLIAdapter
             for convId in byConversation.keys.sorted() {
                 let convMessages = byConversation[convId]!.sorted { $0.timestamp < $1.timestamp }
                 // Cap at 100 most-recent messages per conversation to keep prompts manageable.
                 let capped = convMessages.count > 100 ? Array(convMessages.suffix(100)) : convMessages
-                let lines = capped.map { "[\(dateFormatter.string(from: $0.timestamp))] \($0.sender): \($0.text)" }
+                // Resolve conversation display name: stored name → live adapter lookup → raw ID
+                let convHeader = convMessages.first?.conversationName
+                    ?? signalAdapter?.groupName(for: convId)
+                    ?? signalAdapter?.contactName(for: convId)
+                    ?? convId
+                let lines = capped.map { msg -> String in
+                    let senderName = signalAdapter?.contactName(for: msg.sender) ?? msg.sender
+                    return "[\(dateFormatter.string(from: msg.timestamp))] \(senderName): \(msg.text)"
+                }
                 let omitted = convMessages.count - capped.count
-                var block = "=== \(convId) ===\n"
+                var block = "=== \(convHeader) ===\n"
                 if omitted > 0 { block += "[\(omitted) earlier messages omitted]\n" }
                 block += lines.joined(separator: "\n")
                 conversationBlocks.append(block)
@@ -187,8 +196,10 @@ final class BriefEngine {
                     var byConv: [String: [Message]] = [:]
                     for m in dbMessages { byConv[m.conversationId, default: []].append(m) }
                     conversations = byConv.map { convId, msgs in
-                        AdapterConversation(
-                            id: convId, name: convId, type: .dm,
+                        // Use stored conversationName if available; fall back to raw ID.
+                        let convName = msgs.first?.conversationName ?? convId
+                        return AdapterConversation(
+                            id: convId, name: convName, type: .dm,
                             messages: msgs.map { AdapterMessage(id: $0.messageId, sender: $0.sender,
                                                                 text: $0.text, timestamp: $0.timestamp) }
                         )

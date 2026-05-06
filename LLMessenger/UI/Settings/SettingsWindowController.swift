@@ -10,30 +10,30 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         self.database = database
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 380),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
-            defer: true
+            defer: false
         )
         window.title = "LLMessenger Settings"
         window.setFrameAutosaveName("LLMessengerSettings")
+        window.contentView = NSHostingView(rootView: SettingsView(database: database))
 
         super.init(window: window)
         window.delegate = self
-
-        let content = SettingsView(database: database)
-        window.contentView = NSHostingView(rootView: content)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     func show() {
-        if window?.isVisible == false { window?.center() }
-        window?.makeKeyAndOrderFront(nil)
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        if window?.isVisible == false { window?.center() }
+        showWindow(nil)
+        window?.orderFrontRegardless()
     }
 
     func windowWillClose(_ notification: Notification) {
-        // Keep controller alive — don't nil it out, just let window hide
+        NSApp.setActivationPolicy(.accessory)
     }
 }

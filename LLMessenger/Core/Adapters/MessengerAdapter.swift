@@ -60,6 +60,7 @@ enum AdapterError: Error, LocalizedError {
     case sendFailed(String)
     case invalidResponse
     case processClosed
+    case timeout
 
     var errorDescription: String? {
         switch self {
@@ -68,6 +69,7 @@ enum AdapterError: Error, LocalizedError {
         case .sendFailed(let r):   return "Send failed: \(r)"
         case .invalidResponse:     return "Invalid response from adapter"
         case .processClosed:       return "Adapter process closed unexpectedly"
+        case .timeout:             return "Adapter request timed out"
         }
     }
 }
@@ -78,8 +80,11 @@ protocol MessengerAdapter: AnyObject {
     var serviceID: String { get }
     var healthStatus: AdapterHealthResult.Status { get }
 
-    /// Start the adapter subprocess. Must be called before fetch/send.
+    /// Start the adapter. Must be called before fetch/send.
     func start() async throws
+
+    /// Stop the adapter and release any resources.
+    func stop()
 
     /// Fetch new messages according to the given config.
     func fetch(config: FetchConfig) async throws -> AdapterFetchResult

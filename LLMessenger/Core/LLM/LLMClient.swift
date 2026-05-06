@@ -18,13 +18,17 @@ enum LLMError: Error, LocalizedError {
     case invalidResponse
     case missingAPIKey
     case providerError(String)
+    case rateLimited(retryAfter: Int?)
 
     var errorDescription: String? {
         switch self {
-        case .networkFailed(let r): return "Network failed: \(r)"
-        case .invalidResponse:      return "Invalid response from LLM provider"
-        case .missingAPIKey:        return "Missing API key"
-        case .providerError(let r): return "Provider error: \(r)"
+        case .networkFailed(let r):       return "Network failed: \(r)"
+        case .invalidResponse:            return "Invalid response from LLM provider"
+        case .missingAPIKey:              return "Missing API key"
+        case .providerError(let r):       return "Provider error: \(r)"
+        case .rateLimited(let s):
+            if let s { return "Rate limited — retry after \(s)s" }
+            return "Rate limited"
         }
     }
 }

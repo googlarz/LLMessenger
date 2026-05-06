@@ -1,15 +1,46 @@
 // LLMessenger/MenuBar/MenuBarController.swift
 import AppKit
 
+// NSObject subclass with no actor isolation so @objc actions fire reliably via ObjC dispatch
+private final class MenuActionProxy: NSObject {
+    var onNewBrief: (() -> Void)?
+    var onLast24h: (() -> Void)?
+    var onSelectBrief: ((Int64) -> Void)?
+    var onOpenSettings: (() -> Void)?
+
+    @objc func newBrief() { onNewBrief?() }
+    @objc func last24h() { onLast24h?() }
+    @objc func openSettings() { onOpenSettings?() }
+    @objc func briefSelected(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? Int64 else { return }
+        onSelectBrief?(id)
+    }
+}
+
 @MainActor
 final class MenuBarController {
     private let statusItem: NSStatusItem
+    private let proxy = MenuActionProxy()
     private var unreadCount: Int = 0 { didSet { updateButton() } }
     private var recentBriefs: [Brief] = []
+    private var briefPreviews: [Int64: String] = [:]
+    private var isLoading = false
+    private var loadingTimer: Timer?
+    private var loadingAngle: CGFloat = 0
+    private var lastError: String?
 
-    var onNewBrief: (() -> Void)?
-    var onSelectBrief: ((Int64) -> Void)?
-    var onOpenSettings: (() -> Void)?
+    var onNewBrief: (() -> Void)? {
+        didSet { proxy.onNewBrief = onNewBrief }
+    }
+    var onLast24h: (() -> Void)? {
+        didSet { proxy.onLast24h = onLast24h }
+    }
+    var onSelectBrief: ((Int64) -> Void)? {
+        didSet { proxy.onSelectBrief = onSelectBrief }
+    }
+    var onOpenSettings: (() -> Void)? {
+        didSet { proxy.onOpenSettings = onOpenSettings }
+    }
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -23,21 +54,69 @@ final class MenuBarController {
 
     func setBriefs(_ briefs: [Brief]) {
         recentBriefs = Array(briefs.prefix(10))
+        briefPreviews = [:]
+        for brief in recentBriefs {
+            if let id = brief.id, let summary = brief.openingSummary {
+                briefPreviews[id] = menuPreview(summary)
+            }
+        }
+        rebuildMenu()
+    }
+
+    func setLastError(_ error: String?) {
+        lastError = error
+        rebuildMenu()
+    }
+
+    func setLoading(_ loading: Bool) {
+        guard isLoading != loading else { return }
+        isLoading = loading
+        if loading {
+            loadingAngle = 0
+            loadingTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.tickLoadingAnimation() }
+            }
+        } else {
+            loadingTimer?.invalidate()
+            loadingTimer = nil
+            updateButton()
+        }
         rebuildMenu()
     }
 
     // MARK: - Private
 
+    private func tickLoadingAnimation() {
+        loadingAngle = (loadingAngle + 15).truncatingRemainder(dividingBy: 360)
+        guard let button = statusItem.button else { return }
+        button.image = rotatedArrow(degrees: loadingAngle)
+        button.title = ""
+        button.imagePosition = .imageOnly
+    }
+
+    private func rotatedArrow(degrees: CGFloat) -> NSImage? {
+        guard let base = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil) else { return nil }
+        let size = NSSize(width: 16, height: 16)
+        let result = NSImage(size: size)
+        result.lockFocus()
+        let context = NSGraphicsContext.current!.cgContext
+        context.translateBy(x: size.width / 2, y: size.height / 2)
+        context.rotate(by: -degrees * .pi / 180)
+        context.translateBy(x: -size.width / 2, y: -size.height / 2)
+        base.draw(in: NSRect(origin: .zero, size: size))
+        result.unlockFocus()
+        result.isTemplate = true
+        return result
+    }
+
     private func menuPreview(_ summary: String) -> String {
         var text = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Strip markdown code fences
         if text.hasPrefix("```") {
             text = text
                 .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
                 .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        // For JSON briefs, extract the first card headline
         if text.hasPrefix("{") || text.hasPrefix("["),
            let data = text.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -46,7 +125,6 @@ final class MenuBarController {
            let headline = first["headline"] as? String {
             return headline
         }
-        // Otherwise use first non-empty line, strip markdown formatting, truncate
         var plain = text.components(separatedBy: .newlines)
             .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? text
         plain = plain
@@ -59,7 +137,7 @@ final class MenuBarController {
     private func updateButton() {
         guard let button = statusItem.button else { return }
         button.image = NSImage(systemSymbolName: "envelope.fill", accessibilityDescription: nil)
-        button.action = nil   // menu attached, action not used
+        button.action = nil
         button.target = self
         button.title = unreadCount > 0 ? " \(unreadCount)" : ""
         button.imagePosition = unreadCount > 0 ? .imageLeft : .imageOnly
@@ -68,14 +146,26 @@ final class MenuBarController {
     private func rebuildMenu() {
         let menu = NSMenu()
 
-        // New Brief
-        let newItem = NSMenuItem(title: "New Brief", action: #selector(newBrief), keyEquivalent: "n")
-        newItem.target = self
+        let newTitle = isLoading ? "Refreshing…" : "New Brief"
+        let newItem = NSMenuItem(title: newTitle, action: isLoading ? nil : #selector(MenuActionProxy.newBrief), keyEquivalent: isLoading ? "" : "n")
+        newItem.target = proxy
+        newItem.isEnabled = !isLoading
         menu.addItem(newItem)
+
+        let last24hItem = NSMenuItem(title: "Brief Last 24h", action: isLoading ? nil : #selector(MenuActionProxy.last24h), keyEquivalent: "")
+        last24hItem.target = proxy
+        last24hItem.isEnabled = !isLoading
+        menu.addItem(last24hItem)
+
+        if let err = lastError {
+            menu.addItem(.separator())
+            let errItem = NSMenuItem(title: "⚠ \(err)", action: nil, keyEquivalent: "")
+            errItem.isEnabled = false
+            menu.addItem(errItem)
+        }
 
         menu.addItem(.separator())
 
-        // Last 10 briefs
         if recentBriefs.isEmpty {
             let empty = NSMenuItem(title: "No briefs yet", action: nil, keyEquivalent: "")
             empty.isEnabled = false
@@ -83,16 +173,14 @@ final class MenuBarController {
         } else {
             for brief in recentBriefs {
                 let title = brief.notificationText
-                let item = NSMenuItem(title: title, action: #selector(briefSelected(_:)), keyEquivalent: "")
-                item.target = self
+                let item = NSMenuItem(title: title, action: #selector(MenuActionProxy.briefSelected(_:)), keyEquivalent: "")
+                item.target = proxy
                 item.representedObject = brief.id
-                if brief.status == "ready" {
+                if brief.briefStatus == .ready {
                     item.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)
                     item.image?.size = NSSize(width: 8, height: 8)
                 }
-                // Subtitle via attributed title (truncated)
-                if let summary = brief.openingSummary {
-                    let preview = menuPreview(summary)
+                if let id = brief.id, let preview = briefPreviews[id] {
                     let attr = NSMutableAttributedString(string: title + "\n")
                     let sub = NSAttributedString(
                         string: preview,
@@ -108,29 +196,14 @@ final class MenuBarController {
 
         menu.addItem(.separator())
 
-        // Settings
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
-        settingsItem.target = self
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(MenuActionProxy.openSettings), keyEquivalent: ",")
+        settingsItem.target = proxy
         menu.addItem(settingsItem)
 
         menu.addItem(.separator())
 
-        // Quit
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         statusItem.menu = menu
-    }
-
-    @objc private func newBrief() {
-        onNewBrief?()
-    }
-
-    @objc private func briefSelected(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? Int64 else { return }
-        onSelectBrief?(id)
-    }
-
-    @objc private func openSettings() {
-        onOpenSettings?()
     }
 }

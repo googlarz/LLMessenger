@@ -25,19 +25,24 @@ struct KeychainStore {
 
     func set(account: String, value: String) throws {
         let data = Data(value.utf8)
-        let baseQuery: [String: Any] = [
+        // Search query omits kSecAttrAccessible so it matches items regardless of
+        // how they were originally stored (including pre-existing items without the attribute).
+        let searchQuery: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        let updateStatus = SecItemUpdate(
-            baseQuery as CFDictionary,
-            [kSecValueData as String: data] as CFDictionary
-        )
+        // Update payload sets the accessibility class, migrating legacy items on first write.
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String:        data,
+            kSecAttrAccessible as String:   kSecAttrAccessibleAfterFirstUnlock
+        ]
+        let updateStatus = SecItemUpdate(searchQuery as CFDictionary, updateAttributes as CFDictionary)
         if updateStatus == errSecSuccess { return }
         if updateStatus == errSecItemNotFound {
-            var addQuery = baseQuery
-            addQuery[kSecValueData as String] = data
+            var addQuery = searchQuery
+            addQuery[kSecValueData as String]      = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             guard addStatus == errSecSuccess else {
                 throw KeychainError.unexpectedStatus(addStatus)
@@ -48,6 +53,8 @@ struct KeychainStore {
     }
 
     func get(account: String) throws -> String {
+        // kSecAttrAccessible is intentionally omitted from the search query —
+        // including it would filter out items stored without that attribute.
         let query: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,

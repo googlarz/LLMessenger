@@ -118,6 +118,7 @@ struct BriefRepository {
                         briefId: nil,
                         service: service,
                         conversationId: conv.id,
+                        conversationName: conv.name,
                         messageId: msg.id,
                         sender: msg.sender,
                         text: msg.text,

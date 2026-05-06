@@ -127,6 +127,11 @@ final class SignalCLIAdapter: MessengerAdapter {
         )
     }
 
+    /// Resolve a UUID / phone number to a display name. Returns nil when unknown.
+    func contactName(for id: String) -> String? { contactNames[id] }
+    /// Resolve a base64 group ID to a display name. Returns nil when unknown.
+    func groupName(for id: String) -> String? { groupNames[id] }
+
     // MARK: - Private RPC helpers
 
     private func rpc(_ method: String, params: [String: Any] = [:]) async throws -> Any? {

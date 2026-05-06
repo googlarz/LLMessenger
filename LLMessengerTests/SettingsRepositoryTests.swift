@@ -60,16 +60,16 @@ final class SettingsRepositoryTests: XCTestCase {
     }
 
     func testSaveAndLoadSignalAccount() throws {
-        let repo = SettingsRepository(keychainStore: KeychainStore(), database: nil)
+        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
+        let repo = SettingsRepository(keychainStore: store, database: nil)
         try repo.saveSignalAccount("+12345678900")
         let loaded = try repo.loadSignalAccount()
         XCTAssertEqual(loaded, "+12345678900")
-        try repo.saveSignalAccount("")  // clean up
     }
 
     func testLoadSignalAccountReturnsNilWhenNotSet() throws {
-        let repo = SettingsRepository(keychainStore: KeychainStore(), database: nil)
-        try repo.saveSignalAccount("")  // ensure cleared
+        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
+        let repo = SettingsRepository(keychainStore: store, database: nil)
         let loaded = try repo.loadSignalAccount()
         XCTAssertNil(loaded)
     }

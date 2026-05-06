@@ -63,9 +63,7 @@ struct BriefListView: View {
     private func briefTimeLabel(_ brief: Brief) -> String {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
-        let end = brief.createdAt
-        let start = end.addingTimeInterval(-3600)
-        return "\(f.string(from: start)) – \(f.string(from: end))"
+        return f.string(from: brief.createdAt)
     }
 
     private func briefSyncDate(_ brief: Brief) -> String {
@@ -241,8 +239,7 @@ private struct BriefRowView: View {
     private var timeRange: String {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
-        let start = brief.createdAt.addingTimeInterval(-3600)
-        return "\(f.string(from: start)) – \(f.string(from: brief.createdAt))"
+        return f.string(from: brief.createdAt)
     }
 }
 

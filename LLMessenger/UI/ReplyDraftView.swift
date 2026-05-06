@@ -33,6 +33,16 @@ struct ReplyDraftView: View {
                     .buttonStyle(.plain)
                 }
 
+                if draft.conversationID == "unknown" {
+                    Text("Cannot determine recipient — brief spans multiple conversations. Discard and ask about one conversation specifically.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textTertiary)
+                } else if !draft.conversationID.isEmpty {
+                    Text("→ \(draft.serviceID) · \(draft.conversationID)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+
                 Text(draft.text)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textPrimary)

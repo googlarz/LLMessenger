@@ -18,6 +18,7 @@ final class MockAdapter: MessengerAdapter {
     var fetchError: Error?
 
     func start() async throws {}
+    func stop() {}
 
     func fetch(config: FetchConfig) async throws -> AdapterFetchResult {
         fetchCallCount += 1

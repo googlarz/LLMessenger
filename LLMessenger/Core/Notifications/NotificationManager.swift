@@ -9,8 +9,8 @@ final class NotificationManager: NSObject {
     var onNotificationTap: ((Int64) -> Void)?
 
     func requestPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
         UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 
     func post(briefID: Int64, title: String, body: String) {

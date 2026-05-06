@@ -57,6 +57,22 @@ final class SignalCLIAdapterTests: XCTestCase {
         XCTAssertEqual(result[0].messages[0].text, "Hey group!")
     }
 
+    func testGroupEmptyGroupIDTreatedAsDM() {
+        // signal-mcp sends group_id as "" for DMs, not NULL
+        let tsMs: Int64 = 1_700_000_000_000
+        let row: [String: DatabaseValue] = [
+            "sender": "+4915100000001".databaseValue,
+            "recipient": "+491739048003".databaseValue,
+            "body": "Direct".databaseValue,
+            "timestamp": tsMs.databaseValue,
+            "group_id": "".databaseValue
+        ]
+        let result = SignalCLIAdapter.group(rows: [row])
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].type, .dm)
+        XCTAssertEqual(result[0].id, "+4915100000001")
+    }
+
     func testGroupSkipsEmptyBody() {
         let row: [String: DatabaseValue] = [
             "sender": "+4915100000001".databaseValue,

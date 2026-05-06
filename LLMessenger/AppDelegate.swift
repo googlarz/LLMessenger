@@ -1,6 +1,10 @@
 // LLMessenger/AppDelegate.swift
 import AppKit
 
+extension Notification.Name {
+    static let serviceConfigDidChange = Notification.Name("com.llmessenger.serviceConfigDidChange")
+}
+
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     var menuBarController: MenuBarController?
@@ -18,8 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let db = try AppDatabase()
             database = db
 
-            let llmClient = makeLLMClient()
-            let model = preferredModel()
+            let (llmClient, model) = resolvedProvider()
 
             let savedPrompt = SettingsRepository(database: db).loadBasePrompt()
             let basePrompt = savedPrompt.isEmpty ? PromptBuilder.defaultBasePrompt : savedPrompt
@@ -55,10 +58,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menuBar.onNewBrief = { [weak self] in
                 guard let self else { return }
                 Task {
+                    self.menuBarController?.setLoading(true)
+                    let start = Date()
                     await self.pollEngine?.pollAll()
-                    _ = try? await self.briefEngine?.processNewMessages()
+                    do {
+                        _ = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
+                        self.appState?.lastError = nil
+                    } catch {
+                        self.appState?.lastError = error.localizedDescription
+                    }
+                    // Keep animation visible for at least 1.5s so user sees activity
+                    let elapsed = Date().timeIntervalSince(start)
+                    if elapsed < 1.5 {
+                        try? await Task.sleep(nanoseconds: UInt64((1.5 - elapsed) * 1_000_000_000))
+                    }
                     self.appState?.refreshBriefs()
+                    self.menuBarController?.setLoading(false)
                     self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
+                    self.menuBarController?.setLastError(self.appState?.lastError)
+                    let unread = self.appState?.unreadCount ?? 0
+                    self.menuBarController?.setUnreadCount(unread)
+                }
+            }
+            menuBar.onLast24h = { [weak self] in
+                guard let self else { return }
+                Task {
+                    self.menuBarController?.setLoading(true)
+                    let start = Date()
+                    let adapters = self.appState?.adapters ?? [:]
+                    do {
+                        if let briefID = try await self.briefEngine?.summarizeLast(hours: 24, adapters: adapters) {
+                            let brief = try? self.appState?.repository.fetchBrief(id: briefID)
+                            let body = brief?.notificationText ?? "24h summary ready"
+                            self.notificationManager?.post(briefID: briefID, title: "24h Summary", body: body)
+                        }
+                        self.appState?.lastError = nil
+                    } catch {
+                        self.appState?.lastError = error.localizedDescription
+                    }
+                    let elapsed = Date().timeIntervalSince(start)
+                    if elapsed < 1.5 {
+                        try? await Task.sleep(nanoseconds: UInt64((1.5 - elapsed) * 1_000_000_000))
+                    }
+                    self.appState?.refreshBriefs()
+                    self.menuBarController?.setLoading(false)
+                    self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
+                    self.menuBarController?.setLastError(self.appState?.lastError)
                     let unread = self.appState?.unreadCount ?? 0
                     self.menuBarController?.setUnreadCount(unread)
                 }
@@ -82,17 +127,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let engine = PollEngine(database: db)
             engine.onPollSucceeded = { [weak self] in
                 guard let self else { return }
-                let newID: Int64? = (try? await self.briefEngine?.processNewMessages()) ?? nil
-                self.appState?.refreshBriefs()
-                self.appState?.nextPollDate = self.pollEngine?.nextFireDate
-                if let id = newID {
-                    let brief = try? self.appState?.repository.fetchBrief(id: id)
-                    let body = brief?.notificationText ?? "You have new messages"
-                    self.notificationManager?.post(briefID: id, title: "New messages", body: body)
+                self.menuBarController?.setLoading(true)
+                do {
+                    let newID = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
+                    self.appState?.lastError = nil
+                    self.appState?.refreshBriefs()
+                    self.appState?.nextPollDate = self.pollEngine?.nextFireDate
+                    self.menuBarController?.setLoading(false)
+                    if let id = newID {
+                        let brief = try? self.appState?.repository.fetchBrief(id: id)
+                        let body = brief?.notificationText ?? "You have new messages"
+                        self.notificationManager?.post(briefID: id, title: "New messages", body: body)
+                    }
+                } catch {
+                    self.appState?.lastError = error.localizedDescription
+                    self.appState?.refreshBriefs()
+                    self.appState?.nextPollDate = self.pollEngine?.nextFireDate
+                    self.menuBarController?.setLoading(false)
                 }
                 let unread = self.appState?.unreadCount ?? 0
                 self.menuBarController?.setUnreadCount(unread)
                 self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
+                self.menuBarController?.setLastError(self.appState?.lastError)
+                if let health = self.pollEngine?.currentServiceHealth {
+                    self.appState?.updateServiceHealth(health)
+                }
             }
 
             let telegramBinary = telegramAdapterPath()
@@ -120,10 +179,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 state.adapters["signal"] = signalAdapter
             }
 
+            // iMessage — always available on macOS; requires Contacts + Automation permissions.
+            let imessageConfig = (try? db.dbQueue.read { db in
+                try ServiceConfig.fetchOne(db, key: "imessage")
+            }) ?? ServiceConfig.default(for: "imessage")
+            let imessageAdapter = iMessageAdapter()
+            engine.register(adapter: imessageAdapter, config: imessageConfig)
+            state.adapters["imessage"] = imessageAdapter
+
             pollEngine = engine
             startTask = Task {
                 await engine.start()
                 state.nextPollDate = engine.nextFireDate
+            }
+
+            NotificationCenter.default.addObserver(
+                forName: .serviceConfigDidChange, object: nil, queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor [weak self] in
+                    guard let self, let db = self.database else { return }
+                    let configs = (try? db.dbQueue.read { db in try ServiceConfig.fetchAll(db) }) ?? []
+                    for config in configs { self.pollEngine?.reload(config: config) }
+                }
             }
 
             state.refreshBriefs()
@@ -138,6 +216,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        startTask?.cancel()
+        for adapter in appState?.adapters.values ?? [:].values {
+            adapter.stop()
+        }
+    }
+
     private func applyTheme(_ theme: String) {
         let appearance: NSAppearance? = switch theme {
         case "light": NSAppearance(named: .aqua)
@@ -147,27 +232,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.appearance = appearance
     }
 
-    private func makeLLMClient() -> LLMClient {
+    private func resolvedProvider() -> (client: LLMClient, model: String) {
         let store = KeychainStore()
         if let key = try? store.get(account: "anthropic"), !key.isEmpty {
-            return LLMProvider.anthropic.makeClient(apiKey: key)
+            return (LLMProvider.anthropic.makeClient(apiKey: key), LLMProvider.anthropic.defaultModel)
         }
         if let key = try? store.get(account: "openai"), !key.isEmpty {
-            return LLMProvider.openai.makeClient(apiKey: key)
-        }
-        return LLMProvider.ollama.makeClient(apiKey: nil)
-    }
-
-    private func preferredModel() -> String {
-        let store = KeychainStore()
-        if let key = try? store.get(account: "anthropic"), !key.isEmpty {
-            return LLMProvider.anthropic.defaultModel
-        }
-        if let key = try? store.get(account: "openai"), !key.isEmpty {
-            return LLMProvider.openai.defaultModel
+            return (LLMProvider.openai.makeClient(apiKey: key), LLMProvider.openai.defaultModel)
         }
         let udModel = UserDefaults.standard.string(forKey: "ollama_model")
-        return (udModel?.isEmpty == false ? udModel! : nil) ?? LLMProvider.ollama.defaultModel
+        let model = (udModel?.isEmpty == false ? udModel! : nil) ?? LLMProvider.ollama.defaultModel
+        return (LLMProvider.ollama.makeClient(apiKey: nil), model)
     }
 
     private func telegramAdapterPath() -> String? {

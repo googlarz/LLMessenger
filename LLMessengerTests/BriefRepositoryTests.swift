@@ -74,7 +74,7 @@ final class BriefRepositoryTests: XCTestCase {
         }
 
         let repo = BriefRepository(database: db)
-        let latest = try repo.fetchLatestUncompressedBrief()
+        let latest = try repo.fetchOldestUncompressedBrief()
         XCTAssertEqual(latest?.id, newerId)
         XCTAssertNil(latest?.episodicSummary)
     }
@@ -88,7 +88,7 @@ final class BriefRepositoryTests: XCTestCase {
             try b.insert(db)
         }
         let repo = BriefRepository(database: db)
-        XCTAssertNil(try repo.fetchLatestUncompressedBrief())
+        XCTAssertNil(try repo.fetchOldestUncompressedBrief())
     }
 
     func testFetchUnreadCountReturnsOnlyReadyBriefs() throws {
@@ -118,7 +118,7 @@ final class BriefRepositoryTests: XCTestCase {
         try db.dbQueue.write { db in
             for i in 0..<5 {
                 var b = Brief(createdAt: Date(timeIntervalSinceNow: TimeInterval(-i * 100)),
-                              status: "idle", services: "[]",
+                              status: "idle", services: "[\"signal\"]",
                               openingSummary: nil, notificationText: "x",
                               episodicSummary: "summary \(i)")
                 try b.insert(db)
@@ -126,10 +126,10 @@ final class BriefRepositoryTests: XCTestCase {
         }
 
         let repo = BriefRepository(database: db)
-        let recent = try repo.recentEpisodicSummaries(limit: 3)
+        let recent = try repo.recentEpisodicSummaries(service: "signal", limit: 3)
         XCTAssertEqual(recent.count, 3)
-        XCTAssertEqual(recent[0], "summary 0")
-        XCTAssertEqual(recent[1], "summary 1")
-        XCTAssertEqual(recent[2], "summary 2")
+        XCTAssertEqual(recent[0].summary, "summary 0")
+        XCTAssertEqual(recent[1].summary, "summary 1")
+        XCTAssertEqual(recent[2].summary, "summary 2")
     }
 }

@@ -7,20 +7,34 @@ import AppKit
 struct ReplyDraft: Identifiable, Equatable {
     let id: UUID
     var text: String
+    let serviceID: String
     let conversationID: String
     let senderName: String
 }
 
+struct ConversationOption: Identifiable, Equatable {
+    let id = UUID()
+    let number: Int
+    let service: String       // "signal", "telegram", etc.
+    let convId: String        // raw conversation ID
+    let displayName: String   // "Alice Müller", "Work group"
+}
+
 enum ThreadItem: Identifiable {
     case message(Message)
+    case userMessage(id: UUID, text: String)
     case assistantResponse(id: UUID, text: String)
     case replyDraft(id: UUID, draft: ReplyDraft)
+    /// Shown when a reply intent targets multiple conversations — user picks one by number.
+    case conversationPicker(id: UUID, originalRequest: String, options: [ConversationOption])
 
     var id: String {
         switch self {
-        case .message(let m):              return "msg-\(m.id ?? 0)"
-        case .assistantResponse(let i, _): return "asst-\(i)"
-        case .replyDraft(let i, _):        return "draft-\(i)"
+        case .message(let m):                return "msg-\(m.id ?? 0)"
+        case .userMessage(let i, _):         return "user-\(i)"
+        case .assistantResponse(let i, _):   return "asst-\(i)"
+        case .replyDraft(let i, _):          return "draft-\(i)"
+        case .conversationPicker(let i, _, _): return "picker-\(i)"
         }
     }
 }
@@ -55,13 +69,17 @@ struct BriefListGrouper {
         return result
     }
 
+    private static let mediumDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
     private static func dayLabel(for date: Date, calendar: Calendar) -> String {
         if calendar.isDateInToday(date) { return "Today" }
         if calendar.isDateInYesterday(date) { return "Yesterday" }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
+        return mediumDateFormatter.string(from: date)
     }
 }
 
@@ -73,6 +91,7 @@ final class AppState: ObservableObject {
     @Published var selectedBriefID: Int64?
     @Published var serviceHealth: [String: AdapterHealthResult.Status] = [:]
     @Published var nextPollDate: Date?
+    @Published var lastError: String?
 
     let database: AppDatabase
     let repository: BriefRepository
@@ -103,7 +122,11 @@ final class AppState: ObservableObject {
     }
 
     var unreadCount: Int {
-        briefs.filter { $0.status == "ready" }.count
+        briefs.filter { $0.briefStatus == .ready }.count
+    }
+
+    func updateServiceHealth(_ health: [String: AdapterHealthResult.Status]) {
+        serviceHealth = health
     }
 
     func markAsOpen(briefID: Int64) {
@@ -129,9 +152,5 @@ final class AppState: ObservableObject {
 
     func makeSettingsRepository() -> SettingsRepository {
         SettingsRepository(database: database)
-    }
-
-    func reloadConfig() {
-        refreshBriefs()
     }
 }

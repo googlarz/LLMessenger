@@ -15,9 +15,16 @@ struct MemoryCompressor {
         let messages = try repository.fetchMessages(forBriefID: briefID)
         guard !messages.isEmpty else { return }
 
-        let threadText = messages
-            .map { "\($0.sender): \($0.text)" }
-            .joined(separator: "\n")
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "EEE, d MMM HH:mm"
+
+        let byConversation = Dictionary(grouping: messages, by: { $0.conversationId })
+        let blocks = byConversation.keys.sorted().map { convId -> String in
+            let convMsgs = byConversation[convId]!.sorted { $0.timestamp < $1.timestamp }
+            let lines = convMsgs.map { "[\(dateFormatter.string(from: $0.timestamp))] \($0.sender): \($0.text)" }
+            return "=== \(convId) ===\n" + lines.joined(separator: "\n")
+        }
+        let threadText = blocks.joined(separator: "\n\n")
 
         let systemPrompt = PromptBuilder.build(
             mode: .compressor,
@@ -33,7 +40,7 @@ struct MemoryCompressor {
         ]
 
         let response = try await client.complete(
-            model: model, messages: llmMessages, maxTokens: 200
+            model: model, messages: llmMessages, maxTokens: 350
         )
 
         var updated = brief

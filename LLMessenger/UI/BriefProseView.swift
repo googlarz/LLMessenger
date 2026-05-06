@@ -161,7 +161,10 @@ struct BriefProseView: View {
     }
 
     private var services: [String] {
-        Array(Set(messages.map(\.service))).sorted()
+        if let json = parsedJSON, !json.cards.isEmpty {
+            return Array(Set(json.cards.map(\.service))).sorted()
+        }
+        return Array(Set(messages.map(\.service))).sorted()
     }
 
     private var counts: [String: Int] {
@@ -228,12 +231,19 @@ struct BriefProseView: View {
     @ViewBuilder
     private func cardView(_ card: BriefCard) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Service + headline + priority
+            // Service + conversation + headline + priority
             HStack(alignment: .center, spacing: 6) {
                 SourceGlyphView(service: card.service, size: 22)
                 Text(Theme.serviceName(card.service))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
+                if let conv = card.conversation, !conv.isEmpty {
+                    Text("·")
+                        .foregroundStyle(Theme.textTertiary)
+                    Text(conv)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
+                }
                 Text("—")
                     .foregroundStyle(Theme.textTertiary)
                 Text(card.headline)

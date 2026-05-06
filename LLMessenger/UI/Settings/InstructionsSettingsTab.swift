@@ -5,7 +5,6 @@ import AppKit
 struct InstructionsSettingsTab: View {
     @State private var prompt: String = ""
     @State private var theme: String = "system"
-    @State private var pollInterval: Int = 60
     @State private var saveStatus: String = ""
 
     private let repo = SettingsRepository()
@@ -31,11 +30,6 @@ struct InstructionsSettingsTab: View {
                 }
             } header: {
                 Text("System Prompt")
-            }
-
-            Section("Refresh Frequency") {
-                Stepper("Poll every \(pollInterval) min",
-                        value: $pollInterval, in: 5...240, step: 5)
             }
 
             Section("Appearance") {
@@ -65,13 +59,11 @@ struct InstructionsSettingsTab: View {
         let saved = repo.loadBasePrompt()
         prompt = saved.isEmpty ? PromptBuilder.defaultBasePrompt : saved
         theme = repo.loadTheme()
-        pollInterval = repo.loadPollInterval()
     }
 
     private func save() {
         repo.saveBasePrompt(prompt)
         repo.saveTheme(theme)
-        repo.savePollInterval(pollInterval)
         applyTheme(theme)
         saveStatus = "Saved ✓"
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }

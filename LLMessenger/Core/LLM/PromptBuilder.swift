@@ -6,6 +6,9 @@ enum LLMMode {
     case conversationalist
     case replyDrafter
     case compressor
+    /// Interactive chat beneath a brief — handles Q&A and reply drafting with full context.
+    /// `conversations` lists the available targets as "service|convId|displayName".
+    case chat(conversations: [String])
 }
 
 struct PromptBuilder {
@@ -64,7 +67,7 @@ struct PromptBuilder {
         mode: LLMMode,
         basePrompt: String,
         services: [String],
-        episodicSummaries: [String],
+        episodicSummaries: [(summary: String, createdAt: Date)],
         now: Date
     ) -> String {
         var parts: [String] = [basePrompt]
@@ -78,14 +81,22 @@ struct PromptBuilder {
         }
 
         if !episodicSummaries.isEmpty {
-            parts.append("Recent context from prior hours:")
-            for s in episodicSummaries {
-                parts.append("- \(s)")
+            parts.append("Recent context from prior sessions:")
+            for entry in episodicSummaries {
+                let age = relativeAge(from: entry.createdAt, to: now)
+                parts.append("- [\(age)] \(entry.summary)")
             }
         }
 
         parts.append(suffix(for: mode))
         return parts.joined(separator: "\n")
+    }
+
+    private static func relativeAge(from date: Date, to now: Date) -> String {
+        let seconds = now.timeIntervalSince(date)
+        if seconds < 3600 { return "\(Int(seconds / 60))m ago" }
+        if seconds < 86400 { return "\(Int(seconds / 3600))h ago" }
+        return "\(Int(seconds / 86400))d ago"
     }
 
     private static func suffix(for mode: LLMMode) -> String {
@@ -131,6 +142,32 @@ struct PromptBuilder {
             return "Given the conversation thread and the user's intent, draft a reply in their voice. Be natural."
         case .compressor:
             return "Summarize the entire conversation above in 2-3 sentences. Focus on outcomes and open threads."
+        case .chat(let conversations):
+            let convList = conversations.isEmpty
+                ? "No conversations available."
+                : conversations.enumerated()
+                    .map { "\($0.offset + 1). \($0.element)" }
+                    .joined(separator: "\n")
+            return """
+            You are an interactive assistant for this brief. You can:
+            1. Answer questions about any conversation — drill into details, context, tone, history.
+            2. Draft replies when asked — write in the user's voice and register.
+
+            Available conversations:
+            \(convList)
+
+            Output rules — follow exactly:
+            • For Q&A or follow-up discussion: reply in plain text.
+            • To draft a reply: when the target is unambiguous (only one conversation exists, \
+            or the user clearly named it), output ONLY:
+                DRAFT: <reply text>
+              No preamble, no explanation — just DRAFT: followed by the message.
+            • When you cannot determine which conversation to reply to: output ONLY the word:
+                CHOOSE
+              No other text. Swift will show the user the numbered list above to pick from.
+            • Never write DRAFT: inside a plain-text answer.
+            • Match the language of the conversation you're discussing.
+            """
         }
     }
 }

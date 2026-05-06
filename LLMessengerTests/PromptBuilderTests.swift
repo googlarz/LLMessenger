@@ -6,8 +6,8 @@ final class PromptBuilderTests: XCTestCase {
 
     func testDefaultBasePromptContainsCoreInstructions() {
         let prompt = PromptBuilder.defaultBasePrompt
-        XCTAssertTrue(prompt.contains("personal messaging assistant"))
-        XCTAssertTrue(prompt.contains("Never send anything without explicit user confirmation"))
+        XCTAssertTrue(prompt.contains("LLMessenger"))
+        XCTAssertTrue(prompt.contains("Never send anything without the user's explicit confirmation"))
     }
 
     func testBuildSummarizerPromptInjectsContext() {
@@ -15,14 +15,17 @@ final class PromptBuilderTests: XCTestCase {
             mode: .summarizer,
             basePrompt: "BASE",
             services: ["telegram", "signal"],
-            episodicSummaries: ["Yesterday: Marta asked about deploy.", "Today: João confirmed staging fix."],
+            episodicSummaries: [
+                (summary: "Yesterday: Marta asked about deploy.", createdAt: Date()),
+                (summary: "Today: João confirmed staging fix.", createdAt: Date())
+            ],
             now: Date(timeIntervalSince1970: 1_746_465_600)
         )
         XCTAssertTrue(prompt.contains("BASE"))
         XCTAssertTrue(prompt.contains("telegram"))
         XCTAssertTrue(prompt.contains("signal"))
         XCTAssertTrue(prompt.contains("Marta asked about deploy"))
-        XCTAssertTrue(prompt.contains("Summarize"))
+        XCTAssertTrue(prompt.contains("Produce a JSON brief"))
     }
 
     func testBuildCompressorPromptHasCompressionSuffix() {

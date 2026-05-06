@@ -19,14 +19,21 @@ struct ChatPanelView: View {
 
     private var headerStats: (messages: Int, services: Int, threads: Int, people: Int) {
         let msgs = briefMessages
-        if let summary = appState.selectedBrief?.openingSummary,
-           let data = summary.data(using: .utf8),
-           let json = try? JSONDecoder().decode(BriefJSON.self, from: data) {
-            let totalMsgs = json.total_messages ?? msgs.count
-            let svcs = Set(json.cards.map(\.service)).count
-            let threads = json.total_threads ?? json.cards.reduce(0) { $0 + $1.counts.threads }
-            let people = json.total_people ?? json.cards.reduce(0) { $0 + $1.counts.people }
-            return (totalMsgs, svcs, threads, people)
+        if var summary = appState.selectedBrief?.openingSummary {
+            let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.hasPrefix("```") {
+                summary = trimmed
+                    .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
+                    .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
+            }
+            if let data = summary.data(using: .utf8),
+               let json = try? JSONDecoder().decode(BriefJSON.self, from: data) {
+                let totalMsgs = json.total_messages ?? msgs.count
+                let svcs = Set(json.cards.map(\.service)).count
+                let threads = json.total_threads ?? json.cards.reduce(0) { $0 + $1.counts.threads }
+                let people = json.total_people ?? json.cards.reduce(0) { $0 + $1.counts.people }
+                return (totalMsgs, svcs, threads, people)
+            }
         }
         let svcs = Set(msgs.map(\.service)).count
         let convs = Set(msgs.map(\.conversationId)).count
@@ -99,10 +106,14 @@ struct ChatPanelView: View {
         switch item {
         case .message:
             EmptyView()
+        case .userMessage(_, let text):
+            UserMessageView(text: text)
         case .assistantResponse(_, let text):
             AssistantResponseView(text: text)
         case .replyDraft(let id, let draft):
             ReplyDraftView(draftID: id, draft: draft)
+        case .conversationPicker(let id, let req, let opts):
+            ConversationPickerView(pickerID: id, originalRequest: req, options: opts)
         }
     }
 }

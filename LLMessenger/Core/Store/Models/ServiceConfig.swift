@@ -24,8 +24,10 @@ struct ServiceConfig: Codable, FetchableRecord, PersistableRecord {
     var resolvedFetchMode: FetchMode { FetchMode(rawValue: fetchMode) ?? .count }
 
     static func `default`(for service: String) -> ServiceConfig {
-        ServiceConfig(service: service, enabled: true,
-                      pollIntervalMinutes: 30, fetchMode: FetchMode.time.rawValue,
-                      fetchLimit: 50, privacyMode: PrivacyMode.onDemand.rawValue)
+        // iMessage requires Full Disk Access — ship disabled so users opt in consciously.
+        let enabledByDefault = service != "imessage"
+        return ServiceConfig(service: service, enabled: enabledByDefault,
+                             pollIntervalMinutes: 30, fetchMode: FetchMode.time.rawValue,
+                             fetchLimit: 50, privacyMode: PrivacyMode.onDemand.rawValue)
     }
 }

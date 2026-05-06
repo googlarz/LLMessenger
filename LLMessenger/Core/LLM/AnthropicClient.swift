@@ -38,6 +38,10 @@ final class AnthropicClient: LLMClient {
         }
 
         guard let http = response as? HTTPURLResponse else { throw LLMError.invalidResponse }
+        if http.statusCode == 429 {
+            let retryAfter = http.value(forHTTPHeaderField: "retry-after").flatMap { Int($0) }
+            throw LLMError.rateLimited(retryAfter: retryAfter)
+        }
         if http.statusCode >= 400 {
             throw LLMError.providerError("HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
         }

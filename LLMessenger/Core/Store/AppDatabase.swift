@@ -30,6 +30,8 @@ final class AppDatabase: @unchecked Sendable {
 
     private func migrate() throws {
         var migrator = DatabaseMigrator()
+        // WARNING: erases all user data whenever migrations change during DEBUG builds.
+        // Disable this line before shipping or when you need to preserve local data while iterating.
         #if DEBUG
         migrator.eraseDatabaseOnSchemaChange = true
         #endif
@@ -69,6 +71,15 @@ final class AppDatabase: @unchecked Sendable {
                 t.column("lastCheck", .datetime)
                 t.column("lastError", .text)
                 t.column("retryAfter", .integer)
+            }
+        }
+        migrator.registerMigration("v2_indexes") { db in
+            try db.create(index: "messages_on_briefId", on: "messages", columns: ["briefId"])
+            try db.create(index: "messages_on_timestamp", on: "messages", columns: ["timestamp"])
+        }
+        migrator.registerMigration("v3_conversation_name") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "conversationName", .text)
             }
         }
         try migrator.migrate(dbQueue)

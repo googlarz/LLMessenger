@@ -2,14 +2,18 @@
 import XCTest
 @testable import LLMessenger
 
+// Valid JSON the BriefEngine expects: cards array with at least one card.
+private let validBriefJSON = """
+{"total_messages":3,"total_threads":1,"total_people":1,"cards":[{"headline":"Test headline"}]}
+"""
+
 @MainActor
 final class BriefEngineTests: XCTestCase {
 
-    func setupDB(privacyMode: String) throws -> AppDatabase {
+    func setupDB() throws -> AppDatabase {
         let db = try AppDatabase(inMemory: true)
         try db.dbQueue.write { db in
-            var cfg = ServiceConfig.default(for: "telegram")
-            cfg.privacyMode = privacyMode
+            let cfg = ServiceConfig.default(for: "telegram")
             try cfg.insert(db)
         }
         return db
@@ -28,7 +32,7 @@ final class BriefEngineTests: XCTestCase {
     }
 
     func testNoUnattachedMessagesCreatesNoBrief() async throws {
-        let db = try setupDB(privacyMode: "on_demand")
+        let db = try setupDB()
         let mock = MockLLMClient()
         let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
 
@@ -38,41 +42,38 @@ final class BriefEngineTests: XCTestCase {
         XCTAssertEqual(mock.calls.count, 0)
     }
 
-    func testOnDemandModeCreatesBriefWithoutLLMCall() async throws {
-        let db = try setupDB(privacyMode: "on_demand")
+    func testProcessNewMessagesCreatesBriefWithLLMCall() async throws {
+        let db = try setupDB()
         try insertUnattachedMessages(db, count: 3)
         let mock = MockLLMClient()
+        mock.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
         let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
 
         let id = try await engine.processNewMessages()
 
-        XCTAssertNotNil(id)
-        XCTAssertEqual(mock.calls.count, 0)
-
-        let repo = BriefRepository(database: db)
-        let brief = try repo.fetchBrief(id: id!)!
-        XCTAssertNil(brief.openingSummary)
-        XCTAssertTrue(brief.notificationText.contains("3"))
-    }
-
-    func testEagerModeCallsSummarizer() async throws {
-        let db = try setupDB(privacyMode: "eager")
-        try insertUnattachedMessages(db, count: 2)
-        let mock = MockLLMClient()
-        mock.response = LLMResponse(text: "Alice said hi twice.", inputTokens: 10, outputTokens: 5)
-        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
-
-        let id = try await engine.processNewMessages()
         XCTAssertNotNil(id)
         XCTAssertEqual(mock.calls.count, 1)
 
         let repo = BriefRepository(database: db)
         let brief = try repo.fetchBrief(id: id!)!
-        XCTAssertEqual(brief.openingSummary, "Alice said hi twice.")
+        XCTAssertNotNil(brief.openingSummary)
+        XCTAssertTrue(brief.notificationText.contains("3"))
+    }
+
+    func testProcessNewMessagesReturnsNilWhenLLMReturnsNoCards() async throws {
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 2)
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: "not valid json", inputTokens: 5, outputTokens: 2)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let id = try await engine.processNewMessages()
+
+        XCTAssertNil(id)
     }
 
     func testCompressesPreviousBriefBeforeCreatingNewOne() async throws {
-        let db = try setupDB(privacyMode: "on_demand")
+        let db = try setupDB()
         var prevId: Int64 = 0
         try await db.dbQueue.write { db in
             var prev = Brief(createdAt: Date(timeIntervalSinceNow: -3600),
@@ -91,30 +92,61 @@ final class BriefEngineTests: XCTestCase {
         try insertUnattachedMessages(db, count: 1)
 
         let mock = MockLLMClient()
-        mock.response = LLMResponse(text: "Bob talked about old stuff.", inputTokens: 5, outputTokens: 3)
-        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+        // First call: compression (returns episodic text); second call: summarization (returns JSON).
+        var callIndex = 0
+        mock.response = LLMResponse(text: validBriefJSON, inputTokens: 5, outputTokens: 3)
+        // Override by checking calls: compression must happen first.
+        // Use two sequential responses via a custom closure is not supported by MockLLMClient,
+        // so we verify call count and episodicSummary is set after both calls complete.
+        _ = mock  // suppress unused warning
+
+        let compressionMock = TwoStageMockLLMClient(
+            first: "Bob talked about old stuff.",
+            second: validBriefJSON
+        )
+        let engine = BriefEngine(database: db, client: compressionMock, model: "test", basePrompt: "BASE")
 
         _ = try await engine.processNewMessages()
 
-        XCTAssertEqual(mock.calls.count, 1)
+        XCTAssertEqual(compressionMock.calls.count, 2)
         let repo = BriefRepository(database: db)
         let prev = try repo.fetchBrief(id: prevId)!
         XCTAssertEqual(prev.episodicSummary, "Bob talked about old stuff.")
     }
 
     func testAttachesMessagesToNewBrief() async throws {
-        let db = try setupDB(privacyMode: "on_demand")
+        let db = try setupDB()
         try insertUnattachedMessages(db, count: 4)
         let mock = MockLLMClient()
+        mock.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
         let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
 
         let id = try await engine.processNewMessages()
 
+        XCTAssertNotNil(id)
         let repo = BriefRepository(database: db)
         let attached = try repo.fetchMessages(forBriefID: id!)
         XCTAssertEqual(attached.count, 4)
 
         let stillUnattached = try repo.fetchUnattachedMessages()
         XCTAssertEqual(stillUnattached.count, 0)
+    }
+}
+
+// Two-stage mock: returns `first` on call 1, `second` on call 2+.
+final class TwoStageMockLLMClient: LLMClient {
+    var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
+    private let first: String
+    private let second: String
+
+    init(first: String, second: String) {
+        self.first = first
+        self.second = second
+    }
+
+    func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
+        calls.append((model, messages, maxTokens))
+        let text = calls.count == 1 ? first : second
+        return LLMResponse(text: text, inputTokens: 5, outputTokens: 3)
     }
 }

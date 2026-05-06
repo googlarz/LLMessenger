@@ -178,13 +178,22 @@ private struct ServiceCard: View {
     @ViewBuilder
     private var credentialsSection: some View {
         if service == "imessage" {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
-                    .font(.subheadline)
-                Text("Reads from macOS Messages automatically — no setup needed.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.shield.fill")
+                        .foregroundStyle(.orange)
+                        .font(.subheadline)
+                    Text("Requires Full Disk Access to read your Messages database.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Button("Open Privacy & Security Settings →") {
+                    NSWorkspace.shared.open(
+                        URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+                    )
+                }
+                .font(.caption)
+                .buttonStyle(.link)
             }
         } else if service == "signal" {
             HStack {

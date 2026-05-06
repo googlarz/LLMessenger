@@ -121,9 +121,7 @@ private struct ContentHeaderBar: View {
         guard let brief = appState.selectedBrief else { return "LLMessenger" }
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
-        let end = brief.createdAt
-        let start = end.addingTimeInterval(-3600)
-        return "LLMessenger — \(f.string(from: start)) – \(f.string(from: end))"
+        return "LLMessenger — \(f.string(from: brief.createdAt))"
     }
 }
 

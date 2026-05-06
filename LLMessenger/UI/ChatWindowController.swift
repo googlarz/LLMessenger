@@ -28,7 +28,6 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("LLMessengerMain")
         window.minSize = NSSize(width: 600, height: 420)
-        window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.hasShadow = true
 
@@ -52,12 +51,14 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
             appState.selectedBriefID = id
         }
         appState.refreshBriefs()
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        window?.orderFrontRegardless()
     }
 
     func windowWillClose(_ notification: Notification) {
-        // Cleanup if needed
+        NSApp.setActivationPolicy(.accessory)
     }
 }

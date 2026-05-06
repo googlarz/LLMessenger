@@ -38,10 +38,14 @@ struct ThreadView: View {
         switch item {
         case .message(let m):
             MessageBubbleView(message: m)
+        case .userMessage(_, let text):
+            UserMessageView(text: text)
         case .assistantResponse(_, let text):
             AssistantResponseView(text: text)
         case .replyDraft(let id, let draft):
             ReplyDraftView(draftID: id, draft: draft)
+        case .conversationPicker(let id, let req, let opts):
+            ConversationPickerView(pickerID: id, originalRequest: req, options: opts)
         }
     }
 }

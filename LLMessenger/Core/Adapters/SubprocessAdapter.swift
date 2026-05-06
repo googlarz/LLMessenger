@@ -13,6 +13,7 @@ final class SubprocessAdapter: MessengerAdapter {
     private var readHandle: FileHandle?
 
     private let ioQueue: DispatchQueue
+    private let readBuffer = _IOBuffer()
 
     private let iso8601: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -34,8 +35,20 @@ final class SubprocessAdapter: MessengerAdapter {
         try await sendInit()
     }
 
+    func stop() {
+        process?.terminate()
+        writeHandle = nil
+        readHandle = nil
+        process = nil
+        readBuffer.data.removeAll()
+        healthStatus = .warning
+    }
+
     private func launchProcess() throws {
-        guard process == nil else { return }
+        // Allow relaunch if the previous process has already exited.
+        if let existing = process, existing.isRunning { return }
+        process = nil; writeHandle = nil; readHandle = nil
+        readBuffer.data.removeAll()
         let p = Process()
         let inPipe = Pipe()
         let outPipe = Pipe()
@@ -120,37 +133,75 @@ final class SubprocessAdapter: MessengerAdapter {
             throw AdapterError.notRunning
         }
 
+        // Capture as a local ref so the closure doesn't need to retain self.
+        let readBuffer = self.readBuffer
+
+        // ioQueue.async blocks the serial queue thread until sem.signal() fires,
+        // preventing concurrent roundTrips from clobbering readabilityHandler.
         return try await withCheckedThrowingContinuation { continuation in
             ioQueue.async {
+                let sem = DispatchSemaphore(value: 0)
+                var callResult: Result<[String: Any], Error>?
+
                 do {
                     var data = try JSONSerialization.data(withJSONObject: request)
                     data.append(UInt8(ascii: "\n"))
                     writeHandle.write(data)
-
-                    var buffer = Data()
-                    while true {
-                        let byte = readHandle.readData(ofLength: 1)
-                        if byte.isEmpty {
-                            continuation.resume(throwing: AdapterError.processClosed)
-                            return
-                        }
-                        if byte[0] == UInt8(ascii: "\n") { break }
-                        buffer.append(contentsOf: byte)
-                    }
-
-                    guard let response = try JSONSerialization.jsonObject(with: buffer)
-                            as? [String: Any] else {
-                        continuation.resume(throwing: AdapterError.invalidResponse)
-                        return
-                    }
-                    continuation.resume(returning: response)
                 } catch {
                     continuation.resume(throwing: error)
+                    return
+                }
+
+                // Slice one newline-terminated line from the shared buffer.
+                // Bytes after the newline are left in place for the next call.
+                let consumeLine: () -> Bool = {
+                    guard let nlIdx = readBuffer.data.firstIndex(of: UInt8(ascii: "\n")) else { return false }
+                    let line = readBuffer.data[..<nlIdx]
+                    readBuffer.data = Data(readBuffer.data[readBuffer.data.index(after: nlIdx)...])
+                    if let response = try? JSONSerialization.jsonObject(with: line) as? [String: Any] {
+                        callResult = .success(response)
+                    } else {
+                        callResult = .failure(AdapterError.invalidResponse)
+                    }
+                    return true
+                }
+
+                // A previous call may have left a complete line in the buffer.
+                if consumeLine() {
+                    sem.signal()
+                } else {
+                    readHandle.readabilityHandler = { handle in
+                        let chunk = handle.availableData
+                        if chunk.isEmpty {
+                            callResult = .failure(AdapterError.processClosed)
+                            handle.readabilityHandler = nil
+                            sem.signal()
+                            return
+                        }
+                        readBuffer.data.append(chunk)
+                        if consumeLine() {
+                            handle.readabilityHandler = nil
+                            sem.signal()
+                        }
+                    }
+                }
+
+                if sem.wait(timeout: .now() + 30) == .timedOut {
+                    readHandle.readabilityHandler = nil
+                    continuation.resume(throwing: AdapterError.timeout)
+                } else {
+                    switch callResult ?? .failure(AdapterError.processClosed) {
+                    case .success(let r): continuation.resume(returning: r)
+                    case .failure(let e): continuation.resume(throwing: e)
+                    }
                 }
             }
         }
     }
 }
+
+// readabilityHandler fires on a private serial queue — safe without external locking.
+private final class _IOBuffer: @unchecked Sendable { var data = Data() }
 
 private struct FetchPayload: Decodable {
     let conversations: [AdapterConversation]

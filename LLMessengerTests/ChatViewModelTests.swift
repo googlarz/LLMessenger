@@ -76,7 +76,7 @@ final class ChatViewModelTests: XCTestCase {
         let vm = ChatViewModel(appState: appState)
         let draftID = UUID()
         let draft = ReplyDraft(id: draftID, text: "Draft reply",
-                               conversationID: "c1", senderName: "Alice")
+                               serviceID: "telegram", conversationID: "c1", senderName: "Alice")
         vm.threadItems = [.replyDraft(id: draftID, draft: draft)]
 
         vm.discardDraft(id: draftID)

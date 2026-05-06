@@ -6,7 +6,11 @@ final class OllamaClient: LLMClient {
     private let session: URLSession
 
     init(baseURL: URL = URL(string: "http://localhost:11434")!,
-         session: URLSession = .shared) {
+         session: URLSession = {
+             let config = URLSessionConfiguration.default
+             config.timeoutIntervalForRequest = 120
+             return URLSession(configuration: config)
+         }()) {
         self.baseURL = baseURL
         self.session = session
     }
@@ -20,7 +24,7 @@ final class OllamaClient: LLMClient {
             "model":    model,
             "messages": chatMessages,
             "stream":   false,
-            "options":  ["num_predict": maxTokens]
+            "options":  ["num_predict": maxTokens, "num_ctx": 8192]
         ]
 
         var request = URLRequest(url: baseURL.appendingPathComponent("api/chat"))
@@ -36,6 +40,10 @@ final class OllamaClient: LLMClient {
         }
 
         guard let http = response as? HTTPURLResponse else { throw LLMError.invalidResponse }
+        if http.statusCode == 429 {
+            let retryAfter = http.value(forHTTPHeaderField: "retry-after").flatMap { Int($0) }
+            throw LLMError.rateLimited(retryAfter: retryAfter)
+        }
         if http.statusCode >= 400 {
             throw LLMError.providerError("HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
         }

@@ -6,6 +6,7 @@ struct Message: Codable, FetchableRecord, MutablePersistableRecord {
     var briefId: Int64?
     var service: String
     var conversationId: String
+    var conversationName: String?  // resolved display name (e.g. group title, contact name)
     var messageId: String       // native service ID — unique per (service, messageId)
     var sender: String
     var text: String

@@ -1,6 +1,12 @@
 // LLMessenger/Core/Settings/SettingsRepository.swift
 import Foundation
 
+enum SettingsError: Error, LocalizedError {
+    case databaseNotConfigured
+
+    var errorDescription: String? { "Settings database is not configured" }
+}
+
 struct SettingsRepository {
     private let keychainStore: KeychainStore
     private let database: AppDatabase?
@@ -53,31 +59,44 @@ struct SettingsRepository {
         return (apiId, apiHash)
     }
 
-    // MARK: - Signal Account (stored in UserDefaults — not sensitive)
+    // MARK: - Signal Account (stored in Keychain)
 
     func saveSignalAccount(_ number: String) throws {
         if number.isEmpty {
-            UserDefaults.standard.removeObject(forKey: "signal_account")
+            try? keychainStore.delete(account: "signal_account")
         } else {
-            UserDefaults.standard.set(number, forKey: "signal_account")
+            try keychainStore.set(account: "signal_account", value: number)
         }
     }
 
     func loadSignalAccount() throws -> String? {
-        UserDefaults.standard.string(forKey: "signal_account")
+        // One-time migration from UserDefaults — only remove the source after a confirmed write.
+        if let legacy = UserDefaults.standard.string(forKey: "signal_account"), !legacy.isEmpty {
+            do {
+                try keychainStore.set(account: "signal_account", value: legacy)
+                UserDefaults.standard.removeObject(forKey: "signal_account")
+            } catch {
+                // Keep the legacy value so migration retries on next launch.
+            }
+        }
+        do {
+            return try keychainStore.get(account: "signal_account")
+        } catch KeychainError.itemNotFound {
+            return nil
+        }
     }
 
     // MARK: - Service Config
 
     func saveServiceConfig(_ config: ServiceConfig) throws {
-        guard let db = database else { return }
+        guard let db = database else { throw SettingsError.databaseNotConfigured }
         try db.dbQueue.write { db in
             try config.save(db)
         }
     }
 
     func loadServiceConfig(for service: String) throws -> ServiceConfig? {
-        guard let db = database else { return nil }
+        guard let db = database else { throw SettingsError.databaseNotConfigured }
         return try db.dbQueue.read { db in
             try ServiceConfig.fetchOne(db, key: service)
         }
@@ -115,7 +134,7 @@ struct SettingsRepository {
     }
 
     func loadAllServiceConfigs() throws -> [ServiceConfig] {
-        guard let db = database else { return [] }
+        guard let db = database else { throw SettingsError.databaseNotConfigured }
         return try db.dbQueue.read { db in
             try ServiceConfig.fetchAll(db)
         }
