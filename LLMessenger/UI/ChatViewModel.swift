@@ -45,7 +45,38 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
-        // Case 2 — Normal: let the LLM understand intent and decide what to do.
+        // Case 2 — Named-send shortcut: "write/send/reply/message to X: text".
+        // Resolve the target client-side — no LLM needed when the match is unambiguous.
+        if let (targetName, messageText) = extractNamedSend(from: rawInput) {
+            let matches = briefConvs.filter {
+                $0.name.lowercased().contains(targetName.lowercased())
+            }
+            if matches.count == 1 {
+                let conv = matches[0]
+                threadItems.append(.userMessage(id: UUID(), text: rawInput))
+                await draftReply(brief: brief,
+                                 originalRequest: messageText,
+                                 service: conv.service,
+                                 convId: conv.convId,
+                                 convName: conv.name)
+                return
+            } else if matches.count > 1 {
+                let options = matches.enumerated().map { i, conv in
+                    ConversationOption(number: i + 1,
+                                       service: conv.service,
+                                       convId: conv.convId,
+                                       displayName: conv.name)
+                }
+                threadItems.append(.userMessage(id: UUID(), text: rawInput))
+                threadItems.append(.conversationPicker(id: UUID(),
+                                                       originalRequest: rawInput,
+                                                       options: options))
+                return
+            }
+            // Zero matches → fall through to LLM for a helpful reply.
+        }
+
+        // Case 3 — Normal: let the LLM understand intent and decide what to do.
         let userMsgID = UUID()
         threadItems.append(.userMessage(id: userMsgID, text: rawInput))
         isLoading = true
@@ -89,11 +120,20 @@ final class ChatViewModel: ObservableObject {
                                                        options: options))
             } else if let draftRange = responseText.range(of: "DRAFT:", options: .caseInsensitive),
                       draftRange.lowerBound == responseText.startIndex {
-                // LLM drafted a reply — target must be unambiguous (single conv or user named it).
-                let draftText = String(responseText[draftRange.upperBound...])
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                // Use first conv (LLM already validated it's unambiguous).
-                let target = briefConvs.first
+                // LLM drafted a reply. Format: DRAFT:<n>: <text> or DRAFT: <text> (single conv).
+                let rest = String(responseText[draftRange.upperBound...])
+                var target = briefConvs.first
+                var draftText = rest.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Parse optional "n: " prefix to identify which conversation.
+                if let colonIdx = rest.firstIndex(of: ":") {
+                    let numStr = rest[rest.startIndex..<colonIdx]
+                        .trimmingCharacters(in: .whitespaces)
+                    if let n = Int(numStr), n >= 1, n <= briefConvs.count {
+                        target = briefConvs[n - 1]
+                        draftText = String(rest[rest.index(after: colonIdx)...])
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                }
                 let draft = ReplyDraft(id: UUID(),
                                        text: draftText,
                                        serviceID: target?.service ?? services.first ?? "",
@@ -246,21 +286,13 @@ final class ChatViewModel: ObservableObject {
 
     private func buildConvList(from messages: [Message],
                                brief: Brief) -> [(service: String, convId: String, name: String)] {
-        var convNames: [String: String] = [:]
-        if let summary = brief.openingSummary,
-           let data = summary.data(using: .utf8),
-           let json = try? JSONDecoder().decode(BriefJSON.self, from: data) {
-            for card in json.cards {
-                let key = "\(card.service):\(card.conversation ?? "")"
-                convNames[key] = card.conversation ?? card.service
-            }
-        }
         var seen = Set<String>()
         var result: [(service: String, convId: String, name: String)] = []
         for m in messages {
             let key = "\(m.service):\(m.conversationId)"
             if seen.insert(key).inserted {
-                let name = convNames[key] ?? m.conversationId
+                // Prefer the stored display name; fall back to the raw conversation ID.
+                let name = m.conversationName ?? m.conversationId
                 result.append((service: m.service, convId: m.conversationId, name: name))
             }
         }
@@ -295,5 +327,19 @@ final class ChatViewModel: ObservableObject {
         return n
     }
 
-
+    /// Parses "write/send/reply/message (to) <name>: <text>" into (name, text).
+    /// Returns nil if the input doesn't match the pattern.
+    private func extractNamedSend(from text: String) -> (name: String, message: String)? {
+        let pattern = #"(?i)(?:write|send|reply|message)\s+(?:to\s+)?(.+?):\s*(.+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text,
+                                           range: NSRange(text.startIndex..., in: text)),
+              let nameRange = Range(match.range(at: 1), in: text),
+              let msgRange  = Range(match.range(at: 2), in: text)
+        else { return nil }
+        let name = String(text[nameRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let msg  = String(text[msgRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !msg.isEmpty else { return nil }
+        return (name, msg)
+    }
 }

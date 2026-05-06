@@ -158,13 +158,15 @@ struct PromptBuilder {
 
             Output rules — follow exactly:
             • For Q&A or follow-up discussion: reply in plain text.
-            • To draft a reply: when the target is unambiguous (only one conversation exists, \
-            or the user clearly named it), output ONLY:
-                DRAFT: <reply text>
-              No preamble, no explanation — just DRAFT: followed by the message.
-            • When you cannot determine which conversation to reply to: output ONLY the word:
+            • To draft a reply: when you can identify which conversation the user means \
+            (they named someone, or only one conversation exists), output ONLY:
+                DRAFT:<n>: <reply text>
+              where <n> is the 1-based number from the list above. \
+              No preamble, no explanation — just DRAFT:<n>: followed by the message.
+            • When the target is genuinely ambiguous (name matches multiple conversations, \
+            or no name was given and multiple conversations exist): output ONLY the word:
                 CHOOSE
-              No other text. Swift will show the user the numbered list above to pick from.
+              No other text. The app will show the user the numbered list above to pick from.
             • Never write DRAFT: inside a plain-text answer.
             • Match the language of the conversation you're discussing.
             """
