@@ -510,7 +510,7 @@ final class BriefEngine {
         senderNameResolver: (String) -> String
     ) throws -> String {
         guard let firstNewMessageDate = newMessages.first?.timestamp else {
-            return "=== \(conversationID) | \(conversationTitle) ==="
+            return "=== [\(service)] \(conversationID) | \(conversationTitle) ==="
         }
 
         let state = try repository.fetchConversationState(service: service, conversationID: conversationID)
@@ -523,7 +523,10 @@ final class BriefEngine {
             limit: maxRecentContextMessages
         )
 
-        var lines: [String] = ["=== \(conversationID) | \(conversationTitle) ==="]
+        // Header format: === [service] conversationID | conversationTitle ===
+        // The [service] tag lets the LLM reliably extract service and conversationId
+        // without guessing from the opaque ID format.
+        var lines: [String] = ["=== [\(service)] \(conversationID) | \(conversationTitle) ==="]
         if let summary = state?.rollingSummary, !summary.isEmpty {
             lines.append("Previous summary: \(summary)")
         }
