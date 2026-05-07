@@ -63,7 +63,10 @@ private struct OnboardingView: View {
     @State private var anthropicKey: String = ""
     @State private var openAIKey: String = ""
     @State private var ollamaModel: String = ""
+    @State private var signalEnabled: Bool = true
     @State private var signalNumber: String = ""
+    @State private var imessageEnabled: Bool = true
+    @State private var telegramEnabled: Bool = true
     @State private var telegramAdapter: SubprocessAdapter? = nil
 
     private var repo: SettingsRepository { SettingsRepository(database: database) }
@@ -253,31 +256,40 @@ private struct OnboardingView: View {
     // MARK: - Step 3: Signal
 
     private var signalStep: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            stepHeader(
-                title: "Connect Signal",
-                subtitle: "Enter your Signal phone number.\nLLMessenger uses signal-cli."
-            )
+        ScrollView {
+            VStack(spacing: 24) {
+                serviceToggleHeader(
+                    title: "Signal",
+                    icon: "lock.shield.fill",
+                    color: Theme.serviceSignal,
+                    isEnabled: $signalEnabled
+                )
 
-            TextField("+1 (555) 000-0000", text: $signalNumber)
-                .textFieldStyle(DarkTextFieldStyle())
-                .frame(maxWidth: 300)
+                if signalEnabled {
+                    VStack(spacing: 8) {
+                        Text("Enter your Signal phone number. LLMessenger uses signal-cli to read messages.")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.textSecondary)
+                            .multilineTextAlignment(.center)
 
-            HStack(spacing: 12) {
-                Button("Skip for now") { advance() }
-                    .buttonStyle(SecondaryButtonStyle())
+                        TextField("+1 (555) 000-0000", text: $signalNumber)
+                            .textFieldStyle(DarkTextFieldStyle())
+                    }
+                }
 
-                Button("Save") {
-                    try? repo.saveSignalAccount(signalNumber)
+                Button("Continue") {
+                    if signalEnabled && !signalNumber.trimmingCharacters(in: .whitespaces).isEmpty {
+                        try? repo.saveSignalAccount(signalNumber)
+                    }
+                    saveServiceEnabled("signal", signalEnabled)
                     advance()
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(signalNumber.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(signalEnabled && signalNumber.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            Spacer()
+            .padding(.horizontal, 48)
+            .padding(.vertical, 16)
         }
-        .padding(.horizontal, 48)
     }
 
     // MARK: - Step 4: iMessage
@@ -285,28 +297,35 @@ private struct OnboardingView: View {
     private var imessageStep: some View {
         ScrollView {
             VStack(spacing: 24) {
-                stepHeader(
-                    title: "iMessage Access",
-                    subtitle: "LLMessenger reads Messages from ~/Library/Messages/chat.db. This requires Full Disk Access."
+                serviceToggleHeader(
+                    title: "iMessage",
+                    icon: "message.fill",
+                    color: Theme.serviceIMessage,
+                    isEnabled: $imessageEnabled
                 )
 
-                VStack(alignment: .leading, spacing: 10) {
-                    instructionRow(number: "1", text: "Open System Settings → Privacy & Security → Full Disk Access")
-                    instructionRow(number: "2", text: "Click the + button and add LLMessenger")
-                    instructionRow(number: "3", text: "Restart LLMessenger after granting access")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
-                .background(Theme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                if imessageEnabled {
+                    VStack(alignment: .leading, spacing: 10) {
+                        instructionRow(number: "1", text: "Open System Settings → Privacy & Security → Full Disk Access")
+                        instructionRow(number: "2", text: "Click the + button and add LLMessenger")
+                        instructionRow(number: "3", text: "Restart LLMessenger after granting access")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(Theme.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                Button("Open Privacy Settings") {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+                    Button("Open Privacy Settings") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
                 }
-                .buttonStyle(SecondaryButtonStyle())
 
-                Button("Continue") { advance() }
-                    .buttonStyle(PrimaryButtonStyle())
+                Button("Continue") {
+                    saveServiceEnabled("imessage", imessageEnabled)
+                    advance()
+                }
+                .buttonStyle(PrimaryButtonStyle())
             }
             .padding(.horizontal, 48)
             .padding(.vertical, 16)
@@ -333,29 +352,40 @@ private struct OnboardingView: View {
     private var telegramStep: some View {
         ScrollView {
             VStack(spacing: 24) {
-                if let adapter = telegramAdapter {
-                    TelegramSignInView(adapter: adapter, onSuccess: { advance() })
+                serviceToggleHeader(
+                    title: "Telegram",
+                    icon: "paperplane.fill",
+                    color: Theme.serviceTelegram,
+                    isEnabled: $telegramEnabled
+                )
+
+                if telegramEnabled {
+                    if let adapter = telegramAdapter {
+                        TelegramSignInView(adapter: adapter, onSuccess: {
+                            saveServiceEnabled("telegram", true)
+                            advance()
+                        })
                         .frame(width: 360)
-                } else {
-                    stepHeader(title: "Connect Telegram", subtitle: nil)
-
-                    VStack(spacing: 12) {
-                        Image(systemName: "paperplane.circle")
-                            .font(.system(size: 40))
-                            .foregroundStyle(Theme.serviceTelegram)
-
-                        Text("Telegram requires API credentials from my.telegram.org and the LLMessenger Telegram adapter binary.")
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.textSecondary)
-                            .multilineTextAlignment(.center)
+                    } else {
+                        VStack(spacing: 12) {
+                            Text("Telegram requires API credentials from my.telegram.org and the LLMessenger Telegram adapter binary.")
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(20)
+                        .background(Theme.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
-                    .padding(20)
-                    .background(Theme.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
 
-                Button("Skip") { advance() }
-                    .buttonStyle(SecondaryButtonStyle())
+                if !telegramEnabled || telegramAdapter == nil {
+                    Button("Continue") {
+                        saveServiceEnabled("telegram", telegramEnabled)
+                        advance()
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                }
             }
             .padding(.horizontal, 48)
             .padding(.vertical, 16)
@@ -421,6 +451,35 @@ private struct OnboardingView: View {
     }
 
     // MARK: - Helpers
+
+    private func serviceToggleHeader(title: String, icon: String, color: Color, isEnabled: Binding<Bool>) -> some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(color.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundStyle(color)
+            }
+            Text(title)
+                .font(.title3.bold())
+                .foregroundStyle(Theme.textPrimary)
+            Spacer()
+            Toggle("", isOn: isEnabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+        .padding(16)
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func saveServiceEnabled(_ service: String, _ enabled: Bool) {
+        var config = ServiceConfig.default(for: service)
+        config.enabled = enabled
+        try? repo.saveServiceConfig(config)
+    }
 
     private func stepHeader(title: String, subtitle: String?) -> some View {
         VStack(spacing: 8) {
