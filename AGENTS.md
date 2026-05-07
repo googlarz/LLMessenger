@@ -91,7 +91,7 @@ Each `ServiceConfig` has `privacyMode`: `"on_demand"` (LLM only runs when user e
 <claude-mem-context>
 # Memory Context
 
-# [LLMessenger] recent context, 2026-05-06 8:36pm GMT+2
+# [LLMessenger] recent context, 2026-05-07 6:20am GMT+2
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
@@ -107,7 +107,6 @@ Stats: 50 obs (18,200t read) | 680,976t work | 97% savings
 930 " 🔵 SubprocessAdapter.roundTrip discards JSON-RPC messages arriving after first newline in chunk
 931 " 🔵 Signal account silently deleted if Keychain migration write fails
 932 " 🔵 Instructions tab poll interval slider dead UI: no runtime effect on polling timers
-S127 Fix all identified bugs from code review of LLMessenger Swift application (May 5 at 10:59 PM)
 ### May 6, 2026
 934 6:23a 🔵 BriefEngine orchestrates per-service message summarization with episodic memory compression
 935 " 🔵 PollEngine manages periodic polling of messenger adapters with failure tracking and health reporting
@@ -133,7 +132,6 @@ S127 Fix all identified bugs from code review of LLMessenger Swift application (
 955 " 🔴 Prevent unsafe replies to ambiguous conversations in multi-conversation briefs
 956 " 🟣 Added visual feedback for reply draft recipients and multi-conversation warnings
 957 " 🔵 Build verification: All recent changes compile successfully
-S128 Fix all identified bugs and prepare comprehensive changeset for review and merge (May 6 at 6:33 AM)
 958 6:34a 🔵 Comprehensive bug fix changeset spans 38 files across entire application stack
 S129 Codex adversarial review of 38-file changeset identifies three high-severity issues requiring fixes before merge (May 6 at 6:34 AM)
 959 6:37a 🔵 Codex adversarial review identifies three high-severity regressions in changeset
@@ -154,20 +152,22 @@ S218 Verify Phase 1 completion: check full test suite results from xcodebuild in
 1357 6:27p 🟣 Added Explicit LLM Provider Selection and Consent Tracking to Settings Repository
 S219 Type-safety refactoring for LLMessenger Brief system: converting unsafe JSON (`[[String: Any]]`) to strongly-typed Codable structures with comprehensive source-citation validation, message ID tracking, database persistence, and enhanced UI feedback (May 6 at 6:28 PM)
 1358 6:53p 🔄 Extract brief card JSON structures into dedicated BriefJSON.swift
+S220 Debug and fix failing BriefEngineTests, specifically testProcessNewMessagesIncludesRollingSummaryAndRecentContext which expected rolling summary and recent context strings in the LLM prompt but found them missing (May 6 at 6:56 PM)
 1359 7:05p 🔵 BriefEngineTests test failures discovered during batch test run
 1360 7:07p ✅ BriefEngineTests fixture modified to fix test data setup
 1361 " 🔵 Test fix attempt unsuccessful; testProcessNewMessagesIncludesRollingSummaryAndRecentContext still failing
 1362 " 🔵 Test assertion requirements identified: rolling summary and recent context must appear in LLM prompt
 1363 " 🔴 Test corrected to inspect last LLM call instead of first
 1364 " 🔵 Test fixture change introduced new failure in testProcessNewMessagesPersistsConversationState
-S220 Debug and fix failing BriefEngineTests, specifically testProcessNewMessagesIncludesRollingSummaryAndRecentContext which expected rolling summary and recent context strings in the LLM prompt but found them missing (May 6 at 7:08 PM)
-**Investigated**: Test execution and failure output showing XCTAssertTrue failures at lines 211-212; mock LLM client call tracking; message sorting behavior in persistConversationStates(); conversation state fetching and recent context message retrieval logic
+S221 Assessed remaining work from the PRD-aligned plan for the inbox briefing product (May 6 at 7:08 PM)
+S222 Reviewed remaining work from PRD-aligned plan for inbox briefing product (May 6 at 8:36 PM)
+**Investigated**: Full feature implementation status across seven major areas: trust UI, above-the-fold prioritization, autoreplay logic, conversation memory, partial-failure UX, performance validation, and user research instrumentation
 
-**Learned**: The test was examining the wrong LLM call (first instead of last) which prevented it from seeing the correct prompt with rolling summary and context. Non-deterministic message sorting when timestamps are equal causes flaky test behavior because the "latest" message selection becomes ambiguous. The buildConversationBlock() method properly constructs prompts with previous summaries, recent context, and new messages, but the test needed to inspect the correct call in the mock's call history
+**Learned**: Project is 70-80% complete with solid architectural foundations. Backend safety and brief grounding are strong, but the final trust layer, prioritization polish, and performance validation are blocking full PRD alignment. The gap is primarily in product-facing behavior and user confidence signals, not core capability.
 
-**Completed**: Applied three patches: (1) Changed mock.calls.first to mock.calls.last in BriefEngineTests line 210 to inspect the correct LLM call; (2) Added messageSortAscending() helper function to BriefEngine.swift for deterministic message sorting by timestamp, messageId, and row ID; (3) Removed unused callIndex variable. Full test suite now passes: BriefEngineTests 10/10 passing, BriefRepositoryTests 13/13 passing, complete run 94/94 tests passing with 0 failures
+**Completed**: Sources storage with citation counts; continuity state for conversation context; generation state tracking for partial failures; prompt capping and structural constraints; card sorting by priority; safer architecture with better safety patterns
 
-**Next Steps**: Session work is complete. All tests passing. Minor follow-up available: SubprocessAdapterTests still emits Thread Performance Checker QoS inversion warnings which could be addressed in future work to improve performance alignment with PRD requirements
+**Next Steps**: Seven priority areas identified: (1) complete trust UI with expandable source previews and message navigation, (2) refine above-the-fold prioritization for urgency signaling, (3) build autoreplay with importance thresholding, (4) extend conversation memory with rolling context and entity tracking, (5) improve partial-failure messaging and degraded-mode UX, (6) profile performance on large real-world inboxes and add cost telemetry, (7) add user research instrumentation with event logging and success metrics
 
 
 Access 681k tokens of past work via get_observations([IDs]) or mem-search skill.

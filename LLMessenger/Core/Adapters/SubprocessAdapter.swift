@@ -31,6 +31,7 @@ final class SubprocessAdapter: MessengerAdapter {
     }
 
     func start() async throws {
+        guard process?.isRunning != true else { return }
         try launchProcess()
         try await sendInit()
     }

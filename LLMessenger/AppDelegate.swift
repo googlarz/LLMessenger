@@ -129,6 +129,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let settingsController = SettingsWindowController(database: db)
             settingsWindowController = settingsController
+            settingsController.onRunSetup = { [weak self] in
+                guard let self else { return }
+                UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+                let controller = OnboardingWindowController(database: db)
+                controller.onComplete = { [weak self] in
+                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                    self?.onboardingWindowController = nil
+                }
+                self.onboardingWindowController = controller
+                controller.show()
+            }
             let openSettings: () -> Void = { [weak settingsController] in settingsController?.show() }
             menuBar.onOpenSettings = openSettings
             state.onOpenSettings = openSettings

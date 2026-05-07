@@ -5,22 +5,31 @@ import SwiftUI
 @MainActor
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let database: AppDatabase
+    var onRunSetup: (() -> Void)?
 
     init(database: AppDatabase) {
         self.database = database
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 480),
+            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "LLMessenger Settings"
+        window.titlebarAppearsTransparent = true
+        window.appearance = .dark
+        window.backgroundColor = NSColor(Theme.bg)
         window.setFrameAutosaveName("LLMessengerSettings")
-        window.contentView = NSHostingView(rootView: SettingsView(database: database))
+        window.isReleasedWhenClosed = false
 
         super.init(window: window)
         window.delegate = self
+
+        // contentView set after super.init so we can capture self
+        window.contentView = NSHostingView(rootView: SettingsView(database: database, onRunSetup: { [weak self] in
+            self?.onRunSetup?()
+        }))
     }
 
     required init?(coder: NSCoder) { fatalError() }

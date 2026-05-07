@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		051BE19FFE796E11D9312A4E /* DeepIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 276519F649E84201C4C1D365 /* DeepIntegrationTests.swift */; };
 		0A29CB4614513C5DD5552425 /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5153C5FA624AF8042F72A30 /* AppStateTests.swift */; };
 		0AA8FC1D3F625AABF5777C9F /* SubprocessAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */; };
 		1B0047A6CC4EC78192C7D255 /* AssistantResponseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3154370024E6D2FFA5B0FE62 /* AssistantResponseView.swift */; };
@@ -109,6 +110,7 @@
 		1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepository.swift; sourceTree = "<group>"; };
 		1C1B7A7D24D3AF2FF2E6FC84 /* OnboardingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWindowController.swift; sourceTree = "<group>"; };
 		2415F8132629B43CC77A08F8 /* ChatWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWindowController.swift; sourceTree = "<group>"; };
+		276519F649E84201C4C1D365 /* DeepIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepIntegrationTests.swift; sourceTree = "<group>"; };
 		306739C4ABE143E1957D677D /* BriefEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefEngineTests.swift; sourceTree = "<group>"; };
 		309F6600675F13496583B3AA /* SettingsRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepositoryTests.swift; sourceTree = "<group>"; };
 		3154370024E6D2FFA5B0FE62 /* AssistantResponseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantResponseView.swift; sourceTree = "<group>"; };
@@ -297,6 +299,7 @@
 				306739C4ABE143E1957D677D /* BriefEngineTests.swift */,
 				9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */,
 				47B8A33ADE90F0EC79A61D4D /* ChatViewModelTests.swift */,
+				276519F649E84201C4C1D365 /* DeepIntegrationTests.swift */,
 				97C7886911F46E51E0EE1B2B /* KeychainStoreTests.swift */,
 				E0E83C3D7F5BA8B73D9EF54F /* LLMClientTypesTests.swift */,
 				04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */,
@@ -570,6 +573,7 @@
 				89D9474481B146BB8EFB761C /* BriefEngineTests.swift in Sources */,
 				74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */,
 				B3CF5BF36060C33F25099D53 /* ChatViewModelTests.swift in Sources */,
+				051BE19FFE796E11D9312A4E /* DeepIntegrationTests.swift in Sources */,
 				2528022DB189F9F99041972C /* KeychainStoreTests.swift in Sources */,
 				E2C8F8B6CA8E66B74B528FB1 /* LLMClientTypesTests.swift in Sources */,
 				E76EA4B470CC880F2800F3F3 /* LLMProviderTests.swift in Sources */,
