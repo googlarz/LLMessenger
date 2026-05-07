@@ -348,6 +348,144 @@ final class BriefEngineTests: XCTestCase {
         let stillUnattached = try repo.fetchUnattachedMessages()
         XCTAssertEqual(stillUnattached.count, 0)
     }
+
+    // MARK: - Conversation block header format
+
+    func testConversationBlockHeaderIncludesServiceTag() async throws {
+        // The [service] tag is required so the LLM can extract service and conversationId
+        // independently. Without it, the LLM guessed service from the opaque ID format.
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 1)   // service="telegram", conversationId="c1"
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        _ = try await engine.processNewMessages()
+
+        let userPrompt = try XCTUnwrap(mock.calls.last?.messages.last?.content)
+        XCTAssertTrue(userPrompt.contains("=== [telegram] c1 |"),
+                      "Block header must be '=== [telegram] c1 | …' — got:\n\(userPrompt)")
+    }
+
+    func testConversationBlockMessageLineFormat() async throws {
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 1)
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        _ = try await engine.processNewMessages()
+
+        let userPrompt = try XCTUnwrap(mock.calls.last?.messages.last?.content)
+        // Message line must start with [id=<id> | <time>] Sender: text
+        XCTAssertTrue(userPrompt.contains("[id=m0 |"), "Message line must start with [id=<id> |")
+        XCTAssertTrue(userPrompt.contains("] Alice:"), "Message line must contain '] Sender:'")
+    }
+
+    func testMultiServiceEachGetsItsOwnLLMCall() async throws {
+        // BriefEngine makes one LLM call per service (parallel TaskGroup).
+        // Verify that telegram and signal each get their own prompt with the correct service block.
+        let db = try setupDB()
+        try await db.dbQueue.write { db in
+            let cfg = ServiceConfig.default(for: "signal")
+            try cfg.insert(db)
+        }
+        try await db.dbQueue.write { db in
+            var m1 = Message(briefId: nil, service: "telegram", conversationId: "c1",
+                             messageId: "t1", sender: "Bob", text: "telegram msg",
+                             timestamp: Date(), isSent: false)
+            var m2 = Message(briefId: nil, service: "signal", conversationId: "s1",
+                             messageId: "s1", sender: "Alice", text: "signal msg",
+                             timestamp: Date(), isSent: false)
+            try m1.insert(db)
+            try m2.insert(db)
+        }
+
+        // Service-aware mock: returns service-specific valid JSON based on which service
+        // is mentioned in the system prompt.
+        let mock = ServiceAwareMockLLMClient()
+        mock.jsonForService["telegram"] = """
+        {"total_messages":1,"total_threads":1,"total_people":1,"cards":[
+          {"id":"telegram-c1-1","service":"telegram","conversationId":"c1",
+           "conversationTitle":"Bob","headline":"Bob said hi","priority":"low",
+           "counts":{"messages":1,"threads":1,"people":1},"summary":"Bob said hi.",
+           "callback":null,"actionItems":[],"quotes":[],"sourceMessageIds":["t1"]}
+        ]}
+        """
+        mock.jsonForService["signal"] = """
+        {"total_messages":1,"total_threads":1,"total_people":1,"cards":[
+          {"id":"signal-s1-1","service":"signal","conversationId":"s1",
+           "conversationTitle":"Alice","headline":"Alice said hi","priority":"low",
+           "counts":{"messages":1,"threads":1,"people":1},"summary":"Alice said hi.",
+           "callback":null,"actionItems":[],"quotes":[],"sourceMessageIds":["s1"]}
+        ]}
+        """
+
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+        _ = try await engine.processNewMessages()
+
+        // Two separate LLM calls must be made.
+        XCTAssertEqual(mock.calls.count, 2, "BriefEngine must make one LLM call per service")
+
+        // Each call's user prompt must contain only that service's conversation block.
+        let telegramCall = mock.calls.first { $0.messages.first?.content.contains("Connected services: telegram") ?? false }
+        let signalCall   = mock.calls.first { $0.messages.first?.content.contains("Connected services: signal") ?? false }
+
+        XCTAssertNotNil(telegramCall, "Must have a call for telegram")
+        XCTAssertNotNil(signalCall,   "Must have a call for signal")
+
+        let telegramPrompt = telegramCall?.messages.last?.content ?? ""
+        let signalPrompt   = signalCall?.messages.last?.content   ?? ""
+
+        XCTAssertTrue(telegramPrompt.contains("=== [telegram] c1 |"), "Telegram call must contain telegram block")
+        XCTAssertTrue(signalPrompt.contains("=== [signal] s1 |"),     "Signal call must contain signal block")
+    }
+
+    // MARK: - JSON fence / truncation robustness
+
+    func testBriefEngineHandlesTruncatedJSON() async throws {
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 1)
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: #"{"cards":[{"id":"x","headl"#, inputTokens: 5, outputTokens: 2)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let id = try await engine.processNewMessages()
+
+        XCTAssertNil(id, "Truncated JSON must produce nil (no brief), not a crash")
+    }
+
+    func testBriefEngineStripsMarkdownFencesAndSucceeds() async throws {
+        // LLMs sometimes wrap JSON output in ```json … ``` fences.
+        // BriefEngine strips fences before parsing, so a brief should still be produced.
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 1)
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(
+            text: "```json\n\(validBriefJSON)\n```",
+            inputTokens: 5, outputTokens: 2
+        )
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let id = try await engine.processNewMessages()
+
+        XCTAssertNotNil(id, "BriefEngine must strip markdown fences and still produce a brief")
+    }
+}
+
+// Service-aware mock: returns service-specific JSON based on which service appears in the system prompt.
+final class ServiceAwareMockLLMClient: LLMClient {
+    var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
+    var jsonForService: [String: String] = [:]
+    var fallbackJSON: String = #"{"cards":[]}"#
+
+    func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
+        calls.append((model, messages, maxTokens))
+        let systemContent = messages.first(where: { $0.role == .system })?.content ?? ""
+        let service = ["signal", "telegram", "imessage"].first { systemContent.contains($0) } ?? ""
+        let text = jsonForService[service] ?? fallbackJSON
+        return LLMResponse(text: text, inputTokens: 10, outputTokens: 5)
+    }
 }
 
 // Two-stage mock: returns `first` on call 1, `second` on call 2+.

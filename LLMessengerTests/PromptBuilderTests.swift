@@ -75,4 +75,70 @@ final class PromptBuilderTests: XCTestCase {
         )
         XCTAssertFalse(prompt.contains("Recent context:"))
     }
+
+    // MARK: - New [service] header format
+
+    func testSummarizerSuffixDocumentsServiceHeaderFormat() {
+        let prompt = PromptBuilder.build(
+            mode: .summarizer, basePrompt: "BASE",
+            services: [], episodicSummaries: [], now: Date()
+        )
+        // The schema instructions must explain the [service] tag so the LLM extracts correctly.
+        XCTAssertTrue(prompt.contains("[signal]") || prompt.contains("[service]"),
+                      "Summarizer suffix must document the [service] header tag format")
+        XCTAssertTrue(prompt.contains("conversationId"))
+    }
+
+    func testSummarizerSuffixExplainsIdExtraction() {
+        let prompt = PromptBuilder.build(
+            mode: .summarizer, basePrompt: "BASE",
+            services: [], episodicSummaries: [], now: Date()
+        )
+        XCTAssertTrue(prompt.contains("[id="), "Suffix must explain [id= extraction rule")
+    }
+
+    func testDefaultPromptEnforcesEnglish() {
+        XCTAssertTrue(
+            PromptBuilder.defaultBasePrompt.lowercased().contains("english"),
+            "Base prompt must instruct the LLM to write in English regardless of input language"
+        )
+    }
+
+    func testDefaultPromptContainsHeadlineGoodExample() {
+        // The concrete good/bad examples are key for prompt quality — guard them.
+        XCTAssertTrue(
+            PromptBuilder.defaultBasePrompt.contains("canceled") ||
+            PromptBuilder.defaultBasePrompt.contains("cancelled") ||
+            PromptBuilder.defaultBasePrompt.contains("Nagel"),
+            "Base prompt must contain the headline good-example (Lasse Nagel canceled...)"
+        )
+    }
+
+    // MARK: - Chat mode
+
+    func testChatModeWithNoConversationsSaysNoneAvailable() {
+        let prompt = PromptBuilder.build(
+            mode: .chat(conversations: []), basePrompt: "BASE",
+            services: [], episodicSummaries: [], now: Date()
+        )
+        XCTAssertTrue(prompt.contains("No conversations available"))
+    }
+
+    func testChatModeNumbersConversationsFrom1() {
+        let prompt = PromptBuilder.build(
+            mode: .chat(conversations: ["signal|abc|Alice", "telegram|xyz|Bob"]),
+            basePrompt: "BASE", services: [], episodicSummaries: [], now: Date()
+        )
+        XCTAssertTrue(prompt.contains("1. signal|abc|Alice"))
+        XCTAssertTrue(prompt.contains("2. telegram|xyz|Bob"))
+    }
+
+    func testChatModeSuffixContainsDraftAndChooseInstructions() {
+        let prompt = PromptBuilder.build(
+            mode: .chat(conversations: ["signal|abc|Alice"]),
+            basePrompt: "BASE", services: [], episodicSummaries: [], now: Date()
+        )
+        XCTAssertTrue(prompt.contains("DRAFT:"))
+        XCTAssertTrue(prompt.contains("CHOOSE"))
+    }
 }
