@@ -116,7 +116,8 @@ final class BriefEngineTests: XCTestCase {
         _ = try await engine.processNewMessages()
 
         let userPrompt = try XCTUnwrap(mock.calls.last?.messages.last?.content)
-        XCTAssertTrue(userPrompt.contains("=== c1 |"))
+        // Header now includes [service] tag: === [telegram] c1 | Title ===
+        XCTAssertTrue(userPrompt.contains("=== [telegram] c1 |"))
         XCTAssertTrue(userPrompt.contains("[id=m0 |"))
         XCTAssertTrue(userPrompt.contains("[id=m1 |"))
     }

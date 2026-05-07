@@ -27,7 +27,8 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Marta asked about deploy"))
         XCTAssertTrue(prompt.contains("Produce a JSON brief"))
         XCTAssertTrue(prompt.contains("sourceMessageIds"))
-        XCTAssertTrue(prompt.contains("message id from an input line"))
+        // Updated assertion: matches the new explicit extraction rule wording
+        XCTAssertTrue(prompt.contains("[id="))
         XCTAssertTrue(prompt.contains("conversationId"))
     }
 
