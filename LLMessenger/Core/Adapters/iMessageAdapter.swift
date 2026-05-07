@@ -37,7 +37,9 @@ final class iMessageAdapter: MessengerAdapter {
     }
 
     func fetch(config: FetchConfig) async throws -> AdapterFetchResult {
-        guard let dbQueue else { return AdapterFetchResult(conversations: []) }
+        guard let dbQueue else {
+            throw AdapterError.initFailed("Full Disk Access not granted. Open System Settings › Privacy & Security › Full Disk Access and add LLMessenger.")
+        }
 
         // Convert the fetch window to Mac absolute time (nanoseconds).
         let sinceNs: Int64

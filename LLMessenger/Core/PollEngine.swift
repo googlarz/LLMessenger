@@ -48,10 +48,11 @@ final class PollEngine {
         }
     }
 
-    // Poll all adapters; fire onPollSucceeded exactly once if any new messages were stored.
+    // Poll all enabled adapters; fire onPollSucceeded exactly once if any new messages were stored.
     func pollAll() async {
         var anyNew = false
         for serviceID in adapters.keys {
+            guard configs[serviceID]?.enabled == true else { continue }
             if (try? await pollOnce(serviceID: serviceID)) == true {
                 anyNew = true
             }
@@ -81,6 +82,18 @@ final class PollEngine {
 
         guard let adapter = adapters[serviceID],
               let config = configs[serviceID] else { return false }
+
+        // Retry start() for adapters that failed at launch (e.g. FDA granted after app start).
+        if adapter.healthStatus != .ok {
+            do {
+                try await adapter.start()
+            } catch {
+                let failures = (failureCounts[serviceID] ?? 0) + 1
+                failureCounts[serviceID] = failures
+                writeHealth(service: serviceID, status: "error", error: error.localizedDescription)
+                throw error
+            }
+        }
 
         do {
             let fetchConfig = makeFetchConfig(config: config, serviceID: serviceID)
@@ -141,10 +154,13 @@ final class PollEngine {
     }
 
     private func makeFetchConfig(config: ServiceConfig, serviceID: String) -> FetchConfig {
+        // On first run (no prior check recorded), fetch the last 24 hours so recent
+        // messages are not missed. Subsequent polls use the last-check timestamp.
+        let firstRunWindow: TimeInterval = 24 * 3600
         switch config.resolvedFetchMode {
         case .time:
             let since = readLastCheck(serviceID: serviceID)
-                ?? Date().addingTimeInterval(-Double(config.pollIntervalMinutes) * 60)
+                ?? Date().addingTimeInterval(-firstRunWindow)
             return FetchConfig(mode: .byTime(since: since))
         case .count:
             // Always include a time anchor so adapters that respect `since` don't
@@ -152,8 +168,7 @@ final class PollEngine {
             if let lastCheck = readLastCheck(serviceID: serviceID) {
                 return FetchConfig(mode: .byTime(since: lastCheck))
             }
-            // No prior check: fetch only the last poll-interval window.
-            let since = Date().addingTimeInterval(-Double(config.pollIntervalMinutes) * 60)
+            let since = Date().addingTimeInterval(-firstRunWindow)
             return FetchConfig(mode: .byTime(since: since))
         }
     }

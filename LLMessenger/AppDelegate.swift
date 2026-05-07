@@ -66,10 +66,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.menuBarController?.setLoading(true)
                     let start = Date()
                     await self.pollEngine?.pollAll()
+                    // Surface adapter failures after polling (e.g. FDA not granted for iMessage).
+                    if let health = self.pollEngine?.currentServiceHealth {
+                        let failed = health.filter { $0.value != .ok }.keys.sorted()
+                        if !failed.isEmpty {
+                            self.appState?.lastError = "Could not reach: \(failed.joined(separator: ", ")). Check permissions in System Settings."
+                        }
+                    }
                     do {
                         self.appState?.briefGenerationState = .summarizing
                         let newID = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
-                        self.appState?.lastError = nil
+                        if newID != nil { self.appState?.lastError = nil }
                         self.appState?.briefGenerationState = newID == nil ? .noNewMessages : .complete
                     } catch {
                         self.appState?.lastError = error.localizedDescription
