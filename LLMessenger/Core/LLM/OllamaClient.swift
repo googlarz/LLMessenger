@@ -8,7 +8,7 @@ final class OllamaClient: LLMClient {
     init(baseURL: URL = URL(string: "http://localhost:11434")!,
          session: URLSession = {
              let config = URLSessionConfiguration.default
-             config.timeoutIntervalForRequest = 120
+             config.timeoutIntervalForRequest = 300
              return URLSession(configuration: config)
          }()) {
         self.baseURL = baseURL
@@ -24,7 +24,11 @@ final class OllamaClient: LLMClient {
             "model":    model,
             "messages": chatMessages,
             "stream":   false,
-            "options":  ["num_predict": maxTokens, "num_ctx": 8192]
+            // num_predict is intentionally omitted for Ollama — local models have no
+            // billing concern, and thinking models (e.g. gemma4) need the full context
+            // window for their reasoning pass before they can emit the final response.
+            // num_ctx is bumped to 16 384 to handle longer conversation inputs.
+            "options":  ["num_ctx": 16384]
         ]
 
         var request = URLRequest(url: baseURL.appendingPathComponent("api/chat"))
