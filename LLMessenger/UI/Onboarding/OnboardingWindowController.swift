@@ -64,6 +64,7 @@ private struct OnboardingView: View {
     @State private var openAIKey: String = ""
     @State private var ollamaModel: String = ""
     @State private var signalNumber: String = ""
+    @State private var telegramAdapter: SubprocessAdapter? = nil
 
     private var repo: SettingsRepository { SettingsRepository(database: database) }
 
@@ -332,23 +333,11 @@ private struct OnboardingView: View {
     private var telegramStep: some View {
         ScrollView {
             VStack(spacing: 24) {
-                let binaryPath = telegramAdapterPath()
-                let creds = SettingsRepository().loadTelegramCredentials()
-                let hasCreds = !creds.apiId.isEmpty && !creds.apiHash.isEmpty
-
-                if let path = binaryPath, hasCreds {
-                    let adapter = SubprocessAdapter(
-                        serviceID: "telegram",
-                        adapterPath: path,
-                        config: makeTelegramConfig(apiId: creds.apiId, apiHash: creds.apiHash)
-                    )
+                if let adapter = telegramAdapter {
                     TelegramSignInView(adapter: adapter, onSuccess: { advance() })
                         .frame(width: 360)
                 } else {
-                    stepHeader(
-                        title: "Connect Telegram",
-                        subtitle: nil
-                    )
+                    stepHeader(title: "Connect Telegram", subtitle: nil)
 
                     VStack(spacing: 12) {
                         Image(systemName: "paperplane.circle")
@@ -363,14 +352,27 @@ private struct OnboardingView: View {
                     .padding(20)
                     .background(Theme.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                    Button("Skip") { advance() }
-                        .buttonStyle(PrimaryButtonStyle())
                 }
+
+                Button("Skip") { advance() }
+                    .buttonStyle(SecondaryButtonStyle())
             }
             .padding(.horizontal, 48)
             .padding(.vertical, 16)
         }
+        .onAppear { buildTelegramAdapterIfNeeded() }
+    }
+
+    private func buildTelegramAdapterIfNeeded() {
+        guard telegramAdapter == nil,
+              let path = telegramAdapterPath() else { return }
+        let creds = SettingsRepository().loadTelegramCredentials()
+        guard !creds.apiId.isEmpty && !creds.apiHash.isEmpty else { return }
+        telegramAdapter = SubprocessAdapter(
+            serviceID: "telegram",
+            adapterPath: path,
+            config: makeTelegramConfig(apiId: creds.apiId, apiHash: creds.apiHash)
+        )
     }
 
     private func telegramAdapterPath() -> String? {

@@ -16,7 +16,7 @@ struct TelegramSignInView: View {
     @State private var code: String = ""
     @State private var password: String = ""
     @State private var errorMessage: String? = nil
-    @State private var isLoading: Bool = false
+    @State private var isLoading: Bool = true   // true until adapter starts
 
     var body: some View {
         VStack(spacing: 24) {
@@ -53,6 +53,16 @@ struct TelegramSignInView: View {
         .padding(28)
         .frame(width: 360)
         .background(Theme.surface)
+        .onAppear {
+            Task {
+                do {
+                    try await adapter.start()
+                } catch {
+                    errorMessage = "Couldn't start Telegram adapter: \(error.localizedDescription)"
+                }
+                isLoading = false
+            }
+        }
     }
 
     // MARK: - Phone step
