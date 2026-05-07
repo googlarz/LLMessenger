@@ -10,8 +10,16 @@ struct AISettingsTab: View {
     @State private var cloudAutoBriefsConsent: Bool = false
     @State private var launchAtLogin: Bool = false
     @State private var saveStatus: String = ""
+    @State private var testState: TestState = .idle
 
     private let repo = SettingsRepository()
+
+    enum TestState {
+        case idle
+        case running
+        case success(String)   // model name that responded
+        case failure(String)   // error message
+    }
 
     var body: some View {
         Form {
@@ -68,6 +76,44 @@ struct AISettingsTab: View {
                     }
             }
 
+            // Test connection row
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Button(action: { Task { await testConnection() } }) {
+                            if case .running = testState {
+                                HStack(spacing: 6) {
+                                    ProgressView().controlSize(.small)
+                                    Text("Testing…")
+                                }
+                            } else {
+                                Label("Test AI Connection", systemImage: "bolt.circle")
+                            }
+                        }
+                        .disabled(currentClientSpec == nil || testState == .running)
+                    }
+
+                    switch testState {
+                    case .idle:
+                        EmptyView()
+                    case .running:
+                        EmptyView()
+                    case .success(let model):
+                        Label("Connected — \(model) responded", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    case .failure(let msg):
+                        Label(msg, systemImage: "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+            } footer: {
+                Text("Sends a one-word test prompt using the settings above (no need to save first).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack {
                 Spacer()
                 if !saveStatus.isEmpty {
@@ -81,6 +127,55 @@ struct AISettingsTab: View {
         }
         .onAppear { load() }
     }
+
+    // MARK: - Test
+
+    private struct ClientSpec {
+        let client: LLMClient
+        let model: String
+        let label: String
+    }
+
+    private var currentClientSpec: ClientSpec? {
+        guard let provider = LLMProvider(rawValue: selectedProviderRaw) else { return nil }
+        switch provider {
+        case .anthropic:
+            let key = anthropicKey.trimmingCharacters(in: .whitespaces)
+            guard !key.isEmpty else { return nil }
+            return ClientSpec(client: provider.makeClient(apiKey: key),
+                              model: provider.defaultModel,
+                              label: "\(provider.displayName) / \(provider.defaultModel)")
+        case .openai:
+            let key = openAIKey.trimmingCharacters(in: .whitespaces)
+            guard !key.isEmpty else { return nil }
+            return ClientSpec(client: provider.makeClient(apiKey: key),
+                              model: provider.defaultModel,
+                              label: "\(provider.displayName) / \(provider.defaultModel)")
+        case .ollama:
+            let model = ollamaModel.trimmingCharacters(in: .whitespaces)
+            let m = model.isEmpty ? provider.defaultModel : model
+            return ClientSpec(client: provider.makeClient(apiKey: nil),
+                              model: m,
+                              label: "Ollama / \(m)")
+        }
+    }
+
+    private func testConnection() async {
+        guard let spec = currentClientSpec else { return }
+        testState = .running
+        do {
+            _ = try await spec.client.complete(
+                model: spec.model,
+                messages: [LLMMessage(role: .user, content: "Reply with just the word OK.")],
+                maxTokens: 10
+            )
+            testState = .success(spec.label)
+        } catch {
+            testState = .failure(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Load / Save
 
     private func load() {
         selectedProviderRaw = repo.loadSelectedLLMProvider()?.rawValue ?? ""
@@ -115,5 +210,16 @@ struct AISettingsTab: View {
             return "When enabled, automatic briefs may send included message content to the selected cloud provider. Manual briefs still use the selected backend when you run them."
         }
         return "Automatic cloud consent is only needed when Anthropic or OpenAI is selected."
+    }
+}
+
+extension AISettingsTab.TestState: Equatable {
+    static func == (lhs: AISettingsTab.TestState, rhs: AISettingsTab.TestState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.running, .running): return true
+        case (.success(let a), .success(let b)):   return a == b
+        case (.failure(let a), .failure(let b)):   return a == b
+        default: return false
+        }
     }
 }
