@@ -4,18 +4,19 @@ ARCHIVE_PATH  := build/LLMessenger.xcarchive
 APP_PATH      := build/LLMessenger.app
 DMG_PATH      := build/LLMessenger.dmg
 
-DEBUG_APP := build/run/Build/Products/Debug/LLMessenger.app
+DERIVED_DEBUG := $(shell xcodebuild -scheme $(SCHEME) -configuration Debug -project LLMessenger.xcodeproj -showBuildSettings 2>/dev/null | grep 'TARGET_BUILD_DIR' | head -1 | awk '{print $$3}')
+DEBUG_APP     := $(DERIVED_DEBUG)/LLMessenger.app
 
 .PHONY: build test install archive export notarize dmg clean
 
 build:
-	xcodebuild -scheme $(SCHEME) -configuration Debug build
+	xcodebuild -scheme $(SCHEME) -configuration Debug build -project LLMessenger.xcodeproj
 
 install: build
 	rm -rf /Applications/LLMessenger.app
 	cp -R "$(DEBUG_APP)" /Applications/
 	mdimport /Applications/LLMessenger.app
-	@echo "✓ Installed to /Applications — Spotlight updated"
+	@echo "✓ Installed $(DEBUG_APP) → /Applications"
 
 test:
 	xcodebuild -scheme $(SCHEME) -configuration Debug test
