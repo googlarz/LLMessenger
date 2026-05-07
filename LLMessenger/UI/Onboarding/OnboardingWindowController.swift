@@ -28,8 +28,8 @@ final class OnboardingWindowController: NSWindowController {
         super.init(window: window)
 
         let view = OnboardingView(database: database, onComplete: { [weak self] in
-            self?.onComplete?()
-            self?.close()
+            self?.close()       // close before releasing self
+            self?.onComplete?() // then notify — AppDelegate nils the reference after this
         })
         window.contentView = NSHostingView(rootView: view)
     }
@@ -73,7 +73,7 @@ private struct OnboardingView: View {
             VStack(spacing: 0) {
                 // Back button row
                 HStack {
-                    if currentStep != .welcome && currentStep != .done {
+                    if currentStep != .welcome {
                         Button(action: goBack) {
                             Label("Back", systemImage: "chevron.left")
                                 .font(.subheadline)
@@ -131,7 +131,7 @@ private struct OnboardingView: View {
         case .signalSetup:  currentStep = .llmSetup
         case .imessageSetup: currentStep = .signalSetup
         case .telegramSetup: currentStep = .imessageSetup
-        case .done:         currentStep = .telegramSetup
+        case .done:          currentStep = .telegramSetup
         default: break
         }
     }

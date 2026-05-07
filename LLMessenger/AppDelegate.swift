@@ -136,6 +136,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 controller.onComplete = { [weak self] in
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                     self?.onboardingWindowController = nil
+                    self?.chatWindowController?.show()
                 }
                 self.onboardingWindowController = controller
                 controller.show()
@@ -242,6 +243,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 onboardingController.onComplete = { [weak self] in
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                     self?.onboardingWindowController = nil
+                    self?.chatWindowController?.show()
                 }
                 self.onboardingWindowController = onboardingController
                 onboardingController.show()
