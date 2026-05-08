@@ -268,17 +268,22 @@ final class BriefEngine {
                         let sourceMessages: [Message]
                         let conversations: [AdapterConversation]
                         if let result = adapterResult, !result.conversations.isEmpty {
+                            let totalMsgs = result.conversations.reduce(0) { $0 + $1.messages.count }
+                            print("[BriefEngine] \(serviceID): adapter returned \(result.conversations.count) conversations, \(totalMsgs) messages")
                             newlyStored = try self.repository.storeMessages(from: result, service: serviceID)
                             conversations = result.conversations
-                            // After storing, fetch ALL messages in the window (including previously-briefed
-                            // ones) so decodeAndValidateBrief accepts sourceMessageIds from any point in
-                            // the window — not just the unattached tail.
-                            sourceMessages = try self.repository.fetchMessages(service: serviceID, since: since)
+                            // Fetch ALL messages in the window PLUS the 24h context window that
+                            // buildConversationBlock prepends before the first new message.
+                            // Without this, the LLM can reference context message IDs that are
+                            // outside 'since' and decodeAndValidateBrief rejects the whole service.
+                            let sourceSince = since.addingTimeInterval(-self.recentContextWindow)
+                            sourceMessages = try self.repository.fetchMessages(service: serviceID, since: sourceSince)
                         } else {
                             // Adapter unavailable or empty — use messages already stored by the poll loop.
-                            let dbMessages = try self.repository.fetchMessages(service: serviceID, since: since)
+                            let sourceSince = since.addingTimeInterval(-self.recentContextWindow)
+                            let dbMessages = try self.repository.fetchMessages(service: serviceID, since: sourceSince)
                             guard !dbMessages.isEmpty else { return nil }
-                            newlyStored = dbMessages
+                            newlyStored = dbMessages.filter { $0.timestamp > since }
                             sourceMessages = dbMessages
                             // Reconstruct AdapterConversation-like grouping from stored messages.
                             var byConv: [String: [Message]] = [:]
@@ -346,7 +351,8 @@ final class BriefEngine {
                             maxTokens: 4000
                         )
 
-                        if let parsed = try? self.decodeAndValidateBrief(response.text, service: serviceID, sourceMessages: sourceMessages) {
+                        do {
+                            let parsed = try self.decodeAndValidateBrief(response.text, service: serviceID, sourceMessages: sourceMessages)
                             return ServiceResult(
                                 service: serviceID,
                                 cards: parsed.cards,
@@ -355,7 +361,8 @@ final class BriefEngine {
                                 newlyStored: newlyStored,
                                 success: true
                             )
-                        } else {
+                        } catch {
+                            print("[BriefEngine] \(serviceID) validation failed: \(error)")
                             return ServiceResult(service: serviceID, cards: [], stats: (0, 0, 0), sourceMessages: [], newlyStored: [], success: false)
                         }
                     } catch {
