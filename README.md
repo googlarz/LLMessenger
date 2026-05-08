@@ -74,7 +74,7 @@ PollEngine ──► Signal adapter    (signal-mcp SQLite + HTTP JSON-RPC)
 - macOS 13 Ventura or later
 - Xcode 15+ (to build from source)
 - One or more messaging services:
-  - **Signal** — [signal-mcp](https://github.com/arian-gg/signal-mcp) running as a local daemon
+  - **Signal** — a local Signal daemon exposing a SQLite database and an HTTP JSON-RPC endpoint (the `signal-mcp` pattern)
   - **Telegram** — `telegram-adapter` binary (bundled or in `~/.config/llmessenger/adapters/telegram/`)
   - **iMessage** — Full Disk Access granted to LLMessenger in System Settings → Privacy & Security
 - One LLM backend:
@@ -123,7 +123,7 @@ All settings are also available under the menu bar icon → **Settings**:
 
 **Services tab:**
 
-- **Signal** — enter your phone number (`+491234567890`); requires [signal-mcp](https://github.com/arian-gg/signal-mcp)
+- **Signal** — enter your phone number (`+491234567890`); requires a local Signal daemon (SQLite + HTTP JSON-RPC)
 - **Telegram** — click "Connect Telegram" to sign in interactively (phone → code → optional 2FA)
 - **iMessage** — enable and grant Full Disk Access when prompted
 
