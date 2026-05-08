@@ -1,4 +1,5 @@
 // LLMessenger/Core/Notifications/NotificationManager.swift
+import AppKit
 import Foundation
 import UserNotifications
 
