@@ -11,4 +11,5 @@ struct MessageSearchResult {
     /// FTS5 snippet with matched terms surrounded by `<<` and `>>`.
     let snippet: String
     let timestamp: Date
+    let briefID: Int64?
 }

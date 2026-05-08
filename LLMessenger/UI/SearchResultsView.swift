@@ -47,19 +47,16 @@ struct SearchResultsView: View {
     }
 
     private func selectBrief(_ brief: Brief) {
-        appState.selectedBriefID = brief.id
-        appState.markAsOpen(briefID: brief.id!)
+        guard let id = brief.id else { return }
+        appState.selectedBriefID = id
+        appState.markAsOpen(briefID: id)
         Task { try? await chatViewModel.loadBrief(brief) }
     }
 
     private func openConversation(_ result: MessageSearchResult) {
-        // Find a brief that contains this message and navigate to it
-        let match = appState.briefs.first { brief in
-            guard let id = brief.id else { return false }
-            return (try? appState.repository.fetchMessages(forBriefID: id)
-                .contains { $0.id == result.messageRowId }) ?? false
-        }
-        if let match { selectBrief(match) }
+        guard let briefID = result.briefID,
+              let brief = appState.briefs.first(where: { $0.id == briefID }) else { return }
+        selectBrief(brief)
     }
 }
 

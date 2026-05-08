@@ -265,7 +265,7 @@ struct BriefRepository {
             let sanitized = query.replacingOccurrences(of: "\"", with: "\"\"") + "*"
             var sql = """
                 SELECT m.id as messageRowId, m.service, m.conversationId,
-                       m.conversationName, m.sender, m.timestamp,
+                       m.conversationName, m.sender, m.timestamp, m.briefId as briefID,
                        snippet(messages_fts, 0, '<<', '>>', '\u{2026}', 15) as snippet
                 FROM messages_fts
                 JOIN messages m ON m.id = messages_fts.rowid
@@ -293,7 +293,8 @@ struct BriefRepository {
                         conversationName: row["conversationName"],
                         sender:       row["sender"],
                         snippet:      row["snippet"] ?? query,
-                        timestamp:    row["timestamp"]
+                        timestamp:    row["timestamp"],
+                        briefID:      row["briefID"]
                     )
                 }
         }

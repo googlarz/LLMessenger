@@ -11,6 +11,7 @@ struct BriefListView: View {
     @State private var searchResults: [MessageSearchResult] = []
     @State private var searchBriefResults: [Brief] = []
     @State private var isSearching = false
+    @State private var searchTask: Task<Void, Never>? = nil
 
     var filteredGroups: [BriefListGroup] {
         appState.briefGroups(from: dateFrom, to: dateTo)
@@ -105,45 +106,54 @@ struct BriefListView: View {
     // MARK: - Helpers
 
     private func selectBrief(_ brief: Brief) {
-        appState.selectedBriefID = brief.id
-        appState.markAsOpen(briefID: brief.id!)
+        guard let id = brief.id else { return }
+        appState.selectedBriefID = id
+        appState.markAsOpen(briefID: id)
         Task { try? await chatViewModel.loadBrief(brief) }
     }
 
     @ViewBuilder
     private func briefContextMenu(_ brief: Brief) -> some View {
         if brief.pinned {
-            Button("Unpin") { appState.setPinnedBrief(briefID: brief.id!, pinned: false) }
+            Button("Unpin") {
+                if let id = brief.id { appState.setPinnedBrief(briefID: id, pinned: false) }
+            }
         } else {
             Button("Pin") {
-                if appState.pinnedBriefs.count >= 10 {
+                let pinnedCount = appState.pinnedBriefs.count
+                if pinnedCount >= 10 {
                     appState.lastError = "Cannot pin more than 10 briefs. Unpin one first."
                 } else {
-                    appState.setPinnedBrief(briefID: brief.id!, pinned: true)
+                    if let id = brief.id { appState.setPinnedBrief(briefID: id, pinned: true) }
                 }
             }
         }
         Divider()
-        Button("Mark as Read") { appState.markAsOpen(briefID: brief.id!) }
+        Button("Mark as Read") {
+            if let id = brief.id { appState.markAsOpen(briefID: id) }
+        }
     }
 
     private func performSearch(_ query: String) {
+        searchTask?.cancel()
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             searchResults = []
             searchBriefResults = []
             return
         }
         isSearching = true
-        Task {
+        searchTask = Task {
             do {
-                let msgs = try appState.repository.searchMessages(query: query)
-                let briefs = try appState.repository.searchBriefs(query: query)
+                let msgResults = try appState.repository.searchMessages(query: query)
+                let briefResults = try appState.repository.searchBriefs(query: query)
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    searchResults = msgs
-                    searchBriefResults = briefs
+                    searchResults = msgResults
+                    searchBriefResults = briefResults
                     isSearching = false
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 await MainActor.run { isSearching = false }
             }
         }
