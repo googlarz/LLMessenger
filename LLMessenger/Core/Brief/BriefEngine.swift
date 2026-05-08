@@ -260,7 +260,11 @@ final class BriefEngine {
                             if adapter.healthStatus != .ok {
                                 try? await adapter.start()
                             }
-                            adapterResult = try? await adapter.fetch(config: fetchConfig)
+                            do {
+                                adapterResult = try await adapter.fetch(config: fetchConfig)
+                            } catch {
+                                print("[BriefEngine] \(serviceID): adapter fetch failed: \(error)")
+                            }
                         }
 
                         // 2. If adapter returned nothing, fall back to stored DB messages.
@@ -282,6 +286,8 @@ final class BriefEngine {
                             // Adapter unavailable or empty — use messages already stored by the poll loop.
                             let sourceSince = since.addingTimeInterval(-self.recentContextWindow)
                             let dbMessages = try self.repository.fetchMessages(service: serviceID, since: sourceSince)
+                            let dbCount = dbMessages.filter { $0.timestamp > since }.count
+                            print("[BriefEngine] \(serviceID): using DB fallback, \(dbCount) messages in window (adapter: \(adapterResult == nil ? "nil" : "empty"))")
                             guard !dbMessages.isEmpty else { return nil }
                             newlyStored = dbMessages.filter { $0.timestamp > since }
                             sourceMessages = dbMessages
@@ -348,7 +354,7 @@ final class BriefEngine {
                                 LLMMessage(role: .system, content: systemPrompt),
                                 LLMMessage(role: .user,   content: threadText)
                             ],
-                            maxTokens: 4000
+                            maxTokens: 16000
                         )
 
                         do {
