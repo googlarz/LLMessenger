@@ -83,6 +83,7 @@
 		AF6BE9979D35F02876AF59D8 /* AutoLaunchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 806576F921F0C0A99AB00DC3 /* AutoLaunchManager.swift */; };
 		B3CF5BF36060C33F25099D53 /* ChatViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B8A33ADE90F0EC79A61D4D /* ChatViewModelTests.swift */; };
 		B47F50B3DD0A86EE369C8549 /* BriefListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17E2FC6E580C483A5220F007 /* BriefListView.swift */; };
+		F2E1D0C9B8A7F6E5D4C3B2A1 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C9A77979E84260BE6CDD77 /* SearchResultsView.swift */; };
 		B93451BF2E596033EE00C54C /* BriefCardRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1551568E73E6646226FE66C3 /* BriefCardRecord.swift */; };
 		C347F8AD719ED5819B0D3D09 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBC9C795B6AF02F77D298ED7 /* AppState.swift */; };
 		C6E78A674132D16A32E143B9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96FD9BD1839DC30E92065C7E /* ContentView.swift */; };
@@ -126,6 +127,7 @@
 		1551568E73E6646226FE66C3 /* BriefCardRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefCardRecord.swift; sourceTree = "<group>"; };
 		173C28CE4F72A153E9132291 /* TelegramSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelegramSignInView.swift; sourceTree = "<group>"; };
 		17E2FC6E580C483A5220F007 /* BriefListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefListView.swift; sourceTree = "<group>"; };
+		12C9A77979E84260BE6CDD77 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepository.swift; sourceTree = "<group>"; };
 		1C1B7A7D24D3AF2FF2E6FC84 /* OnboardingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWindowController.swift; sourceTree = "<group>"; };
 		2415F8132629B43CC77A08F8 /* ChatWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWindowController.swift; sourceTree = "<group>"; };
@@ -434,6 +436,7 @@
 				3154370024E6D2FFA5B0FE62 /* AssistantResponseView.swift */,
 				758A1B093F09B6DE98D3613C /* BriefHeaderView.swift */,
 				17E2FC6E580C483A5220F007 /* BriefListView.swift */,
+				12C9A77979E84260BE6CDD77 /* SearchResultsView.swift */,
 				D2E743B88282AE993C10C526 /* BriefProseView.swift */,
 				98C662F360723B5576ACCA35 /* ChatInputView.swift */,
 				B0E3E5C7F80F5E5EACF5E3E9 /* ChatPanelView.swift */,
@@ -576,6 +579,7 @@
 				FAF9F38106756444BDB2FAAA /* BriefHeaderView.swift in Sources */,
 				2837CF2B8EB456AA3092F0D4 /* BriefJSON.swift in Sources */,
 				B47F50B3DD0A86EE369C8549 /* BriefListView.swift in Sources */,
+				F2E1D0C9B8A7F6E5D4C3B2A1 /* SearchResultsView.swift in Sources */,
 				5A7F8A5FF820AE804CFC2BEC /* BriefProseView.swift in Sources */,
 				ADE6785F10D5F0FB2A55C6C6 /* BriefRepository.swift in Sources */,
 				A4888E40CE69CDE1673C16D6 /* ChatInputView.swift in Sources */,

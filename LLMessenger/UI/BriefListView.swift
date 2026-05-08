@@ -5,47 +5,88 @@ struct BriefListView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
     @State private var searchQuery = ""
-
-    private var filteredGroups: [BriefListGroup] {
-        guard !searchQuery.isEmpty else { return appState.briefGroups }
-        let q = searchQuery.lowercased()
-        return appState.briefGroups.compactMap { group in
-            let filtered = group.briefs.filter { brief in
-                briefTimeLabel(brief).lowercased().contains(q) ||
-                briefSyncDate(brief).lowercased().contains(q) ||
-                (brief.notificationText.lowercased().contains(q))
-            }
-            return filtered.isEmpty ? nil :
-                BriefListGroup(id: group.id, label: group.label, briefs: filtered)
-        }
-    }
+    @State private var dateFrom: Date? = nil
+    @State private var dateTo: Date? = nil
+    @State private var showDateFilter = false
+    @State private var searchResults: [MessageSearchResult] = []
+    @State private var searchBriefResults: [Brief] = []
+    @State private var isSearching = false
 
     var body: some View {
         VStack(spacing: 0) {
-            // Widgets below the header bar
             VStack(spacing: 6) {
                 NextRefreshWidget()
-                SearchBarView(query: $searchQuery)
+                HStack(spacing: 6) {
+                    SearchBarView(query: $searchQuery)
+                        .onChange(of: searchQuery) { q in performSearch(q) }
+                    DateFilterButton(isActive: dateFrom != nil || dateTo != nil,
+                                     showPopover: $showDateFilter)
+                        .popover(isPresented: $showDateFilter, arrowEdge: .bottom) {
+                            DateFilterPopover(dateFrom: $dateFrom, dateTo: $dateTo)
+                        }
+                }
             }
             .padding(.horizontal, 10)
             .padding(.top, 10)
             .padding(.bottom, 8)
 
+            if dateFrom != nil || dateTo != nil {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.accent)
+                    Text(dateRangeLabel)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
+                    Spacer()
+                    Button { dateFrom = nil; dateTo = nil } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .background(Theme.accentMuted)
+            }
+
             Divider().background(Theme.border)
 
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(filteredGroups, id: \.id) { group in
-                        SectionHeaderView(label: group.label)
-                        ForEach(group.briefs, id: \.id) { brief in
-                            BriefRowView(
-                                brief: brief,
-                                isSelected: appState.selectedBriefID == brief.id
-                            )
-                            .onTapGesture {
-                                appState.selectedBriefID = brief.id
-                                appState.markAsOpen(briefID: brief.id!)
-                                Task { try? await chatViewModel.loadBrief(brief) }
+            if !searchQuery.isEmpty {
+                SearchResultsView(messageResults: searchResults,
+                                  briefResults: searchBriefResults,
+                                  isSearching: isSearching)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        // Pinned section
+                        let pinned = appState.pinnedBriefs
+                        if !pinned.isEmpty {
+                            SectionHeaderView(label: "📌 Pinned")
+                            ForEach(pinned, id: \.id) { brief in
+                                BriefRowView(brief: brief,
+                                             isSelected: appState.selectedBriefID == brief.id)
+                                    .onTapGesture { selectBrief(brief) }
+                                    .contextMenu { briefContextMenu(brief) }
+                            }
+                        }
+
+                        // Date-grouped unpinned briefs
+                        let groups = appState.briefGroups(from: dateFrom, to: dateTo)
+                            .map { group in
+                                BriefListGroup(id: group.id, label: group.label,
+                                               briefs: group.briefs.filter { !$0.pinned })
+                            }
+                            .filter { !$0.briefs.isEmpty }
+
+                        ForEach(groups, id: \.id) { group in
+                            SectionHeaderView(label: group.label)
+                            ForEach(group.briefs, id: \.id) { brief in
+                                BriefRowView(brief: brief,
+                                             isSelected: appState.selectedBriefID == brief.id)
+                                    .onTapGesture { selectBrief(brief) }
+                                    .contextMenu { briefContextMenu(brief) }
                             }
                         }
                     }
@@ -53,23 +94,139 @@ struct BriefListView: View {
             }
 
             Divider().background(Theme.border)
-
             SettingsButtonView()
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
         }
     }
 
-    private func briefTimeLabel(_ brief: Brief) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f.string(from: brief.createdAt)
+    // MARK: - Helpers
+
+    private func selectBrief(_ brief: Brief) {
+        appState.selectedBriefID = brief.id
+        appState.markAsOpen(briefID: brief.id!)
+        Task { try? await chatViewModel.loadBrief(brief) }
     }
 
-    private func briefSyncDate(_ brief: Brief) -> String {
+    @ViewBuilder
+    private func briefContextMenu(_ brief: Brief) -> some View {
+        if brief.pinned {
+            Button("Unpin") { appState.setPinnedBrief(briefID: brief.id!, pinned: false) }
+        } else {
+            Button("Pin") {
+                if appState.pinnedBriefs.count >= 10 {
+                    appState.lastError = "Cannot pin more than 10 briefs. Unpin one first."
+                } else {
+                    appState.setPinnedBrief(briefID: brief.id!, pinned: true)
+                }
+            }
+        }
+        Divider()
+        Button("Mark as Read") { appState.markAsOpen(briefID: brief.id!) }
+    }
+
+    private func performSearch(_ query: String) {
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
+            searchResults = []
+            searchBriefResults = []
+            return
+        }
+        isSearching = true
+        Task {
+            do {
+                let msgs = try appState.repository.searchMessages(query: query)
+                let briefs = try appState.repository.searchBriefs(query: query)
+                await MainActor.run {
+                    searchResults = msgs
+                    searchBriefResults = briefs
+                    isSearching = false
+                }
+            } catch {
+                await MainActor.run { isSearching = false }
+            }
+        }
+    }
+
+    private var dateRangeLabel: String {
         let f = DateFormatter()
-        f.dateFormat = "EEE d MMM"
-        return f.string(from: brief.createdAt)
+        f.dateFormat = "d MMM"
+        let fromStr = dateFrom.map { f.string(from: $0) } ?? "…"
+        let toStr   = dateTo.map   { f.string(from: $0) } ?? "now"
+        return "\(fromStr) – \(toStr)"
+    }
+}
+
+// MARK: - Date filter button
+
+private struct DateFilterButton: View {
+    let isActive: Bool
+    @Binding var showPopover: Bool
+
+    var body: some View {
+        Button { showPopover.toggle() } label: {
+            Image(systemName: isActive ? "calendar.badge.clock" : "calendar")
+                .font(.system(size: 14))
+                .foregroundStyle(isActive ? Theme.accent : Theme.textTertiary)
+                .frame(width: 30, height: 30)
+        }
+        .buttonStyle(.plain)
+        .background(isActive ? Theme.accentMuted : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .help("Filter by date range")
+    }
+}
+
+// MARK: - Date filter popover
+
+private struct DateFilterPopover: View {
+    @Binding var dateFrom: Date?
+    @Binding var dateTo: Date?
+    @State private var localFrom = Date().addingTimeInterval(-7 * 86400)
+    @State private var localTo   = Date()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Filter by Date")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+
+            HStack(spacing: 8) {
+                Button("Last 7 days")  { applyQuick(days: 7) }
+                Button("Last 30 days") { applyQuick(days: 30) }
+                Button("Last 90 days") { applyQuick(days: 90) }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.accent)
+
+            Divider().background(Theme.border)
+
+            DatePicker("From", selection: $localFrom, displayedComponents: .date)
+            DatePicker("To",   selection: $localTo,   displayedComponents: .date)
+
+            HStack {
+                Button("Clear") { dateFrom = nil; dateTo = nil }
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer()
+                Button("Apply") {
+                    dateFrom = Calendar.current.startOfDay(for: localFrom)
+                    dateTo   = Calendar.current.date(bySettingHour: 23, minute: 59,
+                                                     second: 59, of: localTo) ?? localTo
+                }
+                .foregroundStyle(Theme.accent)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .frame(width: 260)
+        .background(Theme.surface)
+    }
+
+    private func applyQuick(days: Int) {
+        dateFrom = Calendar.current.startOfDay(
+            for: Date().addingTimeInterval(-Double(days) * 86400))
+        dateTo = nil
     }
 }
 
@@ -88,13 +245,11 @@ private struct NextRefreshWidget: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.accent)
             }
-
             VStack(alignment: .leading, spacing: 1) {
                 Text("NEXT REFRESH")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
                     .tracking(0.5)
-
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
                     Text(countdownText)
                         .font(.system(size: 13, weight: .semibold))
@@ -115,9 +270,7 @@ private struct NextRefreshWidget: View {
         guard let next = appState.nextPollDate else { return "—" }
         let secs = max(0, Int(next.timeIntervalSinceNow))
         if secs == 0 { return "Now" }
-        let m = secs / 60
-        let s = secs % 60
-        return String(format: "%dm %02ds", m, s)
+        return String(format: "%dm %02ds", secs / 60, secs % 60)
     }
 }
 
@@ -132,21 +285,26 @@ private struct SearchBarView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textTertiary)
-
-            TextField("Search", text: $query)
+            TextField("Search messages & briefs", text: $query)
                 .font(.system(size: 13))
                 .textFieldStyle(.plain)
                 .foregroundStyle(Theme.textPrimary)
                 .focused($focused)
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Theme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(focused ? Theme.accent : Theme.border, lineWidth: 1)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 8)
+            .stroke(focused ? Theme.accent : Theme.border, lineWidth: 1))
         .animation(.easeInOut(duration: 0.12), value: focused)
     }
 }
@@ -155,7 +313,6 @@ private struct SearchBarView: View {
 
 private struct SectionHeaderView: View {
     let label: String
-
     var body: some View {
         HStack {
             Text(label.uppercased())
@@ -180,14 +337,11 @@ private struct BriefRowView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Active indicator bar
             Rectangle()
                 .fill(isSelected ? Theme.accent : Color.clear)
                 .frame(width: 2)
-
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    // Row 1: sync date + sync time
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
                         Text(syncDate)
                             .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
@@ -196,10 +350,14 @@ private struct BriefRowView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Theme.textTertiary)
                             .monospacedDigit()
+                        if brief.pinned {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Theme.accent.opacity(0.7))
+                        }
                     }
-                    // Row 2: time range · relative
                     HStack(spacing: 3) {
-                        Text(timeRange)
+                        Text(syncTime)
                         Text("·")
                         Text(brief.createdAt, style: .relative)
                     }
@@ -207,9 +365,7 @@ private struct BriefRowView: View {
                     .foregroundStyle(Theme.textTertiary)
                     .monospacedDigit()
                 }
-
                 Spacer(minLength: 4)
-
                 if isUnread {
                     Circle()
                         .fill(isSelected ? Theme.accent : Theme.accent.opacity(0.7))
@@ -235,12 +391,6 @@ private struct BriefRowView: View {
         f.dateFormat = "HH:mm"
         return f.string(from: brief.createdAt)
     }
-
-    private var timeRange: String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f.string(from: brief.createdAt)
-    }
 }
 
 // MARK: - Settings button
@@ -249,9 +399,7 @@ private struct SettingsButtonView: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        Button {
-            appState.onOpenSettings?()
-        } label: {
+        Button { appState.onOpenSettings?() } label: {
             HStack(spacing: 10) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
