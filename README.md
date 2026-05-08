@@ -35,6 +35,7 @@ Click any brief in the sidebar to open it. Ask follow-up questions ("who confirm
 - **Parallel brief generation** — each service summarised concurrently; one failure doesn't drop the rest
 - **Source grounding** — every card cites exact message IDs; quotes are validated against real messages
 - **Conversation continuity** — rolling summaries and unresolved actions carried forward across brief cycles
+- **Background poll errors surfaced** — adapter failures during automatic polling shown in the menu bar, not silently discarded
 - **First-launch onboarding** — wizard walks through LLM setup, Signal, iMessage, and Telegram in one flow
 - **Anthropic-inspired dark UI** — floating, resizable panel, remembers position and size
 - **macOS notifications** — tap to jump directly to the brief
@@ -184,6 +185,8 @@ Your messages never leave your machine silently.
 | Brief content | Stored locally in SQLite |
 | Credentials (API keys, Signal number) | Stored in the macOS Keychain — never transmitted |
 
+Cloud consent is enforced at runtime — toggling it off in Settings takes effect on the next brief cycle without requiring a restart.
+
 No telemetry, no analytics, no third-party SDKs beyond the LLM API you choose.
 
 ---
@@ -196,17 +199,17 @@ See [`docs/NOTARIZATION.md`](docs/NOTARIZATION.md) for instructions on building 
 
 ## Roadmap
 
-### v1.2 — Search & History
+### v1.3 — Search & History
 - [ ] Full-text search across all stored messages and briefs
 - [ ] Brief history date-range picker
 - [ ] Pin important briefs
 
-### v1.3 — Richer Briefs
+### v1.4 — Richer Briefs
 - [ ] Weekly digest (Monday morning: last 7 days)
 - [ ] Per-conversation quiet hours
 - [ ] User-defined priority rules
 
-### v1.4 — Extensibility
+### v1.5 — Extensibility
 - [ ] WhatsApp adapter (pending viable local API)
 - [ ] Adapter plugin API for third-party services
 
