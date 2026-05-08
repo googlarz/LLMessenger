@@ -26,7 +26,7 @@ struct BriefHeaderView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("HOURLY BRIEF · \(timeRange) · \(stateLabel)")
+                    Text("\(briefKind) · \(timeRange) · \(stateLabel)")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(stateColor)
                         .tracking(0.8)
@@ -131,10 +131,24 @@ struct BriefHeaderView: View {
         return "\(messageCount) new messages across \(serviceCount) app\(serviceCount == 1 ? "" : "s")"
     }
 
+    private var briefKind: String {
+        guard let start = brief.windowStart else { return "HOURLY BRIEF" }
+        let hours = Int(brief.createdAt.timeIntervalSince(start) / 3600)
+        if hours >= 24 * 6 { return "7-DAY BRIEF" }
+        if hours >= 24 { return "\(hours / 24)D BRIEF" }
+        if hours >= 2  { return "\(hours)H BRIEF" }
+        return "HOURLY BRIEF"
+    }
+
     private var timeRange: String {
         let end = brief.createdAt
-        let start = end.addingTimeInterval(-3600)
+        let start = brief.windowStart ?? end.addingTimeInterval(-3600)
         let f = DateFormatter()
+        let span = end.timeIntervalSince(start)
+        if span > 24 * 3600 {
+            f.dateFormat = "MMM d"
+            return "\(f.string(from: start)) – \(f.string(from: end))"
+        }
         f.dateFormat = "HH:mm"
         return "\(f.string(from: start)) – \(f.string(from: end))"
     }

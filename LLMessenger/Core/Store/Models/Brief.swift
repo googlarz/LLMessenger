@@ -17,12 +17,13 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
     var notificationText: String
     var episodicSummary: String?
     var pinned: Bool
+    /// Start of the fetch window. nil for hourly auto-poll briefs; set for on-demand summarizeLast() briefs.
+    var windowStart: Date?
 
     static let databaseTableName = "briefs"
 
     var briefStatus: BriefStatus { BriefStatus(rawValue: status) ?? .idle }
 
-    // Custom init with pinned defaulting to false for backward compatibility with existing call sites
     init(id: Int64? = nil,
          createdAt: Date,
          status: String,
@@ -31,7 +32,8 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
          openingSummary: String? = nil,
          notificationText: String,
          episodicSummary: String? = nil,
-         pinned: Bool = false) {
+         pinned: Bool = false,
+         windowStart: Date? = nil) {
         self.id = id
         self.createdAt = createdAt
         self.status = status
@@ -41,6 +43,7 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
         self.notificationText = notificationText
         self.episodicSummary = episodicSummary
         self.pinned = pinned
+        self.windowStart = windowStart
     }
 
     mutating func didInsert(_ inserted: InsertionSuccess) {

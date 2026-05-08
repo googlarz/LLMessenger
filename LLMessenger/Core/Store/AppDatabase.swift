@@ -228,6 +228,13 @@ final class AppDatabase: @unchecked Sendable {
                 END
             """)
         }
+        migrator.registerMigration("v7_window_start") { db in
+            // windowStart records the beginning of the brief's fetch window.
+            // NULL for hourly auto-poll briefs; set for on-demand summarizeLast() briefs.
+            try db.alter(table: "briefs") { t in
+                t.add(column: "windowStart", .datetime)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

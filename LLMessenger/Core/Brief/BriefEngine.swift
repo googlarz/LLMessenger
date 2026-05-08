@@ -406,7 +406,8 @@ final class BriefEngine {
             failedServices: failedJSON,
             openingSummary: openingSummary,
             notificationText: "\(totalMessages) messages (last \(hours)h) · \(activeServices.joined(separator: ", "))",
-            episodicSummary: nil
+            episodicSummary: nil,
+            windowStart: since
         )
         let briefID = try repository.insertBrief(brief)
         try persistBriefCards(allCards, briefID: briefID, sourceMessagesByService: sourceMessagesByService)
