@@ -16,5 +16,7 @@
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSContactsUsageDescription</key>
+    <string>LLMessenger uses your contacts to display names instead of phone numbers in message briefs.</string>
 </dict>
 </plist>
