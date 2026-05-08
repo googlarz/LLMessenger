@@ -11,6 +11,7 @@ final class PollEngine {
     private var inFlight: Set<String> = []
     var failureCounts: [String: Int] = [:]
     var onPollSucceeded: (() async -> Void)?
+    var onPollFailed: ((String, Error) async -> Void)?
 
     init(database: AppDatabase) {
         self.database = database
@@ -43,7 +44,7 @@ final class PollEngine {
                 await checkCatchUp(serviceID: serviceID)
             } catch {
                 writeHealth(service: serviceID, status: "error",
-                            error: error.localizedDescription)
+                            error: error.localizedDescription, updateLastCheck: true)
             }
         }
     }
@@ -90,23 +91,37 @@ final class PollEngine {
             } catch {
                 let failures = (failureCounts[serviceID] ?? 0) + 1
                 failureCounts[serviceID] = failures
-                writeHealth(service: serviceID, status: "error", error: error.localizedDescription)
+                writeHealth(service: serviceID, status: "error", error: error.localizedDescription, updateLastCheck: true)
                 throw error
             }
         }
 
+        let fetchConfig = makeFetchConfig(config: config, serviceID: serviceID)
+        let result: AdapterFetchResult
         do {
-            let fetchConfig = makeFetchConfig(config: config, serviceID: serviceID)
-            let result = try await adapter.fetch(config: fetchConfig)
+            result = try await adapter.fetch(config: fetchConfig)
+        } catch {
+            let failures = (failureCounts[serviceID] ?? 0) + 1
+            failureCounts[serviceID] = failures
+            // Fetch failed — write error status; lastCheck advances so the next poll
+            // starts from now rather than re-fetching the same (failed) window again.
+            writeHealth(service: serviceID, status: "error",
+                        error: error.localizedDescription, updateLastCheck: true)
+            throw error
+        }
+
+        do {
             let hadNew = try store(result: result, service: serviceID)
             failureCounts[serviceID] = 0
-            writeHealth(service: serviceID, status: "ok", error: nil)
+            writeHealth(service: serviceID, status: "ok", error: nil, updateLastCheck: true)
             return hadNew
         } catch {
             let failures = (failureCounts[serviceID] ?? 0) + 1
             failureCounts[serviceID] = failures
+            // Store failed after a successful fetch — do NOT advance lastCheck so the
+            // next poll re-fetches the same window and retries the store.
             writeHealth(service: serviceID, status: "error",
-                        error: error.localizedDescription)
+                        error: error.localizedDescription, updateLastCheck: false)
             throw error
         }
     }
@@ -120,7 +135,11 @@ final class PollEngine {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.nextFireDates[serviceID] = Date().addingTimeInterval(interval)
-                try? await self.pollNow(serviceID: serviceID)
+                do {
+                    try await self.pollNow(serviceID: serviceID)
+                } catch {
+                    await self.onPollFailed?(serviceID, error)
+                }
             }
         }
         timers[serviceID] = timer
@@ -198,13 +217,21 @@ final class PollEngine {
         return hadNew
     }
 
-    private func writeHealth(service: String, status: String, error: String?) {
+    private func writeHealth(service: String, status: String, error: String?, updateLastCheck: Bool) {
         do {
             try database.dbQueue.write { db in
+                // Preserve the existing lastCheck when updateLastCheck is false (e.g. store() failed
+                // after a successful fetch) so the next poll re-fetches the same time window.
+                let lastCheck: Date
+                if updateLastCheck {
+                    lastCheck = Date()
+                } else {
+                    lastCheck = (try? ServiceHealth.fetchOne(db, key: service)?.lastCheck) ?? Date()
+                }
                 let health = ServiceHealth(
                     service: service,
                     status: status,
-                    lastCheck: Date(),
+                    lastCheck: lastCheck,
                     lastError: error,
                     retryAfter: nil
                 )
