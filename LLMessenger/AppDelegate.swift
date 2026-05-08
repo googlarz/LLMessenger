@@ -226,9 +226,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            engine.onPollFailed = { [weak self] serviceID, _ in
+            engine.onPollFailed = { [weak self] serviceID, error in
                 guard let self else { return }
-                let msg = "Could not reach: \(serviceID). Check permissions in System Settings."
+                let msg = "Could not reach \(serviceID): \(error.localizedDescription)"
                 self.appState?.lastError = msg
                 if let health = self.pollEngine?.currentServiceHealth {
                     self.appState?.updateServiceHealth(health)

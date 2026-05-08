@@ -46,31 +46,41 @@ final class PollEngine {
     }
 
     func start() async {
-        for (serviceID, config) in configs where config.enabled {
-            guard let adapter = adapters[serviceID] else { continue }
-            do {
-                try await adapter.start()
-                scheduleTimer(serviceID: serviceID, intervalMinutes: config.pollIntervalMinutes)
-                await checkCatchUp(serviceID: serviceID)
-            } catch {
-                writeHealth(service: serviceID, status: "error",
-                            error: error.localizedDescription, updateLastCheck: true)
+        // Start all enabled adapters concurrently so a slow/unresponsive adapter
+        // (e.g. Telegram timing out) doesn't block iMessage or Signal from starting.
+        await withTaskGroup(of: Void.self) { group in
+            for (serviceID, config) in configs where config.enabled {
+                let intervalMinutes = config.pollIntervalMinutes
+                group.addTask { @MainActor [weak self] in
+                    guard let self, let adapter = self.adapters[serviceID] else { return }
+                    do {
+                        try await adapter.start()
+                        self.scheduleTimer(serviceID: serviceID, intervalMinutes: intervalMinutes)
+                        await self.checkCatchUp(serviceID: serviceID)
+                    } catch {
+                        self.writeHealth(service: serviceID, status: "error",
+                                         error: error.localizedDescription, updateLastCheck: true)
+                    }
+                }
             }
         }
     }
 
     // Poll all enabled adapters; fire onPollSucceeded exactly once if any new messages were stored.
     func pollAll() async {
-        var anyNew = false
-        for serviceID in adapters.keys {
-            guard configs[serviceID]?.enabled == true else { continue }
-            if (try? await pollOnce(serviceID: serviceID)) == true {
-                anyNew = true
+        let serviceIDs = adapters.keys.filter { configs[$0]?.enabled == true }
+        let anyNew = await withTaskGroup(of: Bool.self) { group in
+            for serviceID in serviceIDs {
+                group.addTask { @MainActor [weak self] in
+                    guard let self else { return false }
+                    return (try? await self.pollOnce(serviceID: serviceID)) == true
+                }
             }
+            var result = false
+            for await hadNew in group { if hadNew { result = true } }
+            return result
         }
-        if anyNew {
-            await onPollSucceeded?()
-        }
+        if anyNew { await onPollSucceeded?() }
     }
 
     // Public: poll one service and fire onPollSucceeded if new messages arrived.
