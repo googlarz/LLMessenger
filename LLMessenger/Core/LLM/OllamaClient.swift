@@ -27,8 +27,9 @@ final class OllamaClient: LLMClient {
             // num_predict is intentionally omitted for Ollama — local models have no
             // billing concern, and thinking models (e.g. gemma4) need the full context
             // window for their reasoning pass before they can emit the final response.
-            // num_ctx is bumped to 16 384 to handle longer conversation inputs.
-            "options":  ["num_ctx": 16384]
+            // num_ctx is set to 32 768 to leave room for thinking-model reasoning chains
+            // (gemma4, qwen3, etc.) without truncating the JSON output.
+            "options":  ["num_ctx": 32768]
         ]
 
         var request = URLRequest(url: baseURL.appendingPathComponent("api/chat"))
