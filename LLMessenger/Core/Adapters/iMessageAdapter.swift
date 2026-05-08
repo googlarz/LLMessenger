@@ -53,7 +53,8 @@ final class iMessageAdapter: MessengerAdapter {
         }
 
         let rows: [(chatGUID: String, displayName: String, style: Int64,
-                     handleID: String, text: String, dateNs: Int64, msgRowid: Int64)]
+                     handleID: String, text: String, dateNs: Int64, msgRowid: Int64,
+                     isFromMe: Bool)]
 
         rows = try await dbQueue.read { db in
             let sql = """
@@ -64,13 +65,13 @@ final class iMessageAdapter: MessengerAdapter {
                     COALESCE(h.id, '') AS handle_id,
                     m.text        AS text,
                     m.date        AS date_ns,
-                    m.rowid       AS msg_rowid
+                    m.rowid       AS msg_rowid,
+                    m.is_from_me  AS is_from_me
                 FROM message m
                 JOIN chat_message_join cmj ON m.rowid = cmj.message_id
                 JOIN chat c               ON cmj.chat_id = c.rowid
                 LEFT JOIN handle h        ON m.handle_id = h.rowid
-                WHERE m.is_from_me = 0
-                  AND m.text IS NOT NULL
+                WHERE m.text IS NOT NULL
                   AND m.text != ''
                   AND m.error  = 0
                   AND m.date   > ?
@@ -82,17 +83,20 @@ final class iMessageAdapter: MessengerAdapter {
                       let ns    = row["date_ns"]   as? Int64,
                       let rowid = row["msg_rowid"] as? Int64
                 else { return nil }
-                let style: Int64   = row["style"]     ?? 45
-                let handle: String = row["handle_id"] ?? ""
+                let style: Int64   = row["style"]       ?? 45
+                let handle: String = row["handle_id"]   ?? ""
                 let name: String   = row["display_name"] ?? ""
+                let fromMe: Bool   = (row["is_from_me"] as? Int64 ?? 0) == 1
                 return (chatGUID: guid, displayName: name, style: style,
-                        handleID: handle, text: text, dateNs: ns, msgRowid: rowid)
+                        handleID: handle, text: text, dateNs: ns, msgRowid: rowid,
+                        isFromMe: fromMe)
             }
         }
 
         // For byCount mode, trim to the requested limit.
         let trimmed: [(chatGUID: String, displayName: String, style: Int64,
-                        handleID: String, text: String, dateNs: Int64, msgRowid: Int64)]
+                        handleID: String, text: String, dateNs: Int64, msgRowid: Int64,
+                        isFromMe: Bool)]
         if case .byCount(let limit) = config.mode {
             trimmed = Array(rows.suffix(limit))
         } else {
@@ -162,7 +166,8 @@ final class iMessageAdapter: MessengerAdapter {
 
     static func group(
         rows: [(chatGUID: String, displayName: String, style: Int64,
-                handleID: String, text: String, dateNs: Int64, msgRowid: Int64)],
+                handleID: String, text: String, dateNs: Int64, msgRowid: Int64,
+                isFromMe: Bool)],
         contactNames: [String: String] = [:]
     ) -> [AdapterConversation] {
         var byID: [String: (name: String, type: ConversationType, messages: [AdapterMessage])] = [:]
@@ -184,7 +189,7 @@ final class iMessageAdapter: MessengerAdapter {
                 convType = .dm
             }
 
-            let senderName = contactNames[row.handleID] ?? row.handleID
+            let senderName = row.isFromMe ? "Me" : (contactNames[row.handleID] ?? row.handleID)
             let date = Date(timeIntervalSince1970: TimeInterval(row.dateNs) / 1_000_000_000 + kMacEpochOffset)
             let msg = AdapterMessage(
                 id: "imsg-\(row.msgRowid)",
