@@ -3,6 +3,9 @@ import AppKit
 
 extension Notification.Name {
     static let serviceConfigDidChange = Notification.Name("com.llmessenger.serviceConfigDidChange")
+    /// Posted by LLMSettingsTab when provider, API key, or cloud consent changes.
+    /// AppDelegate observes this to hot-swap the LLM client without requiring a restart.
+    static let llmProviderDidChange = Notification.Name("com.llmessenger.llmProviderDidChange")
 }
 
 @MainActor
@@ -190,9 +193,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            engine.onPollFailed = { [weak self] serviceID, error in
+            engine.onPollFailed = { [weak self] serviceID, _ in
                 guard let self else { return }
-                let msg = "Poll failed for \(serviceID): \(error.localizedDescription)"
+                let msg = "Could not reach: \(serviceID). Check permissions in System Settings."
                 self.appState?.lastError = msg
                 if let health = self.pollEngine?.currentServiceHealth {
                     self.appState?.updateServiceHealth(health)
@@ -247,6 +250,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     guard let self, let db = self.database else { return }
                     let configs = (try? db.dbQueue.read { db in try ServiceConfig.fetchAll(db) }) ?? []
                     for config in configs { self.pollEngine?.reload(config: config) }
+                }
+            }
+
+            // Hot-swap the LLM client when provider, API key, or consent changes in Settings.
+            // Without this, revoked cloud consent only takes effect on next restart.
+            NotificationCenter.default.addObserver(
+                forName: .llmProviderDidChange, object: nil, queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let llm = self.resolvedProvider()
+                    self.briefEngine?.client = llm.client
                 }
             }
 

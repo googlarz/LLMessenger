@@ -15,7 +15,7 @@ final class BriefEngine {
     private let maxRecentContextMessages = 20
     private let recentContextWindow: TimeInterval = 24 * 3600
     private let database: AppDatabase
-    private let client: LLMClient
+    var client: LLMClient
     private let model: String
     private let basePrompt: String
     private let repository: BriefRepository
@@ -38,10 +38,15 @@ final class BriefEngine {
         let messages = try repository.fetchUnattachedMessages()
         guard !messages.isEmpty else { return nil }
 
-        // Step 1: Compress oldest uncompressed Brief (non-fatal; oldest-first avoids starvation)
+        // Step 1: Compress oldest uncompressed Brief (non-fatal; oldest-first avoids starvation).
+        // On failure, write an empty-string sentinel so the same brief is not retried every cycle.
         if let prev = try repository.fetchOldestUncompressedBrief(), let prevID = prev.id {
             let compressor = MemoryCompressor(client: client, model: model, basePrompt: basePrompt)
-            try? await compressor.compress(briefID: prevID, repository: repository)
+            do {
+                try await compressor.compress(briefID: prevID, repository: repository)
+            } catch {
+                try? repository.setEpisodicSummary(briefID: prevID, summary: "")
+            }
         }
 
         // Step 2: Group messages by service

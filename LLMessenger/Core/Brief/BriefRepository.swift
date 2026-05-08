@@ -17,10 +17,14 @@ struct BriefRepository {
     let database: AppDatabase
 
     func fetchUnattachedMessages() throws -> [Message] {
-        try database.dbQueue.read { db in
+        // Exclude messages older than 7 days — they won't improve a current brief and
+        // would silently bloat the LLM prompt on every cycle until attached or pruned.
+        let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
+        return try database.dbQueue.read { db in
             try Message
                 .filter(Column("briefId") == nil)
                 .filter(Column("isSent") == false)
+                .filter(Column("timestamp") >= cutoff)
                 .order(Column("timestamp").asc)
                 .fetchAll(db)
         }
@@ -93,6 +97,8 @@ struct BriefRepository {
 
     // Returns the oldest uncompressed brief so compression runs oldest-first,
     // preventing new briefs from starving older ones of episodic summaries.
+    // Briefs where episodicSummary == "" have failed compression and are excluded
+    // (empty string is the sentinel written by BriefEngine when compression fails).
     func fetchOldestUncompressedBrief() throws -> Brief? {
         try database.dbQueue.read { db in
             try Brief
@@ -102,11 +108,23 @@ struct BriefRepository {
         }
     }
 
+    // Writes episodicSummary for a brief — used by MemoryCompressor on success and,
+    // with an empty string, as a sentinel when compression permanently fails.
+    func setEpisodicSummary(briefID: Int64, summary: String) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE briefs SET episodicSummary = ? WHERE id = ?",
+                arguments: [summary, briefID]
+            )
+        }
+    }
+
     func recentEpisodicSummaries(service: String, limit: Int) throws -> [(summary: String, createdAt: Date)] {
         try database.dbQueue.read { db in
             let pattern = "%\"" + service + "\"%"
             let briefs = try Brief
                 .filter(Column("episodicSummary") != nil)
+                .filter(sql: "episodicSummary != ''")   // exclude compression-failed sentinel
                 .filter(sql: "services LIKE ?", arguments: [pattern])
                 .order(Column("createdAt").desc)
                 .limit(limit)

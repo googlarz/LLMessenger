@@ -194,6 +194,7 @@ struct AISettingsTab: View {
             try repo.saveLLMKey(provider: .openai,    key: openAIKey)
             repo.saveOllamaModel(ollamaModel)
             repo.saveCloudAutoBriefsConsent(selectedProvider?.isCloud == true && cloudAutoBriefsConsent)
+            NotificationCenter.default.post(name: .llmProviderDidChange, object: nil)
             saveStatus = "Saved ✓"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }
         } catch {
