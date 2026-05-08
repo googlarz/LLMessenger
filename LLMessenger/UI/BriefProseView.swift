@@ -119,6 +119,7 @@ private struct PriorityPill: View {
 
 struct BriefCardEvidenceView: View {
     let card: BriefCard
+    let briefID: Int64
     let repository: BriefRepository
     @State private var sources: [(source: BriefCardSource, message: Message?)] = []
     @State private var isLoading = true
@@ -180,7 +181,7 @@ struct BriefCardEvidenceView: View {
         .onAppear {
             Task {
                 do {
-                    sources = try repository.fetchSourcesWithMessages(briefCardID: card.id)
+                    sources = try repository.fetchSourcesWithMessages(briefID: briefID, service: card.service, conversationID: card.conversationId)
                 } catch {
                     print("Evidence error: \(error)")
                 }
@@ -428,7 +429,7 @@ struct BriefProseView: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                BriefCardEvidenceView(card: card, repository: appState.repository)
+                BriefCardEvidenceView(card: card, briefID: brief.id ?? 0, repository: appState.repository)
                     .padding(.leading, 12)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }

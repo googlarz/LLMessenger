@@ -417,6 +417,30 @@ struct BriefRepository {
         }
     }
 
+    /// Evidence lookup by brief + service + conversation — used when only the LLM card ID is
+    /// available in the UI, which doesn't match the UUID stored in BriefCardSource.briefCardId.
+    func fetchSourcesWithMessages(briefID: Int64, service: String, conversationID: String) throws -> [(source: BriefCardSource, message: Message?)] {
+        try database.dbQueue.read { db in
+            guard let card = try BriefCardRecord
+                .filter(Column("briefId") == briefID)
+                .filter(Column("service") == service)
+                .filter(Column("conversationId") == conversationID)
+                .fetchOne(db) else { return [] }
+
+            let sources = try BriefCardSource
+                .filter(Column("briefCardId") == card.id)
+                .order(Column("id").asc)
+                .fetchAll(db)
+
+            var results: [(source: BriefCardSource, message: Message?)] = []
+            for source in sources {
+                let message = try Message.fetchOne(db, key: source.messageRowId)
+                results.append((source: source, message: message))
+            }
+            return results
+        }
+    }
+
     func insertLLMRunRecord(_ run: LLMRunRecord) throws -> Int64 {
         try database.dbQueue.write { db in
             var record = run
