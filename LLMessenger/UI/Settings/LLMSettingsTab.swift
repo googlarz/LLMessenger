@@ -54,9 +54,8 @@ struct AISettingsTab: View {
             }
 
             Section("Ollama (local)") {
-                TextField("Model name (e.g. llama3, mistral)", text: $ollamaModel)
-                    .textFieldStyle(.roundedBorder)
-                Text("Runs locally via Ollama when Ollama is explicitly selected above.")
+                OllamaModelPicker(selectedModel: $ollamaModel)
+                Text("Runs locally via Ollama when Ollama is explicitly selected above. The picker loads available models from the local Ollama API; falls back to a text field if Ollama is not running.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

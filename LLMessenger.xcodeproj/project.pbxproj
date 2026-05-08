@@ -28,6 +28,7 @@
 		0AA8FC1D3F625AABF5777C9F /* SubprocessAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */; };
 		1B0047A6CC4EC78192C7D255 /* AssistantResponseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3154370024E6D2FFA5B0FE62 /* AssistantResponseView.swift */; };
 		1F3AF9DCA45D658915781028 /* LLMSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D6788AD581D62FE11B99E8 /* LLMSettingsTab.swift */; };
+		EE1A2B3C4D5E6F7A8B9C0D1F /* OllamaModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF1A2B3C4D5E6F7A8B9C0D1E /* OllamaModelPicker.swift */; };
 		237D39CA190899E3F771F2DA /* ChatWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2415F8132629B43CC77A08F8 /* ChatWindowController.swift */; };
 		2528022DB189F9F99041972C /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97C7886911F46E51E0EE1B2B /* KeychainStoreTests.swift */; };
 		2608EF8CE0CD660F8AA89425 /* OllamaClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F6073CF328ABEC81E9A9E2 /* OllamaClient.swift */; };
@@ -142,6 +143,7 @@
 		3CEF84891E1C875158D7F4B4 /* SignalCLIAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalCLIAdapterTests.swift; sourceTree = "<group>"; };
 		3DB2F4FDD502C4B9477B9BCE /* ServiceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceConfig.swift; sourceTree = "<group>"; };
 		44D6788AD581D62FE11B99E8 /* LLMSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMSettingsTab.swift; sourceTree = "<group>"; };
+		FF1A2B3C4D5E6F7A8B9C0D1E /* OllamaModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaModelPicker.swift; sourceTree = "<group>"; };
 		47B676DE198355D9388A6399 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		47B8A33ADE90F0EC79A61D4D /* ChatViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModelTests.swift; sourceTree = "<group>"; };
 		4A14FF85C448907397AC9412 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
@@ -460,6 +462,7 @@
 				792419D090E0BA27E26988ED /* AboutSettingsTab.swift */,
 				EBD22DF77EE0F38928663192 /* InstructionsSettingsTab.swift */,
 				44D6788AD581D62FE11B99E8 /* LLMSettingsTab.swift */,
+				FF1A2B3C4D5E6F7A8B9C0D1E /* OllamaModelPicker.swift */,
 				DF6366D0E1F8A72B71A9F530 /* ServiceSettingsTab.swift */,
 				E310D3698200C661D0937036 /* SettingsView.swift */,
 				874EAADE41BC00D431B7655A /* SettingsWindowController.swift */,
@@ -595,6 +598,7 @@
 				6FD560709B01F26879B0C14C /* LLMProvider.swift in Sources */,
 				7177450F9E2D6DC65A094DA5 /* LLMRunRecord.swift in Sources */,
 				1F3AF9DCA45D658915781028 /* LLMSettingsTab.swift in Sources */,
+				EE1A2B3C4D5E6F7A8B9C0D1F /* OllamaModelPicker.swift in Sources */,
 				DE0C17AEBEECDE55B14BD784 /* LLMessengerApp.swift in Sources */,
 				6AA8C3866C3D66763E25B60A /* MediaPanelView.swift in Sources */,
 				F465FA960D540D9CFB44E578 /* MemoryCompressor.swift in Sources */,

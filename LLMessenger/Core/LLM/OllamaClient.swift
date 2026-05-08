@@ -65,3 +65,30 @@ final class OllamaClient: LLMClient {
         )
     }
 }
+
+// MARK: - Model listing
+
+struct OllamaModel: Decodable, Identifiable {
+    let name: String
+    let size: Int64
+
+    var id: String { name }
+
+    var displayLabel: String {
+        let gb = Double(size) / 1_073_741_824
+        return String(format: "%@ (%.1f GB)", name, gb)
+    }
+}
+
+extension OllamaClient {
+    /// Fetches the list of locally-pulled Ollama models.
+    /// Throws if Ollama is not running or returns unexpected data.
+    static func fetchModels(baseURL: URL = URL(string: "http://localhost:11434")!) async throws -> [OllamaModel] {
+        struct TagsResponse: Decodable { let models: [OllamaModel] }
+        let url = baseURL.appendingPathComponent("api/tags")
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode(TagsResponse.self, from: data).models
+    }
+}
