@@ -98,6 +98,10 @@ final class BriefEngine {
                                 ?? signalAdapter?.contactName(for: convId)
                                 ?? convId
                             let omitted = convMessages.count - capped.count
+                            // SECURITY: message.text is inserted into the LLM user content without escaping.
+                            // A malicious sender whose text contains "=== [service] id | Title ===" could
+                            // inject a fake conversation header. Mitigation: strip or escape "===" from
+                            // user-supplied text before building conversation blocks. Tracked as a known gap.
                             let block = try self.buildConversationBlock(
                                 service: service,
                                 conversationID: convId,

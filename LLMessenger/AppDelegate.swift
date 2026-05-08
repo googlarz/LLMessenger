@@ -190,6 +190,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
+            engine.onPollFailed = { [weak self] serviceID, error in
+                guard let self else { return }
+                let msg = "Poll failed for \(serviceID): \(error.localizedDescription)"
+                self.appState?.lastError = msg
+                if let health = self.pollEngine?.currentServiceHealth {
+                    self.appState?.updateServiceHealth(health)
+                }
+                self.menuBarController?.setLastError(msg)
+            }
+
             let telegramBinary = telegramAdapterPath()
             let telegramConfig = (try? db.dbQueue.read { db in
                 try ServiceConfig.fetchOne(db, key: "telegram")
@@ -302,6 +312,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch provider {
         case .anthropic, .openai:
             guard let key = try? repo.loadLLMKey(provider: provider), !key.isEmpty else {
+                return ResolvedProvider(
+                    provider: provider,
+                    client: UnconfiguredLLMClient(),
+                    model: provider.defaultModel,
+                    isConfigured: false
+                )
+            }
+            guard repo.loadCloudAutoBriefsConsent() else {
                 return ResolvedProvider(
                     provider: provider,
                     client: UnconfiguredLLMClient(),
