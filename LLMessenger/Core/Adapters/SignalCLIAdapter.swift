@@ -18,7 +18,7 @@ final class SignalCLIAdapter: MessengerAdapter {
 
     init(accountNumber: String, daemonPort: Int = 7583) {
         self.accountNumber = accountNumber
-        self.daemonURL = URL(string: "http://localhost:\(daemonPort)/api/v1/rpc")!
+        self.daemonURL = URL(string: "http://127.0.0.1:\(daemonPort)/api/v1/rpc")!
         self.storeDBPath = NSHomeDirectory() + "/.local/share/signal-mcp/messages.db"
     }
 
