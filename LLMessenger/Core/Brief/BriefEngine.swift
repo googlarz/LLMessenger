@@ -348,6 +348,7 @@ final class BriefEngine {
                             return ServiceResult(service: serviceID, cards: [], stats: (0, 0, 0), newlyStored: [], success: false)
                         }
                     } catch {
+                        print("[BriefEngine] \(serviceID) brief failed: \(error)")
                         return ServiceResult(service: serviceID, cards: [], stats: (0, 0, 0), newlyStored: [], success: false)
                     }
                 }
@@ -447,8 +448,11 @@ final class BriefEngine {
     ) throws {
         let now = Date()
         for card in cards {
+            // Always generate a fresh UUID — the LLM-produced card.id is reused across
+            // brief runs for the same conversation, causing UNIQUE constraint failures.
+            let cardID = UUID().uuidString
             let record = BriefCardRecord(
-                id: card.id,
+                id: cardID,
                 briefId: briefID,
                 service: card.service,
                 conversationId: card.conversationId,
@@ -469,7 +473,7 @@ final class BriefEngine {
                 let quote = card.quotes.first { $0.messageId == messageID }
                 return BriefCardSource(
                     id: nil,
-                    briefCardId: card.id,
+                    briefCardId: cardID,
                     messageRowId: message?.id,
                     service: card.service,
                     messageId: messageID,
