@@ -86,6 +86,15 @@ PollEngine ──► Signal adapter    (signal-mcp SQLite + HTTP JSON-RPC)
 
 ## Quick start
 
+### Download (macOS)
+
+Grab the latest DMG from the [Releases page](https://github.com/googlarz/LLMessenger/releases/latest).
+
+> **Gatekeeper note:** the DMG is currently unsigned. On first open, macOS will block it.
+> Right-click the app → **Open** → **Open**, or go to **System Settings → Privacy & Security → Open Anyway**.
+
+### Build from source
+
 ```bash
 git clone https://github.com/googlarz/LLMessenger
 cd LLMessenger
