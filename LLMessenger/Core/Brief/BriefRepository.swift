@@ -253,6 +253,78 @@ struct BriefRepository {
         }
     }
 
+    /// Full-text search over message content using FTS5.
+    /// Returns up to `limit` results ordered by FTS5 relevance rank.
+    /// An empty query returns an empty array immediately.
+    func searchMessages(query: String,
+                        service: String? = nil,
+                        since: Date? = nil,
+                        limit: Int = 50) throws -> [MessageSearchResult] {
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        return try database.dbQueue.read { db in
+            let sanitized = query.replacingOccurrences(of: "\"", with: "\"\"") + "*"
+            var sql = """
+                SELECT m.id as messageRowId, m.service, m.conversationId,
+                       m.conversationName, m.sender, m.timestamp,
+                       snippet(messages_fts, 0, '<<', '>>', '\u{2026}', 15) as snippet
+                FROM messages_fts
+                JOIN messages m ON m.id = messages_fts.rowid
+                WHERE messages_fts MATCH ?
+            """
+            var args: [DatabaseValueConvertible] = [sanitized]
+
+            if let service {
+                sql += " AND m.service = ?"
+                args.append(service)
+            }
+            if let since {
+                sql += " AND m.timestamp >= ?"
+                args.append(since)
+            }
+            sql += " ORDER BY rank LIMIT ?"
+            args.append(limit)
+
+            return try Row.fetchAll(db, sql: sql, arguments: StatementArguments(args))
+                .map { row -> MessageSearchResult in
+                    MessageSearchResult(
+                        messageRowId: row["messageRowId"],
+                        service:      row["service"],
+                        conversationId: row["conversationId"],
+                        conversationName: row["conversationName"],
+                        sender:       row["sender"],
+                        snippet:      row["snippet"] ?? query,
+                        timestamp:    row["timestamp"]
+                    )
+                }
+        }
+    }
+
+    /// Full-text search over brief notification text and opening summary.
+    func searchBriefs(query: String,
+                      since: Date? = nil,
+                      limit: Int = 20) throws -> [Brief] {
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        return try database.dbQueue.read { db in
+            let sanitized = query.replacingOccurrences(of: "\"", with: "\"\"") + "*"
+            var sql = """
+                SELECT b.*
+                FROM briefs_fts
+                JOIN briefs b ON b.id = briefs_fts.rowid
+                WHERE briefs_fts MATCH ?
+            """
+            var args: [DatabaseValueConvertible] = [sanitized]
+
+            if let since {
+                sql += " AND b.createdAt >= ?"
+                args.append(since)
+            }
+            sql += " ORDER BY rank LIMIT ?"
+            args.append(limit)
+
+            return try Brief.fetchAll(db, sql: sql, arguments: StatementArguments(args))
+        }
+    }
+
     func fetchUnreadCount() throws -> Int {
         try database.dbQueue.read { db in
             try Brief.filter(Column("status") == BriefStatus.ready.rawValue).fetchCount(db)
