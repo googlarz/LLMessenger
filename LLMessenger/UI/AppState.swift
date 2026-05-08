@@ -164,6 +164,28 @@ final class AppState: ObservableObject {
         }
     }
 
+    func setPinnedBrief(briefID: Int64, pinned: Bool) {
+        do {
+            try repository.setPinned(briefID: briefID, pinned: pinned)
+            refreshBriefs()
+        } catch {
+            // Silently ignore — UI state will be stale at worst
+        }
+    }
+
+    var pinnedBriefs: [Brief] {
+        briefs.filter { $0.pinned }.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    func briefGroups(from: Date? = nil, to: Date? = nil) -> [BriefListGroup] {
+        let filtered = briefs.filter { brief in
+            if let from = from, brief.createdAt < from { return false }
+            if let to = to, brief.createdAt > to { return false }
+            return true
+        }
+        return BriefListGrouper.group(filtered)
+    }
+
     func makeChatViewModel() -> ChatViewModel {
         ChatViewModel(appState: self)
     }
