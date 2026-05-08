@@ -490,7 +490,12 @@ final class BriefEngine {
                 sourceMessageIds: try encodeStringArray(card.sourceMessageIds),
                 createdAt: now
             )
-            try repository.insertBriefCard(record)
+            do {
+                try repository.insertBriefCard(record)
+            } catch {
+                print("[BriefEngine] persistBriefCards: failed to insert card \(cardID) (\(card.service)/\(card.conversationId)): \(error)")
+                continue
+            }
 
             let quoteMessageIDs = Set(card.quotes.compactMap(\.messageId))
             let sources = card.sourceMessageIds.map { messageID in
@@ -507,7 +512,11 @@ final class BriefEngine {
                     createdAt: now
                 )
             }
-            try repository.insertBriefCardSources(sources)
+            do {
+                try repository.insertBriefCardSources(sources)
+            } catch {
+                print("[BriefEngine] persistBriefCards: failed to insert sources for card \(cardID): \(error)")
+            }
         }
     }
 

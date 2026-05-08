@@ -189,7 +189,7 @@ final class iMessageAdapter: MessengerAdapter {
 
             if isGroup {
                 convID   = row.chatGUID
-                convName = row.displayName.isEmpty ? row.chatGUID : row.displayName
+                convName = row.displayName.isEmpty ? "Group Chat" : row.displayName
                 convType = .group
             } else {
                 convID   = row.handleID

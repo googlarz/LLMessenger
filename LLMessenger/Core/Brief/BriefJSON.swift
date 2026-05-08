@@ -98,7 +98,11 @@ struct BriefCard: Codable, Identifiable {
             ?? (try container.decodeIfPresent([String].self, forKey: .legacyActions))
             ?? []
         quotes = try container.decodeIfPresent([BriefQuote].self, forKey: .quotes) ?? []
-        sourceMessageIds = try container.decodeIfPresent([String].self, forKey: .sourceMessageIds) ?? []
+        // The LLM formats messages as "[id=<msgId> | ...]" and sometimes copies the "id=" label
+        // verbatim into sourceMessageIds (e.g. "id=541a06ac-...-1777702993542"). Strip it here so
+        // validation, persistence, and evidence lookup all receive bare message IDs.
+        sourceMessageIds = (try container.decodeIfPresent([String].self, forKey: .sourceMessageIds) ?? [])
+            .map { $0.hasPrefix("id=") ? String($0.dropFirst(3)) : $0 }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -131,4 +135,13 @@ struct BriefQuote: Codable {
     let from: String
     let time: String
     let text: String
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let raw = try c.decodeIfPresent(String.self, forKey: .messageId)
+        messageId = raw.map { $0.hasPrefix("id=") ? String($0.dropFirst(3)) : $0 }
+        from = try c.decodeIfPresent(String.self, forKey: .from) ?? ""
+        time = try c.decodeIfPresent(String.self, forKey: .time) ?? ""
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+    }
 }
