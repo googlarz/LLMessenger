@@ -83,10 +83,18 @@ final class iMessageAdapter: MessengerAdapter {
                       let ns    = row["date_ns"]   as? Int64,
                       let rowid = row["msg_rowid"] as? Int64
                 else { return nil }
-                let style: Int64   = row["style"]       ?? 45
-                let handle: String = row["handle_id"]   ?? ""
-                let name: String   = row["display_name"] ?? ""
-                let fromMe: Bool   = (row["is_from_me"] as? Int64 ?? 0) == 1
+                let style: Int64 = row["style"]       ?? 45
+                let name: String = row["display_name"] ?? ""
+                let fromMe: Bool = (row["is_from_me"] as? Int64 ?? 0) == 1
+                // For sent DM messages, m.handle_id is NULL (you're the sender).
+                // Extract the recipient contact from the chat GUID instead.
+                // Format: "iMessage;-;+12345678901" → "+12345678901"
+                var handle: String = row["handle_id"] ?? ""
+                if handle.isEmpty && fromMe && style != 43 {
+                    if let range = guid.range(of: ";-;") {
+                        handle = String(guid[range.upperBound...])
+                    }
+                }
                 return (chatGUID: guid, displayName: name, style: style,
                         handleID: handle, text: text, dateNs: ns, msgRowid: rowid,
                         isFromMe: fromMe)
