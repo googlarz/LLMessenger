@@ -12,6 +12,15 @@ struct BriefListView: View {
     @State private var searchBriefResults: [Brief] = []
     @State private var isSearching = false
 
+    var filteredGroups: [BriefListGroup] {
+        appState.briefGroups(from: dateFrom, to: dateTo)
+            .map { group in
+                BriefListGroup(id: group.id, label: group.label,
+                               briefs: group.briefs.filter { !$0.pinned })
+            }
+            .filter { !$0.briefs.isEmpty }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 6) {
@@ -73,14 +82,7 @@ struct BriefListView: View {
                         }
 
                         // Date-grouped unpinned briefs
-                        let groups = appState.briefGroups(from: dateFrom, to: dateTo)
-                            .map { group in
-                                BriefListGroup(id: group.id, label: group.label,
-                                               briefs: group.briefs.filter { !$0.pinned })
-                            }
-                            .filter { !$0.briefs.isEmpty }
-
-                        ForEach(groups, id: \.id) { group in
+                        ForEach(filteredGroups, id: \.id) { group in
                             SectionHeaderView(label: group.label)
                             ForEach(group.briefs, id: \.id) { brief in
                                 BriefRowView(brief: brief,

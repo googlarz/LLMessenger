@@ -28,14 +28,14 @@ struct SearchResultsView: View {
                         .frame(maxWidth: .infinity)
                 } else {
                     if !briefResults.isEmpty {
-                        SearchSectionLabel(text: "BRIEFS")
+                        SectionLabel(text: "BRIEFS")
                         ForEach(briefResults, id: \.id) { brief in
                             BriefSearchResultRow(brief: brief)
                                 .onTapGesture { selectBrief(brief) }
                         }
                     }
                     if !messageResults.isEmpty {
-                        SearchSectionLabel(text: "MESSAGES")
+                        SectionLabel(text: "MESSAGES")
                         ForEach(messageResults, id: \.messageRowId) { result in
                             MessageSearchResultRow(result: result)
                                 .onTapGesture { openConversation(result) }
@@ -63,7 +63,7 @@ struct SearchResultsView: View {
     }
 }
 
-private struct SearchSectionLabel: View {
+private struct SectionLabel: View {
     let text: String
     var body: some View {
         HStack {
