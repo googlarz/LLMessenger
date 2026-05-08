@@ -59,6 +59,7 @@
 		7177450F9E2D6DC65A094DA5 /* LLMRunRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C8397AA9C0E4BF6BE370EB9 /* LLMRunRecord.swift */; };
 		7485667FD9BB75A498987D0F /* TelegramSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173C28CE4F72A153E9132291 /* TelegramSignInView.swift */; };
 		74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */; };
+		E2F3A4B5C6D7E8F9A0B1C2D3 /* PinBriefTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A4B5C6D7E8F9A0B1C2D3E4 /* PinBriefTests.swift */; };
 		7A1C42ABBA573144C4FF9C7F /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DE9B36EDDE0DDEA40BC7DB /* OpenAIClient.swift */; };
 		7B7A3506F3DF564A1595A4A8 /* LLMessengerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */; };
 		85D75B32679B8196954EE50E /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C06B210F56BF4ED8F4EDD76 /* NotificationManager.swift */; };
@@ -167,6 +168,7 @@
 		98C662F360723B5576ACCA35 /* ChatInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessengerAdapter.swift; sourceTree = "<group>"; };
 		9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepositoryTests.swift; sourceTree = "<group>"; };
+		F3A4B5C6D7E8F9A0B1C2D3E4 /* PinBriefTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinBriefTests.swift; sourceTree = "<group>"; };
 		A5153C5FA624AF8042F72A30 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A7B8C9D0E1F2A3 /* AdversarialResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdversarialResponseTests.swift; sourceTree = "<group>"; };
 		D4E5F6A7B8C9D0E1F2A3B4C5 /* BackendWorkflowE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendWorkflowE2ETests.swift; sourceTree = "<group>"; };
@@ -346,6 +348,7 @@
 				FD6470BF1FD4618456E18C6D /* AutoLaunchManagerTests.swift */,
 				306739C4ABE143E1957D677D /* BriefEngineTests.swift */,
 				9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */,
+				F3A4B5C6D7E8F9A0B1C2D3E4 /* PinBriefTests.swift */,
 				47B8A33ADE90F0EC79A61D4D /* ChatViewModelTests.swift */,
 				276519F649E84201C4C1D365 /* DeepIntegrationTests.swift */,
 				97C7886911F46E51E0EE1B2B /* KeychainStoreTests.swift */,
@@ -636,6 +639,7 @@
 				AA6E78AED377D90FC3EBAA02 /* AutoLaunchManagerTests.swift in Sources */,
 				89D9474481B146BB8EFB761C /* BriefEngineTests.swift in Sources */,
 				74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */,
+				E2F3A4B5C6D7E8F9A0B1C2D3 /* PinBriefTests.swift in Sources */,
 				B3CF5BF36060C33F25099D53 /* ChatViewModelTests.swift in Sources */,
 				051BE19FFE796E11D9312A4E /* DeepIntegrationTests.swift in Sources */,
 				2528022DB189F9F99041972C /* KeychainStoreTests.swift in Sources */,

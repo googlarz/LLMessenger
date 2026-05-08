@@ -224,6 +224,35 @@ struct BriefRepository {
         }
     }
 
+    func setPinned(briefID: Int64, pinned: Bool) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE briefs SET pinned = ? WHERE id = ?",
+                arguments: [pinned ? 1 : 0, briefID]
+            )
+        }
+    }
+
+    func fetchPinnedBriefs() throws -> [Brief] {
+        try database.dbQueue.read { db in
+            try Brief
+                .filter(Column("pinned") == true)
+                .order(Column("createdAt").desc)
+                .fetchAll(db)
+        }
+    }
+
+    /// Fetches briefs whose createdAt falls within [from, to] inclusive.
+    func fetchBriefs(from: Date, to: Date) throws -> [Brief] {
+        try database.dbQueue.read { db in
+            try Brief
+                .filter(Column("createdAt") >= from)
+                .filter(Column("createdAt") <= to)
+                .order(Column("createdAt").desc)
+                .fetchAll(db)
+        }
+    }
+
     func fetchUnreadCount() throws -> Int {
         try database.dbQueue.read { db in
             try Brief.filter(Column("status") == BriefStatus.ready.rawValue).fetchCount(db)
