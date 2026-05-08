@@ -151,7 +151,9 @@ final class SubprocessAdapter: MessengerAdapter {
                 do {
                     var data = try JSONSerialization.data(withJSONObject: request)
                     data.append(UInt8(ascii: "\n"))
-                    writeHandle.write(data)
+                    // Use the throwing write(_:error:) API (macOS 10.15.4+) so a broken
+                    // pipe becomes a catchable Swift error instead of an NSException crash.
+                    try writeHandle.write(data)
                 } catch {
                     continuation.resume(throwing: error)
                     return
