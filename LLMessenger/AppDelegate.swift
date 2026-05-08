@@ -79,7 +79,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     do {
                         self.appState?.briefGenerationState = .summarizing
                         let newID = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
-                        if newID != nil { self.appState?.lastError = nil }
+                        if let id = newID {
+                            self.appState?.lastError = nil
+                            let brief = try? self.appState?.repository.fetchBrief(id: id)
+                            let body = brief?.notificationText ?? "You have new messages"
+                            self.notificationManager?.post(briefID: id, title: "New messages", body: body)
+                        }
                         self.appState?.briefGenerationState = newID == nil ? .noNewMessages : .complete
                     } catch {
                         self.appState?.lastError = error.localizedDescription
