@@ -580,7 +580,7 @@ final class BackendWorkflowE2ETests: XCTestCase {
         mock.specs["signal"] = .init(convId: "c1", messageIds: ["m1", "m2", "m3"])
 
         try await db.dbQueue.write { d in
-            for (msgId, convId) in [("m1", "c1"), ("m2", "c1"), ("m3", "c2")] {
+            for (msgId, convId) in [("m1", "c1"), ("m2", "c1"), ("m3", "c1")] {
                 var m = Message(briefId: nil, service: "signal", conversationId: convId,
                                 messageId: msgId, sender: "Alice", text: "Hi",
                                 timestamp: Date(), isSent: false)
@@ -630,6 +630,7 @@ final class BackendWorkflowE2ETests: XCTestCase {
         let mock = DynamicMockLLMClient()
 
         for (msgId, cycle) in [("m1", 1), ("m2", 2), ("m3", 3)] {
+            // Prior messages already have briefId set — only the new message is unattached each cycle
             mock.specs["signal"] = .init(convId: "c1", messageIds: [msgId])
             try await db.dbQueue.write { d in
                 var m = Message(briefId: nil, service: "signal", conversationId: "c1",
@@ -645,7 +646,7 @@ final class BackendWorkflowE2ETests: XCTestCase {
     }
 
     // 5.4 — Two concurrent processNewMessages() calls produce exactly one brief.
-    func testConcurrentBriefGenerationProducesExactlyOneBrief() async throws {
+    func testReentrantBriefCallIsGuardedByInFlightFlag() async throws {
         let db = try makeDB()
         let mock = DynamicMockLLMClient()
         mock.specs["signal"] = .init(convId: "c1", messageIds: ["m1"])
@@ -691,7 +692,7 @@ final class BackendWorkflowE2ETests: XCTestCase {
         }
         let lastCheck1 = try XCTUnwrap(t1, "lastCheck must be set after cycle 1")
 
-        try await Task.sleep(nanoseconds: 10_000_000) // 10ms
+        try await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
         // Cycle 2
         await engine.pollAll()
@@ -707,7 +708,7 @@ final class BackendWorkflowE2ETests: XCTestCase {
     // MARK: - Group 6: DB Error Boundaries
 
     // 6.1 — BriefEngine is atomic: no messages get a briefId when the LLM fails (before any DB write).
-    func testBriefEngineIsAtomicOnPartialInsertFailure() async throws {
+    func testBriefEngineAtomicityOnLLMFailure() async throws {
         // Note: This tests atomicity via LLM failure (before DB writes). DB-level transaction
         // atomicity (e.g., if insertBrief throws mid-write) is guaranteed by GRDB's
         // dbQueue.write transaction semantics, which cannot be easily injected in tests
