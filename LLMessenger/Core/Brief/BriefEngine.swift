@@ -230,6 +230,10 @@ final class BriefEngine {
             let service: String
             let cards: [BriefCard]
             let stats: (messages: Int, threads: Int, people: Int)
+            /// All messages in the time window — used for source-ID validation and card attribution.
+            /// Includes previously-briefed messages so the LLM can reference any message in the window.
+            let sourceMessages: [Message]
+            /// Only unattached messages (briefId == nil) — used to set briefId on this new brief.
             let newlyStored: [Message]
             let success: Bool
         }
@@ -261,15 +265,21 @@ final class BriefEngine {
 
                         // 2. If adapter returned nothing, fall back to stored DB messages.
                         let newlyStored: [Message]
+                        let sourceMessages: [Message]
                         let conversations: [AdapterConversation]
                         if let result = adapterResult, !result.conversations.isEmpty {
                             newlyStored = try self.repository.storeMessages(from: result, service: serviceID)
                             conversations = result.conversations
+                            // After storing, fetch ALL messages in the window (including previously-briefed
+                            // ones) so decodeAndValidateBrief accepts sourceMessageIds from any point in
+                            // the window — not just the unattached tail.
+                            sourceMessages = try self.repository.fetchMessages(service: serviceID, since: since)
                         } else {
                             // Adapter unavailable or empty — use messages already stored by the poll loop.
                             let dbMessages = try self.repository.fetchMessages(service: serviceID, since: since)
                             guard !dbMessages.isEmpty else { return nil }
                             newlyStored = dbMessages
+                            sourceMessages = dbMessages
                             // Reconstruct AdapterConversation-like grouping from stored messages.
                             var byConv: [String: [Message]] = [:]
                             for m in dbMessages { byConv[m.conversationId, default: []].append(m) }
@@ -336,20 +346,21 @@ final class BriefEngine {
                             maxTokens: 4000
                         )
 
-                        if let parsed = try? self.decodeAndValidateBrief(response.text, service: serviceID, sourceMessages: newlyStored) {
+                        if let parsed = try? self.decodeAndValidateBrief(response.text, service: serviceID, sourceMessages: sourceMessages) {
                             return ServiceResult(
                                 service: serviceID,
                                 cards: parsed.cards,
                                 stats: (parsed.totalMessages ?? msgCount, parsed.totalThreads ?? 0, parsed.totalPeople ?? 0),
+                                sourceMessages: sourceMessages,
                                 newlyStored: newlyStored,
                                 success: true
                             )
                         } else {
-                            return ServiceResult(service: serviceID, cards: [], stats: (0, 0, 0), newlyStored: [], success: false)
+                            return ServiceResult(service: serviceID, cards: [], stats: (0, 0, 0), sourceMessages: [], newlyStored: [], success: false)
                         }
                     } catch {
                         print("[BriefEngine] \(serviceID) brief failed: \(error)")
-                        return ServiceResult(service: serviceID, cards: [], stats: (0, 0, 0), newlyStored: [], success: false)
+                        return ServiceResult(service: serviceID, cards: [], stats: (0, 0, 0), sourceMessages: [], newlyStored: [], success: false)
                     }
                 }
             }
@@ -365,7 +376,7 @@ final class BriefEngine {
             if res.success {
                 activeServices.append(res.service)
                 messagesToAttach.append(contentsOf: res.newlyStored)
-                sourceMessagesByService[res.service] = Dictionary(uniqueKeysWithValues: res.newlyStored.map { ($0.messageId, $0) })
+                sourceMessagesByService[res.service] = Dictionary(uniqueKeysWithValues: res.sourceMessages.map { ($0.messageId, $0) })
                 totalMessages += res.stats.messages
                 totalThreads += res.stats.threads
                 totalPeople += res.stats.people
