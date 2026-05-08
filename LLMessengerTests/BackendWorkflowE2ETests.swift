@@ -737,9 +737,11 @@ final class BackendWorkflowE2ETests: XCTestCase {
             "All 3 messages must remain unattached when brief creation fails")
     }
 
-    // 6.2 — Known gap: PollEngine does not expose a way to make store() throw.
-    func testPollEngineStoreFailureDoesNotUpdateHealth() throws {
-        throw XCTSkip("Known gap: PollEngine does not update ServiceHealth when store() fails. Requires DB injection infrastructure not yet available.")
+    // 6.2 — Production code fix applied: store() failures now preserve lastCheck so the next
+    // poll re-fetches the same window. Test remains skipped because making store() throw
+    // requires a DB injection wrapper (AppDatabase protocol) that doesn't exist yet.
+    func testPollEngineStoreFailurePreservesLastCheck() throws {
+        throw XCTSkip("Infrastructure gap: forcing store() to throw requires a mockable AppDatabase. Production fix (updateLastCheck: false in store error path) was applied in PollEngine.swift.")
     }
 
     // MARK: - Group 7: AppState Observation Contract
