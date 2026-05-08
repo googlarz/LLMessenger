@@ -69,6 +69,7 @@ final class AppDatabaseTests: XCTestCase {
         }
         XCTAssertEqual(fetched?.notificationText, "3 new messages")
         XCTAssertNil(fetched?.openingSummary)
+        XCTAssertEqual(fetched?.pinned, false, "Newly inserted brief without explicit pinned should default to false")
     }
 
     func testBriefsPinnedColumnExists() throws {
@@ -109,6 +110,25 @@ final class AppDatabaseTests: XCTestCase {
             let rows = try Row.fetchAll(db, sql:
                 "SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'world'")
             XCTAssertEqual(rows.count, 1)
+        }
+    }
+
+    func testBriefsFTSTriggerKeepsSync() throws {
+        let db = try AppDatabase(inMemory: true)
+        try db.dbQueue.write { db in
+            var brief = Brief(
+                createdAt: Date(), status: "ready",
+                services: "[\"telegram\"]",
+                openingSummary: nil,
+                notificationText: "Breaking news from the agency",
+                episodicSummary: nil
+            )
+            try brief.insert(db)
+        }
+        try db.dbQueue.read { db in
+            let rows = try Row.fetchAll(db, sql:
+                "SELECT rowid FROM briefs_fts WHERE briefs_fts MATCH 'breaking'")
+            XCTAssertEqual(rows.count, 1, "briefs_fts virtual table must be kept in sync with briefs table")
         }
     }
 }
