@@ -16,10 +16,32 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
     var openingSummary: String?
     var notificationText: String
     var episodicSummary: String?
+    var pinned: Bool
 
     static let databaseTableName = "briefs"
 
     var briefStatus: BriefStatus { BriefStatus(rawValue: status) ?? .idle }
+
+    // Custom init with pinned defaulting to false for backward compatibility with existing call sites
+    init(id: Int64? = nil,
+         createdAt: Date,
+         status: String,
+         services: String,
+         failedServices: String? = nil,
+         openingSummary: String? = nil,
+         notificationText: String,
+         episodicSummary: String? = nil,
+         pinned: Bool = false) {
+        self.id = id
+        self.createdAt = createdAt
+        self.status = status
+        self.services = services
+        self.failedServices = failedServices
+        self.openingSummary = openingSummary
+        self.notificationText = notificationText
+        self.episodicSummary = episodicSummary
+        self.pinned = pinned
+    }
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
         id = inserted.rowID

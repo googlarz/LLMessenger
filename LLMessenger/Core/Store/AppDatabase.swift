@@ -152,6 +152,82 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "failedServices", .text)
             }
         }
+        migrator.registerMigration("v6_fts5_and_pinned") { db in
+            // 1. Add pinned column to briefs (defaults to false)
+            try db.alter(table: "briefs") { t in
+                t.add(column: "pinned", .boolean).notNull().defaults(to: false)
+            }
+
+            // 2. FTS5 external-content table for messages
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE messages_fts USING fts5(
+                    text, sender, conversationName,
+                    content=messages, content_rowid=id
+                )
+            """)
+
+            // Populate FTS5 from existing rows
+            try db.execute(sql: """
+                INSERT INTO messages_fts(rowid, text, sender, conversationName)
+                SELECT id, text, sender, COALESCE(conversationName, '') FROM messages
+            """)
+
+            // Triggers to keep FTS5 in sync with messages
+            try db.execute(sql: """
+                CREATE TRIGGER messages_ai AFTER INSERT ON messages BEGIN
+                    INSERT INTO messages_fts(rowid, text, sender, conversationName)
+                    VALUES (new.id, new.text, new.sender, COALESCE(new.conversationName, ''));
+                END
+            """)
+            try db.execute(sql: """
+                CREATE TRIGGER messages_ad AFTER DELETE ON messages BEGIN
+                    INSERT INTO messages_fts(messages_fts, rowid, text, sender, conversationName)
+                    VALUES ('delete', old.id, old.text, old.sender, COALESCE(old.conversationName, ''));
+                END
+            """)
+            try db.execute(sql: """
+                CREATE TRIGGER messages_au AFTER UPDATE ON messages BEGIN
+                    INSERT INTO messages_fts(messages_fts, rowid, text, sender, conversationName)
+                    VALUES ('delete', old.id, old.text, old.sender, COALESCE(old.conversationName, ''));
+                    INSERT INTO messages_fts(rowid, text, sender, conversationName)
+                    VALUES (new.id, new.text, new.sender, COALESCE(new.conversationName, ''));
+                END
+            """)
+
+            // 3. FTS5 external-content table for briefs
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE briefs_fts USING fts5(
+                    notificationText, openingSummary,
+                    content=briefs, content_rowid=id
+                )
+            """)
+
+            try db.execute(sql: """
+                INSERT INTO briefs_fts(rowid, notificationText, openingSummary)
+                SELECT id, notificationText, COALESCE(openingSummary, '') FROM briefs
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER briefs_ai AFTER INSERT ON briefs BEGIN
+                    INSERT INTO briefs_fts(rowid, notificationText, openingSummary)
+                    VALUES (new.id, new.notificationText, COALESCE(new.openingSummary, ''));
+                END
+            """)
+            try db.execute(sql: """
+                CREATE TRIGGER briefs_ad AFTER DELETE ON briefs BEGIN
+                    INSERT INTO briefs_fts(briefs_fts, rowid, notificationText, openingSummary)
+                    VALUES ('delete', old.id, old.notificationText, COALESCE(old.openingSummary, ''));
+                END
+            """)
+            try db.execute(sql: """
+                CREATE TRIGGER briefs_au AFTER UPDATE ON briefs BEGIN
+                    INSERT INTO briefs_fts(briefs_fts, rowid, notificationText, openingSummary)
+                    VALUES ('delete', old.id, old.notificationText, COALESCE(old.openingSummary, ''));
+                    INSERT INTO briefs_fts(rowid, notificationText, openingSummary)
+                    VALUES (new.id, new.notificationText, COALESCE(new.openingSummary, ''));
+                END
+            """)
+        }
         try migrator.migrate(dbQueue)
     }
 }

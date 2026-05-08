@@ -70,4 +70,45 @@ final class AppDatabaseTests: XCTestCase {
         XCTAssertEqual(fetched?.notificationText, "3 new messages")
         XCTAssertNil(fetched?.openingSummary)
     }
+
+    func testBriefsPinnedColumnExists() throws {
+        let db = try AppDatabase(inMemory: true)
+        try db.dbQueue.read { db in
+            let columns = try db.columns(in: "briefs")
+            XCTAssertTrue(columns.contains { $0.name == "pinned" },
+                          "briefs table must have a 'pinned' column")
+        }
+    }
+
+    func testMessagesFTSTableExists() throws {
+        let db = try AppDatabase(inMemory: true)
+        try db.dbQueue.read { db in
+            let exists = try db.tableExists("messages_fts")
+            XCTAssertTrue(exists, "messages_fts virtual table must exist after migration")
+        }
+    }
+
+    func testBriefsFTSTableExists() throws {
+        let db = try AppDatabase(inMemory: true)
+        try db.dbQueue.read { db in
+            let exists = try db.tableExists("briefs_fts")
+            XCTAssertTrue(exists, "briefs_fts virtual table must exist after migration")
+        }
+    }
+
+    func testMessagesFTSTriggerKeepsSync() throws {
+        let db = try AppDatabase(inMemory: true)
+        try db.dbQueue.write { db in
+            var msg = Message(briefId: nil, service: "signal", conversationId: "c1",
+                              messageId: "m1", sender: "Alice",
+                              text: "Hello world from Alice",
+                              timestamp: Date(), isSent: false)
+            try msg.insert(db)
+        }
+        try db.dbQueue.read { db in
+            let rows = try Row.fetchAll(db, sql:
+                "SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'world'")
+            XCTAssertEqual(rows.count, 1)
+        }
+    }
 }
