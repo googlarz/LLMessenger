@@ -74,7 +74,7 @@ PollEngine ──► Signal adapter    (signal-mcp SQLite + HTTP JSON-RPC)
 - macOS 13 Ventura or later
 - Xcode 15+ (to build from source)
 - One or more messaging services:
-  - **Signal** — a local Signal daemon exposing a SQLite database and an HTTP JSON-RPC endpoint (the `signal-mcp` pattern)
+  - **Signal** — [signal-mcp](https://github.com/googlarz/signal-mcp) running as a local daemon
   - **Telegram** — `telegram-adapter` binary (bundled or in `~/.config/llmessenger/adapters/telegram/`)
   - **iMessage** — Full Disk Access granted to LLMessenger in System Settings → Privacy & Security
 - One LLM backend:
