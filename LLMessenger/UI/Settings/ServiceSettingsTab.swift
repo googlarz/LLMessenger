@@ -305,8 +305,10 @@ private struct ServiceCard: View {
     private var isConnected: Bool {
         switch service {
         case "imessage":
-            return FileManager.default.fileExists(
-                atPath: NSHomeDirectory() + "/Library/Messages/chat.db")
+            // fileExists returns true even without Full Disk Access; try to open for reading
+            // to distinguish "file present + FDA granted" from "file present, FDA missing".
+            let path = NSHomeDirectory() + "/Library/Messages/chat.db"
+            return FileManager.default.isReadableFile(atPath: path)
         case "signal":
             return !signalAccount.trimmingCharacters(in: .whitespaces).isEmpty
         case "telegram":
@@ -326,7 +328,7 @@ private struct ServiceCard: View {
         guard config.enabled else { return "Disabled" }
         switch service {
         case "imessage":
-            return isConnected ? "Available" : "Messages database not found"
+            return isConnected ? "Available" : "Full Disk Access required"
         case "signal":
             return isConnected ? signalAccount : "Phone number required"
         case "telegram":
