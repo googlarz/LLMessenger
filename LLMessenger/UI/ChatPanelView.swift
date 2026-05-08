@@ -68,18 +68,18 @@ struct ChatPanelView: View {
                             BriefProseView(brief: brief, messages: briefMessages)
                         }
 
+                        // Always render so IDs are registered before scrollTo fires.
                         if !aiItems.isEmpty {
                             Divider()
                                 .background(Theme.border.opacity(0.5))
                                 .padding(.horizontal, 28)
-
-                            LazyVStack(alignment: .leading, spacing: 0) {
-                                ForEach(aiItems) { item in
-                                    aiItemView(item).id(item.id)
-                                }
-                            }
-                            .padding(.vertical, 8)
                         }
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(aiItems) { item in
+                                aiItemView(item).id(item.id)
+                            }
+                        }
+                        .padding(.vertical, aiItems.isEmpty ? 0 : 8)
 
                         if chatViewModel.isLoading {
                             LoadingIndicatorView()
@@ -89,8 +89,11 @@ struct ChatPanelView: View {
                 }
                 .background(Theme.bg)
                 .onChange(of: chatViewModel.threadItems.count) { _ in
-                    if let last = chatViewModel.threadItems.last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    // Delay one run-loop so the new item finishes rendering before scrollTo.
+                    DispatchQueue.main.async {
+                        if let last = chatViewModel.threadItems.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
                     }
                 }
                 .onChange(of: chatViewModel.isLoading) { loading in
