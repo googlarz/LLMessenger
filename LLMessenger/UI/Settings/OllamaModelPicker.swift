@@ -61,18 +61,21 @@ struct OllamaModelPicker: View {
         .task { await load() }
     }
 
+    @MainActor
     private func load() async {
+        guard loadState != .loading else { return }
         loadState = .loading
         do {
             let models = try await OllamaClient.fetchModels()
-            await MainActor.run {
-                loadState = .loaded(models)
-                if !models.isEmpty && selectedModel.isEmpty {
+            loadState = .loaded(models)
+            if !models.isEmpty {
+                let names = models.map(\.name)
+                if selectedModel.isEmpty || !names.contains(selectedModel) {
                     selectedModel = models[0].name
                 }
             }
         } catch {
-            await MainActor.run { loadState = .failed }
+            loadState = .failed
         }
     }
 }
