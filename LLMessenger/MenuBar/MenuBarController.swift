@@ -5,11 +5,13 @@ import AppKit
 private final class MenuActionProxy: NSObject {
     var onNewBrief: (() -> Void)?
     var onLast24h: (() -> Void)?
+    var onLast7d: (() -> Void)?
     var onSelectBrief: ((Int64) -> Void)?
     var onOpenSettings: (() -> Void)?
 
     @objc func newBrief() { onNewBrief?() }
     @objc func last24h() { onLast24h?() }
+    @objc func last7d() { onLast7d?() }
     @objc func openSettings() { onOpenSettings?() }
     @objc func briefSelected(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? Int64 else { return }
@@ -34,6 +36,9 @@ final class MenuBarController {
     }
     var onLast24h: (() -> Void)? {
         didSet { proxy.onLast24h = onLast24h }
+    }
+    var onLast7d: (() -> Void)? {
+        didSet { proxy.onLast7d = onLast7d }
     }
     var onSelectBrief: ((Int64) -> Void)? {
         didSet { proxy.onSelectBrief = onSelectBrief }
@@ -156,6 +161,11 @@ final class MenuBarController {
         last24hItem.target = proxy
         last24hItem.isEnabled = !isLoading
         menu.addItem(last24hItem)
+
+        let last7dItem = NSMenuItem(title: "Brief Last 7 Days", action: isLoading ? nil : #selector(MenuActionProxy.last7d), keyEquivalent: "")
+        last7dItem.target = proxy
+        last7dItem.isEnabled = !isLoading
+        menu.addItem(last7dItem)
 
         if let err = lastError {
             menu.addItem(.separator())

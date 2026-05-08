@@ -132,6 +132,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.menuBarController?.setUnreadCount(unread)
                 }
             }
+            menuBar.onLast7d = { [weak self] in
+                guard let self else { return }
+                Task {
+                    self.appState?.briefGenerationState = .fetching
+                    self.menuBarController?.setLoading(true)
+                    let start = Date()
+                    let adapters = self.appState?.adapters ?? [:]
+                    do {
+                        self.appState?.briefGenerationState = .summarizing
+                        if let briefID = try await self.briefEngine?.summarizeLast(hours: 168, adapters: adapters) {
+                            let brief = try? self.appState?.repository.fetchBrief(id: briefID)
+                            let body = brief?.notificationText ?? "7-day summary ready"
+                            self.notificationManager?.post(briefID: briefID, title: "7-Day Summary", body: body)
+                            self.appState?.briefGenerationState = .complete
+                        } else {
+                            self.appState?.briefGenerationState = .noNewMessages
+                        }
+                        self.appState?.lastError = nil
+                    } catch {
+                        self.appState?.lastError = error.localizedDescription
+                        self.appState?.briefGenerationState = .failed
+                    }
+                    let elapsed = Date().timeIntervalSince(start)
+                    if elapsed < 1.5 {
+                        try? await Task.sleep(nanoseconds: UInt64((1.5 - elapsed) * 1_000_000_000))
+                    }
+                    self.appState?.refreshBriefs()
+                    self.menuBarController?.setLoading(false)
+                    self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
+                    self.menuBarController?.setLastError(self.appState?.lastError)
+                    self.menuBarController?.setUnreadCount(self.appState?.unreadCount ?? 0)
+                }
+            }
             menuBar.onSelectBrief = { [weak windowController, weak state] briefID in
                 state?.selectedBriefID = briefID
                 state?.markAsOpen(briefID: briefID)
