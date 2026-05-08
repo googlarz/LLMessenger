@@ -89,7 +89,7 @@ final class SubprocessAdapter: MessengerAdapter {
             req["limit"] = last
         }
 
-        let response = try await roundTrip(req)
+        let response = try await roundTrip(req, timeout: 300)
         let data = try JSONSerialization.data(withJSONObject: response)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -132,7 +132,7 @@ final class SubprocessAdapter: MessengerAdapter {
         try await roundTrip(request)
     }
 
-    private func roundTrip(_ request: [String: Any]) async throws -> [String: Any] {
+    private func roundTrip(_ request: [String: Any], timeout: TimeInterval = 30) async throws -> [String: Any] {
         guard process?.isRunning == true,
               let writeHandle, let readHandle else {
             throw AdapterError.notRunning
@@ -193,7 +193,7 @@ final class SubprocessAdapter: MessengerAdapter {
                     }
                 }
 
-                if sem.wait(timeout: .now() + 30) == .timedOut {
+                if sem.wait(timeout: .now() + timeout) == .timedOut {
                     readHandle.readabilityHandler = nil
                     continuation.resume(throwing: AdapterError.timeout)
                 } else {
