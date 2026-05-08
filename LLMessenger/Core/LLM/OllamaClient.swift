@@ -5,7 +5,7 @@ final class OllamaClient: LLMClient {
     private let baseURL: URL
     private let session: URLSession
 
-    init(baseURL: URL = URL(string: "http://localhost:11434")!,
+    init(baseURL: URL = URL(string: "http://127.0.0.1:11434")!,
          session: URLSession = {
              let config = URLSessionConfiguration.default
              config.timeoutIntervalForRequest = 300
@@ -83,7 +83,7 @@ struct OllamaModel: Decodable, Identifiable {
 extension OllamaClient {
     /// Fetches the list of locally-pulled Ollama models.
     /// Throws if Ollama is not running or returns unexpected data.
-    static func fetchModels(baseURL: URL = URL(string: "http://localhost:11434")!) async throws -> [OllamaModel] {
+    static func fetchModels(baseURL: URL = URL(string: "http://127.0.0.1:11434")!) async throws -> [OllamaModel] {
         struct TagsResponse: Decodable { let models: [OllamaModel] }
         let url = baseURL.appendingPathComponent("api/tags")
         var request = URLRequest(url: url)
