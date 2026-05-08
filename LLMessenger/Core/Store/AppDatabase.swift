@@ -31,10 +31,10 @@ final class AppDatabase: @unchecked Sendable {
     private func migrate() throws {
         var migrator = DatabaseMigrator()
         // WARNING: erases all user data whenever migrations change during DEBUG builds.
-        // Disable this line before shipping or when you need to preserve local data while iterating.
-        #if DEBUG
-        migrator.eraseDatabaseOnSchemaChange = true
-        #endif
+        // Uncomment when you need a clean slate during development. Keep commented to preserve data.
+        // #if DEBUG
+        // migrator.eraseDatabaseOnSchemaChange = true
+        // #endif
         migrator.registerMigration("v1_schema") { db in
             try db.create(table: "briefs") { t in
                 t.autoIncrementedPrimaryKey("id")
