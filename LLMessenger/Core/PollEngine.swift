@@ -173,9 +173,9 @@ final class PollEngine {
     }
 
     private func makeFetchConfig(config: ServiceConfig, serviceID: String) -> FetchConfig {
-        // On first run (no prior check recorded), fetch the last 24 hours so recent
+        // On first run (no prior check recorded), fetch the last 48 hours so recent
         // messages are not missed. Subsequent polls use the last-check timestamp.
-        let firstRunWindow: TimeInterval = 24 * 3600
+        let firstRunWindow: TimeInterval = 48 * 3600
         switch config.resolvedFetchMode {
         case .time:
             let since = readLastCheck(serviceID: serviceID)
