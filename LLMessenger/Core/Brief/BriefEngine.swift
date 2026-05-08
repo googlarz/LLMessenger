@@ -248,9 +248,14 @@ final class BriefEngine {
             for serviceID in serviceIDs.sorted() {
                 group.addTask {
                     do {
-                        // 1. Try live adapter fetch.
+                        // 1. Try live adapter fetch. Start the adapter first if it hasn't
+                        // been started yet (e.g. iMessage disabled during startup, or FDA
+                        // was granted after the app launched).
                         var adapterResult: AdapterFetchResult? = nil
                         if let adapter = adapters[serviceID] {
+                            if adapter.healthStatus != .ok {
+                                try? await adapter.start()
+                            }
                             adapterResult = try? await adapter.fetch(config: fetchConfig)
                         }
 

@@ -25,9 +25,19 @@ final class PollEngine {
     // Apply updated config for a running service without restarting the engine.
     func reload(config: ServiceConfig) {
         let serviceID = config.service
+        let wasEnabled = configs[serviceID]?.enabled ?? false
         configs[serviceID] = config
         if config.enabled {
             scheduleTimer(serviceID: serviceID, intervalMinutes: config.pollIntervalMinutes)
+            // If newly enabled, fire an immediate catch-up poll so messages aren't
+            // delayed until the first scheduled timer fires.
+            if !wasEnabled {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    do { try await self.pollNow(serviceID: serviceID) }
+                    catch { await self.onPollFailed?(serviceID, error) }
+                }
+            }
         } else {
             timers[serviceID]?.invalidate()
             timers[serviceID] = nil
