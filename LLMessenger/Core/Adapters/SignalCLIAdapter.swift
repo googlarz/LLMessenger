@@ -57,6 +57,11 @@ final class SignalCLIAdapter: MessengerAdapter {
             if !g.isEmpty { groupNames   = g }
         }
 
+        // Snapshot before any concurrent work so reads inside closures
+        // don't race with mutations from a concurrent fetch() call.
+        let snapshotContactNames = contactNames
+        let snapshotGroupNames   = groupNames
+
         let rows: [[String: DatabaseValue]]
         switch config.mode {
         case .byTime(let since):
@@ -85,8 +90,8 @@ final class SignalCLIAdapter: MessengerAdapter {
 
         return AdapterFetchResult(conversations: Self.group(
             rows: rows,
-            contactNames: contactNames,
-            groupNames: groupNames
+            contactNames: snapshotContactNames,
+            groupNames: snapshotGroupNames
         ))
     }
 
@@ -189,16 +194,15 @@ final class SignalCLIAdapter: MessengerAdapter {
         var config = Configuration()
         config.readonly = true
         guard let db = try? DatabaseQueue(path: dbPath, configuration: config) else { return [:] }
-        var names: [String: String] = [:]
-        try? await db.read { db in
+        let names = try? await db.read { db -> [String: String] in
             let rows = try Row.fetchAll(db, sql: """
                 SELECT aci, number, given_name, family_name, profile_given_name, profile_family_name
                 FROM recipient
                 WHERE aci IS NOT NULL
             """)
+            var result: [String: String] = [:]
             for row in rows {
                 guard let aci = row["aci"] as? String, !aci.isEmpty else { continue }
-                // Prefer explicit given/family over profile fields.
                 let given  = (row["given_name"]  as? String ?? "").isEmpty
                     ? (row["profile_given_name"]  as? String ?? "")
                     : (row["given_name"]  as? String ?? "")
@@ -208,13 +212,14 @@ final class SignalCLIAdapter: MessengerAdapter {
                 let name = family.isEmpty ? given : "\(given) \(family)"
                 let trimmed = name.trimmingCharacters(in: .whitespaces)
                 guard !trimmed.isEmpty else { continue }
-                names[aci] = trimmed
+                result[aci] = trimmed
                 if let phone = row["number"] as? String, !phone.isEmpty {
-                    names[phone] = trimmed
+                    result[phone] = trimmed
                 }
             }
+            return result
         }
-        return names
+        return names ?? [:]
     }
 
     /// Path to signal-cli's account database for this account number.
