@@ -27,7 +27,7 @@ final class SubprocessAdapter: MessengerAdapter {
         self.adapterPath = adapterPath
         self.adapterArgs = adapterArgs
         self.config = config
-        self.ioQueue = DispatchQueue(label: "com.llmessenger.adapter.\(serviceID)", qos: .userInitiated)
+        self.ioQueue = DispatchQueue(label: "com.llmessenger.adapter.\(serviceID)", qos: .default)
     }
 
     func start() async throws {
@@ -141,69 +141,95 @@ final class SubprocessAdapter: MessengerAdapter {
         // Capture as a local ref so the closure doesn't need to retain self.
         let readBuffer = self.readBuffer
 
-        // ioQueue.async blocks the serial queue thread until sem.signal() fires,
-        // preventing concurrent roundTrips from clobbering readabilityHandler.
-        return try await withCheckedThrowingContinuation { continuation in
-            ioQueue.async {
-                let sem = DispatchSemaphore(value: 0)
-                var callResult: Result<[String: Any], Error>?
+        // Shared state hoisted so both the operation and onCancel closures can reference it.
+        final class RoundTripState: @unchecked Sendable {
+            let sem = DispatchSemaphore(value: 0)
+            var cancelled = false
+            var result: Result<[String: Any], Error>?
+        }
+        let state = RoundTripState()
 
-                do {
-                    var data = try JSONSerialization.data(withJSONObject: request)
-                    data.append(UInt8(ascii: "\n"))
-                    // Use the throwing write(_:error:) API (macOS 10.15.4+) so a broken
-                    // pipe becomes a catchable Swift error instead of an NSException crash.
-                    try writeHandle.write(data)
-                } catch {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                // Slice one newline-terminated line from the shared buffer.
-                // Bytes after the newline are left in place for the next call.
-                let consumeLine: () -> Bool = {
-                    guard let nlIdx = readBuffer.data.firstIndex(of: UInt8(ascii: "\n")) else { return false }
-                    let line = readBuffer.data[..<nlIdx]
-                    readBuffer.data = Data(readBuffer.data[readBuffer.data.index(after: nlIdx)...])
-                    if let response = try? JSONSerialization.jsonObject(with: line) as? [String: Any] {
-                        callResult = .success(response)
-                    } else {
-                        callResult = .failure(AdapterError.invalidResponse)
-                    }
-                    return true
-                }
-
-                // A previous call may have left a complete line in the buffer.
-                if consumeLine() {
-                    sem.signal()
-                } else {
-                    readHandle.readabilityHandler = { handle in
-                        let chunk = handle.availableData
-                        if chunk.isEmpty {
-                            callResult = .failure(AdapterError.processClosed)
-                            handle.readabilityHandler = nil
-                            sem.signal()
+        // withTaskCancellationHandler wraps withCheckedThrowingContinuation so that
+        // if the calling Task is cancelled while ioQueue.async is blocked on the
+        // semaphore, onCancel signals the semaphore and allows the continuation to
+        // resume with CancellationError instead of leaking indefinitely.
+        return try await withTaskCancellationHandler(
+            operation: {
+                try await withCheckedThrowingContinuation { continuation in
+                    ioQueue.async {
+                        // Abort early if already cancelled before we even started.
+                        guard !state.cancelled else {
+                            continuation.resume(throwing: CancellationError())
                             return
                         }
-                        readBuffer.data.append(chunk)
+
+                        do {
+                            var data = try JSONSerialization.data(withJSONObject: request)
+                            data.append(UInt8(ascii: "\n"))
+                            writeHandle.write(data)
+                        } catch {
+                            continuation.resume(throwing: error)
+                            return
+                        }
+
+                        // Slice one newline-terminated line from the shared buffer.
+                        // Bytes after the newline are left in place for the next call.
+                        let consumeLine: () -> Bool = {
+                            guard let nlIdx = readBuffer.data.firstIndex(of: UInt8(ascii: "\n")) else { return false }
+                            let line = readBuffer.data[..<nlIdx]
+                            readBuffer.data = Data(readBuffer.data[readBuffer.data.index(after: nlIdx)...])
+                            if let response = try? JSONSerialization.jsonObject(with: line) as? [String: Any] {
+                                state.result = .success(response)
+                            } else {
+                                state.result = .failure(AdapterError.invalidResponse)
+                            }
+                            return true
+                        }
+
+                        // A previous call may have left a complete line in the buffer.
                         if consumeLine() {
-                            handle.readabilityHandler = nil
-                            sem.signal()
+                            state.sem.signal()
+                        } else {
+                            readHandle.readabilityHandler = { handle in
+                                let chunk = handle.availableData
+                                if chunk.isEmpty {
+                                    state.result = .failure(AdapterError.processClosed)
+                                    handle.readabilityHandler = nil
+                                    state.sem.signal()
+                                    return
+                                }
+                                readBuffer.data.append(chunk)
+                                if consumeLine() {
+                                    handle.readabilityHandler = nil
+                                    state.sem.signal()
+                                }
+                            }
+                        }
+
+                        if state.sem.wait(timeout: .now() + timeout) == .timedOut {
+                            readHandle.readabilityHandler = nil
+                            continuation.resume(throwing: AdapterError.timeout)
+                        } else if state.cancelled {
+                            readHandle.readabilityHandler = nil
+                            continuation.resume(throwing: CancellationError())
+                        } else {
+                            switch state.result ?? .failure(AdapterError.processClosed) {
+                            case .success(let r): continuation.resume(returning: r)
+                            case .failure(let e): continuation.resume(throwing: e)
+                            }
                         }
                     }
                 }
-
-                if sem.wait(timeout: .now() + timeout) == .timedOut {
-                    readHandle.readabilityHandler = nil
-                    continuation.resume(throwing: AdapterError.timeout)
-                } else {
-                    switch callResult ?? .failure(AdapterError.processClosed) {
-                    case .success(let r): continuation.resume(returning: r)
-                    case .failure(let e): continuation.resume(throwing: e)
-                    }
-                }
+            },
+            onCancel: {
+                // Signal the semaphore so ioQueue.async unblocks and resumes the
+                // continuation with CancellationError. Called from an arbitrary thread;
+                // RoundTripState is @unchecked Sendable — the semaphore provides the
+                // necessary happens-before relationship.
+                state.cancelled = true
+                state.sem.signal()
             }
-        }
+        )
     }
 }
 
