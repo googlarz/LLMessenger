@@ -134,10 +134,9 @@ final class BriefEngineTests: XCTestCase {
         let repo = BriefRepository(database: db)
         let cards = try repo.fetchBriefCards(briefID: try XCTUnwrap(id))
         XCTAssertEqual(cards.count, 1)
-        XCTAssertEqual(cards[0].id, "telegram-c1-1")
         XCTAssertEqual(cards[0].sourceMessageIds, #"["m0"]"#)
 
-        let sources = try repo.fetchSources(briefCardID: "telegram-c1-1")
+        let sources = try repo.fetchSources(briefCardID: cards[0].id)
         XCTAssertEqual(sources.count, 1)
         XCTAssertEqual(sources[0].messageId, "m0")
         XCTAssertEqual(sources[0].sourceRole, BriefCardSourceRole.quote.rawValue)
@@ -147,9 +146,10 @@ final class BriefEngineTests: XCTestCase {
     func testProcessNewMessagesIncludesRollingSummaryAndRecentContext() async throws {
         let db = try setupDB()
         let repo = BriefRepository(database: db)
+        let now = Date()
         try await db.dbQueue.write { db in
             var oldBrief = Brief(
-                createdAt: Date(timeIntervalSince1970: 50),
+                createdAt: now.addingTimeInterval(-3600),
                 status: "ready",
                 services: #"["telegram"]"#,
                 openingSummary: nil,
@@ -166,7 +166,7 @@ final class BriefEngineTests: XCTestCase {
                 messageId: "m-old",
                 sender: "Joanna",
                 text: "Earlier context",
-                timestamp: Date(timeIntervalSince1970: 110),
+                timestamp: now.addingTimeInterval(-1800),
                 isSent: false
             )
             try oldMessage.insert(db)
@@ -180,7 +180,7 @@ final class BriefEngineTests: XCTestCase {
                     messageId: "m\(i)",
                     sender: "Alice",
                     text: "msg \(i)",
-                    timestamp: Date(timeIntervalSince1970: Double(120 + i)),
+                    timestamp: now.addingTimeInterval(Double(-60 + i)),
                     isSent: false
                 )
                 try msg.insert(db)

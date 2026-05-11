@@ -217,7 +217,7 @@ final class AdversarialResponseTests: XCTestCase {
 
     // MARK: - All-or-nothing per service: one bad card kills the whole service batch
 
-    func testOneInvalidCardAmongValidOnesRejectsEntireService() async throws {
+    func testOneInvalidCardAmongValidOnesKeepsValidCards() async throws {
         let db = try makeDB()
         try await insertSignalMessage(db: db, messageId: "m1", convId: "c1")
         // Second message in same service
@@ -245,11 +245,13 @@ final class AdversarialResponseTests: XCTestCase {
                                   model: "m", basePrompt: "B")
         let result = try await engine.processNewMessages()
 
-        // BriefEngine validates all cards atomically — one bad card rejects all
-        XCTAssertNil(result,
-                     "One invalid card among valid ones must reject the entire service batch (all-or-nothing)")
-        XCTAssertEqual(try unattachedCount(db: db), 2,
-                       "Both messages must remain unattached after all-or-nothing rejection")
+        // Graceful degradation: the valid card survives, only the invalid one is dropped
+        XCTAssertNotNil(result,
+                        "Valid cards must survive even when other cards in the same service batch are invalid")
+        let repo = BriefRepository(database: db)
+        let cards = try repo.fetchBriefCards(briefID: result!)
+        XCTAssertEqual(cards.count, 1, "Only the valid card must be persisted")
+        XCTAssertEqual(cards[0].conversationId, "c1")
     }
 
     // MARK: - Extra fields (forward compatibility)
