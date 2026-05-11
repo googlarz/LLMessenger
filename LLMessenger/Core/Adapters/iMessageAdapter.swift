@@ -57,13 +57,20 @@ final class iMessageAdapter: MessengerAdapter {
                      isFromMe: Bool)]
 
         rows = try await dbQueue.read { db in
+            // Discover the attributed body column name (varies by macOS version).
+            let columns = try Row.fetchAll(db, sql: "PRAGMA table_info(message)")
+            let attrCol = columns.compactMap { $0["name"] as? String }
+                .first { $0 == "attributedBody" || $0 == "attributed_body" }
+
+            let attrSelect = attrCol.map { ", m.\($0) AS attr_body" } ?? ""
+            let attrWhere = attrCol.map { " OR m.\($0) IS NOT NULL" } ?? ""
             let sql = """
                 SELECT
                     c.guid        AS chat_guid,
                     COALESCE(c.display_name, '') AS display_name,
                     c.style       AS style,
                     COALESCE(h.id, '') AS handle_id,
-                    m.text        AS text,
+                    m.text        AS text\(attrSelect),
                     m.date        AS date_ns,
                     m.rowid       AS msg_rowid,
                     m.is_from_me  AS is_from_me
@@ -71,14 +78,21 @@ final class iMessageAdapter: MessengerAdapter {
                 JOIN chat_message_join cmj ON m.rowid = cmj.message_id
                 JOIN chat c               ON cmj.chat_id = c.rowid
                 LEFT JOIN handle h        ON m.handle_id = h.rowid
-                WHERE m.text IS NOT NULL
-                  AND m.text != ''
-                  AND m.error  = 0
+                WHERE (m.text IS NOT NULL AND m.text != ''\(attrWhere))
                   AND m.date   > ?
                 ORDER BY m.date ASC
             """
             return try Row.fetchAll(db, sql: sql, arguments: [sinceNs]).compactMap { row in
-                guard let text  = row["text"]     as? String, !text.isEmpty,
+                let rawText = row["text"] as? String ?? ""
+                let text: String
+                if !rawText.isEmpty {
+                    text = rawText
+                } else if let blob = row["attr_body"] as? Data {
+                    text = Self.extractTextFromAttributedBody(blob) ?? ""
+                } else {
+                    text = ""
+                }
+                guard !text.isEmpty,
                       let guid  = row["chat_guid"] as? String,
                       let ns    = row["date_ns"]   as? Int64,
                       let rowid = row["msg_rowid"] as? Int64
@@ -92,9 +106,12 @@ final class iMessageAdapter: MessengerAdapter {
                 var handle: String = row["handle_id"] ?? ""
                 if handle.isEmpty && fromMe && style != 43 {
                     if let range = guid.range(of: ";-;") {
-                        handle = String(guid[range.upperBound...])
+                        let extracted = String(guid[range.upperBound...])
+                        if !extracted.isEmpty { handle = extracted }
                     }
                 }
+                // Drop sent messages we can't attribute to a conversation.
+                if handle.isEmpty && fromMe { return nil }
                 return (chatGUID: guid, displayName: name, style: style,
                         handleID: handle, text: text, dateNs: ns, msgRowid: rowid,
                         isFromMe: fromMe)
@@ -111,7 +128,10 @@ final class iMessageAdapter: MessengerAdapter {
             trimmed = rows
         }
 
-        return AdapterFetchResult(conversations: Self.group(rows: trimmed, contactNames: contactNames))
+        let groupParticipants = try await loadGroupParticipants(db: dbQueue)
+        return AdapterFetchResult(conversations: Self.group(
+            rows: trimmed, contactNames: contactNames, groupParticipants: groupParticipants
+        ))
     }
 
     func send(conversationID: String, text: String) async throws {
@@ -121,12 +141,16 @@ final class iMessageAdapter: MessengerAdapter {
         let escapedText = text
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\" & linefeed & \"")
+            .replacingOccurrences(of: "\r", with: "\" & return & \"")
+            .replacingOccurrences(of: "\0", with: "")
 
         let script: String
         if isGroup {
             let escapedGUID = conversationID
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\0", with: "")
             script = """
             tell application "Messages"
                 set targetChat to first chat whose id is "\(escapedGUID)"
@@ -137,6 +161,7 @@ final class iMessageAdapter: MessengerAdapter {
             let escapedID = conversationID
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\0", with: "")
             script = """
             tell application "Messages"
                 set targetService to 1st service whose service type is iMessage
@@ -176,8 +201,19 @@ final class iMessageAdapter: MessengerAdapter {
         rows: [(chatGUID: String, displayName: String, style: Int64,
                 handleID: String, text: String, dateNs: Int64, msgRowid: Int64,
                 isFromMe: Bool)],
-        contactNames: [String: String] = [:]
+        contactNames: [String: String] = [:],
+        groupParticipants: [String: [String]] = [:]
     ) -> [AdapterConversation] {
+        // Suffix-based fallback: strip + and country code, match subscriber number.
+        let resolve: (String) -> String? = { handle in
+            if let name = contactNames[handle] { return name }
+            let digits = handle.filter { $0.isNumber }
+            for len in stride(from: min(digits.count, 10), through: 7, by: -1) {
+                if let name = contactNames[String(digits.suffix(len))] { return name }
+            }
+            return nil
+        }
+
         var byID: [String: (name: String, type: ConversationType, messages: [AdapterMessage])] = [:]
         var order: [String] = []
 
@@ -189,15 +225,22 @@ final class iMessageAdapter: MessengerAdapter {
 
             if isGroup {
                 convID   = row.chatGUID
-                convName = row.displayName.isEmpty ? "Group Chat" : row.displayName
+                if !row.displayName.isEmpty {
+                    convName = row.displayName
+                } else if let handles = groupParticipants[row.chatGUID] {
+                    let names = handles.prefix(4).map { resolve($0) ?? $0 }
+                    convName = names.joined(separator: ", ")
+                } else {
+                    convName = "Group Chat"
+                }
                 convType = .group
             } else {
                 convID   = row.handleID
-                convName = contactNames[row.handleID] ?? row.handleID
+                convName = resolve(row.handleID) ?? row.handleID
                 convType = .dm
             }
 
-            let senderName = row.isFromMe ? "Me" : (contactNames[row.handleID] ?? row.handleID)
+            let senderName = row.isFromMe ? "Me" : (resolve(row.handleID) ?? row.handleID)
             let date = Date(timeIntervalSince1970: TimeInterval(row.dateNs) / 1_000_000_000 + kMacEpochOffset)
             let msg = AdapterMessage(
                 id: "imsg-\(row.msgRowid)",
@@ -220,6 +263,60 @@ final class iMessageAdapter: MessengerAdapter {
         }
     }
 
+    private func loadGroupParticipants(db: DatabaseQueue) async throws -> [String: [String]] {
+        try await db.read { db in
+            let sql = """
+                SELECT c.guid AS chat_guid, h.id AS handle_id
+                FROM chat c
+                JOIN chat_handle_join chj ON c.rowid = chj.chat_id
+                JOIN handle h             ON chj.handle_id = h.rowid
+                WHERE c.style = 43
+            """
+            var result: [String: [String]] = [:]
+            for row in try Row.fetchAll(db, sql: sql) {
+                guard let guid = row["chat_guid"] as? String,
+                      let handle = row["handle_id"] as? String else { continue }
+                result[guid, default: []].append(handle)
+            }
+            return result
+        }
+    }
+
+    // MARK: - attributed_body extraction
+
+    static func extractTextFromAttributedBody(_ data: Data) -> String? {
+        // chat.db stores attributed_body as a serialized NSAttributedString (typedstream).
+        // Try NSKeyedUnarchiver first (macOS 13+ may use this format).
+        if let attrStr = try? NSKeyedUnarchiver.unarchivedObject(
+            ofClasses: [NSAttributedString.self, NSMutableAttributedString.self,
+                        NSString.self, NSMutableString.self,
+                        NSDictionary.self, NSMutableDictionary.self,
+                        NSArray.self, NSMutableArray.self, NSNumber.self],
+            from: data
+        ) as? NSAttributedString {
+            let text = attrStr.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty { return text }
+        }
+        // Fallback: scan for the longest printable UTF-8 run in the binary data.
+        let bytes = [UInt8](data)
+        var best = ""
+        var start = -1
+        for i in 0...bytes.count {
+            let isPrintable = i < bytes.count && (bytes[i] >= 0x20 && bytes[i] != 0x7F || bytes[i] >= 0xC0)
+            if isPrintable {
+                if start < 0 { start = i }
+            } else if start >= 0 {
+                if let candidate = String(bytes: bytes[start..<i], encoding: .utf8),
+                   candidate.count > best.count {
+                    best = candidate
+                }
+                start = -1
+            }
+        }
+        let trimmed = best.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count >= 2 ? trimmed : nil
+    }
+
     // MARK: - Contact name resolution
 
     private func loadContactNames() async -> [String: String] {
@@ -233,26 +330,39 @@ final class iMessageAdapter: MessengerAdapter {
             guard granted == true else { return [:] }
         }
 
-        var names: [String: String] = [:]
-        let keysToFetch = [CNContactGivenNameKey, CNContactFamilyNameKey,
-                           CNContactPhoneNumbersKey, CNContactEmailAddressesKey] as [CNKeyDescriptor]
-        let request = CNContactFetchRequest(keysToFetch: keysToFetch)
-        try? store.enumerateContacts(with: request) { contact, _ in
-            let fullName = [contact.givenName, contact.familyName]
-                .filter { !$0.isEmpty }.joined(separator: " ")
-            guard !fullName.isEmpty else { return }
+        return await Task.detached(priority: .utility) {
+            var names: [String: String] = [:]
+            let keysToFetch = [CNContactGivenNameKey, CNContactFamilyNameKey,
+                               CNContactPhoneNumbersKey, CNContactEmailAddressesKey] as [CNKeyDescriptor]
+            let request = CNContactFetchRequest(keysToFetch: keysToFetch)
+            try? store.enumerateContacts(with: request) { contact, _ in
+                let fullName = [contact.givenName, contact.familyName]
+                    .filter { !$0.isEmpty }.joined(separator: " ")
+                guard !fullName.isEmpty else { return }
 
-            // Index by all phone numbers (normalised) and email addresses.
-            for phone in contact.phoneNumbers {
-                let digits = phone.value.stringValue
-                    .components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
-                if !digits.isEmpty { names["+" + digits] = fullName }
-                names[phone.value.stringValue] = fullName
+                // Index by all phone numbers (normalised) and email addresses.
+                // chat.db stores handles in E.164 format (e.g. +491712404386).
+                // Contacts may store local format (e.g. 01712404386), so we store
+                // the subscriber number (leading 0 stripped) for suffix matching.
+                for phone in contact.phoneNumbers {
+                    let digits = phone.value.stringValue
+                        .components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
+                    guard !digits.isEmpty else { continue }
+                    names["+" + digits] = fullName
+                    names[phone.value.stringValue] = fullName
+                    if digits.count == 10 {
+                        names["+1" + digits] = fullName
+                    }
+                    let subscriber = digits.hasPrefix("0") ? String(digits.dropFirst()) : digits
+                    if subscriber.count >= 7 {
+                        names[subscriber] = fullName
+                    }
+                }
+                for email in contact.emailAddresses {
+                    names[email.value as String] = fullName
+                }
             }
-            for email in contact.emailAddresses {
-                names[email.value as String] = fullName
-            }
-        }
-        return names
+            return names
+        }.value
     }
 }
