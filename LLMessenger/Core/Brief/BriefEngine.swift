@@ -137,7 +137,9 @@ final class BriefEngine {
                                 service: service,
                                 cards: parsed.cards,
                                 stats: (parsed.totalMessages ?? serviceMessages.count, parsed.totalThreads ?? 0, parsed.totalPeople ?? 0),
-                                sourceMessages: Dictionary(uniqueKeysWithValues: serviceMessages.map { ($0.messageId, $0) }),
+                                // uniquingKeysWith: keeps the first occurrence when Signal produces
+                                // duplicate messageIds (same sender+timestamp), preventing a crash.
+                                sourceMessages: Dictionary(serviceMessages.map { ($0.messageId, $0) }, uniquingKeysWith: { a, _ in a }),
                                 success: true
                             )
                         } else {
@@ -289,7 +291,10 @@ final class BriefEngine {
                             let dbCount = dbMessages.filter { $0.timestamp > since }.count
                             print("[BriefEngine] \(serviceID): using DB fallback, \(dbCount) messages in window (adapter: \(adapterResult == nil ? "nil" : "empty"))")
                             guard !dbMessages.isEmpty else { return nil }
-                            newlyStored = dbMessages.filter { $0.timestamp > since }
+                            // Only attach unattached messages; already-briefed ones are included
+                            // in sourceMessages for validation but must not have their briefId
+                            // reassigned to this new brief.
+                            newlyStored = dbMessages.filter { $0.timestamp > since && $0.briefId == nil }
                             sourceMessages = dbMessages
                             // Reconstruct AdapterConversation-like grouping from stored messages.
                             var byConv: [String: [Message]] = [:]
@@ -389,7 +394,7 @@ final class BriefEngine {
             if res.success {
                 activeServices.append(res.service)
                 messagesToAttach.append(contentsOf: res.newlyStored)
-                sourceMessagesByService[res.service] = Dictionary(uniqueKeysWithValues: res.sourceMessages.map { ($0.messageId, $0) })
+                sourceMessagesByService[res.service] = Dictionary(res.sourceMessages.map { ($0.messageId, $0) }, uniquingKeysWith: { a, _ in a })
                 totalMessages += res.stats.messages
                 totalThreads += res.stats.threads
                 totalPeople += res.stats.people
@@ -432,7 +437,7 @@ final class BriefEngine {
     }
 
     private nonisolated func decodeAndValidateBrief(_ text: String, service: String, sourceMessages: [Message]) throws -> BriefJSON {
-        let cleanText = stripMarkdownFences(text)
+        let cleanText = repairJSON(stripMarkdownFences(text))
         guard let data = cleanText.data(using: .utf8) else {
             throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid UTF-8"))
         }
@@ -440,30 +445,55 @@ final class BriefEngine {
         guard !parsed.cards.isEmpty else { throw BriefEngineValidationError.emptyCards }
 
         let sourceIDs = Set(sourceMessages.map(\.messageId))
+        var validCards: [BriefCard] = []
         for card in parsed.cards {
             guard card.service == service else {
-                throw BriefEngineValidationError.wrongService(cardId: card.id, service: card.service)
+                print("[BriefEngine] skipping card \(card.id): wrong service \(card.service)")
+                continue
             }
 
-            let cardSourceIDs = card.sourceMessageIds.filter { !$0.isEmpty }
-            guard !cardSourceIDs.isEmpty else {
-                throw BriefEngineValidationError.missingSourceMessageIds(cardId: card.id)
+            let validSourceIDs = card.sourceMessageIds.filter { !$0.isEmpty && sourceIDs.contains($0) }
+            let droppedCount = card.sourceMessageIds.count - validSourceIDs.count
+            if droppedCount > 0 {
+                print("[BriefEngine] card \(card.id): dropped \(droppedCount) unknown sourceMessageIds")
+            }
+            guard !validSourceIDs.isEmpty else {
+                print("[BriefEngine] skipping card \(card.id): no valid sourceMessageIds")
+                continue
             }
 
-            for messageID in cardSourceIDs {
-                guard sourceIDs.contains(messageID) else {
-                    throw BriefEngineValidationError.unknownSourceMessageId(cardId: card.id, messageId: messageID)
-                }
+            let validQuotes = card.quotes.filter { q in
+                guard let mid = q.messageId else { return false }
+                return sourceIDs.contains(mid)
+            }
+            if validQuotes.count < card.quotes.count {
+                print("[BriefEngine] card \(card.id): dropped \(card.quotes.count - validQuotes.count) unknown quotes")
             }
 
-            for quote in card.quotes {
-                guard let messageID = quote.messageId, sourceIDs.contains(messageID) else {
-                    throw BriefEngineValidationError.unknownQuoteMessageId(cardId: card.id, messageId: quote.messageId ?? "")
-                }
-            }
+            validCards.append(BriefCard(
+                id: card.id,
+                service: card.service,
+                conversationId: card.conversationId,
+                conversationTitle: card.conversationTitle,
+                headline: card.headline,
+                priority: card.priority,
+                counts: card.counts,
+                summary: card.summary,
+                callback: card.callback,
+                actionItems: card.actionItems,
+                quotes: validQuotes,
+                sourceMessageIds: validSourceIDs
+            ))
         }
 
-        return parsed
+        guard !validCards.isEmpty else { throw BriefEngineValidationError.emptyCards }
+
+        return BriefJSON(
+            totalMessages: parsed.totalMessages,
+            totalThreads: parsed.totalThreads,
+            totalPeople: parsed.totalPeople,
+            cards: validCards
+        )
     }
 
     private func persistBriefCards(
@@ -616,6 +646,21 @@ final class BriefEngine {
             return lhs.messageId < rhs.messageId
         }
         return (lhs.id ?? 0) < (rhs.id ?? 0)
+    }
+
+    private nonisolated func repairJSON(_ text: String) -> String {
+        var s = text
+        // Remove trailing commas before ] or }
+        s = s.replacingOccurrences(of: #",\s*\]"#, with: "]", options: .regularExpression)
+        s = s.replacingOccurrences(of: #",\s*\}"#, with: "}", options: .regularExpression)
+        // Balance brackets if the LLM truncated the output
+        let openBraces = s.filter { $0 == "{" }.count
+        let closeBraces = s.filter { $0 == "}" }.count
+        let openBrackets = s.filter { $0 == "[" }.count
+        let closeBrackets = s.filter { $0 == "]" }.count
+        if closeBraces < openBraces { s += String(repeating: "}", count: openBraces - closeBraces) }
+        if closeBrackets < openBrackets { s += String(repeating: "]", count: openBrackets - closeBrackets) }
+        return s
     }
 
     private nonisolated func stripMarkdownFences(_ text: String) -> String {
