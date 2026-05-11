@@ -19,6 +19,8 @@ final class FakeMessengerAdapter: MessengerAdapter {
     private(set) var startCallCount = 0
     private(set) var fetchConfigs: [FetchConfig] = []
 
+    var healthCheckOverride: AdapterHealthResult?
+
     init(serviceID: String) { self.serviceID = serviceID }
 
     func start() async throws {
@@ -40,7 +42,8 @@ final class FakeMessengerAdapter: MessengerAdapter {
 
     func send(conversationID: String, text: String) async throws {}
     func healthCheck() async -> AdapterHealthResult {
-        AdapterHealthResult(status: healthStatus, reason: nil, retryAfter: nil)
+        if let override = healthCheckOverride { return override }
+        return AdapterHealthResult(status: healthStatus, reason: nil, retryAfter: nil)
     }
 
     // Helpers for building test data
@@ -318,5 +321,81 @@ final class PollEngineCycleTests: XCTestCase {
 
         XCTAssertFalse(secondFired,
                        "onPollSucceeded must NOT fire on second poll when all messages are duplicates")
+    }
+
+    // MARK: - Post-poll health check
+
+    func testHealthWarningAfterSuccessfulFetchWritesWarningStatus() async throws {
+        let db = try makeDB()
+        let adapter = FakeMessengerAdapter(serviceID: "signal")
+        adapter.addMessage(convId: "c1", msgId: "m1")
+        adapter.healthCheckOverride = AdapterHealthResult(
+            status: .warning,
+            reason: "Signal watch daemon may be stuck — newest message is 48h old",
+            retryAfter: nil
+        )
+
+        let engine = makeEngine(db: db)
+        engine.register(adapter: adapter, config: signalConfig())
+        await engine.pollAll()
+
+        let health = try await db.dbQueue.read { d in
+            try ServiceHealth.fetchOne(d, key: "signal")
+        }
+        XCTAssertEqual(health?.status, "warning",
+                       "Health check warning after fetch must write 'warning' status, not 'ok'")
+        XCTAssertNotNil(health?.lastError,
+                        "Health check warning reason must be stored in lastError")
+    }
+
+    func testHealthWarningFiresOnHealthWarningCallback() async throws {
+        let db = try makeDB()
+        let adapter = FakeMessengerAdapter(serviceID: "signal")
+        adapter.addMessage(convId: "c1", msgId: "m1")
+        adapter.healthCheckOverride = AdapterHealthResult(
+            status: .warning,
+            reason: "Daemon stuck",
+            retryAfter: nil
+        )
+
+        let engine = makeEngine(db: db)
+        engine.register(adapter: adapter, config: signalConfig())
+
+        var warningServiceID: String?
+        var warningReason: String?
+        engine.onHealthWarning = { serviceID, reason in
+            warningServiceID = serviceID
+            warningReason = reason
+        }
+
+        await engine.pollAll()
+
+        XCTAssertEqual(warningServiceID, "signal",
+                       "onHealthWarning must fire with the correct service ID")
+        XCTAssertEqual(warningReason, "Daemon stuck",
+                       "onHealthWarning must pass the health check reason")
+    }
+
+    func testHealthOkAfterFetchWritesOkStatusAndNoCallback() async throws {
+        let db = try makeDB()
+        let adapter = FakeMessengerAdapter(serviceID: "signal")
+        adapter.addMessage(convId: "c1", msgId: "m1")
+        // healthCheckOverride is nil → returns .ok by default
+
+        let engine = makeEngine(db: db)
+        engine.register(adapter: adapter, config: signalConfig())
+
+        var warningFired = false
+        engine.onHealthWarning = { _, _ in warningFired = true }
+
+        await engine.pollAll()
+
+        let health = try await db.dbQueue.read { d in
+            try ServiceHealth.fetchOne(d, key: "signal")
+        }
+        XCTAssertEqual(health?.status, "ok")
+        XCTAssertNil(health?.lastError)
+        XCTAssertFalse(warningFired,
+                       "onHealthWarning must NOT fire when health check returns ok")
     }
 }

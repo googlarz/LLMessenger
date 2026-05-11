@@ -8,11 +8,13 @@ private final class MenuActionProxy: NSObject {
     var onLast7d: (() -> Void)?
     var onSelectBrief: ((Int64) -> Void)?
     var onOpenSettings: (() -> Void)?
+    var onRestartSignalWatch: (() -> Void)?
 
     @objc func newBrief() { onNewBrief?() }
     @objc func last24h() { onLast24h?() }
     @objc func last7d() { onLast7d?() }
     @objc func openSettings() { onOpenSettings?() }
+    @objc func restartSignalWatch() { onRestartSignalWatch?() }
     @objc func briefSelected(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? Int64 else { return }
         onSelectBrief?(id)
@@ -46,6 +48,10 @@ final class MenuBarController {
     var onOpenSettings: (() -> Void)? {
         didSet { proxy.onOpenSettings = onOpenSettings }
     }
+    var onRestartSignalWatch: (() -> Void)? {
+        didSet { proxy.onRestartSignalWatch = onRestartSignalWatch }
+    }
+    private var signalHealthWarning: String?
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -70,6 +76,11 @@ final class MenuBarController {
 
     func setLastError(_ error: String?) {
         lastError = error
+        rebuildMenu()
+    }
+
+    func setSignalHealthWarning(_ warning: String?) {
+        signalHealthWarning = warning
         rebuildMenu()
     }
 
@@ -172,6 +183,16 @@ final class MenuBarController {
             let errItem = NSMenuItem(title: "⚠ \(err)", action: nil, keyEquivalent: "")
             errItem.isEnabled = false
             menu.addItem(errItem)
+        }
+
+        if let warning = signalHealthWarning {
+            menu.addItem(.separator())
+            let warnItem = NSMenuItem(title: "⚠ \(warning)", action: nil, keyEquivalent: "")
+            warnItem.isEnabled = false
+            menu.addItem(warnItem)
+            let restartItem = NSMenuItem(title: "Restart Signal Watch Daemon", action: #selector(MenuActionProxy.restartSignalWatch), keyEquivalent: "")
+            restartItem.target = proxy
+            menu.addItem(restartItem)
         }
 
         menu.addItem(.separator())

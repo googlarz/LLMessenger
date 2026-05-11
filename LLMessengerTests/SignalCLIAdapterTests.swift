@@ -95,6 +95,49 @@ final class SignalCLIAdapterTests: XCTestCase {
         XCTAssertEqual(result.map(\.id), ["+111", "+222"])
     }
 
+    func testContactNameResolution() {
+        let ts: Int64 = 1_700_000_000_000
+        let row: [String: DatabaseValue] = [
+            "sender": "a1b2c3d4-uuid".databaseValue,
+            "recipient": "+491739048003".databaseValue,
+            "body": "Hello".databaseValue,
+            "timestamp": ts.databaseValue,
+            "group_id": DatabaseValue.null
+        ]
+        let names = ["a1b2c3d4-uuid": "Stefan Ludwig"]
+        let result = SignalCLIAdapter.group(rows: [row], contactNames: names)
+        XCTAssertEqual(result[0].name, "Stefan Ludwig")
+        XCTAssertEqual(result[0].messages[0].sender, "Stefan Ludwig")
+    }
+
+    func testUnresolvedUUIDShowsUnknown() {
+        let ts: Int64 = 1_700_000_000_000
+        let row: [String: DatabaseValue] = [
+            "sender": "a1b2c3d4-e5f6-7890-abcd-ef1234567890".databaseValue,
+            "recipient": "+491739048003".databaseValue,
+            "body": "Hello".databaseValue,
+            "timestamp": ts.databaseValue,
+            "group_id": DatabaseValue.null
+        ]
+        let result = SignalCLIAdapter.group(rows: [row])
+        XCTAssertEqual(result[0].messages[0].sender, "Unknown",
+                       "Long unresolved UUID should show 'Unknown' not the raw UUID")
+    }
+
+    func testGroupNameResolution() {
+        let ts: Int64 = 1_700_000_000_000
+        let row: [String: DatabaseValue] = [
+            "sender": "+4915100000001".databaseValue,
+            "recipient": DatabaseValue.null,
+            "body": "Hey group!".databaseValue,
+            "timestamp": ts.databaseValue,
+            "group_id": "abc123groupid".databaseValue
+        ]
+        let groupNames = ["abc123groupid": "Family Chat"]
+        let result = SignalCLIAdapter.group(rows: [row], groupNames: groupNames)
+        XCTAssertEqual(result[0].name, "Family Chat")
+    }
+
     func testTimestampConvertedCorrectly() {
         let tsMs: Int64 = 1_700_000_000_000
         let row: [String: DatabaseValue] = [

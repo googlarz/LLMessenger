@@ -176,4 +176,21 @@ struct SettingsRepository {
             try ServiceConfig.fetchAll(db)
         }
     }
+
+    // MARK: - Service Health
+
+    func loadServiceHealth(for service: String) throws -> ServiceHealth? {
+        guard let db = database else { throw SettingsError.databaseNotConfigured }
+        return try db.dbQueue.read { db in
+            try ServiceHealth.fetchOne(db, key: service)
+        }
+    }
+
+    func loadAllServiceHealth() throws -> [String: ServiceHealth] {
+        guard let db = database else { throw SettingsError.databaseNotConfigured }
+        let rows = try db.dbQueue.read { db in
+            try ServiceHealth.fetchAll(db)
+        }
+        return Dictionary(uniqueKeysWithValues: rows.map { ($0.service, $0) })
+    }
 }

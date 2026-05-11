@@ -134,7 +134,7 @@ final class MockAdapter: MessengerAdapter {
 
     // MARK: - First-run 24h window
 
-    func testFirstRunFetchWindowIs24Hours() async throws {
+    func testFirstRunFetchWindowIs48Hours() async throws {
         let db = try AppDatabase(inMemory: true)
 
         // Capture the FetchConfig passed to the adapter.
@@ -154,11 +154,10 @@ final class MockAdapter: MessengerAdapter {
             XCTFail("Expected .byTime fetch mode"); return
         }
 
-        // since should be approximately 24 hours ago, not 30 minutes.
         let age = before.timeIntervalSince(since)
-        XCTAssertGreaterThan(age, 23 * 3600, "First-run window must be ≥ 23 hours (got \(age / 3600)h)")
-        XCTAssertLessThan(age, 25 * 3600 + after.timeIntervalSince(before),
-                          "First-run window must be ≤ 25 hours")
+        XCTAssertGreaterThan(age, 47 * 3600, "First-run window must be ≥ 47 hours (got \(age / 3600)h)")
+        XCTAssertLessThan(age, 49 * 3600 + after.timeIntervalSince(before),
+                          "First-run window must be ≤ 49 hours")
     }
 }
 

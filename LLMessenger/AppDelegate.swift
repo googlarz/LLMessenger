@@ -193,6 +193,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menuBar.onOpenSettings = openSettings
             state.onOpenSettings = openSettings
 
+            menuBar.onRestartSignalWatch = { [weak self] in
+                guard let self else { return }
+                Task {
+                    guard let signalAdapter = self.appState?.adapters["signal"] as? SignalCLIAdapter else { return }
+                    let ok = await signalAdapter.restartWatchDaemon()
+                    if ok {
+                        self.menuBarController?.setSignalHealthWarning(nil)
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        try? await self.pollEngine?.pollNow(serviceID: "signal")
+                    } else {
+                        self.menuBarController?.setSignalHealthWarning("Failed to restart Signal watch daemon")
+                    }
+                }
+            }
+
             // Apply saved theme
             let savedTheme = UserDefaults.standard.string(forKey: "app_theme") ?? "system"
             applyTheme(savedTheme)
@@ -228,6 +243,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menuBarController?.setLastError(self.appState?.lastError)
                 if let health = self.pollEngine?.currentServiceHealth {
                     self.appState?.updateServiceHealth(health)
+                    if health["signal"] == .ok {
+                        self.menuBarController?.setSignalHealthWarning(nil)
+                    }
                 }
             }
 
@@ -239,6 +257,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.appState?.updateServiceHealth(health)
                 }
                 self.menuBarController?.setLastError(msg)
+            }
+
+            engine.onHealthWarning = { [weak self] serviceID, reason in
+                guard let self else { return }
+                if serviceID == "signal" {
+                    self.menuBarController?.setSignalHealthWarning(reason)
+                }
+                if let health = self.pollEngine?.currentServiceHealth {
+                    self.appState?.updateServiceHealth(health)
+                }
             }
 
             let telegramBinary = telegramAdapterPath()

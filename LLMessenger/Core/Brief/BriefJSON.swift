@@ -136,6 +136,13 @@ struct BriefQuote: Codable {
     let time: String
     let text: String
 
+    init(messageId: String?, from: String, time: String, text: String) {
+        self.messageId = messageId
+        self.from = from
+        self.time = time
+        self.text = text
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let raw = try c.decodeIfPresent(String.self, forKey: .messageId)

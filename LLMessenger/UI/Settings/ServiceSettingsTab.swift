@@ -9,6 +9,7 @@ struct ServiceSettingsTab: View {
     @State private var telegramApiId: String = ""
     @State private var telegramApiHash: String = ""
     @State private var saveStatus: SaveStatus = .idle
+    @State private var healthByService: [String: ServiceHealth] = [:]
     private let repo: SettingsRepository
 
     enum SaveStatus: Equatable {
@@ -29,7 +30,8 @@ struct ServiceSettingsTab: View {
                             config: $cfg,
                             signalAccount: $signalAccount,
                             telegramApiId: $telegramApiId,
-                            telegramApiHash: $telegramApiHash
+                            telegramApiHash: $telegramApiHash,
+                            health: healthByService[cfg.service]
                         )
                     }
                 }
@@ -73,6 +75,7 @@ struct ServiceSettingsTab: View {
         let tg = repo.loadTelegramCredentials()
         telegramApiId = tg.apiId
         telegramApiHash = tg.apiHash
+        healthByService = (try? repo.loadAllServiceHealth()) ?? [:]
     }
 
     private func save() {
@@ -96,6 +99,7 @@ private struct ServiceCard: View {
     @Binding var signalAccount: String
     @Binding var telegramApiId: String
     @Binding var telegramApiHash: String
+    var health: ServiceHealth?
 
     @State private var showingTelegramSignIn = false
     @State private var telegramSignInAdapter: SubprocessAdapter? = nil
@@ -321,21 +325,42 @@ private struct ServiceCard: View {
 
     private var statusColor: Color {
         guard config.enabled else { return Color(nsColor: .tertiaryLabelColor) }
+        if let health, health.status == "error" { return .red }
+        if let health, health.status == "warning" { return .orange }
+        if let health, health.status == "ok" { return .green }
+        // No health record yet — PollEngine hasn't confirmed status.
+        // Don't trust isConnected for iMessage (isReadableFile ignores TCC/FDA).
+        if service == "imessage" { return .orange }
         return isConnected ? .green : .orange
     }
 
     private var statusLabel: String {
         guard config.enabled else { return "Disabled" }
+        if let health, health.status == "error" {
+            return health.lastError ?? "Error"
+        }
+        if let health, health.status == "warning" {
+            return health.lastError ?? "Warning"
+        }
+        if let health, health.status == "ok" {
+            switch service {
+            case "imessage": return "Available"
+            case "signal":   return signalAccount
+            case "telegram": return "Credentials configured"
+            default:         return "Connected"
+            }
+        }
+        // No health record yet — show neutral status.
         switch service {
         case "imessage":
-            return isConnected ? "Available" : "Full Disk Access required"
+            return "Checking…"
         case "signal":
-            return isConnected ? signalAccount : "Phone number required"
+            return isConnected ? "Checking…" : "Phone number required"
         case "telegram":
             if isConnected && !sessionFileExists { return "Session required" }
-            return isConnected ? "Credentials configured" : "API credentials required"
+            return isConnected ? "Checking…" : "API credentials required"
         default:
-            return isConnected ? "Connected" : "Not configured"
+            return isConnected ? "Checking…" : "Not configured"
         }
     }
 

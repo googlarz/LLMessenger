@@ -12,6 +12,7 @@ final class PollEngine {
     var failureCounts: [String: Int] = [:]
     var onPollSucceeded: (() async -> Void)?
     var onPollFailed: ((String, Error) async -> Void)?
+    var onHealthWarning: ((String, String) async -> Void)?
 
     init(database: AppDatabase) {
         self.database = database
@@ -133,7 +134,18 @@ final class PollEngine {
         do {
             let hadNew = try store(result: result, service: serviceID)
             failureCounts[serviceID] = 0
-            writeHealth(service: serviceID, status: "ok", error: nil, updateLastCheck: true)
+
+            let healthResult = await adapter.healthCheck()
+            if healthResult.status == .ok {
+                writeHealth(service: serviceID, status: "ok", error: nil, updateLastCheck: true)
+            } else {
+                writeHealth(service: serviceID, status: healthResult.status.rawValue,
+                            error: healthResult.reason, updateLastCheck: true)
+                if let reason = healthResult.reason {
+                    await onHealthWarning?(serviceID, reason)
+                }
+            }
+
             return hadNew
         } catch {
             let failures = (failureCounts[serviceID] ?? 0) + 1

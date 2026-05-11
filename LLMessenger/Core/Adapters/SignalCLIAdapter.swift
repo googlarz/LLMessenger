@@ -31,10 +31,19 @@ final class SignalCLIAdapter: MessengerAdapter {
         var grdbConfig = Configuration()
         grdbConfig.readonly = true
         dbQueue = try DatabaseQueue(path: storeDBPath, configuration: grdbConfig)
-        // Load names non-fatally — missing daemon just means raw IDs are shown.
+        // Load names: try signal-cli daemon RPC first, then fill gaps from signal-mcp's
+        // conversations table (populated by desktop sync). This way names resolve even
+        // when the daemon isn't running.
         async let contacts = loadContactNames()
         async let groups   = loadGroupNames()
         (contactNames, groupNames) = await (contacts, groups)
+        let storeNames = await loadNamesFromStore()
+        for (key, name) in storeNames.contacts where contactNames[key] == nil {
+            contactNames[key] = name
+        }
+        for (key, name) in storeNames.groups where groupNames[key] == nil {
+            groupNames[key] = name
+        }
         healthStatus = .ok
     }
 
@@ -55,6 +64,13 @@ final class SignalCLIAdapter: MessengerAdapter {
             let (c, g) = await (contacts, groups)
             if !c.isEmpty { contactNames = c }
             if !g.isEmpty { groupNames   = g }
+            let storeNames = await loadNamesFromStore()
+            for (key, name) in storeNames.contacts where contactNames[key] == nil {
+                contactNames[key] = name
+            }
+            for (key, name) in storeNames.groups where groupNames[key] == nil {
+                groupNames[key] = name
+            }
         }
 
         // Snapshot before any concurrent work so reads inside closures
@@ -123,19 +139,137 @@ final class SignalCLIAdapter: MessengerAdapter {
     }
 
     func healthCheck() async -> AdapterHealthResult {
-        let storeOK = FileManager.default.fileExists(atPath: storeDBPath)
-        healthStatus = storeOK ? .ok : .warning
-        return AdapterHealthResult(
-            status: healthStatus,
-            reason: storeOK ? nil : "signal-mcp store not found",
-            retryAfter: nil
-        )
+        guard FileManager.default.fileExists(atPath: storeDBPath) else {
+            healthStatus = .warning
+            return AdapterHealthResult(status: .warning, reason: "signal-mcp store not found", retryAfter: nil)
+        }
+
+        let stalenessResult = await checkDataFreshness()
+        if stalenessResult.isStale {
+            let hasLockConflict = detectReceiveLockConflict()
+            if hasLockConflict {
+                NSLog("[SignalCLIAdapter] Receive lock conflict detected — attempting auto-recovery")
+                let recovered = await restartWatchDaemon()
+                if recovered {
+                    NSLog("[SignalCLIAdapter] Auto-recovery: watch daemon restarted")
+                    healthStatus = .warning
+                    return AdapterHealthResult(
+                        status: .warning,
+                        reason: "Signal watch daemon was stuck (receive lock conflict) — restarted automatically",
+                        retryAfter: nil
+                    )
+                }
+            }
+            let daemonDiag = readWatchDaemonError()
+            let reason = stalenessResult.reason + (daemonDiag.map { "\n\($0)" } ?? "")
+            healthStatus = .warning
+            return AdapterHealthResult(status: .warning, reason: reason, retryAfter: nil)
+        }
+
+        healthStatus = .ok
+        return AdapterHealthResult(status: .ok, reason: nil, retryAfter: nil)
+    }
+
+    private static let stalenessThreshold: TimeInterval = 2 * 3600
+
+    private struct FreshnessResult {
+        let isStale: Bool
+        let reason: String
+        let newestMessageDate: Date?
+    }
+
+    private func checkDataFreshness() async -> FreshnessResult {
+        guard let dbQueue else {
+            return FreshnessResult(isStale: true, reason: "Signal DB not open", newestMessageDate: nil)
+        }
+        let newestMs: Int64? = try? await dbQueue.read { db in
+            try Int64.fetchOne(db, sql: "SELECT MAX(timestamp) FROM messages")
+        }
+        guard let ms = newestMs, ms > 0 else {
+            return FreshnessResult(isStale: true, reason: "No messages in signal-mcp store", newestMessageDate: nil)
+        }
+        let newestDate = Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
+        let age = Date().timeIntervalSince(newestDate)
+        if age > Self.stalenessThreshold {
+            let hours = Int(age / 3600)
+            let reason = "Signal watch daemon may be stuck — newest message is \(hours)h old"
+            return FreshnessResult(isStale: true, reason: reason, newestMessageDate: newestDate)
+        }
+        return FreshnessResult(isStale: false, reason: "", newestMessageDate: newestDate)
+    }
+
+    private static let watchErrPath = NSHomeDirectory() + "/.local/share/signal-mcp/watch.err"
+
+    private func detectReceiveLockConflict() -> Bool {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: Self.watchErrPath)),
+              let text = String(data: data, encoding: .utf8) else { return false }
+        return text.contains("Receive command cannot be used if messages are already being received")
+    }
+
+    private func readWatchDaemonError() -> String? {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: Self.watchErrPath)),
+              !data.isEmpty,
+              let text = String(data: data, encoding: .utf8) else { return nil }
+        let lines = text.components(separatedBy: .newlines).filter { !$0.isEmpty }
+        let tail = lines.suffix(3).joined(separator: "\n")
+        return tail.isEmpty ? nil : "Watch daemon log: \(tail)"
+    }
+
+    func restartWatchDaemon() async -> Bool {
+        // Kill any signal-cli process (daemon, receive, or otherwise) that may hold
+        // the receive lock and prevent the watch daemon from working.
+        for pattern in ["signal-cli.*daemon", "signal-cli.*receive", "org.asamk.signal.Main"] {
+            let kill = Process()
+            kill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+            kill.arguments = ["-f", pattern]
+            try? kill.run()
+            kill.waitUntilExit()
+        }
+
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+
+        // Clear the error log so stale "receive lock" errors don't persist.
+        try? "".write(toFile: Self.watchErrPath, atomically: true, encoding: .utf8)
+
+        let kickstart = Process()
+        kickstart.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        kickstart.arguments = ["kickstart", "-k", "gui/\(getuid())/com.signal-mcp.watch"]
+        do {
+            try kickstart.run()
+            kickstart.waitUntilExit()
+            return kickstart.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 
     /// Resolve a UUID / phone number to a display name. Returns nil when unknown.
     func contactName(for id: String) -> String? { contactNames[id] }
     /// Resolve a base64 group ID to a display name. Returns nil when unknown.
     func groupName(for id: String) -> String? { groupNames[id] }
+
+    /// Reads conversation names from signal-mcp's `conversations` table (populated by desktop sync).
+    private func loadNamesFromStore() async -> (contacts: [String: String], groups: [String: String]) {
+        guard let dbQueue else { return ([:], [:]) }
+        let rows = try? await dbQueue.read { db -> [(id: String, name: String, type: String)] in
+            try Row.fetchAll(db, sql: "SELECT id, name, type FROM conversations").compactMap { row in
+                guard let id = row["id"] as? String,
+                      let name = row["name"] as? String,
+                      let type = row["type"] as? String else { return nil }
+                return (id: id, name: name, type: type)
+            }
+        }
+        var contacts: [String: String] = [:]
+        var groups: [String: String] = [:]
+        for row in rows ?? [] {
+            if row.type == "group" {
+                groups[row.id] = row.name
+            } else {
+                contacts[row.id] = row.name
+            }
+        }
+        return (contacts, groups)
+    }
 
     // MARK: - Private RPC helpers
 

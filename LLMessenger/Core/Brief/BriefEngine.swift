@@ -214,6 +214,16 @@ final class BriefEngine {
         briefingInFlight = true
         defer { briefingInFlight = false }
 
+        // Compress oldest uncompressed brief before creating a new one (same as processNewMessages).
+        if let prev = try repository.fetchOldestUncompressedBrief(), let prevID = prev.id {
+            let compressor = MemoryCompressor(client: client, model: model, basePrompt: basePrompt)
+            do {
+                try await compressor.compress(briefID: prevID, repository: repository)
+            } catch {
+                try? repository.setEpisodicSummary(briefID: prevID, summary: "")
+            }
+        }
+
         let since = Date().addingTimeInterval(-Double(hours) * 3600)
         let fetchConfig = FetchConfig(mode: .byTime(since: since))
         let dateFormatter = DateFormatter()

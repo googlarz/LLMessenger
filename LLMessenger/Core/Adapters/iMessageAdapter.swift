@@ -21,12 +21,29 @@ final class iMessageAdapter: MessengerAdapter {
     // MARK: - MessengerAdapter
 
     func start() async throws {
-        guard FileManager.default.fileExists(atPath: dbPath) else {
-            throw AdapterError.initFailed("Messages database not found at \(dbPath). Ensure macOS Messages is set up.")
+        let messagesDir = NSHomeDirectory() + "/Library/Messages"
+        let dirExists = FileManager.default.fileExists(atPath: messagesDir)
+        let dbExists = FileManager.default.fileExists(atPath: dbPath)
+
+        if dirExists && !dbExists {
+            throw AdapterError.initFailed(
+                "Full Disk Access not granted. Open System Settings › Privacy & Security › Full Disk Access and add LLMessenger."
+            )
+        } else if !dirExists {
+            throw AdapterError.initFailed(
+                "Messages directory not found. Ensure macOS Messages is set up."
+            )
         }
+
         var cfg = Configuration()
         cfg.readonly = true
-        dbQueue = try DatabaseQueue(path: dbPath, configuration: cfg)
+        do {
+            dbQueue = try DatabaseQueue(path: dbPath, configuration: cfg)
+        } catch {
+            throw AdapterError.initFailed(
+                "Cannot open Messages database — Full Disk Access may not be granted. Open System Settings › Privacy & Security › Full Disk Access and add LLMessenger."
+            )
+        }
         contactNames = await loadContactNames()
         healthStatus = .ok
     }
@@ -186,11 +203,23 @@ final class iMessageAdapter: MessengerAdapter {
     }
 
     func healthCheck() async -> AdapterHealthResult {
-        let ok = FileManager.default.fileExists(atPath: dbPath)
+        let messagesDir = NSHomeDirectory() + "/Library/Messages"
+        let dirExists = FileManager.default.fileExists(atPath: messagesDir)
+        let dbExists = FileManager.default.fileExists(atPath: dbPath)
+
+        if dirExists && !dbExists {
+            healthStatus = .warning
+            return AdapterHealthResult(
+                status: .warning,
+                reason: "Full Disk Access not granted — add LLMessenger in System Settings › Privacy & Security",
+                retryAfter: nil
+            )
+        }
+        let ok = dbExists && dbQueue != nil
         healthStatus = ok ? .ok : .warning
         return AdapterHealthResult(
             status: healthStatus,
-            reason: ok ? nil : "Messages database not found",
+            reason: ok ? nil : "Messages database not accessible",
             retryAfter: nil
         )
     }
@@ -285,36 +314,18 @@ final class iMessageAdapter: MessengerAdapter {
     // MARK: - attributed_body extraction
 
     static func extractTextFromAttributedBody(_ data: Data) -> String? {
-        // chat.db stores attributed_body as a serialized NSAttributedString (typedstream).
-        // Try NSKeyedUnarchiver first (macOS 13+ may use this format).
-        if let attrStr = try? NSKeyedUnarchiver.unarchivedObject(
+        // chat.db stores attributed_body as a serialized NSAttributedString.
+        // Only use NSKeyedUnarchiver — the binary scan fallback picks up
+        // internal metadata (class names, archiver keys) as fake message text.
+        guard let attrStr = try? NSKeyedUnarchiver.unarchivedObject(
             ofClasses: [NSAttributedString.self, NSMutableAttributedString.self,
                         NSString.self, NSMutableString.self,
                         NSDictionary.self, NSMutableDictionary.self,
                         NSArray.self, NSMutableArray.self, NSNumber.self],
             from: data
-        ) as? NSAttributedString {
-            let text = attrStr.string.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty { return text }
-        }
-        // Fallback: scan for the longest printable UTF-8 run in the binary data.
-        let bytes = [UInt8](data)
-        var best = ""
-        var start = -1
-        for i in 0...bytes.count {
-            let isPrintable = i < bytes.count && (bytes[i] >= 0x20 && bytes[i] != 0x7F || bytes[i] >= 0xC0)
-            if isPrintable {
-                if start < 0 { start = i }
-            } else if start >= 0 {
-                if let candidate = String(bytes: bytes[start..<i], encoding: .utf8),
-                   candidate.count > best.count {
-                    best = candidate
-                }
-                start = -1
-            }
-        }
-        let trimmed = best.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.count >= 2 ? trimmed : nil
+        ) as? NSAttributedString else { return nil }
+        let text = attrStr.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
     }
 
     // MARK: - Contact name resolution
