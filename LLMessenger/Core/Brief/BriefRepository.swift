@@ -262,7 +262,11 @@ struct BriefRepository {
                         limit: Int = 50) throws -> [MessageSearchResult] {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
         return try database.dbQueue.read { db in
-            let sanitized = query.replacingOccurrences(of: "\"", with: "\"\"") + "*"
+            // Wrap in double-quotes so FTS5 treats the input as a quoted phrase/prefix,
+            // preventing reserved tokens (AND, OR, NOT, NEAR, leading "-") from being
+            // interpreted as operators and causing unexpected results or query errors.
+            let escaped = query.replacingOccurrences(of: "\"", with: "\"\"")
+            let sanitized = "\"\(escaped)\"*"
             var sql = """
                 SELECT m.id as messageRowId, m.service, m.conversationId,
                        m.conversationName, m.sender, m.timestamp, m.briefId as briefID,
@@ -306,7 +310,8 @@ struct BriefRepository {
                       limit: Int = 20) throws -> [Brief] {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
         return try database.dbQueue.read { db in
-            let sanitized = query.replacingOccurrences(of: "\"", with: "\"\"") + "*"
+            let escaped = query.replacingOccurrences(of: "\"", with: "\"\"")
+            let sanitized = "\"\(escaped)\"*"
             var sql = """
                 SELECT b.*
                 FROM briefs_fts
@@ -408,12 +413,7 @@ struct BriefRepository {
                 .order(Column("id").asc)
                 .fetchAll(db)
 
-            var results: [(source: BriefCardSource, message: Message?)] = []
-            for source in sources {
-                let message = try Message.fetchOne(db, key: source.messageRowId)
-                results.append((source: source, message: message))
-            }
-            return results
+            return try Self.attachMessages(to: sources, db: db)
         }
     }
 
@@ -432,12 +432,27 @@ struct BriefRepository {
                 .order(Column("id").asc)
                 .fetchAll(db)
 
-            var results: [(source: BriefCardSource, message: Message?)] = []
-            for source in sources {
-                let message = try Message.fetchOne(db, key: source.messageRowId)
-                results.append((source: source, message: message))
+            return try Self.attachMessages(to: sources, db: db)
+        }
+    }
+
+    // Batch-fetches all messages referenced by `sources` in a single DB round-trip
+    // and zips them back by row ID, avoiding the N+1 pattern.
+    private static func attachMessages(
+        to sources: [BriefCardSource],
+        db: Database
+    ) throws -> [(source: BriefCardSource, message: Message?)] {
+        let rowIDs = sources.compactMap { $0.messageRowId }
+        var messagesByRowID: [Int64: Message] = [:]
+        if !rowIDs.isEmpty {
+            let messages = try Message.fetchAll(db, keys: rowIDs)
+            for msg in messages {
+                if let id = msg.id { messagesByRowID[id] = msg }
             }
-            return results
+        }
+        return sources.map { source in
+            let message = source.messageRowId.flatMap { messagesByRowID[$0] }
+            return (source: source, message: message)
         }
     }
 
