@@ -46,3 +46,7 @@ schemes:
     test:
       targets:
         - LLMessengerTests
+      environmentVariables:
+        - variable: OS_ACTIVITY_MODE
+          value: disable
+          isEnabled: true
