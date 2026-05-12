@@ -152,7 +152,7 @@ struct BriefRepository {
                         sender: msg.sender,
                         text: msg.text,
                         timestamp: msg.timestamp,
-                        isSent: false
+                        isSent: msg.isFromMe
                     )
                     try record.insert(db, onConflict: .ignore)
                     if db.changesCount > 0 {
@@ -175,7 +175,6 @@ struct BriefRepository {
             try Message
                 .filter(Column("service") == service)
                 .filter(Column("timestamp") > since)
-                .filter(Column("isSent") == false)
                 .order(Column("timestamp").asc)
                 .fetchAll(db)
         }
@@ -202,7 +201,6 @@ struct BriefRepository {
                 .filter(Column("service") == service)
                 .filter(Column("conversationId") == conversationID)
                 .filter(Column("timestamp") < date)
-                .filter(Column("isSent") == false)
 
             if let since {
                 request = request.filter(Column("timestamp") >= since)

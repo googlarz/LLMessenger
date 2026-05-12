@@ -82,32 +82,31 @@ final class SignalCLIAdapter: MessengerAdapter {
         switch config.mode {
         case .byTime(let since):
             let sinceMs = Int64(since.timeIntervalSince1970 * 1000)
-            let account = accountNumber
             rows = try await dbQueue.read { db in
                 try Row.fetchAll(db, sql: """
                     SELECT sender, recipient, body, timestamp, group_id
                     FROM messages
-                    WHERE timestamp > ? AND body != '' AND sender != ?
+                    WHERE timestamp > ? AND body != ''
                     ORDER BY timestamp ASC
-                """, arguments: [sinceMs, account]).map { $0.asDictionary() }
+                """, arguments: [sinceMs]).map { $0.asDictionary() }
             }
         case .byCount(let limit):
-            let account = accountNumber
             rows = try await dbQueue.read { db in
                 try Row.fetchAll(db, sql: """
                     SELECT sender, recipient, body, timestamp, group_id
                     FROM messages
-                    WHERE body != '' AND sender != ?
+                    WHERE body != ''
                     ORDER BY timestamp DESC
                     LIMIT ?
-                """, arguments: [account, limit]).map { $0.asDictionary() }
+                """, arguments: [limit]).map { $0.asDictionary() }
             }
         }
 
         return AdapterFetchResult(conversations: Self.group(
             rows: rows,
             contactNames: snapshotContactNames,
-            groupNames: snapshotGroupNames
+            groupNames: snapshotGroupNames,
+            accountNumber: accountNumber
         ))
     }
 
@@ -411,7 +410,8 @@ final class SignalCLIAdapter: MessengerAdapter {
     static func group(
         rows: [[String: DatabaseValue]],
         contactNames: [String: String] = [:],
-        groupNames: [String: String] = [:]
+        groupNames: [String: String] = [:],
+        accountNumber: String? = nil
     ) -> [AdapterConversation] {
         var byID: [String: (name: String, type: ConversationType, messages: [AdapterMessage])] = [:]
         var order: [String] = []
@@ -424,6 +424,8 @@ final class SignalCLIAdapter: MessengerAdapter {
 
             let date = Date(timeIntervalSince1970: TimeInterval(tsMs) / 1000)
             let groupID = row["group_id"]?.storage.value as? String
+            let recipient = row["recipient"]?.storage.value as? String
+            let isFromMe = accountNumber != nil && sender == accountNumber
 
             let convID: String
             let convName: String
@@ -434,19 +436,23 @@ final class SignalCLIAdapter: MessengerAdapter {
                 convID = gid
                 convName = groupNames[gid] ?? gid
                 convType = .group
+            } else if isFromMe, let recip = recipient, !recip.isEmpty {
+                convID = recip
+                convName = contactNames[recip] ?? (recip.count > 20 ? "Unknown" : recip)
+                convType = .dm
             } else {
                 convID = sender
                 convName = contactNames[sender] ?? sender
                 convType = .dm
             }
 
-            // Fall back to "Unknown" for unresolvable UUIDs (long hex strings, not names).
-            let senderName = contactNames[sender] ?? (sender.count > 20 ? "Unknown" : sender)
+            let senderName = isFromMe ? "Me" : (contactNames[sender] ?? (sender.count > 20 ? "Unknown" : sender))
             let msg = AdapterMessage(
                 id: "\(sender)-\(tsMs)",
                 sender: senderName,
                 text: body,
-                timestamp: date
+                timestamp: date,
+                isFromMe: isFromMe
             )
 
             if byID[convID] == nil {

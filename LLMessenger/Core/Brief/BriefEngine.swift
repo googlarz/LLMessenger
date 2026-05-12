@@ -350,7 +350,7 @@ final class BriefEngine {
                                         sender: $0.sender,
                                         text: $0.text,
                                         timestamp: $0.timestamp,
-                                        isSent: false
+                                        isSent: $0.isFromMe
                                     )
                                 },
                                 omittedNewMessageCount: omitted,

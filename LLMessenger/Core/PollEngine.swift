@@ -239,7 +239,7 @@ final class PollEngine {
                         sender: msg.sender,
                         text: msg.text,
                         timestamp: msg.timestamp,
-                        isSent: false
+                        isSent: msg.isFromMe
                     )
                     try record.insert(db, onConflict: .ignore)
                     if db.changesCount > 0 { hadNew = true }

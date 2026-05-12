@@ -275,7 +275,8 @@ final class iMessageAdapter: MessengerAdapter {
                 id: "imsg-\(row.msgRowid)",
                 sender: senderName,
                 text: row.text,
-                timestamp: date
+                timestamp: date,
+                isFromMe: row.isFromMe
             )
 
             if byID[convID] == nil {

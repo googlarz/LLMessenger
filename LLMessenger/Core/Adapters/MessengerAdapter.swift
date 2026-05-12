@@ -17,6 +17,28 @@ struct AdapterMessage: Decodable {
     let sender: String
     let text: String
     let timestamp: Date
+    let isFromMe: Bool
+
+    init(id: String, sender: String, text: String, timestamp: Date, isFromMe: Bool = false) {
+        self.id = id
+        self.sender = sender
+        self.text = text
+        self.timestamp = timestamp
+        self.isFromMe = isFromMe
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        sender = try container.decode(String.self, forKey: .sender)
+        text = try container.decode(String.self, forKey: .text)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        isFromMe = try container.decodeIfPresent(Bool.self, forKey: .isFromMe) ?? false
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, sender, text, timestamp, isFromMe
+    }
 }
 
 enum ConversationType: String, Decodable {

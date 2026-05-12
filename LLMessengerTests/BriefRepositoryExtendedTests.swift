@@ -324,7 +324,7 @@ final class BriefRepositoryExtendedTests: XCTestCase {
                        "fetchMessages must exclude messages older than the 'since' date")
     }
 
-    func testFetchMessagesExcludesSentMessages() throws {
+    func testFetchMessagesIncludesSentMessagesForContext() throws {
         let db = try makeDB()
         let repo = makeRepo(db)
         let since = Date().addingTimeInterval(-60)
@@ -341,8 +341,7 @@ final class BriefRepositoryExtendedTests: XCTestCase {
         }
 
         let result = try repo.fetchMessages(service: "signal", since: since)
-        XCTAssertEqual(result.count, 1, "fetchMessages must exclude sent messages — they are not to be briefed")
-        XCTAssertEqual(result[0].messageId, "received-m1")
+        XCTAssertEqual(result.count, 2, "fetchMessages must include sent messages — they provide conversation context for the LLM")
     }
 
     func testFetchMessagesScopedToService() throws {
