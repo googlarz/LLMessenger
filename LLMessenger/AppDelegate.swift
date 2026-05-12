@@ -22,6 +22,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingWindowController: OnboardingWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            return
+        }
         do {
             let db = try AppDatabase()
             database = db
