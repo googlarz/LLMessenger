@@ -77,8 +77,9 @@ final class DeepIntegrationTests: XCTestCase {
         let cards = try repo.fetchBriefCards(briefID: briefID!)
         XCTAssertEqual(cards.count, 1) // Only signal succeeded
         XCTAssertEqual(cards[0].service, "signal")
-        XCTAssertEqual(cards[0].id, "signal-s1-1")
-        
+        // Card ID is a generated UUID, not the LLM-produced ID
+        XCTAssertFalse(cards[0].id.isEmpty)
+
         // Check sources
         let sources = try repo.fetchSourcesWithMessages(briefCardID: cards[0].id)
         XCTAssertEqual(sources.count, 1)

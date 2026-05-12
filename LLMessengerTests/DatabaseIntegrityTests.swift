@@ -224,7 +224,7 @@ final class DatabaseIntegrityTests: XCTestCase {
         let migrationCount = try db1.dbQueue.read { d in
             try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM grdb_migrations") ?? 0
         }
-        XCTAssertEqual(migrationCount, 6,
-                       "All 6 migrations (v1..v6) must be recorded in grdb_migrations on fresh DB open")
+        XCTAssertEqual(migrationCount, 7,
+                       "All 7 migrations (v1..v7) must be recorded in grdb_migrations on fresh DB open")
     }
 }
