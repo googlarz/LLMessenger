@@ -46,7 +46,14 @@ final class AnthropicClient: LLMClient {
             throw LLMError.providerError("HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let jsonObject: Any
+        do {
+            jsonObject = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw LLMError.invalidResponse
+        }
+
+        guard let json = jsonObject as? [String: Any],
               let contentArr = json["content"] as? [[String: Any]],
               let text = contentArr.first?["text"] as? String,
               let usage = json["usage"] as? [String: Any] else {

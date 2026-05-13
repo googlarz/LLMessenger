@@ -27,9 +27,8 @@ final class OllamaClient: LLMClient {
             // num_predict is intentionally omitted for Ollama — local models have no
             // billing concern, and thinking models (e.g. gemma4) need the full context
             // window for their reasoning pass before they can emit the final response.
-            // num_ctx is set to 32 768 to leave room for thinking-model reasoning chains
-            // (gemma4, qwen3, etc.) without truncating the JSON output.
-            "options":  ["num_ctx": 32768]
+            // Keep local briefs responsive while still leaving room for bounded context.
+            "options":  ["num_ctx": 16384]
         ]
 
         var request = URLRequest(url: baseURL.appendingPathComponent("api/chat"))
@@ -53,7 +52,14 @@ final class OllamaClient: LLMClient {
             throw LLMError.providerError("HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let jsonObject: Any
+        do {
+            jsonObject = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw LLMError.invalidResponse
+        }
+
+        guard let json = jsonObject as? [String: Any],
               let message = json["message"] as? [String: Any],
               let text = message["content"] as? String else {
             throw LLMError.invalidResponse

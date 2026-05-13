@@ -55,6 +55,34 @@ final class OllamaClientTests: XCTestCase {
                          statusCode: code, httpVersion: nil, headerFields: headers)!, Data(body.utf8))
     }
 
+    private func requestBody(from request: URLRequest) throws -> Data {
+        if let body = request.httpBody {
+            return body
+        }
+
+        guard let stream = request.httpBodyStream else {
+            XCTFail("Expected request body")
+            return Data()
+        }
+
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 {
+                throw stream.streamError ?? CocoaError(.fileReadUnknown)
+            }
+            if count == 0 {
+                break
+            }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+
     // MARK: - Response parsing
 
     func testParsesStandardResponse() async throws {
@@ -159,7 +187,7 @@ final class OllamaClientTests: XCTestCase {
         // emitting the actual response, leaving nothing for the content field).
         var captured: [String: Any]?
         MockURLProtocol.handler = { request in
-            captured = try JSONSerialization.jsonObject(with: request.httpBody!) as? [String: Any]
+            captured = try JSONSerialization.jsonObject(with: self.requestBody(from: request)) as? [String: Any]
             return self.ok(#"{"message":{"role":"assistant","content":"ok"}}"#)
         }
         _ = try? await sut.complete(model: "m", messages: [], maxTokens: 4000)
@@ -171,7 +199,7 @@ final class OllamaClientTests: XCTestCase {
     func testNumCtxIs16384() async throws {
         var captured: [String: Any]?
         MockURLProtocol.handler = { request in
-            captured = try JSONSerialization.jsonObject(with: request.httpBody!) as? [String: Any]
+            captured = try JSONSerialization.jsonObject(with: self.requestBody(from: request)) as? [String: Any]
             return self.ok(#"{"message":{"role":"assistant","content":"ok"}}"#)
         }
         _ = try? await sut.complete(model: "m", messages: [], maxTokens: 10)
@@ -182,7 +210,7 @@ final class OllamaClientTests: XCTestCase {
     func testRequestBodyContainsModelAndStream() async throws {
         var captured: [String: Any]?
         MockURLProtocol.handler = { request in
-            captured = try JSONSerialization.jsonObject(with: request.httpBody!) as? [String: Any]
+            captured = try JSONSerialization.jsonObject(with: self.requestBody(from: request)) as? [String: Any]
             return self.ok(#"{"message":{"role":"assistant","content":"ok"}}"#)
         }
         _ = try? await sut.complete(model: "gemma4", messages: [

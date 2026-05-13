@@ -43,7 +43,14 @@ final class OpenAIClient: LLMClient {
             throw LLMError.providerError("HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let jsonObject: Any
+        do {
+            jsonObject = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw LLMError.invalidResponse
+        }
+
+        guard let json = jsonObject as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
               let text = message["content"] as? String,
