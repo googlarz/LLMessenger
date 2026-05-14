@@ -273,7 +273,7 @@ final class ChatViewModel: ObservableObject {
         if let hint = rawInstruction {
             let sanitized = hint
                 .unicodeScalars
-                .filter { !$0.properties.isControl }
+                .filter { !CharacterSet.controlCharacters.contains($0) }
                 .reduce(into: "") { $0.append(Character($1)) }
                 .prefix(300)
             instruction = originalText + (sanitized.isEmpty ? "" : " (\(sanitized))")

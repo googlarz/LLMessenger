@@ -884,7 +884,7 @@ private struct LabelEditorPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Context for "\(convName)"")
+            Text("Context for \"\(convName)\"")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
 
