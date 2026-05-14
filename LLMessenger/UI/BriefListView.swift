@@ -12,6 +12,7 @@ struct BriefListView: View {
     @State private var searchBriefResults: [Brief] = []
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>? = nil
+    @State private var loadTask: Task<Void, Never>? = nil
 
     var filteredGroups: [BriefListGroup] {
         appState.briefGroups(from: dateFrom, to: dateTo)
@@ -109,7 +110,10 @@ struct BriefListView: View {
         guard let id = brief.id else { return }
         appState.selectedBriefID = id
         appState.markAsOpen(briefID: id)
-        Task { try? await chatViewModel.loadBrief(brief) }
+        // Cancel any in-flight load so a rapid second tap doesn't race and leave
+        // brief A's threadItems displayed while selectedBriefID points to brief B.
+        loadTask?.cancel()
+        loadTask = Task { try? await chatViewModel.loadBrief(brief) }
     }
 
     @ViewBuilder
@@ -369,7 +373,7 @@ private struct BriefRowView: View {
                         }
                     }
                     HStack(spacing: 3) {
-                        Text(syncTime)
+                        Text(syncDate)
                         Text("·")
                         Text(brief.createdAt, style: .relative)
                     }
