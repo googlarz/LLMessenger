@@ -13,6 +13,8 @@ final class ChatViewModel: ObservableObject {
     @Published var quickReplies: [String: [QuickReply]] = [:]
     /// Cards currently loading quick replies.
     @Published private(set) var quickRepliesLoading: Set<String> = []
+    /// Cards where generation completed but the LLM returned unparseable output.
+    @Published private(set) var quickRepliesFailed: Set<String> = []
 
     private let appState: AppState
     private var currentBrief: Brief?
@@ -41,6 +43,7 @@ final class ChatViewModel: ObservableObject {
         briefConvs = buildConvList(from: messages, brief: brief)
         quickReplies = [:]
         quickRepliesLoading = []
+        quickRepliesFailed = []
     }
 
     // MARK: - Send
@@ -619,22 +622,31 @@ final class ChatViewModel: ObservableObject {
                 maxTokens: 700
             )
             let replies = decodeQuickReplies(from: response.text)
-            guard !replies.isEmpty else { return }
-            quickReplies[cardID] = replies
+            if replies.isEmpty {
+                // LLM returned something but we couldn't parse it — surface a retry state.
+                quickRepliesFailed.insert(cardID)
+            } else {
+                quickRepliesFailed.remove(cardID)
+                quickReplies[cardID] = replies
+            }
         } catch {
-            // Quick replies are optional — fail silently.
+            quickRepliesFailed.insert(cardID)
             print("[QuickReply] Generation failed for card \(cardID): \(error)")
         }
     }
 
-    /// Converts a quick reply option into a draft and appends it to the thread.
-    func applyQuickReply(_ reply: QuickReply, service: String, convId: String) {
+    /// Converts a quick reply option into a draft and appends it to the thread,
+    /// then clears the chip list so the user can regenerate if needed.
+    func applyQuickReply(_ reply: QuickReply, cardID: String, service: String, convId: String, convName: String) {
         let draft = ReplyDraft(id: UUID(),
                                text: reply.draft,
                                serviceID: service,
                                conversationID: convId,
-                               senderName: "")
+                               senderName: convName)
         threadItems.append(.replyDraft(id: draft.id, draft: draft))
+        // Clear chips so the "Quick reply" trigger reappears and the user
+        // can generate a fresh set if they discard this draft.
+        quickReplies.removeValue(forKey: cardID)
     }
 
     private func decodeQuickReplies(from text: String) -> [QuickReply] {

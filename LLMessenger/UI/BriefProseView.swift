@@ -441,9 +441,18 @@ struct BriefProseView: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                BriefCardEvidenceView(card: card, briefID: brief.id ?? 0, repository: appState.repository)
-                    .padding(.leading, 12)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                if let briefID = brief.id {
+                    BriefCardEvidenceView(card: card, briefID: briefID, repository: appState.repository)
+                        .padding(.leading, 12)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                } else {
+                    Text("Evidence unavailable — brief not yet persisted.")
+                        .font(.system(size: 12))
+                        .italic()
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.leading, 12)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
 
             HStack(spacing: 8) {
@@ -515,7 +524,9 @@ struct BriefProseView: View {
     @ViewBuilder
     private func quickReplySection(card: BriefCard) -> some View {
         let isLoading = chatViewModel.quickRepliesLoading.contains(card.id)
+        let isFailed = chatViewModel.quickRepliesFailed.contains(card.id)
         let replies = chatViewModel.quickReplies[card.id] ?? []
+        let convName = card.conversation ?? ""
 
         if isLoading {
             HStack(spacing: 6) {
@@ -525,48 +536,17 @@ struct BriefProseView: View {
                     .foregroundStyle(Theme.textTertiary)
             }
             .padding(.top, 2)
-        } else if replies.isEmpty {
-            // Show the trigger chip on high/med cards (likely need a reply)
-            // and any card with explicit action items regardless of priority.
-            if card.priority == "high" || card.priority == "med" || !card.actions.isEmpty {
-                Button {
-                    Task {
-                        await chatViewModel.generateQuickReplies(
-                            cardID: card.id,
-                            service: card.service,
-                            convId: card.conversationId,
-                            convName: card.conversation ?? ""
-                        )
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("Quick reply")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundStyle(Theme.accent)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(Theme.accentMuted)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 2)
-            }
-        } else {
-            // Chips: label shown in the button, full draft revealed on hover and sent on confirm.
+        } else if !replies.isEmpty {
+            // Chips: label in button, full draft on hover tooltip.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(replies) { reply in
                         Button {
                             chatViewModel.applyQuickReply(reply,
+                                                          cardID: card.id,
                                                           service: card.service,
-                                                          convId: card.conversationId)
+                                                          convId: card.conversationId,
+                                                          convName: convName)
                         } label: {
                             Text(reply.label)
                                 .font(.system(size: 12, weight: .semibold))
@@ -575,9 +555,7 @@ struct BriefProseView: View {
                                 .padding(.vertical, 6)
                                 .background(Theme.surfaceHigh)
                                 .clipShape(Capsule())
-                                .overlay(
-                                    Capsule().stroke(Theme.border, lineWidth: 1)
-                                )
+                                .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                         .help(reply.draft)
@@ -586,6 +564,36 @@ struct BriefProseView: View {
                 .padding(.horizontal, 2)
                 .padding(.vertical, 2)
             }
+            .padding(.top, 2)
+        } else if card.priority == "high" || card.priority == "med" || !card.actions.isEmpty {
+            // Trigger chip — shown when idle or after a failed generation (with error label).
+            Button {
+                Task {
+                    await chatViewModel.generateQuickReplies(
+                        cardID: card.id,
+                        service: card.service,
+                        convId: card.conversationId,
+                        convName: convName
+                    )
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: isFailed ? "arrow.clockwise" : "bolt.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(isFailed ? "Retry quick reply" : "Quick reply")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(isFailed ? Theme.textSecondary : Theme.accent)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(isFailed ? Theme.surfaceHigh : Theme.accentMuted)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isFailed ? Theme.border : Theme.accent.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
             .padding(.top, 2)
         }
     }
