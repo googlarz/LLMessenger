@@ -597,9 +597,11 @@ final class ChatViewModel: ObservableObject {
         \(sentStyleText.isEmpty ? "(no sent messages — use a neutral, casual register)" : sentStyleText)
         """
 
+        // Pass empty basePrompt — the inbox assistant operating principles are irrelevant
+        // here and add ~500 tokens of noise before the actual generation instructions.
         let systemPrompt = PromptBuilder.build(
             mode: .quickReplySuggester,
-            basePrompt: appState.basePrompt,
+            basePrompt: "",
             services: [service],
             episodicSummaries: [],
             now: Date()
@@ -612,7 +614,7 @@ final class ChatViewModel: ObservableObject {
                     LLMMessage(role: .system, content: systemPrompt),
                     LLMMessage(role: .user, content: userContent)
                 ],
-                maxTokens: 500
+                maxTokens: 700
             )
             let replies = decodeQuickReplies(from: response.text)
             guard !replies.isEmpty else { return }
