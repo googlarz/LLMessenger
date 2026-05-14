@@ -41,7 +41,7 @@ final class ChatViewModelStateTests: XCTestCase {
     }
 
     private func makeVM(db: AppDatabase,
-                        mock: MockLLMClient,
+                        mock: any LLMClient,
                         briefId: Int64) async throws -> (ChatViewModel, Brief) {
         let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
         let brief = try appState.repository.fetchBrief(id: briefId)!
@@ -302,26 +302,51 @@ final class ChatViewModelStateTests: XCTestCase {
         let briefId = try await insertBrief(db: db)
         try await insertMessage(db: db, briefId: briefId, convId: "c1", convName: "Alice")
 
-        let mock = MockLLMClient()
-        mock.response = LLMResponse(text: "First answer", inputTokens: 5, outputTokens: 2)
+        let mock = StateSequenceLLMClient(responses: [
+            LLMResponse(text: #"{"actions":[{"type":"answer","conversationNumber":null,"targetName":null,"message":null,"question":"First question"}]}"#,
+                        inputTokens: 5,
+                        outputTokens: 2),
+            LLMResponse(text: "First answer", inputTokens: 5, outputTokens: 2),
+            LLMResponse(text: #"{"actions":[{"type":"answer","conversationNumber":null,"targetName":null,"message":null,"question":"Second question"}]}"#,
+                        inputTokens: 5,
+                        outputTokens: 2),
+            LLMResponse(text: "Second answer", inputTokens: 10, outputTokens: 2)
+        ])
         let (vm, _) = try await makeVM(db: db, mock: mock, briefId: briefId)
 
         // First send
         vm.inputText = "First question"
         await vm.send()
-        XCTAssertEqual(mock.calls.count, 1)
-
-        // Second send — should replay the first question in LLM context
-        mock.response = LLMResponse(text: "Second answer", inputTokens: 10, outputTokens: 2)
-        vm.inputText = "Second question"
-        await vm.send()
         XCTAssertEqual(mock.calls.count, 2)
 
-        let secondCallMessages = mock.calls[1].messages
+        // Second send — should replay the first question in LLM context
+        vm.inputText = "Second question"
+        await vm.send()
+        XCTAssertEqual(mock.calls.count, 4)
+
+        let secondCallMessages = mock.calls[3].messages
         // The messages array should contain a user message with the first question
         let userMessages = secondCallMessages.filter { $0.role == .user }
         let hasFirstQuestion = userMessages.contains { $0.content.contains("First question") }
         XCTAssertTrue(hasFirstQuestion,
                       "buildLLMMessages must replay prior user messages in subsequent calls")
+    }
+}
+
+private final class StateSequenceLLMClient: LLMClient {
+    var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
+    var error: Error?
+    private var responses: [LLMResponse]
+
+    init(responses: [LLMResponse]) {
+        self.responses = responses
+    }
+
+    func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
+        calls.append((model, messages, maxTokens))
+        if let error { throw error }
+        return responses.isEmpty
+            ? LLMResponse(text: "", inputTokens: 0, outputTokens: 0)
+            : responses.removeFirst()
     }
 }

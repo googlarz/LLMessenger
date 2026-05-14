@@ -9,6 +9,8 @@ enum LLMMode {
     /// Interactive chat beneath a brief — handles Q&A and reply drafting with full context.
     /// `conversations` lists the available targets as "service|convId|displayName".
     case chat(conversations: [String])
+    /// Routes a free-form user request into executable app actions.
+    case intentRouter(context: IntentRouterPromptContext)
 }
 
 struct PromptBuilder {
@@ -186,6 +188,55 @@ struct PromptBuilder {
               No other text. The app will show the user the numbered list above to pick from.
             • Never write DRAFT: inside a plain-text answer.
             • Match the language of the conversation you're discussing.
+            """
+        case .intentRouter(let context):
+            return """
+            You are the intent router for the LLMessenger composer.
+            Convert the user's free-form request into executable app actions.
+            Output ONLY valid JSON — no markdown fences, no explanation.
+
+            \(context.formatted)
+
+            JSON schema:
+            {
+              "actions": [
+                {
+                  "type": "answer" | "draft_reply" | "revise_draft" | "send_draft_request" | "show_sources" | "list_actions" | "find_waiting_replies" | "summarize_changes" | "extract_tasks" | "compare_conversations" | "clarify",
+                  "conversationNumber": <1-based number from Available conversations, or null>,
+                  "cardNumber": <1-based number from Visible brief cards, or null>,
+                  "draftNumber": <1-based number from Active drafts, or null>,
+                  "targetName": "<person/group/service name if the user named one, or null>",
+                  "message": "<reply text for draft_reply, or null>",
+                  "question": "<question for answer-like actions, or null>",
+                  "instruction": "<rewrite/edit/task instruction, or null>"
+                }
+              ]
+            }
+
+            Routing rules:
+            - A single user sentence may contain multiple actions. Preserve order.
+            - For reply/send/write/respond/replay/agree/confirm intents, use type "draft_reply".
+            - For "make it shorter", "translate it", "change that draft", or similar edits to an active draft,
+              use "revise_draft".
+            - For "send it" or "send the draft", use "send_draft_request". The app will require confirmation.
+            - For "why do you think that", "show original messages", or "show sources", use "show_sources".
+            - For "what should I do", use "list_actions".
+            - For "who needs a reply", use "find_waiting_replies".
+            - For "what changed since last brief", use "summarize_changes".
+            - For "any tasks/deadlines/promises", use "extract_tasks".
+            - For "is this related to..." or "compare...", use "compare_conversations".
+            - For asks such as "give me more details", "what happened", "summarize", "why", or "tell me more",
+              use type "answer".
+            - If the user says: reply to Asia "ok" and give me details about mu11,
+              output two actions: draft_reply for Asia with message "ok", then answer with the mu11 question.
+            - If the user says: agree with 1, say yes to 3,
+              output two draft_reply actions using cardNumber 1 and cardNumber 3 with the requested message text.
+            - Prefer conversationNumber when a target clearly matches the numbered conversation list.
+            - Prefer cardNumber for "first one", "this card", "that item", or references to a visible brief card.
+            - Prefer draftNumber for "it", "that draft", "last draft", or draft editing/sending requests.
+            - If the target is unclear, set conversationNumber to null and include targetName.
+            - Do not draft or answer directly in this router. Only describe actions.
+            - Correct obvious typos in intent words, e.g. "replay to" means "reply to".
             """
         }
     }

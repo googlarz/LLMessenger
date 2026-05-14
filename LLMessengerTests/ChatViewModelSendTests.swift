@@ -1,5 +1,6 @@
 // LLMessengerTests/ChatViewModelSendTests.swift
 import XCTest
+import GRDB
 @testable import LLMessenger
 
 // MARK: - Test-local adapter (SpyAdapter in ChatViewModelTests.swift is private)
@@ -33,11 +34,13 @@ final class ChatViewModelSendTests: XCTestCase {
         try AppDatabase(inMemory: true)
     }
 
-    private func insertBrief(db: AppDatabase, services: String = #"["signal"]"#) async throws -> Int64 {
+    private func insertBrief(db: AppDatabase,
+                             services: String = #"["signal"]"#,
+                             openingSummary: String? = nil) async throws -> Int64 {
         var briefId: Int64 = 0
         try await db.dbQueue.write { d in
             var b = Brief(createdAt: Date(), status: "ready", services: services,
-                          openingSummary: nil, notificationText: "x", episodicSummary: nil)
+                          openingSummary: openingSummary, notificationText: "x", episodicSummary: nil)
             try b.insert(d)
             briefId = b.id!
         }
@@ -101,6 +104,344 @@ final class ChatViewModelSendTests: XCTestCase {
     }
 
     // MARK: - Path 3: LLM response variants
+
+    func testAskForDetailsSubmitsContextualFollowUp() async throws {
+        let db = try await makeDB()
+        let briefId = try await insertBrief(db: db)
+        try await insertMessage(db: db, briefId: briefId, convId: "c1", convName: "Alice")
+
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: "Alice needs the address by noon.", inputTokens: 8, outputTokens: 7)
+        let (vm, _) = try await makeVM(db: db, mock: mock, briefId: briefId)
+
+        await vm.askForDetails(
+            service: "signal",
+            conversationID: "c1",
+            displayName: "Alice",
+            headline: "Alice asked for the address"
+        )
+
+        XCTAssertEqual(mock.calls.count, 1)
+        XCTAssertTrue(vm.threadItems.contains {
+            if case .userMessage(_, let text) = $0 {
+                return text == "Tell me more about Alice: Alice asked for the address"
+            }
+            return false
+        })
+        XCTAssertEqual(mock.calls[0].messages.last?.content,
+                       "Tell me more about Alice: Alice asked for the address")
+    }
+
+    func testPrepareReplyPrefillsComposerAndRequestsFocus() async throws {
+        let db = try await makeDB()
+        let briefId = try await insertBrief(db: db)
+        try await insertMessage(db: db, briefId: briefId, convId: "c1", convName: "Alice")
+
+        let mock = MockLLMClient()
+        let (vm, _) = try await makeVM(db: db, mock: mock, briefId: briefId)
+        let previousFocusRequest = vm.inputFocusRequest
+
+        vm.prepareReply(service: "signal", conversationID: "c1", displayName: "Alice")
+
+        XCTAssertEqual(vm.inputText, "write to Alice: ")
+        XCTAssertNotEqual(vm.inputFocusRequest, previousFocusRequest)
+        XCTAssertEqual(mock.calls.count, 0, "Preparing a reply must not call the LLM until the user sends")
+    }
+
+    func testNaturalLanguageReplyAndDetailsRunsBothActions() async throws {
+        let db = try await makeDB()
+        let briefId = try await insertBrief(db: db)
+        try await insertMessage(db: db,
+                                briefId: briefId,
+                                convId: "asia-dm",
+                                convName: "Asia",
+                                sender: "Asia",
+                                text: "Can you confirm?")
+        try await insertMessage(db: db,
+                                briefId: briefId,
+                                convId: "mu11",
+                                convName: "mu11 group",
+                                sender: "Marta",
+                                text: "Training moved to 19:00")
+
+        let mock = SequenceLLMClient(responses: [
+            LLMResponse(text: #"{"actions":[{"type":"draft_reply","conversationNumber":1,"targetName":"Asia","message":"ok","question":null},{"type":"answer","conversationNumber":2,"targetName":"mu11 group","message":null,"question":"give me more details about the chat in mu11 group"}]}"#,
+                        inputTokens: 20,
+                        outputTokens: 12),
+            LLMResponse(text: "ok", inputTokens: 4, outputTokens: 1),
+            LLMResponse(text: "The mu11 group is discussing the training time.", inputTokens: 12, outputTokens: 9)
+        ])
+        let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
+        let brief = try appState.repository.fetchBrief(id: briefId)!
+        let vm = ChatViewModel(appState: appState)
+        try await vm.loadBrief(brief)
+
+        vm.inputText = #"replay to Asia "ok" and give me more details about the chat in mu11 group"#
+
+        await vm.send()
+
+        XCTAssertEqual(mock.calls.count, 3)
+        XCTAssertTrue(vm.threadItems.contains {
+            if case .userMessage(_, let text) = $0 {
+                return text == #"replay to Asia "ok" and give me more details about the chat in mu11 group"#
+            }
+            return false
+        })
+
+        let drafts = vm.threadItems.compactMap { item -> ReplyDraft? in
+            if case .replyDraft(_, let draft) = item { return draft }
+            return nil
+        }
+        XCTAssertEqual(drafts.count, 1)
+        XCTAssertEqual(drafts[0].text, "ok")
+        XCTAssertEqual(drafts[0].conversationID, "asia-dm")
+
+        let responses = vm.threadItems.compactMap { item -> String? in
+            if case .assistantResponse(_, let text) = item { return text }
+            return nil
+        }
+        XCTAssertEqual(responses.last, "The mu11 group is discussing the training time.")
+        XCTAssertEqual(mock.calls[2].messages.last?.content,
+                       "give me more details about the chat in mu11 group")
+    }
+
+    func testIntentRouterPromptIncludesRecentEpisodicContext() async throws {
+        let db = try await makeDB()
+        let currentBriefId = try await insertBrief(db: db)
+        try await insertMessage(db: db, briefId: currentBriefId, convId: "asia-dm", convName: "Asia")
+        try await db.dbQueue.write { d in
+            var previous = Brief(createdAt: Date().addingTimeInterval(-3600),
+                                 status: "ready",
+                                 services: #"["signal"]"#,
+                                 openingSummary: nil,
+                                 notificationText: "older",
+                                 episodicSummary: "Earlier Asia asked whether Thursday still works.")
+            try previous.insert(d)
+        }
+
+        let mock = SequenceLLMClient(responses: [
+            LLMResponse(text: #"{"actions":[{"type":"clarify","conversationNumber":null,"cardNumber":null,"draftNumber":null,"targetName":null,"message":null,"question":"Which thread do you want to focus on?","instruction":null}]}"#,
+                        inputTokens: 8,
+                        outputTokens: 6)
+        ])
+        let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
+        let brief = try appState.repository.fetchBrief(id: currentBriefId)!
+        let vm = ChatViewModel(appState: appState)
+        try await vm.loadBrief(brief)
+        vm.inputText = "what should I do?"
+
+        await vm.send()
+
+        XCTAssertEqual(mock.calls.count, 1)
+        let routerPrompt = try XCTUnwrap(mock.calls[0].messages.first?.content)
+        XCTAssertTrue(routerPrompt.contains("Recent context from prior sessions:"))
+        XCTAssertTrue(routerPrompt.contains("Earlier Asia asked whether Thursday still works."))
+    }
+
+    func testUnknownRouterActionFallsBackWithoutDuplicatingUserMessage() async throws {
+        let db = try await makeDB()
+        let briefId = try await insertBrief(db: db)
+        try await insertMessage(db: db, briefId: briefId, convId: "c1", convName: "Alice")
+
+        let mock = SequenceLLMClient(responses: [
+            LLMResponse(text: #"{"actions":[{"type":"calendar","conversationNumber":null,"targetName":null,"message":null,"question":"What did Alice say?"}]}"#,
+                        inputTokens: 8,
+                        outputTokens: 6),
+            LLMResponse(text: "Alice asked for the address.", inputTokens: 8, outputTokens: 6)
+        ])
+        let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
+        let brief = try appState.repository.fetchBrief(id: briefId)!
+        let vm = ChatViewModel(appState: appState)
+        try await vm.loadBrief(brief)
+
+        vm.inputText = "What did Alice say?"
+
+        await vm.send()
+
+        XCTAssertEqual(mock.calls.count, 2)
+        let userMessages = vm.threadItems.compactMap { item -> String? in
+            if case .userMessage(_, let text) = item { return text }
+            return nil
+        }
+        XCTAssertEqual(userMessages, ["What did Alice say?"])
+        let responses = vm.threadItems.compactMap { item -> String? in
+            if case .assistantResponse(_, let text) = item { return text }
+            return nil
+        }
+        XCTAssertEqual(responses.last, "Alice asked for the address.")
+    }
+
+    func testReviseDraftIntentUpdatesExistingDraft() async throws {
+        let db = try await makeDB()
+        let briefId = try await insertBrief(db: db)
+        try await insertMessage(db: db, briefId: briefId, convId: "asia-dm", convName: "Asia")
+
+        let mock = SequenceLLMClient(responses: [
+            LLMResponse(text: #"{"actions":[{"type":"revise_draft","conversationNumber":null,"cardNumber":null,"draftNumber":1,"targetName":null,"message":null,"question":null,"instruction":"make it shorter"}]}"#,
+                        inputTokens: 8,
+                        outputTokens: 6),
+            LLMResponse(text: "ok", inputTokens: 8, outputTokens: 1)
+        ])
+        let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
+        let brief = try appState.repository.fetchBrief(id: briefId)!
+        let vm = ChatViewModel(appState: appState)
+        try await vm.loadBrief(brief)
+        let draftID = UUID()
+        vm.threadItems.append(.replyDraft(id: draftID,
+                                          draft: ReplyDraft(id: draftID,
+                                                            text: "That sounds good to me.",
+                                                            serviceID: "signal",
+                                                            conversationID: "asia-dm",
+                                                            senderName: "Asia")))
+        vm.inputText = "make it shorter"
+
+        await vm.send()
+
+        XCTAssertEqual(mock.calls.count, 2)
+        let drafts = vm.threadItems.compactMap { item -> ReplyDraft? in
+            if case .replyDraft(_, let draft) = item { return draft }
+            return nil
+        }
+        XCTAssertEqual(drafts.count, 1)
+        XCTAssertEqual(drafts[0].text, "ok")
+        XCTAssertEqual(drafts[0].conversationID, "asia-dm")
+    }
+
+    func testDraftReplyIncludesRecentConversationContextAndPriorSummary() async throws {
+        let db = try await makeDB()
+        let currentBriefId = try await insertBrief(db: db)
+        try await insertMessage(db: db,
+                                briefId: currentBriefId,
+                                convId: "asia-dm",
+                                convName: "Asia",
+                                sender: "Asia",
+                                text: "Can you confirm for today?",
+                                timeOffset: 0)
+        try await db.dbQueue.write { d in
+            var previous = Brief(createdAt: Date().addingTimeInterval(-3600),
+                                 status: "ready",
+                                 services: #"["signal"]"#,
+                                 openingSummary: nil,
+                                 notificationText: "older",
+                                 episodicSummary: "Asia and I were discussing whether today's timing still stands.")
+            try previous.insert(d)
+            let previousBriefId = previous.id ?? 0
+            var oldMessage = Message(briefId: previousBriefId,
+                                     service: "signal",
+                                     conversationId: "asia-dm",
+                                     conversationName: "Asia",
+                                     messageId: "asia-old-1",
+                                     sender: "me",
+                                     text: "Yesterday I said I'd confirm in the morning.",
+                                     timestamp: Date().addingTimeInterval(-1800),
+                                     isSent: true)
+            try oldMessage.insert(d)
+        }
+
+        let mock = SequenceLLMClient(responses: [
+            LLMResponse(text: #"{"actions":[{"type":"draft_reply","conversationNumber":1,"cardNumber":null,"draftNumber":null,"targetName":"Asia","message":"ok","question":null,"instruction":null}]}"#,
+                        inputTokens: 10,
+                        outputTokens: 8),
+            LLMResponse(text: "ok", inputTokens: 6, outputTokens: 1)
+        ])
+        let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
+        let brief = try appState.repository.fetchBrief(id: currentBriefId)!
+        let vm = ChatViewModel(appState: appState)
+        try await vm.loadBrief(brief)
+        vm.inputText = #"reply to Asia "ok""#
+
+        await vm.send()
+
+        XCTAssertEqual(mock.calls.count, 2)
+        let draftPrompt = try XCTUnwrap(mock.calls[1].messages.first?.content)
+        XCTAssertTrue(draftPrompt.contains("Asia and I were discussing whether today's timing still stands."))
+
+        let conversationContext = try XCTUnwrap(mock.calls[1].messages.dropFirst().first?.content)
+        XCTAssertTrue(conversationContext.contains("Yesterday I said I'd confirm in the morning."))
+        XCTAssertTrue(conversationContext.contains("Can you confirm for today?"))
+    }
+
+    func testSendDraftIntentRequiresConfirmationBeforeSending() async throws {
+        let db = try await makeDB()
+        let briefId = try await insertBrief(db: db)
+        try await insertMessage(db: db, briefId: briefId, convId: "asia-dm", convName: "Asia")
+
+        let mock = SequenceLLMClient(responses: [
+            LLMResponse(text: #"{"actions":[{"type":"send_draft_request","conversationNumber":null,"cardNumber":null,"draftNumber":1,"targetName":null,"message":null,"question":null,"instruction":null}]}"#,
+                        inputTokens: 8,
+                        outputTokens: 6)
+        ])
+        let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        appState.adapters["signal"] = spy
+        let brief = try appState.repository.fetchBrief(id: briefId)!
+        let vm = ChatViewModel(appState: appState)
+        try await vm.loadBrief(brief)
+        let draftID = UUID()
+        vm.threadItems.append(.replyDraft(id: draftID,
+                                          draft: ReplyDraft(id: draftID,
+                                                            text: "ok",
+                                                            serviceID: "signal",
+                                                            conversationID: "asia-dm",
+                                                            senderName: "Asia")))
+        vm.inputText = "send it"
+
+        await vm.send()
+
+        XCTAssertEqual(spy.sentMessages.count, 0)
+        let confirmations = vm.threadItems.compactMap { item -> (UUID, ReplyDraft)? in
+            if case .sendConfirmation(let id, let draft) = item { return (id, draft) }
+            return nil
+        }
+        XCTAssertEqual(confirmations.count, 1)
+        XCTAssertEqual(confirmations[0].1.text, "ok")
+
+        await vm.confirmSendDraft(id: confirmations[0].0)
+
+        XCTAssertEqual(spy.sentMessages.count, 1)
+        XCTAssertEqual(spy.sentMessages[0].conversationID, "asia-dm")
+        XCTAssertEqual(spy.sentMessages[0].text, "ok")
+    }
+
+    func testShowSourcesForCardUsesSourceMessageIds() async throws {
+        let summary = """
+        {"cards":[{"id":"card-1","service":"signal","conversationId":"mu11","conversationTitle":"mu11 group","headline":"Training moved","priority":"high","counts":{"messages":1,"threads":1,"people":1},"summary":"Training moved to 19:00","callback":null,"actionItems":[],"quotes":[],"sourceMessageIds":["m-mu11-1"]}]}
+        """
+        let db = try await makeDB()
+        let briefId = try await insertBrief(db: db, openingSummary: summary)
+        try await insertMessage(db: db,
+                                briefId: briefId,
+                                convId: "mu11",
+                                convName: "mu11 group",
+                                sender: "Marta",
+                                text: "Training moved to 19:00")
+        try await db.dbQueue.write { d in
+            if var message = try Message.fetchOne(d) {
+                message.messageId = "m-mu11-1"
+                try message.update(d)
+            }
+        }
+
+        let mock = SequenceLLMClient(responses: [
+            LLMResponse(text: #"{"actions":[{"type":"show_sources","conversationNumber":null,"cardNumber":1,"draftNumber":null,"targetName":null,"message":null,"question":null,"instruction":null}]}"#,
+                        inputTokens: 8,
+                        outputTokens: 6)
+        ])
+        let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
+        let brief = try appState.repository.fetchBrief(id: briefId)!
+        let vm = ChatViewModel(appState: appState)
+        try await vm.loadBrief(brief)
+        vm.inputText = "show sources for the first one"
+
+        await vm.send()
+
+        let sourcedResponses = vm.threadItems.compactMap { item -> [ThreadSource]? in
+            if case .assistantResponseWithSources(_, _, let sources) = item { return sources }
+            return nil
+        }
+        XCTAssertEqual(sourcedResponses.count, 1)
+        XCTAssertEqual(sourcedResponses[0].map(\.text), ["Training moved to 19:00"])
+    }
 
     func testLLMResponsePlainTextAppendsAssistantResponse() async throws {
         let db = try await makeDB()
@@ -225,8 +566,8 @@ final class ChatViewModelSendTests: XCTestCase {
 
         await vm.send()
 
-        // Named-send bypasses the chat LLM, goes directly to draftReply (which calls LLM once)
-        XCTAssertEqual(mock.calls.count, 1)
+        // Intent routing uses one LLM call, then draftReply uses a second LLM call.
+        XCTAssertEqual(mock.calls.count, 2)
         let drafts = vm.threadItems.compactMap { item -> ReplyDraft? in
             if case .replyDraft(_, let d) = item { return d }
             return nil
@@ -247,8 +588,8 @@ final class ChatViewModelSendTests: XCTestCase {
 
         await vm.send()
 
-        // Should NOT call LLM — returns early with picker
-        XCTAssertEqual(mock.calls.count, 0)
+        // Intent routing is attempted first, then the local fallback creates the picker.
+        XCTAssertEqual(mock.calls.count, 1)
         let pickers = vm.threadItems.filter { if case .conversationPicker = $0 { return true }; return false }
         XCTAssertEqual(pickers.count, 1)
         if case .conversationPicker(_, _, let opts) = pickers[0] {
@@ -368,5 +709,22 @@ final class ChatViewModelSendTests: XCTestCase {
         // Picker still present
         let pickers = vm.threadItems.filter { if case .conversationPicker = $0 { return true }; return false }
         XCTAssertEqual(pickers.count, 1, "Picker should remain when input is not numeric")
+    }
+}
+
+private final class SequenceLLMClient: LLMClient {
+    var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
+    private var responses: [LLMResponse]
+
+    init(responses: [LLMResponse]) {
+        self.responses = responses
+    }
+
+    func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
+        calls.append((model, messages, maxTokens))
+        if responses.isEmpty {
+            return LLMResponse(text: "", inputTokens: 0, outputTokens: 0)
+        }
+        return responses.removeFirst()
     }
 }

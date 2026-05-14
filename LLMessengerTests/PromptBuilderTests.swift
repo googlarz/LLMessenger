@@ -141,4 +141,27 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("DRAFT:"))
         XCTAssertTrue(prompt.contains("CHOOSE"))
     }
+
+    func testIntentRouterPromptContainsActionSchemaAndContext() {
+        let context = IntentRouterPromptContext(
+            conversations: ["Signal — Asia"],
+            cards: ["Training moved — mu11 group"],
+            drafts: ["Draft to Asia: ok"]
+        )
+        let prompt = PromptBuilder.build(
+            mode: .intentRouter(context: context),
+            basePrompt: "BASE",
+            services: ["signal"],
+            episodicSummaries: [],
+            now: Date()
+        )
+
+        XCTAssertTrue(prompt.contains("send_draft_request"))
+        XCTAssertTrue(prompt.contains("show_sources"))
+        XCTAssertTrue(prompt.contains("revise_draft"))
+        XCTAssertTrue(prompt.contains("Visible brief cards"))
+        XCTAssertTrue(prompt.contains("Active drafts"))
+        XCTAssertTrue(prompt.contains("Training moved"))
+        XCTAssertTrue(prompt.contains("agree with 1, say yes to 3"))
+    }
 }

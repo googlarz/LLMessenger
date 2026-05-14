@@ -112,7 +112,7 @@ final class ChatViewModelTests: XCTestCase {
         await vm.send()
 
         XCTAssertEqual(spy.sentMessages.count, 0)
-        XCTAssertEqual(mock.calls.count, 1)
+        XCTAssertEqual(mock.calls.count, 2)
         XCTAssertTrue(vm.threadItems.contains {
             if case .replyDraft(_, let draft) = $0 {
                 return draft.text == "running 10 min late" && draft.conversationID == "c1"

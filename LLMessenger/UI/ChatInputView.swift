@@ -25,6 +25,9 @@ struct ChatInputView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .focused($isFocused)
                     .tint(Theme.accent)
+                    .onChange(of: chatViewModel.inputFocusRequest) { _ in
+                        isFocused = true
+                    }
             }
 
             // Send button

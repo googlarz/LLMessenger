@@ -20,11 +20,22 @@ struct ConversationOption: Identifiable, Equatable {
     let displayName: String   // "Alice Müller", "Work group"
 }
 
+struct ThreadSource: Identifiable, Equatable {
+    let id = UUID()
+    let service: String
+    let conversationID: String
+    let sender: String
+    let text: String
+    let timestamp: Date
+}
+
 enum ThreadItem: Identifiable {
     case message(Message)
     case userMessage(id: UUID, text: String)
     case assistantResponse(id: UUID, text: String)
+    case assistantResponseWithSources(id: UUID, text: String, sources: [ThreadSource])
     case replyDraft(id: UUID, draft: ReplyDraft)
+    case sendConfirmation(id: UUID, draft: ReplyDraft)
     /// Shown when a reply intent targets multiple conversations — user picks one by number.
     case conversationPicker(id: UUID, originalRequest: String, options: [ConversationOption])
 
@@ -33,7 +44,9 @@ enum ThreadItem: Identifiable {
         case .message(let m):                return "msg-\(m.id ?? 0)"
         case .userMessage(let i, _):         return "user-\(i)"
         case .assistantResponse(let i, _):   return "asst-\(i)"
+        case .assistantResponseWithSources(let i, _, _): return "asst-src-\(i)"
         case .replyDraft(let i, _):          return "draft-\(i)"
+        case .sendConfirmation(let i, _):    return "send-\(i)"
         case .conversationPicker(let i, _, _): return "picker-\(i)"
         }
     }

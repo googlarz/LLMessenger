@@ -120,8 +120,12 @@ struct ChatPanelView: View {
             UserMessageView(text: text)
         case .assistantResponse(_, let text):
             AssistantResponseView(text: text)
+        case .assistantResponseWithSources(_, let text, let sources):
+            AssistantResponseWithSourcesView(text: text, sources: sources)
         case .replyDraft(let id, let draft):
             ReplyDraftView(draftID: id, draft: draft)
+        case .sendConfirmation(let id, let draft):
+            SendConfirmationView(confirmationID: id, draft: draft)
         case .conversationPicker(let id, let req, let opts):
             ConversationPickerView(pickerID: id, originalRequest: req, options: opts)
         }

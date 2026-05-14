@@ -3,14 +3,28 @@ import Foundation
 
 @MainActor
 final class ChatViewModel: ObservableObject {
+    private let recentContextWindow: TimeInterval = 24 * 3600
+    private let maxDraftRecentContextMessages = 12
     @Published var threadItems: [ThreadItem] = []
     @Published var inputText: String = ""
     @Published var isLoading: Bool = false
+    @Published var inputFocusRequest = UUID()
 
     private let appState: AppState
     private var currentBrief: Brief?
     // Ordered distinct conversations in the loaded brief; built once per loadBrief().
     private(set) var briefConvs: [(service: String, convId: String, name: String)] = []
+
+    private struct NaturalReplyRequest {
+        let targetName: String
+        let messageText: String
+        let followUpText: String?
+    }
+
+    private enum IntentRoutingResult {
+        case route(IntentRoute)
+        case plainText(String)
+    }
 
     init(appState: AppState) {
         self.appState = appState
@@ -27,8 +41,34 @@ final class ChatViewModel: ObservableObject {
 
     func send() async {
         let rawInput = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rawInput.isEmpty, let brief = currentBrief else { return }
         inputText = ""
+        await submit(rawInput)
+    }
+
+    func askForDetails(service: String,
+                       conversationID: String,
+                       displayName: String,
+                       headline: String) async {
+        let title = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let subject = headline.trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = title.isEmpty ? Theme.serviceName(service) : title
+        let prompt = subject.isEmpty
+            ? "Tell me more about \(label)."
+            : "Tell me more about \(label): \(subject)"
+        await submit(prompt)
+    }
+
+    func prepareReply(service: String,
+                      conversationID: String,
+                      displayName: String) {
+        let label = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let target = label.isEmpty ? conversationID : label
+        inputText = "write to \(target): "
+        inputFocusRequest = UUID()
+    }
+
+    private func submit(_ rawInput: String) async {
+        guard !rawInput.isEmpty, let brief = currentBrief else { return }
 
         // Case 1 — Picker resolution: user typed a number to answer an active picker.
         if let picker = activePicker(),
@@ -45,12 +85,279 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
-        // Case 2 — Named-send shortcut: "write/send/reply/message to X: text".
-        // Resolve the target client-side — no LLM needed when the match is unambiguous.
-        if let (targetName, messageText) = extractNamedSend(from: rawInput) {
-            let matches = briefConvs.filter {
-                $0.name.lowercased().contains(targetName.lowercased())
+        do {
+            let context = interactionContext(for: brief)
+            let routing = try await routeIntents(brief: brief, context: context, rawInput: rawInput)
+            switch routing {
+            case .route(let route):
+                if await processIntentActions(route.actions, brief: brief, context: context, originalText: rawInput) {
+                    return
+                }
+            case .plainText(let responseText):
+                if await processLegacyShortcuts(brief: brief, rawInput: rawInput) {
+                    return
+                }
+                threadItems.append(.userMessage(id: UUID(), text: rawInput))
+                processAssistantResponseText(responseText,
+                                             originalRequest: rawInput,
+                                             services: briefServices(for: brief))
+                return
             }
+        } catch {
+            if await processLegacyShortcuts(brief: brief, rawInput: rawInput) {
+                return
+            }
+            threadItems.append(.userMessage(id: UUID(), text: rawInput))
+            threadItems.append(.assistantResponse(id: UUID(),
+                                                   text: "Error: \(error.localizedDescription)"))
+            return
+        }
+
+        // Safety net: if the router returns valid JSON but no executable action, fall back.
+        if await processLegacyShortcuts(brief: brief, rawInput: rawInput) {
+            return
+        }
+
+        await answerQuestion(brief: brief, rawInput: rawInput, echoUserMessage: true)
+    }
+
+    private func routeIntents(brief: Brief,
+                              context: ChatInteractionContext,
+                              rawInput: String) async throws -> IntentRoutingResult {
+        let services = briefServices(for: brief)
+        let systemPrompt = PromptBuilder.build(
+            mode: .intentRouter(context: context.routerPromptContext),
+            basePrompt: appState.basePrompt,
+            services: services,
+            episodicSummaries: recentEpisodicContext(for: services, limitPerService: 2),
+            now: Date()
+        )
+
+        let response = try await appState.llmClient.complete(
+            model: appState.llmModel,
+            messages: [
+                LLMMessage(role: .system, content: systemPrompt),
+                LLMMessage(role: .user, content: rawInput)
+            ],
+            maxTokens: 450
+        )
+
+        if let route = decodeIntentRoute(from: response.text) {
+            return .route(route)
+        }
+        return .plainText(response.text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func decodeIntentRoute(from text: String) -> IntentRoute? {
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("```") {
+            trimmed = trimmed
+                .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard let data = trimmed.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(IntentRoute.self, from: data)
+    }
+
+    private func processIntentActions(_ actions: [IntentAction],
+                                      brief: Brief,
+                                      context: ChatInteractionContext,
+                                      originalText: String) async -> Bool {
+        let executableActions = actions.filter { action in
+            action.type != .unknown
+        }
+        guard !executableActions.isEmpty else { return false }
+
+        threadItems.append(.userMessage(id: UUID(), text: originalText))
+
+        for action in executableActions {
+            switch action.type {
+            case .draftReply:
+                await processDraftIntent(action, brief: brief, context: context, originalText: originalText)
+            case .answer:
+                let question = normalized(action.question) ?? originalText
+                await answerQuestion(brief: brief, rawInput: question, echoUserMessage: false)
+            case .reviseDraft:
+                await reviseDraft(action, brief: brief, context: context, originalText: originalText)
+            case .sendDraftRequest:
+                requestSendConfirmation(action, context: context)
+            case .showSources:
+                showSources(action, context: context)
+            case .listActions, .findWaitingReplies, .summarizeChanges, .extractTasks, .compareConversations:
+                let question = actionFocusedQuestion(for: action, originalText: originalText)
+                await answerQuestion(brief: brief, rawInput: question, echoUserMessage: false)
+            case .clarify:
+                let text = normalized(action.question)
+                    ?? normalized(action.instruction)
+                    ?? "Which conversation or draft do you mean?"
+                threadItems.append(.assistantResponse(id: UUID(), text: text))
+            case .unknown:
+                break
+            }
+        }
+
+        return true
+    }
+
+    private func processDraftIntent(_ action: IntentAction,
+                                    brief: Brief,
+                                    context: ChatInteractionContext,
+                                    originalText: String) async {
+        let messageText = normalized(action.message) ?? originalText
+
+        if let conv = context.conversation(for: action) {
+            await draftReply(brief: brief,
+                             originalRequest: messageText,
+                             service: conv.service,
+                             convId: conv.convId,
+                             convName: conv.name)
+            return
+        }
+
+        let matches = normalized(action.targetName).map(context.conversations(matching:)) ?? []
+        if matches.count > 1 {
+            threadItems.append(.conversationPicker(id: UUID(),
+                                                   originalRequest: messageText,
+                                                   options: conversationOptions(from: matches)))
+        } else {
+            let target = normalized(action.targetName) ?? "that conversation"
+            threadItems.append(.assistantResponse(id: UUID(),
+                                                   text: "I couldn't find \(target) in this brief."))
+        }
+    }
+
+    private func reviseDraft(_ action: IntentAction,
+                             brief: Brief,
+                             context: ChatInteractionContext,
+                             originalText: String) async {
+        guard let draftRef = context.draft(for: action) else {
+            threadItems.append(.assistantResponse(id: UUID(), text: "I couldn't find a draft to revise."))
+            return
+        }
+
+        let instruction = normalized(action.instruction)
+            ?? normalized(action.message)
+            ?? normalized(action.question)
+            ?? originalText
+        isLoading = true
+        defer { isLoading = false }
+
+        let systemPrompt = PromptBuilder.build(
+            mode: .chat(conversations: ["\(draftRef.draft.serviceID) — \(draftRef.draft.conversationID)"]),
+            basePrompt: appState.basePrompt,
+            services: [draftRef.draft.serviceID],
+            episodicSummaries: recentEpisodicContext(for: [draftRef.draft.serviceID], limitPerService: 3),
+            now: Date()
+        )
+        let messages = [
+            LLMMessage(role: .system, content: systemPrompt),
+            LLMMessage(role: .user, content: "Current draft:\n\(draftRef.draft.text)"),
+            LLMMessage(role: .user, content: "Revise the draft. Instruction: \(instruction)")
+        ]
+
+        do {
+            let response = try await appState.llmClient.complete(
+                model: appState.llmModel,
+                messages: messages,
+                maxTokens: 400
+            )
+            let revised = stripDraftPrefix(response.text.trimmingCharacters(in: .whitespacesAndNewlines))
+            updateDraft(id: draftRef.id, text: revised)
+        } catch {
+            threadItems.append(.assistantResponse(id: UUID(), text: "Error: \(error.localizedDescription)"))
+        }
+    }
+
+    private func requestSendConfirmation(_ action: IntentAction, context: ChatInteractionContext) {
+        guard let draftRef = context.draft(for: action) else {
+            threadItems.append(.assistantResponse(id: UUID(), text: "I couldn't find a draft to send."))
+            return
+        }
+        threadItems.append(.sendConfirmation(id: UUID(), draft: draftRef.draft))
+    }
+
+    private func showSources(_ action: IntentAction, context: ChatInteractionContext) {
+        let sourceMessages: [Message]
+        let title: String
+
+        if let card = context.card(for: action) {
+            sourceMessages = context.sourceMessages(for: card)
+            title = "Here are the source messages for \(card.card.headline):"
+        } else if let conversation = context.conversation(for: action) {
+            sourceMessages = Array(context.conversationMessages(for: conversation).suffix(6))
+            title = "Here are the recent messages from \(conversation.name):"
+        } else {
+            sourceMessages = Array(context.messages.suffix(6))
+            title = "Here are the most relevant recent messages I can show from this brief:"
+        }
+
+        let sources = sourceMessages.map {
+            ThreadSource(service: $0.service,
+                         conversationID: $0.conversationId,
+                         sender: $0.sender,
+                         text: $0.text,
+                         timestamp: $0.timestamp)
+        }
+
+        if sources.isEmpty {
+            threadItems.append(.assistantResponse(id: UUID(), text: "I couldn't find source messages for that item."))
+        } else {
+            threadItems.append(.assistantResponseWithSources(id: UUID(), text: title, sources: sources))
+        }
+    }
+
+    private func actionFocusedQuestion(for action: IntentAction, originalText: String) -> String {
+        if let question = normalized(action.question) {
+            return question
+        }
+        switch action.type {
+        case .listActions:
+            return "List the concrete actions I should take from this brief. Prioritize urgent replies and decisions."
+        case .findWaitingReplies:
+            return "Who appears to be waiting for a reply from me in this brief? Include why and suggested reply direction."
+        case .summarizeChanges:
+            return "What changed since the last brief or recent context? Focus on new information and changed decisions."
+        case .extractTasks:
+            return "Extract tasks, deadlines, promises, and follow-ups from this brief. Be concrete."
+        case .compareConversations:
+            return "Compare the referenced conversations and explain whether they are related."
+        default:
+            return originalText
+        }
+    }
+
+    private func processLegacyShortcuts(brief: Brief, rawInput: String) async -> Bool {
+        if let request = extractNaturalReplyRequest(from: rawInput) {
+            let matches = conversations(matching: request.targetName)
+            if matches.count == 1 {
+                let conv = matches[0]
+                threadItems.append(.userMessage(id: UUID(), text: rawInput))
+                await draftReply(brief: brief,
+                                 originalRequest: request.messageText,
+                                 service: conv.service,
+                                 convId: conv.convId,
+                                 convName: conv.name)
+                if let followUp = request.followUpText {
+                    await answerQuestion(brief: brief, rawInput: followUp, echoUserMessage: false)
+                }
+                return true
+            } else if matches.count > 1 {
+                threadItems.append(.userMessage(id: UUID(), text: rawInput))
+                threadItems.append(.conversationPicker(id: UUID(),
+                                                       originalRequest: request.messageText,
+                                                       options: conversationOptions(from: matches)))
+                if let followUp = request.followUpText {
+                    await answerQuestion(brief: brief, rawInput: followUp, echoUserMessage: false)
+                }
+                return true
+            }
+        }
+
+        if let (targetName, messageText) = extractNamedSend(from: rawInput) {
+            let matches = conversations(matching: targetName)
             if matches.count == 1 {
                 let conv = matches[0]
                 threadItems.append(.userMessage(id: UUID(), text: rawInput))
@@ -59,26 +366,24 @@ final class ChatViewModel: ObservableObject {
                                  service: conv.service,
                                  convId: conv.convId,
                                  convName: conv.name)
-                return
+                return true
             } else if matches.count > 1 {
-                let options = matches.enumerated().map { i, conv in
-                    ConversationOption(number: i + 1,
-                                       service: conv.service,
-                                       convId: conv.convId,
-                                       displayName: conv.name)
-                }
                 threadItems.append(.userMessage(id: UUID(), text: rawInput))
                 threadItems.append(.conversationPicker(id: UUID(),
                                                        originalRequest: rawInput,
-                                                       options: options))
-                return
+                                                       options: conversationOptions(from: matches)))
+                return true
             }
-            // Zero matches → fall through to LLM for a helpful reply.
         }
 
-        // Case 3 — Normal: let the LLM understand intent and decide what to do.
+        return false
+    }
+
+    private func answerQuestion(brief: Brief, rawInput: String, echoUserMessage: Bool) async {
         let userMsgID = UUID()
-        threadItems.append(.userMessage(id: userMsgID, text: rawInput))
+        if echoUserMessage {
+            threadItems.append(.userMessage(id: userMsgID, text: rawInput))
+        }
         InstrumentationManager.shared.track(event: .followUpQuestionAsked, metadata: ["textLength": rawInput.count])
         isLoading = true
         defer { isLoading = false }
@@ -108,45 +413,44 @@ final class ChatViewModel: ObservableObject {
             )
             let responseText = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            if responseText.uppercased().hasPrefix("CHOOSE") {
-                // LLM decided it needs the user to pick a conversation.
-                let options = briefConvs.enumerated().map { i, conv in
-                    ConversationOption(number: i + 1,
-                                       service: conv.service,
-                                       convId: conv.convId,
-                                       displayName: conv.name)
-                }
-                threadItems.append(.conversationPicker(id: UUID(),
-                                                       originalRequest: rawInput,
-                                                       options: options))
-            } else if let draftRange = responseText.range(of: "DRAFT:", options: .caseInsensitive),
-                      draftRange.lowerBound == responseText.startIndex {
-                // LLM drafted a reply. Format: DRAFT:<n>: <text> or DRAFT: <text> (single conv).
-                let rest = String(responseText[draftRange.upperBound...])
-                var target = briefConvs.first
-                var draftText = rest.trimmingCharacters(in: .whitespacesAndNewlines)
-                // Parse optional "n: " prefix to identify which conversation.
-                if let colonIdx = rest.firstIndex(of: ":") {
-                    let numStr = rest[rest.startIndex..<colonIdx]
-                        .trimmingCharacters(in: .whitespaces)
-                    if let n = Int(numStr), n >= 1, n <= briefConvs.count {
-                        target = briefConvs[n - 1]
-                        draftText = String(rest[rest.index(after: colonIdx)...])
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                    }
-                }
-                let draft = ReplyDraft(id: UUID(),
-                                       text: draftText,
-                                       serviceID: target?.service ?? services.first ?? "",
-                                       conversationID: target?.convId ?? "",
-                                       senderName: "")
-                threadItems.append(.replyDraft(id: draft.id, draft: draft))
-            } else {
-                threadItems.append(.assistantResponse(id: UUID(), text: responseText))
-            }
+            processAssistantResponseText(responseText,
+                                         originalRequest: rawInput,
+                                         services: services)
         } catch {
             threadItems.append(.assistantResponse(id: UUID(),
                                                    text: "Error: \(error.localizedDescription)"))
+        }
+    }
+
+    private func processAssistantResponseText(_ responseText: String,
+                                              originalRequest: String,
+                                              services: [String]) {
+        if responseText.uppercased().hasPrefix("CHOOSE") {
+            threadItems.append(.conversationPicker(id: UUID(),
+                                                   originalRequest: originalRequest,
+                                                   options: conversationOptions(from: briefConvs)))
+        } else if let draftRange = responseText.range(of: "DRAFT:", options: .caseInsensitive),
+                  draftRange.lowerBound == responseText.startIndex {
+            let rest = String(responseText[draftRange.upperBound...])
+            var target = briefConvs.first
+            var draftText = rest.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let colonIdx = rest.firstIndex(of: ":") {
+                let numStr = rest[rest.startIndex..<colonIdx]
+                    .trimmingCharacters(in: .whitespaces)
+                if let n = Int(numStr), n >= 1, n <= briefConvs.count {
+                    target = briefConvs[n - 1]
+                    draftText = String(rest[rest.index(after: colonIdx)...])
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+            let draft = ReplyDraft(id: UUID(),
+                                   text: draftText,
+                                   serviceID: target?.service ?? services.first ?? "",
+                                   conversationID: target?.convId ?? "",
+                                   senderName: "")
+            threadItems.append(.replyDraft(id: draft.id, draft: draft))
+        } else {
+            threadItems.append(.assistantResponse(id: UUID(), text: responseText))
         }
     }
 
@@ -180,6 +484,41 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    func cancelSendConfirmation(id: UUID) {
+        threadItems.removeAll {
+            if case .sendConfirmation(let i, _) = $0 { return i == id }
+            return false
+        }
+    }
+
+    func confirmSendDraft(id: UUID) async {
+        guard let confirmation = threadItems.compactMap({ item -> (UUID, ReplyDraft)? in
+            if case .sendConfirmation(let confirmationID, let draft) = item {
+                return (confirmationID, draft)
+            }
+            return nil
+        }).first(where: { $0.0 == id }) else { return }
+
+        let draft = confirmation.1
+        guard let adapter = appState.adapters[draft.serviceID] else {
+            threadItems.append(.assistantResponse(id: UUID(),
+                                                   text: "I can't send this because \(Theme.serviceName(draft.serviceID)) is not connected."))
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await adapter.send(conversationID: draft.conversationID, text: draft.text)
+            cancelSendConfirmation(id: id)
+            discardDraft(id: draft.id)
+            threadItems.append(.assistantResponse(id: UUID(), text: "Sent."))
+        } catch {
+            threadItems.append(.assistantResponse(id: UUID(),
+                                                   text: "Error: \(error.localizedDescription)"))
+        }
+    }
+
     // MARK: - Draft helper
 
     private func draftReply(brief: Brief,
@@ -193,18 +532,18 @@ final class ChatViewModel: ObservableObject {
         let briefMessages = threadItems.compactMap { item -> Message? in
             if case .message(let m) = item { return m } else { return nil }
         }
-        // Filter to the selected conversation so the LLM sees only relevant messages.
-        let convMessages = briefMessages.filter { $0.service == service && $0.conversationId == convId }
-        let contextMessages = (convMessages.isEmpty ? Array(briefMessages.suffix(30)) : Array(convMessages.suffix(30)))
-        let briefText = contextMessages
-            .map { "[\($0.sender)]: \($0.text)" }
-            .joined(separator: "\n")
+        let contextMessages = draftContextMessages(
+            briefMessages: briefMessages,
+            service: service,
+            conversationID: convId
+        )
+        let briefText = contextMessages.map(contextLine).joined(separator: "\n")
 
         let systemPrompt = PromptBuilder.build(
             mode: .chat(conversations: ["\(Theme.serviceName(service)) — \(convName)"]),
             basePrompt: appState.basePrompt,
             services: [service],
-            episodicSummaries: [],
+            episodicSummaries: recentEpisodicContext(for: [service], limitPerService: 3),
             now: Date()
         )
 
@@ -222,13 +561,7 @@ final class ChatViewModel: ObservableObject {
                 maxTokens: 400
             )
             let responseText = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            let draftText: String
-            if let range = responseText.range(of: "DRAFT:", options: .caseInsensitive) {
-                draftText = String(responseText[range.upperBound...])
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-            } else {
-                draftText = responseText
-            }
+            let draftText = stripDraftPrefix(responseText)
             let draft = ReplyDraft(id: UUID(), text: draftText,
                                    serviceID: service, conversationID: convId, senderName: "")
             threadItems.append(.replyDraft(id: draft.id, draft: draft))
@@ -263,14 +596,101 @@ final class ChatViewModel: ObservableObject {
                 msgs.append(LLMMessage(role: .user, content: text))
             case .assistantResponse(_, let text):
                 msgs.append(LLMMessage(role: .assistant, content: text))
+            case .assistantResponseWithSources(_, let text, let sources):
+                let sourceText = sources.map { "\($0.sender): \($0.text)" }.joined(separator: "\n")
+                msgs.append(LLMMessage(role: .assistant, content: "\(text)\n\(sourceText)"))
             case .replyDraft(_, let draft):
                 msgs.append(LLMMessage(role: .assistant, content: "DRAFT: \(draft.text)"))
+            case .sendConfirmation(_, let draft):
+                msgs.append(LLMMessage(role: .assistant, content: "SEND CONFIRMATION PENDING: \(draft.text)"))
             default:
                 break
             }
         }
         msgs.append(LLMMessage(role: .user, content: currentText))
         return msgs
+    }
+
+    private func draftContextMessages(briefMessages: [Message],
+                                      service: String,
+                                      conversationID: String) -> [Message] {
+        let convMessages = briefMessages.filter { $0.service == service && $0.conversationId == conversationID }
+        guard !convMessages.isEmpty else {
+            return Array(briefMessages.suffix(30))
+        }
+
+        let recentContext = fetchRecentDraftContext(
+            service: service,
+            conversationID: conversationID,
+            before: convMessages[0].timestamp
+        )
+        return Array((recentContext + convMessages).suffix(30))
+    }
+
+    private func fetchRecentDraftContext(service: String,
+                                         conversationID: String,
+                                         before date: Date) -> [Message] {
+        (try? appState.repository.fetchRecentContextMessages(
+            service: service,
+            conversationID: conversationID,
+            before: date,
+            since: date.addingTimeInterval(-recentContextWindow),
+            limit: maxDraftRecentContextMessages
+        )) ?? []
+    }
+
+    private func recentEpisodicContext(for services: [String], limitPerService: Int) -> [(summary: String, createdAt: Date)] {
+        var merged: [(summary: String, createdAt: Date)] = []
+        var seen = Set<String>()
+
+        for service in services {
+            let entries = (try? appState.repository.recentEpisodicSummaries(service: service, limit: limitPerService)) ?? []
+            for entry in entries {
+                let key = "\(service)|\(entry.createdAt.timeIntervalSince1970)|\(entry.summary)"
+                if seen.insert(key).inserted {
+                    merged.append(entry)
+                }
+            }
+        }
+
+        return merged.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private func contextLine(_ message: Message) -> String {
+        let serviceName = Theme.serviceName(message.service)
+        return "[\(serviceName)] [\(message.sender)]: \(message.text)"
+    }
+
+    private func interactionContext(for brief: Brief) -> ChatInteractionContext {
+        ChatInteractionContext(brief: brief,
+                               messages: currentMessages(),
+                               threadItems: threadItems,
+                               conversationTuples: briefConvs)
+    }
+
+    private func currentMessages() -> [Message] {
+        threadItems.compactMap { item -> Message? in
+            if case .message(let m) = item { return m }
+            return nil
+        }
+    }
+
+    private func updateDraft(id: UUID, text: String) {
+        threadItems = threadItems.map { item in
+            if case .replyDraft(let draftID, var draft) = item, draftID == id {
+                draft.text = text
+                return .replyDraft(id: draftID, draft: draft)
+            }
+            return item
+        }
+    }
+
+    private func stripDraftPrefix(_ responseText: String) -> String {
+        if let range = responseText.range(of: "DRAFT:", options: .caseInsensitive) {
+            return String(responseText[range.upperBound...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return responseText
     }
 
     private func buildConvList(from messages: [Message],
@@ -319,7 +739,7 @@ final class ChatViewModel: ObservableObject {
     /// Parses "write/send/reply/message (to) <name>: <text>" into (name, text).
     /// Returns nil if the input doesn't match the pattern.
     private func extractNamedSend(from text: String) -> (name: String, message: String)? {
-        let pattern = #"(?i)(?:write|send|reply|message)\s+(?:to\s+)?(.+?):\s*(.+)"#
+        let pattern = #"(?i)(?:write|send|reply|replay|respond|message)\s+(?:to\s+)?(.+?):\s*(.+)"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: text,
                                            range: NSRange(text.startIndex..., in: text)),
@@ -330,5 +750,95 @@ final class ChatViewModel: ObservableObject {
         let msg  = String(text[msgRange]).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, !msg.isEmpty else { return nil }
         return (name, msg)
+    }
+
+    private func extractNaturalReplyRequest(from text: String) -> NaturalReplyRequest? {
+        if let request = extractQuotedReplyRequest(from: text) {
+            return request
+        }
+        return extractColonReplyRequest(from: text)
+    }
+
+    private func extractQuotedReplyRequest(from text: String) -> NaturalReplyRequest? {
+        let pattern = #"(?i)^\s*(?:write|send|reply|replay|respond|message)\s+(?:to\s+)?(.+?)\s+(?:"([^"]+)"|'([^']+)'|“([^”]+)”|‘([^’]+)’)(?:\s+(?:and|then|also)\s+(.+))?\s*$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let nameRange = Range(match.range(at: 1), in: text)
+        else { return nil }
+
+        let quote = (2...5).compactMap { index -> String? in
+            let range = match.range(at: index)
+            guard range.location != NSNotFound, let swiftRange = Range(range, in: text) else { return nil }
+            return String(text[swiftRange])
+        }.first
+
+        guard let messageText = quote?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !messageText.isEmpty else { return nil }
+
+        let followUp = optionalCapture(match: match, index: 6, in: text)
+        let targetName = String(text[nameRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !targetName.isEmpty else { return nil }
+        return NaturalReplyRequest(targetName: targetName, messageText: messageText, followUpText: followUp)
+    }
+
+    private func extractColonReplyRequest(from text: String) -> NaturalReplyRequest? {
+        let pattern = #"(?i)^\s*(?:write|send|reply|replay|respond|message)\s+(?:to\s+)?(.+?):\s*(.+?)(?:\s+(?:and|then|also)\s+(.+))?\s*$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let nameRange = Range(match.range(at: 1), in: text),
+              let messageRange = Range(match.range(at: 2), in: text)
+        else { return nil }
+
+        let targetName = String(text[nameRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let messageText = String(text[messageRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !targetName.isEmpty, !messageText.isEmpty else { return nil }
+        return NaturalReplyRequest(
+            targetName: targetName,
+            messageText: messageText,
+            followUpText: optionalCapture(match: match, index: 3, in: text)
+        )
+    }
+
+    private func optionalCapture(match: NSTextCheckingResult, index: Int, in text: String) -> String? {
+        let range = match.range(at: index)
+        guard range.location != NSNotFound, let swiftRange = Range(range, in: text) else { return nil }
+        let value = String(text[swiftRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    private func conversations(matching targetName: String) -> [(service: String, convId: String, name: String)] {
+        let needle = targetName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return [] }
+        return briefConvs.filter { conv in
+            conv.name.lowercased().contains(needle)
+                || conv.convId.lowercased().contains(needle)
+                || Theme.serviceName(conv.service).lowercased().contains(needle)
+        }
+    }
+
+    private func conversationOptions(
+        from conversations: [(service: String, convId: String, name: String)]
+    ) -> [ConversationOption] {
+        conversations.enumerated().map { i, conv in
+            ConversationOption(number: i + 1,
+                               service: conv.service,
+                               convId: conv.convId,
+                               displayName: conv.name)
+        }
+    }
+
+    private func conversationOptions(from conversations: [ChatConversationRef]) -> [ConversationOption] {
+        conversations.enumerated().map { i, conv in
+            ConversationOption(number: i + 1,
+                               service: conv.service,
+                               convId: conv.convId,
+                               displayName: conv.name)
+        }
+    }
+
+    private func normalized(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 }

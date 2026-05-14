@@ -1,6 +1,13 @@
 // LLMessenger/UI/BriefProseView.swift
 import SwiftUI
 
+struct NumberedBriefCard: Identifiable {
+    let number: Int
+    let card: BriefCard
+
+    var id: String { card.id }
+}
+
 // MARK: - Inline service badge (iM / Tg / Sg)
 
 struct SourceGlyphView: View {
@@ -210,6 +217,7 @@ struct BriefCardEvidenceView: View {
 
 struct BriefProseView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var chatViewModel: ChatViewModel
     let brief: Brief
     let messages: [Message]
     @State private var filter: String = "all"
@@ -247,24 +255,20 @@ struct BriefProseView: View {
         )
     }
 
-    private var visibleCards: [BriefCard]? {
-        guard let json = parsedJSON else { return nil }
-        return filter == "all" ? json.cards : json.cards.filter { $0.service == filter }
+    private var numberedVisibleCards: [NumberedBriefCard] {
+        guard let json = parsedJSON else { return [] }
+        return json.cards.enumerated().compactMap { index, card in
+            guard filter == "all" || card.service == filter else { return nil }
+            return NumberedBriefCard(number: index + 1, card: card)
+        }
     }
 
-    private var highPriorityCards: [BriefCard] {
-        visibleCards?.filter { $0.priority == "high" }
-            .sorted { $0.headline < $1.headline } ?? []
+    private var highPriorityCards: [NumberedBriefCard] {
+        numberedVisibleCards.filter { $0.card.priority == "high" }
     }
 
-    private var otherCards: [BriefCard] {
-        visibleCards?.filter { $0.priority != "high" }
-            .sorted { lhs, rhs in
-                if priorityRank(lhs.priority) == priorityRank(rhs.priority) {
-                    return lhs.headline < rhs.headline
-                }
-                return priorityRank(lhs.priority) < priorityRank(rhs.priority)
-            } ?? []
+    private var otherCards: [NumberedBriefCard] {
+        numberedVisibleCards.filter { $0.card.priority != "high" }
     }
 
     private var visibleMessages: [Message] {
@@ -327,11 +331,11 @@ struct BriefProseView: View {
     // MARK: - JSON card rendering
 
     @ViewBuilder
-    private func cardsView(_ cards: [BriefCard]) -> some View {
+    private func cardsView(_ cards: [NumberedBriefCard]) -> some View {
         VStack(alignment: .leading, spacing: 20) {
             ForEach(Array(cards.enumerated()), id: \.element.id) { idx, card in
                 cardView(card)
-                if idx < cards.count - 1 && card.priority == "high" {
+                if idx < cards.count - 1 && card.card.priority == "high" {
                     Divider()
                         .background(Theme.border.opacity(0.3))
                         .padding(.top, 4)
@@ -342,12 +346,20 @@ struct BriefProseView: View {
     }
 
     @ViewBuilder
-    private func cardView(_ card: BriefCard) -> some View {
+    private func cardView(_ numberedCard: NumberedBriefCard) -> some View {
+        let card = numberedCard.card
         let isExpanded = expandedCards.contains(card.id)
         
         VStack(alignment: .leading, spacing: 10) {
             // Service + conversation + headline + priority
             HStack(alignment: .center, spacing: 6) {
+                Text("#\(numberedCard.number)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Theme.surfaceHigh)
+                    .clipShape(Capsule())
                 SourceGlyphView(service: card.service, size: 20)
                 Text(card.conversation ?? Theme.serviceName(card.service))
                     .font(.system(size: 14, weight: .bold))
@@ -433,11 +445,67 @@ struct BriefProseView: View {
                     .padding(.leading, 12)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            HStack(spacing: 8) {
+                cardActionButton(
+                    title: "More detail",
+                    systemImage: "text.magnifyingglass"
+                ) {
+                    Task {
+                        await chatViewModel.askForDetails(
+                            service: card.service,
+                            conversationID: card.conversationId,
+                            displayName: card.conversation ?? "",
+                            headline: card.headline
+                        )
+                    }
+                }
+                .help("Ask for more detail")
+
+                cardActionButton(
+                    title: "Reply",
+                    systemImage: "arrowshape.turn.up.left"
+                ) {
+                    chatViewModel.prepareReply(
+                        service: card.service,
+                        conversationID: card.conversationId,
+                        displayName: card.conversation ?? ""
+                    )
+                }
+                .help("Draft a reply")
+
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 2)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 8)
         .background(card.priority == "high" ? Theme.accent.opacity(0.03) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func cardActionButton(title: String,
+                                  systemImage: String,
+                                  action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(Theme.surfaceHigh.opacity(0.7))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Theme.border.opacity(0.7), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Fallback: grouped by service
@@ -543,13 +611,5 @@ struct BriefProseView: View {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f.string(from: date)
-    }
-
-    private func priorityRank(_ priority: String) -> Int {
-        switch priority {
-        case "high": return 0
-        case "med": return 1
-        default: return 2
-        }
     }
 }
