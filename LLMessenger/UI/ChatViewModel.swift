@@ -837,17 +837,30 @@ final class ChatViewModel: ObservableObject {
 
     private func buildConvList(from messages: [Message],
                                brief: Brief) -> [(service: String, convId: String, name: String)] {
-        var seen = Set<String>()
-        var result: [(service: String, convId: String, name: String)] = []
+        // Collect the best display name for each conversation — first non-nil conversationName
+        // wins. Using only the first-seen message would lock in nil if early messages (e.g.
+        // sent messages from before the adapter stored names) lack a display name, even though
+        // later messages in the same conversation have the human-readable name.
+        var nameByKey: [String: String] = [:]
+        var order: [String] = []
+        var convByKey: [String: (service: String, convId: String)] = [:]
+
         for m in messages {
             let key = "\(m.service):\(m.conversationId)"
-            if seen.insert(key).inserted {
-                // Prefer the stored display name; fall back to the raw conversation ID.
-                let name = m.conversationName ?? m.conversationId
-                result.append((service: m.service, convId: m.conversationId, name: name))
+            if convByKey[key] == nil {
+                order.append(key)
+                convByKey[key] = (m.service, m.conversationId)
+                nameByKey[key] = m.conversationName  // may be nil
+            } else if nameByKey[key] == nil, let name = m.conversationName {
+                nameByKey[key] = name  // upgrade nil → first real display name
             }
         }
-        return result
+
+        return order.compactMap { key in
+            guard let conv = convByKey[key] else { return nil }
+            let name = nameByKey[key] ?? conv.convId
+            return (service: conv.service, convId: conv.convId, name: name)
+        }
     }
 
     private func briefServices(for brief: Brief) -> [String] {

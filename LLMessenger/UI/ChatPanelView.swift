@@ -93,6 +93,11 @@ struct ChatPanelView: View {
                     // Delay one run-loop so the new item finishes rendering before scrollTo.
                     DispatchQueue.main.async {
                         if let last = chatViewModel.threadItems.last {
+                            // .message items are rendered inside BriefProseView, not in the
+                            // LazyVStack below, so their IDs are not registered in this
+                            // ScrollViewProxy and scrollTo would silently no-op. Only scroll
+                            // for AI thread items (drafts, responses, pickers, etc.).
+                            if case .message = last { return }
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
                     }
