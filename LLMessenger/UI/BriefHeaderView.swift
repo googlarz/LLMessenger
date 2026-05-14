@@ -5,6 +5,7 @@ struct BriefHeaderView: View {
     let brief: Brief
     let messageCount: Int
     let serviceCount: Int
+    let briefCount: Int
     let threadCount: Int
     let peopleCount: Int
     let highPriorityCount: Int
@@ -37,7 +38,7 @@ struct BriefHeaderView: View {
                         .tracking(-0.5)
 
                     HStack(spacing: 5) {
-                        Text("\(threadCount) thread\(threadCount == 1 ? "" : "s")")
+                        Text("\(messageCount) message\(messageCount == 1 ? "" : "s")")
                         Text("·")
                         Text("\(peopleCount) \(peopleCount == 1 ? "person" : "people")")
                         if !failedServices.isEmpty {
@@ -127,8 +128,9 @@ struct BriefHeaderView: View {
     }
 
     private var headlineText: String {
-        if messageCount == 0 { return "No new messages" }
-        return "\(messageCount) new messages across \(serviceCount) app\(serviceCount == 1 ? "" : "s")"
+        if briefCount == 0 && messageCount == 0 { return "No new messages" }
+        if briefCount == 0 { return "\(messageCount) message\(messageCount == 1 ? "" : "s")" }
+        return "\(briefCount) brief\(briefCount == 1 ? "" : "s") across \(serviceCount) app\(serviceCount == 1 ? "" : "s")"
     }
 
     private var briefKind: String {

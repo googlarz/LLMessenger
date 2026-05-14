@@ -93,7 +93,9 @@ struct BriefCard: Codable, Identifiable {
         priority = try container.decodeIfPresent(String.self, forKey: .priority) ?? "low"
         counts = try container.decodeIfPresent(BriefCardCounts.self, forKey: .counts) ?? .zero
         summary = try container.decodeIfPresent(String.self, forKey: .summary) ?? headline
-        callback = try container.decodeIfPresent(String.self, forKey: .callback)
+        // The LLM occasionally emits a bool or other non-string value for callback;
+        // tolerate it as nil rather than failing the whole brief.
+        callback = (try? container.decodeIfPresent(String.self, forKey: .callback)) ?? nil
         actionItems = try container.decodeIfPresent([String].self, forKey: .actionItems)
             ?? (try container.decodeIfPresent([String].self, forKey: .legacyActions))
             ?? []

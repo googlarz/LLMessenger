@@ -196,6 +196,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menuBar.onOpenSettings = openSettings
             state.onOpenSettings = openSettings
 
+            state.onBriefsChanged = { [weak self] in
+                guard let self else { return }
+                self.menuBarController?.setUnreadCount(self.appState?.unreadCount ?? 0)
+                self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
+            }
+
             menuBar.onRestartSignalWatch = { [weak self] in
                 guard let self else { return }
                 Task {

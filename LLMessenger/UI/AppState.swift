@@ -132,6 +132,9 @@ final class AppState: ObservableObject {
     let basePrompt: String
     var adapters: [String: any MessengerAdapter] = [:]
     var onOpenSettings: (() -> Void)?
+    /// Fires whenever `briefs` is reloaded. Used by AppDelegate to keep the menu bar
+    /// unread badge in sync after the user opens a brief (which flips it to "open").
+    var onBriefsChanged: (() -> Void)?
 
     init(database: AppDatabase,
          llmClient: LLMClient,
@@ -178,6 +181,7 @@ final class AppState: ObservableObject {
     func refreshBriefs() {
         do {
             briefs = try repository.fetchAllBriefs()
+            onBriefsChanged?()
         } catch {
             // Silently ignore — UI shows empty state
         }

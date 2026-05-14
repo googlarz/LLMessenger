@@ -256,6 +256,15 @@ final class AppDatabase: @unchecked Sendable {
             try db.create(index: "priorityCorrections_on_createdAt",
                           on: "priorityCorrections", columns: ["createdAt"])
         }
+        migrator.registerMigration("v9_backfill_sent_messages") { db in
+            // iMessageAdapter sets sender="Me" only when is_from_me=1, so this is safe:
+            // pre-fix polls stored these rows with isSent=false. Repair them so user replies
+            // get treated correctly by brief generation and recent-context queries.
+            try db.execute(sql: """
+                UPDATE messages SET isSent = 1
+                WHERE service = 'imessage' AND sender = 'Me' AND isSent = 0
+            """)
+        }
         try migrator.migrate(dbQueue)
     }
 }
