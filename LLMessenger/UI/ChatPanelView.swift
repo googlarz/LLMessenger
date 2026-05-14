@@ -66,6 +66,7 @@ struct ChatPanelView: View {
                             Divider().background(Theme.border.opacity(0.6))
 
                             BriefProseView(brief: brief, messages: briefMessages)
+                                .id(brief.id)
                         }
 
                         // Always render so IDs are registered before scrollTo fires.
