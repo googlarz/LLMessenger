@@ -565,30 +565,80 @@ final class BriefEngine {
         sourceMessagesByService: [String: [String: Message]]
     ) throws {
         let now = Date()
-        for card in cards {
-            let serviceMessages = sourceMessagesByService[card.service].map { Array($0.values) } ?? []
+        // Group cards by conversation. The LLM is instructed to emit one card per
+        // conversationId, but may produce duplicates. Grouping here ensures we write
+        // exactly one ConversationState per conversation, merging data from all cards
+        // rather than silently clobbering earlier cards with later ones.
+        let grouped: [String: [BriefCard]] = Dictionary(
+            grouping: cards,
+            by: { "\($0.service)|\($0.conversationId)" }
+        )
+        for (_, convCards) in grouped {
+            guard let firstCard = convCards.first else { continue }
+            let service = firstCard.service
+            let convId = firstCard.conversationId
+
+            let serviceMessages = sourceMessagesByService[service].map { Array($0.values) } ?? []
             let conversationMessages = serviceMessages
-                .filter { $0.conversationId == card.conversationId }
+                .filter { $0.conversationId == convId }
                 .sorted(by: messageSortAscending)
             let latestMessageID = conversationMessages.last?.messageId
             let participants = Array(Set(conversationMessages.map { $0.sender })).sorted()
-            let existing = try repository.fetchConversationState(service: card.service, conversationID: card.conversationId)
+            let existing = try repository.fetchConversationState(service: service, conversationID: convId)
+
+            // Merge action items from all cards, preserving order and deduplicating.
+            var allActionItems: [String] = []
+            var seenActions = Set<String>()
+            for card in convCards {
+                for item in card.actionItems where seenActions.insert(item).inserted {
+                    allActionItems.append(item)
+                }
+            }
+
+            // Merge summaries: single card uses its summary directly; multiple cards
+            // are joined so no context is discarded.
+            let mergedSummary = convCards.count == 1
+                ? firstCard.summary
+                : convCards.map(\.summary).joined(separator: "\n")
+
+            // Merge source message IDs from all cards (deduplicated, order-preserving).
+            var allSourceIDs: [String] = []
+            var seenIDs = Set<String>()
+            for card in convCards {
+                for id in card.sourceMessageIds where seenIDs.insert(id).inserted {
+                    allSourceIDs.append(id)
+                }
+            }
+
+            // Highest priority wins when cards disagree.
+            let priority = convCards.map(\.priority).min(by: { priorityRank($0) < priorityRank($1) })
+                ?? firstCard.priority
+            let lastCardId = convCards.last?.id ?? firstCard.id
 
             let state = ConversationState(
-                service: card.service,
-                conversationId: card.conversationId,
+                service: service,
+                conversationId: convId,
                 lastSeenMessageId: latestMessageID ?? existing?.lastSeenMessageId,
                 lastSummarizedMessageId: latestMessageID ?? existing?.lastSummarizedMessageId,
-                rollingSummary: card.summary,
+                rollingSummary: mergedSummary,
                 participants: participants.isEmpty ? existing?.participants : try encodeStringArray(participants),
                 knownEntities: existing?.knownEntities,
-                unresolvedActions: card.actionItems.isEmpty ? nil : try encodeStringArray(card.actionItems),
-                lastBriefCardId: card.id,
-                prioritySignals: #"{"priority":"\#(card.priority)"}"#,
-                sourceMessageIds: try encodeStringArray(card.sourceMessageIds),
+                unresolvedActions: allActionItems.isEmpty ? nil : try encodeStringArray(allActionItems),
+                lastBriefCardId: lastCardId,
+                prioritySignals: #"{"priority":"\#(priority)"}"#,
+                sourceMessageIds: try encodeStringArray(allSourceIDs),
                 updatedAt: now
             )
             try repository.upsertConversationState(state)
+        }
+    }
+
+    private nonisolated func priorityRank(_ priority: String) -> Int {
+        switch priority {
+        case "high": return 0
+        case "med":  return 1
+        case "low":  return 2
+        default:     return 3
         }
     }
 
