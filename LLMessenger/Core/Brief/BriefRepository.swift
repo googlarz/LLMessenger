@@ -463,6 +463,39 @@ struct BriefRepository {
         }
     }
 
+    // MARK: - Conversation Context
+
+    func fetchConversationContext(service: String, conversationId: String) throws -> ConversationContext? {
+        try database.dbQueue.read { db in
+            try ConversationContext.fetchOne(db, key: ["service": service, "conversationId": conversationId])
+        }
+    }
+
+    func upsertConversationContext(_ context: ConversationContext) throws {
+        try database.dbQueue.write { db in
+            try context.save(db)
+        }
+    }
+
+    // MARK: - Priority Corrections
+
+    func insertPriorityCorrection(_ correction: PriorityCorrection) throws {
+        var c = correction
+        try database.dbQueue.write { db in
+            try c.insert(db)
+        }
+    }
+
+    /// Returns the most recent corrections, newest first. Used to build few-shot prompt examples.
+    func fetchRecentPriorityCorrections(limit: Int = 6) throws -> [PriorityCorrection] {
+        try database.dbQueue.read { db in
+            try PriorityCorrection
+                .order(Column("createdAt").desc)
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
     private func decodedStringArray(_ json: String) -> [String] {
         guard let data = json.data(using: .utf8),
               let array = try? JSONDecoder().decode([String].self, from: data) else {

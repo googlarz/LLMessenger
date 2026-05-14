@@ -79,7 +79,8 @@ struct PromptBuilder {
         basePrompt: String,
         services: [String],
         episodicSummaries: [(summary: String, createdAt: Date)],
-        now: Date
+        now: Date,
+        priorityCorrections: [(headline: String, llmPriority: String, userPriority: String)] = []
     ) -> String {
         var parts: [String] = [basePrompt]
 
@@ -96,6 +97,13 @@ struct PromptBuilder {
             for entry in episodicSummaries {
                 let age = relativeAge(from: entry.createdAt, to: now)
                 parts.append("- [\(age)] \(entry.summary)")
+            }
+        }
+
+        if !priorityCorrections.isEmpty {
+            parts.append("Your priority calibration history (user corrections — learn from these):")
+            for c in priorityCorrections {
+                parts.append("- \"\(c.headline)\" — you said \(c.llmPriority), user corrected to \(c.userPriority)")
             }
         }
 

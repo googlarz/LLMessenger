@@ -226,4 +226,36 @@ final class AppState: ObservableObject {
     func makeSettingsRepository() -> SettingsRepository {
         SettingsRepository(database: database)
     }
+
+    // MARK: - Conversation Context
+
+    func saveConversationContext(service: String, conversationId: String, label: String, priorityHint: String) {
+        let ctx = ConversationContext(
+            service: service,
+            conversationId: conversationId,
+            label: label,
+            priorityHint: priorityHint,
+            updatedAt: Date()
+        )
+        try? repository.upsertConversationContext(ctx)
+    }
+
+    func fetchConversationContext(service: String, conversationId: String) -> ConversationContext? {
+        try? repository.fetchConversationContext(service: service, conversationId: conversationId)
+    }
+
+    // MARK: - Priority Corrections
+
+    func savePriorityCorrection(service: String, conversationId: String, headline: String, llmPriority: String, userPriority: String) {
+        let correction = PriorityCorrection(
+            id: nil,
+            service: service,
+            conversationId: conversationId,
+            cardHeadline: headline,
+            llmPriority: llmPriority,
+            userPriority: userPriority,
+            createdAt: Date()
+        )
+        try? repository.insertPriorityCorrection(correction)
+    }
 }

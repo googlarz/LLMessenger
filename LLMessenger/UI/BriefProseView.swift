@@ -224,6 +224,10 @@ struct BriefProseView: View {
     @State private var expandedCards: Set<String> = []
     /// Med/low cards that the user has manually expanded. High cards are always expanded.
     @State private var expandedNonHighCards: Set<String> = []
+    /// Card ID whose label popover is open.
+    @State private var labelPopoverCardID: String? = nil
+    @State private var labelEditText: String = ""
+    @State private var labelEditHint: String = "auto"
 
     private var parsedJSON: BriefJSON? {
         guard var summary = brief.openingSummary else { return nil }
@@ -396,9 +400,55 @@ struct BriefProseView: View {
                     .background(Theme.surfaceHigh)
                     .clipShape(Capsule())
                 SourceGlyphView(service: card.service, size: 20)
-                Text(card.conversation ?? Theme.serviceName(card.service))
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(isHandled ? Theme.textTertiary : Theme.textPrimary)
+
+                // Conversation name + label button
+                let ctx = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
+                let convName = card.conversation ?? Theme.serviceName(card.service)
+                Button {
+                    labelEditText = ctx?.label ?? ""
+                    labelEditHint = ctx?.priorityHint ?? "auto"
+                    labelPopoverCardID = card.id
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(convName)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(isHandled ? Theme.textTertiary : Theme.textPrimary)
+                        if let lbl = ctx?.label, !lbl.isEmpty {
+                            Text(lbl)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(Theme.textTertiary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Theme.surfaceHigh)
+                                .clipShape(Capsule())
+                        } else {
+                            Image(systemName: "tag")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Theme.textTertiary.opacity(0.5))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: Binding(
+                    get: { labelPopoverCardID == card.id },
+                    set: { if !$0 { labelPopoverCardID = nil } }
+                )) {
+                    LabelEditorPopover(
+                        convName: convName,
+                        label: $labelEditText,
+                        priorityHint: $labelEditHint,
+                        onSave: {
+                            appState.saveConversationContext(
+                                service: card.service,
+                                conversationId: card.conversationId,
+                                label: labelEditText.trimmingCharacters(in: .whitespaces),
+                                priorityHint: labelEditHint
+                            )
+                            labelPopoverCardID = nil
+                        },
+                        onCancel: { labelPopoverCardID = nil }
+                    )
+                }
 
                 Spacer()
 
@@ -413,7 +463,30 @@ struct BriefProseView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(Color.green.opacity(0.7))
                 } else {
-                    PriorityPill(priority: card.priority)
+                    // Priority pill — tap to correct
+                    Menu {
+                        Text("Correct priority to:")
+                        Button("High") {
+                            appState.savePriorityCorrection(
+                                service: card.service, conversationId: card.conversationId,
+                                headline: card.headline, llmPriority: card.priority, userPriority: "high")
+                        }
+                        Button("Med") {
+                            appState.savePriorityCorrection(
+                                service: card.service, conversationId: card.conversationId,
+                                headline: card.headline, llmPriority: card.priority, userPriority: "med")
+                        }
+                        Button("Low") {
+                            appState.savePriorityCorrection(
+                                service: card.service, conversationId: card.conversationId,
+                                headline: card.headline, llmPriority: card.priority, userPriority: "low")
+                        }
+                    } label: {
+                        PriorityPill(priority: card.priority)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("Tap to correct this priority — teaches future briefs")
                 }
 
                 // Collapse toggle for non-high cards
@@ -797,5 +870,69 @@ struct BriefProseView: View {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f.string(from: date)
+    }
+}
+
+// MARK: - Label editor popover
+
+private struct LabelEditorPopover: View {
+    let convName: String
+    @Binding var label: String
+    @Binding var priorityHint: String
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Context for "\(convName)"")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Label")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.textTertiary)
+                TextField("e.g. manager, client, low noise group", text: $label)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 13))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Priority hint")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.textTertiary)
+                Picker("", selection: $priorityHint) {
+                    Text("Auto (let AI decide)").tag("auto")
+                    Text("Always high").tag("high")
+                    Text("Always med").tag("med")
+                    Text("Always low").tag("low")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+
+            Text("Saved context is injected into every future brief for this conversation.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Theme.textSecondary)
+                    .font(.system(size: 12))
+                Spacer()
+                Button("Save") { onSave() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
+                    .background(Theme.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .padding(20)
+        .frame(width: 320)
     }
 }

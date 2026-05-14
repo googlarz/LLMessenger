@@ -235,6 +235,27 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "windowStart", .datetime)
             }
         }
+        migrator.registerMigration("v8_conversation_context_and_corrections") { db in
+            try db.create(table: "conversationContexts") { t in
+                t.column("service", .text).notNull()
+                t.column("conversationId", .text).notNull()
+                t.column("label", .text).notNull().defaults(to: "")
+                t.column("priorityHint", .text).notNull().defaults(to: "auto")
+                t.column("updatedAt", .datetime).notNull()
+                t.primaryKey(["service", "conversationId"])
+            }
+            try db.create(table: "priorityCorrections") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("service", .text).notNull()
+                t.column("conversationId", .text).notNull()
+                t.column("cardHeadline", .text).notNull()
+                t.column("llmPriority", .text).notNull()
+                t.column("userPriority", .text).notNull()
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.create(index: "priorityCorrections_on_createdAt",
+                          on: "priorityCorrections", columns: ["createdAt"])
+        }
         try migrator.migrate(dbQueue)
     }
 }

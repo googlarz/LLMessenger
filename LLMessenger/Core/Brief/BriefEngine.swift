@@ -321,12 +321,17 @@ final class BriefEngine {
                         }
 
                         let recent = try self.repository.recentEpisodicSummaries(service: serviceID, limit: 3)
+                        let corrections = (try? self.repository.fetchRecentPriorityCorrections(limit: 6)) ?? []
+                        let correctionTuples = corrections.map {
+                            (headline: $0.cardHeadline, llmPriority: $0.llmPriority, userPriority: $0.userPriority)
+                        }
                         let systemPrompt = PromptBuilder.build(
                             mode: .summarizer,
                             basePrompt: self.basePrompt,
                             services: [serviceID],
                             episodicSummaries: recent,
-                            now: Date()
+                            now: Date(),
+                            priorityCorrections: correctionTuples
                         )
 
                         var conversationBlocks: [String] = []
@@ -669,6 +674,17 @@ final class BriefEngine {
         // The [service] tag lets the LLM reliably extract service and conversationId
         // without guessing from the opaque ID format.
         var lines: [String] = ["=== [\(service)] \(conversationID) | \(conversationTitle) ==="]
+
+        // Inject user-defined relationship context (label + priority hint).
+        if let ctx = try? repository.fetchConversationContext(service: service, conversationId: conversationID) {
+            var ctxParts: [String] = []
+            if !ctx.label.isEmpty { ctxParts.append(ctx.label) }
+            if ctx.priorityHint != "auto" { ctxParts.append("priority override: \(ctx.priorityHint)") }
+            if !ctxParts.isEmpty {
+                lines.append("Context: \(ctxParts.joined(separator: " · "))")
+            }
+        }
+
         if let summary = state?.rollingSummary, !summary.isEmpty {
             lines.append("Previous summary: \(summary)")
         }
