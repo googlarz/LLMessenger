@@ -695,7 +695,10 @@ final class BriefEngine {
         dateFormatter: DateFormatter,
         senderNameResolver: (String) -> String
     ) -> String {
-        "[id=\(message.messageId) | \(dateFormatter.string(from: message.timestamp))] \(senderNameResolver(message.sender)): \(message.text)"
+        // [YOU] marks your own sent messages so the LLM can detect reply state and assign
+        // priority correctly — threads where YOU sent last are rarely urgent.
+        let senderLabel = message.isSent ? "YOU" : senderNameResolver(message.sender)
+        return "[id=\(message.messageId) | \(dateFormatter.string(from: message.timestamp))] \(senderLabel): \(message.text)"
     }
 
     private nonisolated func messageSortAscending(_ lhs: Message, _ rhs: Message) -> Bool {

@@ -153,8 +153,19 @@ struct PromptBuilder {
 
             Content rules:
             - One card per conversationId
-            - priority: high=needs reply today, med=worth replying this week, low=informational. Most group announcements are low.
-            - actionItems: concrete verb phrases, max 3; empty [] for announcements, farewells, banter, FYI
+            - Messages marked [YOU] are your own sent messages. Use them to detect who has the conversational ball.
+            - priority:
+              • high: unanswered direct question addressed to you; you're explicitly named with a deadline; time-sensitive (meeting today, offer expires, confirmation needed before a specific time); thread where the last message is NOT from [YOU]
+              • med: awaiting your input but not urgent; open question you haven't addressed; you're mentioned but not blocking anyone
+              • low: group announcements; banter; one-way FYI; farewells; threads where [YOU] sent the last message
+              • If [YOU] sent the last message in a thread, default to low or med — almost never high.
+            - headline: state the ask or decision, not the topic. Write "Alice asks if you're free Thursday at 3pm" not "Alice has a question about Thursday's meeting". Always name the person and state their concrete ask or fact.
+            - time-sensitivity: if any message contains a deadline, meeting time, expiry, or "reply by", elevate priority to high and include the specific time or date in the headline or summary.
+            - actionItems: must be specific enough to act on without re-reading the thread.
+              • Bad: "Follow up with Alice"
+              • Good: "Send Alice your Thursday availability before 6pm"
+              Max 3. Empty [] for announcements, farewells, banter, FYI, or threads where [YOU] sent the last message.
+            - quotes: choose the sentence that most clearly states what you need to respond to — the specific ask, deadline, or decision point. Never quote greetings, pleasantries, or scene-setting. Always prefer the most actionable sentence.
             - callback: null unless the episodic context section contains a directly relevant prior thread
             - summary: plain English prose regardless of the original message language
             """
