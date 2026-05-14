@@ -40,7 +40,9 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Send
 
     func send() async {
+        guard !isLoading else { return }
         let rawInput = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawInput.isEmpty else { return }
         inputText = ""
         await submit(rawInput)
     }
@@ -49,13 +51,18 @@ final class ChatViewModel: ObservableObject {
                        conversationID: String,
                        displayName: String,
                        headline: String) async {
+        guard let brief = currentBrief else { return }
         let title = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let subject = headline.trimmingCharacters(in: .whitespacesAndNewlines)
         let label = title.isEmpty ? Theme.serviceName(service) : title
-        let prompt = subject.isEmpty
+        // Build the question from trusted, app-controlled strings only and bypass
+        // the intent router — external content (headline, displayName) must never
+        // flow through routeIntents where it could be parsed as a routing instruction.
+        let question = subject.isEmpty
             ? "Tell me more about \(label)."
             : "Tell me more about \(label): \(subject)"
-        await submit(prompt)
+        threadItems.append(.userMessage(id: UUID(), text: question))
+        await answerQuestion(brief: brief, rawInput: question, echoUserMessage: false)
     }
 
     func prepareReply(service: String,
@@ -206,7 +213,10 @@ final class ChatViewModel: ObservableObject {
                                     brief: Brief,
                                     context: ChatInteractionContext,
                                     originalText: String) async {
-        let messageText = normalized(action.message) ?? originalText
+        // Prefer the user's own typed text over the LLM router's action.message field.
+        // The router's message field is LLM-generated and must not be trusted as verbatim
+        // user intent — it could carry injected instructions from external message content.
+        let messageText = originalText
 
         if let conv = context.conversation(for: action) {
             await draftReply(brief: brief,
@@ -234,14 +244,33 @@ final class ChatViewModel: ObservableObject {
                              context: ChatInteractionContext,
                              originalText: String) async {
         guard let draftRef = context.draft(for: action) else {
-            threadItems.append(.assistantResponse(id: UUID(), text: "I couldn't find a draft to revise."))
+            if context.drafts.isEmpty {
+                threadItems.append(.assistantResponse(id: UUID(), text: "There are no drafts to revise."))
+            } else {
+                let list = context.drafts.map { "\($0.number). \($0.draft.conversationID)" }.joined(separator: "\n")
+                threadItems.append(.assistantResponse(id: UUID(),
+                    text: "Which draft do you want to revise? Reply with a number:\n\(list)"))
+            }
             return
         }
 
-        let instruction = normalized(action.instruction)
+        // Use the user's original text as the revision instruction when available.
+        // Fall back to action fields only as a hint, capped at 300 chars and stripped
+        // of control characters so LLM-generated content can't inject prompt directives.
+        let rawInstruction = normalized(action.instruction)
             ?? normalized(action.message)
             ?? normalized(action.question)
-            ?? originalText
+        let instruction: String
+        if let hint = rawInstruction {
+            let sanitized = hint
+                .unicodeScalars
+                .filter { !$0.properties.isControl }
+                .reduce(into: "") { $0.append(Character($1)) }
+                .prefix(300)
+            instruction = originalText + (sanitized.isEmpty ? "" : " (\(sanitized))")
+        } else {
+            instruction = originalText
+        }
         isLoading = true
         defer { isLoading = false }
 
@@ -273,7 +302,13 @@ final class ChatViewModel: ObservableObject {
 
     private func requestSendConfirmation(_ action: IntentAction, context: ChatInteractionContext) {
         guard let draftRef = context.draft(for: action) else {
-            threadItems.append(.assistantResponse(id: UUID(), text: "I couldn't find a draft to send."))
+            if context.drafts.isEmpty {
+                threadItems.append(.assistantResponse(id: UUID(), text: "There are no drafts to send."))
+            } else {
+                let list = context.drafts.map { "\($0.number). \($0.draft.conversationID)" }.joined(separator: "\n")
+                threadItems.append(.assistantResponse(id: UUID(),
+                    text: "Which draft do you want to send? Reply with a number:\n\(list)"))
+            }
             return
         }
         threadItems.append(.sendConfirmation(id: UUID(), draft: draftRef.draft))

@@ -127,7 +127,10 @@ struct ChatInteractionContext {
                 return matches[0]
             }
         }
-        return drafts.last
+        // Only one draft open and the action carries no number/name — safe to resolve unambiguously.
+        if drafts.count == 1 { return drafts[0] }
+        // Ambiguous (0 or 2+ drafts): return nil so callers can ask the user to clarify.
+        return nil
     }
 
     func sourceMessages(for card: ChatBriefCardRef) -> [Message] {
