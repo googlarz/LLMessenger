@@ -11,6 +11,9 @@ enum LLMMode {
     case chat(conversations: [String])
     /// Routes a free-form user request into executable app actions.
     case intentRouter(context: IntentRouterPromptContext)
+    /// Generates 3 quick-reply options for a conversation card.
+    /// Each option has a ≤3-word label and a full style-matched draft.
+    case quickReplySuggester
 }
 
 struct PromptBuilder {
@@ -188,6 +191,29 @@ struct PromptBuilder {
               No other text. The app will show the user the numbered list above to pick from.
             • Never write DRAFT: inside a plain-text answer.
             • Match the language of the conversation you're discussing.
+            """
+        case .quickReplySuggester:
+            return """
+            Generate exactly 3 reply options for the conversation below.
+            Output ONLY a valid JSON array — no markdown fences, no explanation.
+
+            Schema:
+            [
+              {"label": "<≤3 word intent>", "draft": "<full reply>"},
+              {"label": "<≤3 word intent>", "draft": "<full reply>"},
+              {"label": "<≤3 word intent>", "draft": "<full reply>"}
+            ]
+
+            Rules:
+            - label: 1–3 words max — captures the semantic intent only (e.g. "Yeah sure", "Can't make it", "Need more time")
+            - draft: the complete message the user would actually send — full length, never truncated
+            - Study the "User's sent messages" section to extract their exact register: vocabulary, emoji use, \
+              sentence length, punctuation style, formality, language
+            - Match that style precisely in every draft — if they write short and casual, write short and casual; \
+              if they write paragraphs, write paragraphs
+            - The 3 options must represent meaningfully different intents (e.g. agree / decline / defer)
+            - Write drafts in the same language as the conversation thread
+            - Output exactly 3 objects — nothing else
             """
         case .intentRouter(let context):
             return """

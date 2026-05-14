@@ -477,6 +477,8 @@ struct BriefProseView: View {
                 Spacer(minLength: 0)
             }
             .padding(.top, 2)
+
+            quickReplySection(card: card)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 8)
@@ -506,6 +508,85 @@ struct BriefProseView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Quick reply chips
+
+    @ViewBuilder
+    private func quickReplySection(card: BriefCard) -> some View {
+        let isLoading = chatViewModel.quickRepliesLoading.contains(card.id)
+        let replies = chatViewModel.quickReplies[card.id] ?? []
+
+        if isLoading {
+            HStack(spacing: 6) {
+                ProgressView().scaleEffect(0.6)
+                Text("Drafting replies…")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.top, 2)
+        } else if replies.isEmpty {
+            // Show the trigger chip only on cards where a reply is likely needed.
+            if card.priority == "high" || !card.actions.isEmpty {
+                Button {
+                    Task {
+                        await chatViewModel.generateQuickReplies(
+                            cardID: card.id,
+                            service: card.service,
+                            convId: card.conversationId,
+                            convName: card.conversation ?? ""
+                        )
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Quick reply")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(Theme.accentMuted)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
+        } else {
+            // Chips: label shown in the button, full draft revealed on hover and sent on confirm.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(replies) { reply in
+                        Button {
+                            chatViewModel.applyQuickReply(reply,
+                                                          service: card.service,
+                                                          convId: card.conversationId)
+                        } label: {
+                            Text(reply.label)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Theme.surfaceHigh)
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule().stroke(Theme.border, lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help(reply.draft)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 2)
+            }
+            .padding(.top, 2)
+        }
     }
 
     // MARK: - Fallback: grouped by service

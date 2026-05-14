@@ -9,6 +9,10 @@ final class ChatViewModel: ObservableObject {
     @Published var inputText: String = ""
     @Published var isLoading: Bool = false
     @Published var inputFocusRequest = UUID()
+    /// Keyed by BriefCard.id. Populated on-demand when the user taps "Quick reply" on a card.
+    @Published var quickReplies: [String: [QuickReply]] = [:]
+    /// Cards currently loading quick replies.
+    @Published private(set) var quickRepliesLoading: Set<String> = []
 
     private let appState: AppState
     private var currentBrief: Brief?
@@ -552,6 +556,93 @@ final class ChatViewModel: ObservableObject {
             threadItems.append(.assistantResponse(id: UUID(),
                                                    text: "Error: \(error.localizedDescription)"))
         }
+    }
+
+    // MARK: - Quick replies
+
+    /// Generates 3 style-matched reply options for a card on demand.
+    /// The user's sent messages in that conversation are used as a style reference.
+    func generateQuickReplies(cardID: String, service: String, convId: String, convName: String) async {
+        guard currentBrief != nil else { return }
+        guard !quickRepliesLoading.contains(cardID) else { return }
+
+        quickRepliesLoading.insert(cardID)
+        defer { quickRepliesLoading.remove(cardID) }
+
+        let briefMessages = currentMessages()
+        let convMessages = draftContextMessages(briefMessages: briefMessages,
+                                                service: service,
+                                                conversationID: convId)
+
+        // Fetch recent sent messages in this conversation for style calibration.
+        let styleSince = Date().addingTimeInterval(-14 * 24 * 3600)
+        let recentAll = (try? appState.repository.fetchMessages(service: service, since: styleSince)) ?? []
+        let sentMessages = recentAll
+            .filter { $0.conversationId == convId && $0.isSent }
+            .sorted { $0.timestamp < $1.timestamp }
+            .suffix(15)
+
+        let conversationText = convMessages.suffix(20)
+            .map { contextLine($0) }
+            .joined(separator: "\n")
+        let sentStyleText = sentMessages
+            .map { $0.text }
+            .joined(separator: "\n")
+
+        let userContent = """
+        Conversation (recent messages):
+        \(conversationText.isEmpty ? "(no messages)" : conversationText)
+
+        User's sent messages in this thread (style reference — match this voice exactly):
+        \(sentStyleText.isEmpty ? "(no sent messages — use a neutral, casual register)" : sentStyleText)
+        """
+
+        let systemPrompt = PromptBuilder.build(
+            mode: .quickReplySuggester,
+            basePrompt: appState.basePrompt,
+            services: [service],
+            episodicSummaries: [],
+            now: Date()
+        )
+
+        do {
+            let response = try await appState.llmClient.complete(
+                model: appState.llmModel,
+                messages: [
+                    LLMMessage(role: .system, content: systemPrompt),
+                    LLMMessage(role: .user, content: userContent)
+                ],
+                maxTokens: 500
+            )
+            let replies = decodeQuickReplies(from: response.text)
+            guard !replies.isEmpty else { return }
+            quickReplies[cardID] = replies
+        } catch {
+            // Quick replies are optional — fail silently.
+            print("[QuickReply] Generation failed for card \(cardID): \(error)")
+        }
+    }
+
+    /// Converts a quick reply option into a draft and appends it to the thread.
+    func applyQuickReply(_ reply: QuickReply, service: String, convId: String) {
+        let draft = ReplyDraft(id: UUID(),
+                               text: reply.draft,
+                               serviceID: service,
+                               conversationID: convId,
+                               senderName: "")
+        threadItems.append(.replyDraft(id: draft.id, draft: draft))
+    }
+
+    private func decodeQuickReplies(from text: String) -> [QuickReply] {
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("```") {
+            trimmed = trimmed
+                .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard let data = trimmed.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([QuickReply].self, from: data)) ?? []
     }
 
     // MARK: - Draft helper
