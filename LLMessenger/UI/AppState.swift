@@ -116,6 +116,12 @@ final class AppState: ObservableObject {
     @Published var nextPollDate: Date?
     @Published var lastError: String?
     @Published var briefGenerationState: BriefGenerationState = .cached
+    /// Keys of cards the user has marked as handled. Format: "\(briefID):\(cardID)".
+    /// Persisted to UserDefaults so state survives app restarts.
+    @Published private(set) var handledCardKeys: Set<String> = {
+        let saved = UserDefaults.standard.stringArray(forKey: "handledCardKeys") ?? []
+        return Set(saved)
+    }()
 
     let database: AppDatabase
     let repository: BriefRepository
@@ -175,6 +181,20 @@ final class AppState: ObservableObject {
         } catch {
             // Silently ignore — UI shows empty state
         }
+    }
+
+    func markCardHandled(briefID: Int64, cardID: String) {
+        handledCardKeys.insert("\(briefID):\(cardID)")
+        UserDefaults.standard.set(Array(handledCardKeys), forKey: "handledCardKeys")
+    }
+
+    func unmarkCardHandled(briefID: Int64, cardID: String) {
+        handledCardKeys.remove("\(briefID):\(cardID)")
+        UserDefaults.standard.set(Array(handledCardKeys), forKey: "handledCardKeys")
+    }
+
+    func isCardHandled(briefID: Int64, cardID: String) -> Bool {
+        handledCardKeys.contains("\(briefID):\(cardID)")
     }
 
     func setPinnedBrief(briefID: Int64, pinned: Bool) {

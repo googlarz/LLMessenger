@@ -222,6 +222,8 @@ struct BriefProseView: View {
     let messages: [Message]
     @State private var filter: String = "all"
     @State private var expandedCards: Set<String> = []
+    /// Med/low cards that the user has manually expanded. High cards are always expanded.
+    @State private var expandedNonHighCards: Set<String> = []
 
     private var parsedJSON: BriefJSON? {
         guard var summary = brief.openingSummary else { return nil }
@@ -276,6 +278,13 @@ struct BriefProseView: View {
         return filter == "all" ? sorted : sorted.filter { $0.service == filter }
     }
 
+    private var briefAge: String {
+        let seconds = Date().timeIntervalSince(brief.createdAt)
+        if seconds < 3600  { return "\(Int(seconds / 60))m ago" }
+        if seconds < 86400 { return "\(Int(seconds / 3600))h ago" }
+        return "\(Int(seconds / 86400))d ago"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if services.count > 1 || (parsedJSON?.cards.count ?? 0) > 1 {
@@ -289,6 +298,29 @@ struct BriefProseView: View {
 
             if let _ = parsedJSON {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Failed services warning
+                    if let failedJSON = brief.failedServices,
+                       let data = failedJSON.data(using: .utf8),
+                       let failed = try? JSONDecoder().decode([String].self, from: data),
+                       !failed.isEmpty {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color(red: 0.90, green: 0.72, blue: 0.30))
+                            Text("\(failed.map { Theme.serviceName($0) }.joined(separator: ", ")) unavailable — threads from \(failed.count == 1 ? "this service were" : "these services were") not included.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color(red: 0.90, green: 0.72, blue: 0.30).opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(red: 0.90, green: 0.72, blue: 0.30).opacity(0.3), lineWidth: 1))
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, 16)
+                    }
+
                     if !highPriorityCards.isEmpty {
                         Text("ATTENTION NEEDED")
                             .font(.system(size: 11, weight: .bold))
@@ -348,10 +380,13 @@ struct BriefProseView: View {
     @ViewBuilder
     private func cardView(_ numberedCard: NumberedBriefCard) -> some View {
         let card = numberedCard.card
-        let isExpanded = expandedCards.contains(card.id)
-        
+        let briefID = brief.id ?? 0
+        let isBodyExpanded = card.priority == "high" || expandedNonHighCards.contains(card.id)
+        let isEvidenceExpanded = expandedCards.contains(card.id)
+        let isHandled = appState.isCardHandled(briefID: briefID, cardID: card.id)
+
         VStack(alignment: .leading, spacing: 10) {
-            // Service + conversation + headline + priority
+            // ── Header row (always visible) ──────────────────────────────
             HStack(alignment: .center, spacing: 6) {
                 Text("#\(numberedCard.number)")
                     .font(.system(size: 11, weight: .bold))
@@ -363,135 +398,196 @@ struct BriefProseView: View {
                 SourceGlyphView(service: card.service, size: 20)
                 Text(card.conversation ?? Theme.serviceName(card.service))
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Theme.textPrimary)
-                
+                    .foregroundStyle(isHandled ? Theme.textTertiary : Theme.textPrimary)
+
                 Spacer()
-                
-                PriorityPill(priority: card.priority)
-            }
 
-            Text(card.headline)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+                // Brief age
+                Text(briefAge)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .monospacedDigit()
 
-            // Summary prose
-            Text(card.summary)
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.textPrimary.opacity(0.9))
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-
-            // From earlier callback
-            if let callback = card.callback, !callback.isEmpty {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "arrow.uturn.backward")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.accent)
-                        .padding(.top, 3)
-                    Text(callback)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                if isHandled {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.green.opacity(0.7))
+                } else {
+                    PriorityPill(priority: card.priority)
                 }
-                .padding(.vertical, 2)
-            }
 
-            // Action items (NEXT)
-            if !card.actions.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(card.actions, id: \.self) { action in
-                        HStack(spacing: 8) {
-                            Image(systemName: "circle")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Theme.accent)
-                            Text(action)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Theme.textPrimary)
+                // Collapse toggle for non-high cards
+                if card.priority != "high" {
+                    Image(systemName: isBodyExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if card.priority != "high" {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
+                        if isBodyExpanded {
+                            expandedNonHighCards.remove(card.id)
+                        } else {
+                            expandedNonHighCards.insert(card.id)
                         }
                     }
                 }
-                .padding(.vertical, 4)
             }
 
-            // Trust / Evidence Toggle
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    if isExpanded {
-                        expandedCards.remove(card.id)
+            // ── Headline (always visible) ────────────────────────────────
+            Text(card.headline)
+                .font(.system(size: isBodyExpanded ? 16 : 14, weight: .semibold))
+                .foregroundStyle(isHandled ? Theme.textTertiary : Theme.textPrimary)
+                .strikethrough(isHandled, color: Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .animation(.easeInOut(duration: 0.15), value: isBodyExpanded)
+
+            // ── Collapsible body ─────────────────────────────────────────
+            if isBodyExpanded {
+                // Summary prose
+                Text(card.summary)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textPrimary.opacity(isHandled ? 0.5 : 0.9))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+
+                // Callback from prior brief
+                if let callback = card.callback, !callback.isEmpty {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.accent)
+                            .padding(.top, 3)
+                        Text(callback)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 2)
+                }
+
+                // Action items
+                if !card.actions.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(card.actions, id: \.self) { action in
+                            HStack(spacing: 8) {
+                                Image(systemName: "circle")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Theme.accent)
+                                Text(action)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(Theme.textPrimary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                // Evidence toggle
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        if isEvidenceExpanded {
+                            expandedCards.remove(card.id)
+                        } else {
+                            expandedCards.insert(card.id)
+                            InstrumentationManager.shared.track(event: .sourceExpanded,
+                                metadata: ["cardID": card.id, "conversationID": card.conversationId])
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isEvidenceExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                        Text(isEvidenceExpanded ? "Hide evidence" : "Show evidence (\(card.sourceMessageIds.count))")
+                        if !card.quotes.isEmpty && !isEvidenceExpanded {
+                            Text("· \(card.quotes.count) quotes")
+                        }
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+
+                if isEvidenceExpanded {
+                    if let briefID = brief.id {
+                        BriefCardEvidenceView(card: card, briefID: briefID, repository: appState.repository)
+                            .padding(.leading, 12)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     } else {
-                        expandedCards.insert(card.id)
-                        InstrumentationManager.shared.track(event: .sourceExpanded, metadata: ["cardID": card.id, "conversationID": card.conversationId])
+                        Text("Evidence unavailable — brief not yet persisted.")
+                            .font(.system(size: 12))
+                            .italic()
+                            .foregroundStyle(Theme.textTertiary)
+                            .padding(.leading, 12)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                    Text(isExpanded ? "Hide evidence" : "Show evidence (\(card.sourceMessageIds.count))")
-                    if !card.quotes.isEmpty && !isExpanded {
-                        Text("· \(card.quotes.count) quotes")
+
+                HStack(spacing: 8) {
+                    cardActionButton(title: "More detail", systemImage: "text.magnifyingglass") {
+                        Task {
+                            await chatViewModel.askForDetails(
+                                service: card.service,
+                                conversationID: card.conversationId,
+                                displayName: card.conversation ?? "",
+                                headline: card.headline
+                            )
+                        }
                     }
-                }
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.textTertiary)
-                .padding(.vertical, 4)
-            }
-            .buttonStyle(.plain)
+                    .help("Ask for more detail")
 
-            if isExpanded {
-                if let briefID = brief.id {
-                    BriefCardEvidenceView(card: card, briefID: briefID, repository: appState.repository)
-                        .padding(.leading, 12)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                } else {
-                    Text("Evidence unavailable — brief not yet persisted.")
-                        .font(.system(size: 12))
-                        .italic()
-                        .foregroundStyle(Theme.textTertiary)
-                        .padding(.leading, 12)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-
-            HStack(spacing: 8) {
-                cardActionButton(
-                    title: "More detail",
-                    systemImage: "text.magnifyingglass"
-                ) {
-                    Task {
-                        await chatViewModel.askForDetails(
+                    cardActionButton(title: "Reply", systemImage: "arrowshape.turn.up.left") {
+                        chatViewModel.prepareReply(
                             service: card.service,
                             conversationID: card.conversationId,
-                            displayName: card.conversation ?? "",
-                            headline: card.headline
+                            displayName: card.conversation ?? ""
                         )
                     }
-                }
-                .help("Ask for more detail")
+                    .help("Draft a reply")
 
-                cardActionButton(
-                    title: "Reply",
-                    systemImage: "arrowshape.turn.up.left"
-                ) {
-                    chatViewModel.prepareReply(
-                        service: card.service,
-                        conversationID: card.conversationId,
-                        displayName: card.conversation ?? ""
-                    )
-                }
-                .help("Draft a reply")
+                    Spacer(minLength: 0)
 
-                Spacer(minLength: 0)
+                    // Handled toggle
+                    Button {
+                        if isHandled {
+                            appState.unmarkCardHandled(briefID: briefID, cardID: card.id)
+                        } else {
+                            appState.markCardHandled(briefID: briefID, cardID: card.id)
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: isHandled ? "arrow.uturn.left" : "checkmark")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(isHandled ? "Undo" : "Done")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundStyle(isHandled ? Theme.textTertiary : Color.green.opacity(0.8))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(isHandled ? Theme.surfaceHigh : Color.green.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8)
+                            .stroke(isHandled ? Theme.border : Color.green.opacity(0.25), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help(isHandled ? "Mark as not done" : "Mark as handled")
+                }
+                .padding(.top, 2)
+
+                quickReplySection(card: card)
             }
-            .padding(.top, 2)
-
-            quickReplySection(card: card)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 8)
-        .background(card.priority == "high" ? Theme.accent.opacity(0.03) : Color.clear)
+        .background(
+            isHandled ? Color.clear :
+            card.priority == "high" ? Theme.accent.opacity(0.03) : Color.clear
+        )
+        .opacity(isHandled ? 0.6 : 1.0)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 

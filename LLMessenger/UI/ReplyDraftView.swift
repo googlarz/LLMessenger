@@ -103,6 +103,16 @@ struct ReplyDraftView: View {
         case "signal":
             return URL(string: "sgnl://")
         case "imessage":
+            // conversationID format from iMessage adapter: "any;-;+491234567890"
+            // Extract the phone/email portion after the last ";-;"
+            let convID = draft.conversationID
+            if let range = convID.range(of: ";-;") {
+                let recipient = String(convID[range.upperBound...])
+                if !recipient.isEmpty,
+                   let encoded = recipient.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+                    return URL(string: "imessage://\(encoded)")
+                }
+            }
             return URL(string: "imessage://")
         default:
             return nil
