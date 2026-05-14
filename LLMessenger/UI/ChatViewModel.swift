@@ -39,6 +39,8 @@ final class ChatViewModel: ObservableObject {
         let messages = try appState.repository.fetchMessages(forBriefID: brief.id!)
         threadItems = messages.map { .message($0) }
         briefConvs = buildConvList(from: messages, brief: brief)
+        quickReplies = [:]
+        quickRepliesLoading = []
     }
 
     // MARK: - Send

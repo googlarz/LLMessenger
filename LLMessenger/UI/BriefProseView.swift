@@ -526,8 +526,9 @@ struct BriefProseView: View {
             }
             .padding(.top, 2)
         } else if replies.isEmpty {
-            // Show the trigger chip only on cards where a reply is likely needed.
-            if card.priority == "high" || !card.actions.isEmpty {
+            // Show the trigger chip on high/med cards (likely need a reply)
+            // and any card with explicit action items regardless of priority.
+            if card.priority == "high" || card.priority == "med" || !card.actions.isEmpty {
                 Button {
                     Task {
                         await chatViewModel.generateQuickReplies(
