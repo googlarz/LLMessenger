@@ -374,15 +374,24 @@ private struct ServiceCard: View {
         case "telegram":
             VStack(alignment: .leading, spacing: 10) {
                 Text(sessionFileExists
-                     ? "Telegram session exists but the adapter isn't responding. Re-sign in or try Retry now."
+                     ? "Telegram session exists. Try Retry now — your existing session should reconnect without signing in again."
                      : "Telegram session is missing. Sign in to reconnect.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                    Button("Re-sign in") { startTelegramSignIn() }
-                        .buttonStyle(.borderedProminent).controlSize(.regular)
-                        .disabled(telegramApiId.isEmpty || telegramApiHash.isEmpty)
-                    retryButton
+                    if sessionFileExists {
+                        // Session is fine — Retry leads, re-sign-in is the escape hatch.
+                        retryButton
+                        Button("Re-sign in") { startTelegramSignIn() }
+                            .controlSize(.regular)
+                            .disabled(telegramApiId.isEmpty || telegramApiHash.isEmpty)
+                    } else {
+                        // No session — sign-in is the primary action.
+                        Button("Sign in") { startTelegramSignIn() }
+                            .buttonStyle(.borderedProminent).controlSize(.regular)
+                            .disabled(telegramApiId.isEmpty || telegramApiHash.isEmpty)
+                        retryButton
+                    }
                 }
                 if let err = telegramSignInError {
                     Text(err).font(.caption).foregroundStyle(.red)

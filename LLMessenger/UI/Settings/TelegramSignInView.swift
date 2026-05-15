@@ -19,39 +19,59 @@ struct TelegramSignInView: View {
     @State private var isLoading: Bool = true   // true until adapter starts
 
     var body: some View {
-        VStack(spacing: 24) {
-            // Header
-            VStack(spacing: 6) {
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(Theme.serviceTelegram)
-                Text("Connect Telegram")
-                    .font(.title2.bold())
-                    .foregroundStyle(Theme.textPrimary)
-            }
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 6) {
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(Theme.serviceTelegram)
+                    Text("Connect Telegram")
+                        .font(.title2.bold())
+                        .foregroundStyle(Theme.textPrimary)
+                }
 
-            // Step content
-            switch step {
-            case .phone:
-                phoneStep
-            case .code(let hash):
-                codeStep(phoneCodeHash: hash)
-            case .password:
-                passwordStep
-            case .success:
-                successStep
-            }
+                // Step content
+                switch step {
+                case .phone:
+                    phoneStep
+                case .code(let hash):
+                    codeStep(phoneCodeHash: hash)
+                case .password:
+                    passwordStep
+                case .success:
+                    successStep
+                }
 
-            // Error
-            if let msg = errorMessage {
-                Text(msg)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
+                // Error
+                if let msg = errorMessage {
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                // Always-visible Cancel/Close at the bottom too.
+                Button("Close") { dismiss() }
+                    .controlSize(.small)
+                    .keyboardShortcut(.cancelAction)
             }
+            .padding(28)
+
+            // Top-right close (⌘W / Esc) for users who want the standard sheet close.
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .padding(12)
+            .keyboardShortcut("w", modifiers: .command)
         }
-        .padding(28)
-        .frame(width: 360)
+        .frame(width: 380)
         .background(Theme.surface)
         .onAppear {
             Task {
@@ -183,7 +203,14 @@ struct TelegramSignInView: View {
                    let hash = resp["phone_code_hash"] as? String {
                     step = .code(phoneCodeHash: hash)
                 } else {
-                    errorMessage = resp["error"] as? String ?? "Failed to send code."
+                    let raw = resp["error"] as? String ?? "Failed to send code."
+                    // Older telegram-adapter binaries don't expose auth handlers.
+                    // Help the user know they have a working session and can just retry.
+                    if raw.localizedCaseInsensitiveContains("unknown action") {
+                        errorMessage = "Your telegram-adapter binary doesn't support re-auth. Rebuild it from the adapters/telegram source, OR close this dialog and click Retry now — your existing session will reconnect."
+                    } else {
+                        errorMessage = raw
+                    }
                 }
             } catch {
                 errorMessage = error.localizedDescription
