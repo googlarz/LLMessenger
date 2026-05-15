@@ -53,6 +53,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             let windowController = ChatWindowController(appState: state)
             chatWindowController = windowController
+            windowController.onRetryService = { [weak self] serviceID in
+                guard let self else { return }
+                Task {
+                    try? await self.pollEngine?.pollNow(serviceID: serviceID)
+                    if let health = self.pollEngine?.currentServiceHealth {
+                        self.appState?.updateServiceHealth(health)
+                    }
+                }
+            }
 
             let notifications = NotificationManager()
             notifications.requestPermission()

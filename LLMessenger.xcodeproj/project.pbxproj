@@ -92,6 +92,7 @@
 		B3CF5BF36060C33F25099D53 /* ChatViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B8A33ADE90F0EC79A61D4D /* ChatViewModelTests.swift */; };
 		B47F50B3DD0A86EE369C8549 /* BriefListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17E2FC6E580C483A5220F007 /* BriefListView.swift */; };
 		B69FC59BC25181FC0389FB9D /* SlackWorkspacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 724CEB5405989BE4B7824CA8 /* SlackWorkspacesView.swift */; };
+		B77224C56B9AA03C7A925526 /* MainChromeBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E77DF565652B4D6763A2605 /* MainChromeBar.swift */; };
 		B93451BF2E596033EE00C54C /* BriefCardRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1551568E73E6646226FE66C3 /* BriefCardRecord.swift */; };
 		BAB6F302E2FD6409D2BEEAA5 /* BriefRepositoryExtendedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */; };
 		BCFC2235AC318EA2A9019F83 /* ConversationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95C2ACF68692E965BA4055BA /* ConversationStateTests.swift */; };
@@ -145,6 +146,7 @@
 		09D44892CD851C4994CEA012 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
 		09F863A1D7C0B0D2C9C06967 /* SlackAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAdapterTests.swift; sourceTree = "<group>"; };
 		0B01BD5888FD90D28050A644 /* ServiceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealth.swift; sourceTree = "<group>"; };
+		0E77DF565652B4D6763A2605 /* MainChromeBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainChromeBar.swift; sourceTree = "<group>"; };
 		113724A6E99E26E8CD720DFE /* PriorityCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriorityCorrection.swift; sourceTree = "<group>"; };
 		14DE9B36EDDE0DDEA40BC7DB /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		1551568E73E6646226FE66C3 /* BriefCardRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefCardRecord.swift; sourceTree = "<group>"; };
@@ -512,6 +514,7 @@
 				4AD49D8511186D6C7D97DCE1 /* ChatViewModel.swift */,
 				2415F8132629B43CC77A08F8 /* ChatWindowController.swift */,
 				96FD9BD1839DC30E92065C7E /* ContentView.swift */,
+				0E77DF565652B4D6763A2605 /* MainChromeBar.swift */,
 				DFC689A6D5F7D05E452154B4 /* MediaPanelView.swift */,
 				4CBE24D05550B0F805958D37 /* MentionPickerView.swift */,
 				700C9AE93DA56553E631CE85 /* MessageBubbleView.swift */,
@@ -676,6 +679,7 @@
 				7177450F9E2D6DC65A094DA5 /* LLMRunRecord.swift in Sources */,
 				1F3AF9DCA45D658915781028 /* LLMSettingsTab.swift in Sources */,
 				DE0C17AEBEECDE55B14BD784 /* LLMessengerApp.swift in Sources */,
+				B77224C56B9AA03C7A925526 /* MainChromeBar.swift in Sources */,
 				6AA8C3866C3D66763E25B60A /* MediaPanelView.swift in Sources */,
 				F465FA960D540D9CFB44E578 /* MemoryCompressor.swift in Sources */,
 				0F820A2720B766AD8F46C688 /* MentionPickerView.swift in Sources */,

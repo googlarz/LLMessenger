@@ -71,22 +71,39 @@ struct ChatPanelView: View {
                                 .id(brief.id)
                         }
 
-                        // Always render so IDs are registered before scrollTo fires.
-                        if !aiItems.isEmpty {
-                            Divider()
-                                .background(Theme.border.opacity(0.5))
+                        // Chat zone — visually distinct from brief content above. Tinted
+                        // background + small "Chat" label tells the user this is a side
+                        // conversation about the brief, not the brief itself.
+                        if !aiItems.isEmpty || chatViewModel.isLoading {
+                            VStack(alignment: .leading, spacing: 0) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(Theme.accent)
+                                    Text("Chat")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .tracking(0.8)
+                                        .foregroundStyle(Theme.textTertiary)
+                                    Spacer()
+                                }
                                 .padding(.horizontal, 28)
-                        }
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(aiItems) { item in
-                                aiItemView(item).id(item.id)
-                            }
-                        }
-                        .padding(.vertical, aiItems.isEmpty ? 0 : 8)
+                                .padding(.top, 12)
+                                .padding(.bottom, 4)
 
-                        if chatViewModel.isLoading {
-                            LoadingIndicatorView()
-                                .id("loading")
+                                LazyVStack(alignment: .leading, spacing: 0) {
+                                    ForEach(aiItems) { item in
+                                        aiItemView(item).id(item.id)
+                                    }
+                                }
+                                .padding(.vertical, 8)
+
+                                if chatViewModel.isLoading {
+                                    LoadingIndicatorView()
+                                        .id("loading")
+                                }
+                            }
+                            .background(Theme.accentMuted.opacity(0.25))
+                            .padding(.top, 8)
                         }
                     }
                 }

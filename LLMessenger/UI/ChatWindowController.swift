@@ -6,6 +6,7 @@ import SwiftUI
 final class ChatWindowController: NSWindowController, NSWindowDelegate {
     private let appState: AppState
     private let chatViewModel: ChatViewModel
+    var onRetryService: ((String) -> Void)?
 
     init(appState: AppState) {
         self.appState = appState
@@ -34,7 +35,10 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
 
-        let content = ContentView()
+        let content = ContentView(onRetryService: { [weak self] svc in
+            guard let self else { return }
+            Task { @MainActor in self.onRetryService?(svc) }
+        })
             .environmentObject(appState)
             .environmentObject(chatViewModel)
             .environmentObject(appState.contactDirectory)

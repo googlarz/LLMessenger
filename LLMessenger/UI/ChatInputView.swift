@@ -77,9 +77,10 @@ struct ChatInputView: View {
     }
 
     private var placeholder: String {
-        chatViewModel.pendingTarget == nil
-            ? "Ask about these messages… (type @ to pick a contact)"
-            : "Type the message — Claude will draft it"
+        if let target = chatViewModel.pendingTarget {
+            return "Reply to \(target.displayName) on \(Theme.serviceName(target.service)) — say what you want, AI drafts it"
+        }
+        return "Ask about this brief, or type @ to write to anyone"
     }
 
     private var canSend: Bool {

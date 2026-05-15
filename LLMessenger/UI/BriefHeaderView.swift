@@ -32,12 +32,16 @@ struct BriefHeaderView: View {
                         .foregroundStyle(stateColor)
                         .tracking(0.8)
 
-                    Text(headlineText)
+                    // Headline now leads with the action-needed count, since that's
+                    // the only number the user actually opens the app to learn.
+                    Text(actionHeadline)
                         .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(Theme.textPrimary)
+                        .foregroundStyle(highPriorityCount > 0 ? Theme.textPrimary : Theme.textSecondary)
                         .tracking(-0.5)
 
                     HStack(spacing: 5) {
+                        Text("\(briefCount) brief\(briefCount == 1 ? "" : "s")")
+                        Text("·")
                         Text("\(messageCount) message\(messageCount == 1 ? "" : "s")")
                         Text("·")
                         Text("\(peopleCount) \(peopleCount == 1 ? "person" : "people")")
@@ -131,6 +135,21 @@ struct BriefHeaderView: View {
         if briefCount == 0 && messageCount == 0 { return "No new messages" }
         if briefCount == 0 { return "\(messageCount) message\(messageCount == 1 ? "" : "s")" }
         return "\(briefCount) brief\(briefCount == 1 ? "" : "s") across \(serviceCount) app\(serviceCount == 1 ? "" : "s")"
+    }
+
+    /// What the user came here to learn, in priority order:
+    ///   • some action needed → "1 action needed"
+    ///   • no actions but some content → "Nothing urgent · 1 brief"
+    ///   • empty brief → "No new messages"
+    private var actionHeadline: String {
+        if briefCount == 0 && messageCount == 0 { return "No new messages" }
+        if highPriorityCount > 0 {
+            return "\(highPriorityCount) action\(highPriorityCount == 1 ? "" : "s") needed"
+        }
+        if briefCount > 0 {
+            return "Nothing urgent · \(briefCount) brief\(briefCount == 1 ? "" : "s")"
+        }
+        return "\(messageCount) new message\(messageCount == 1 ? "" : "s")"
     }
 
     private var briefKind: String {
