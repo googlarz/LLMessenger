@@ -716,70 +716,42 @@ private struct ServiceCard: View {
         )
     }
 
-    /// Opens the Full Disk Access pane in System Settings. The single-line
-    /// NSWorkspace.shared.open(URL) call worked for months before I started
-    /// "improving" it — turns out my multi-strategy wrappers were swallowing
-    /// success states or triggering AppleScript popups. Back to the simple
-    /// call. If it ever returns false on a given Mac, show the manual alert.
+    /// Surfaces FDA setup instructions to the user. The programmatic deep-link
+    /// trigger ("Open System Settings now") is offered as a button, but the
+    /// manual steps lead — because on some Macs the URL-scheme dispatch fires
+    /// a "System Settings is not open anymore" popup that we can't suppress.
+    /// Showing instructions first means the user always has a working path
+    /// even when macOS' programmatic open silently fails.
     private func openFullDiskAccessSettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
-        if NSWorkspace.shared.open(url) { return }
-
-        // Modern fallback for installs where the legacy URL-scheme dispatch
-        // returns false — hands the URL directly to System Settings.app.
-        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences") {
-            let config = NSWorkspace.OpenConfiguration()
-            config.activates = true
-            NSWorkspace.shared.open([url], withApplicationAt: appURL,
-                                    configuration: config,
-                                    completionHandler: nil)
-            return
-        }
-
         showManualFDAInstructions()
     }
 
     private func showManualFDAInstructions() {
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "Couldn't open System Settings automatically"
+        alert.messageText = "Grant Full Disk Access to LLMessenger"
         alert.informativeText = """
-        macOS blocked all the ways this app can open System Settings — usually because LLMessenger doesn't have Automation permission, or its TCC entry got out of sync.
+        macOS needs you to add LLMessenger to Full Disk Access before it can read your iMessage history.
 
-        Manual steps:
-          1. Apple menu → System Settings
-          2. Privacy & Security → Full Disk Access
-          3. Click +
+        Manual steps (works on every Mac):
+          1. Apple menu  →  System Settings…
+          2. Privacy & Security  →  Full Disk Access
+          3. Click the +
           4. Choose LLMessenger.app
           5. Quit and reopen LLMessenger
 
-        If LLMessenger isn't in /Applications, use the Finder button below to find it.
+        The buttons below can speed it up but don't always work — some Macs immediately quit System Settings on URL hand-off ("is not open anymore"). If that happens, just use the Apple menu manually.
         """
-        // Button order shows right-to-left on macOS.
-        alert.addButton(withTitle: "Reveal LLMessenger.app")    // rightmost
-        alert.addButton(withTitle: "Open Automation settings")  // middle
-        alert.addButton(withTitle: "OK")                        // leftmost (default)
+        alert.addButton(withTitle: "Open System Settings")       // rightmost (default)
+        alert.addButton(withTitle: "Reveal LLMessenger.app")     // middle
+        alert.addButton(withTitle: "Cancel")                      // leftmost
 
         switch alert.runModal() {
         case .alertFirstButtonReturn:
-            NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+            NSWorkspace.shared.open(url)
         case .alertSecondButtonReturn:
-            // Take the user to the Automation panel so they can re-grant
-            // permission for LLMessenger → System Settings. Same five-strategy
-            // chain but for a different URL.
-            let automationURLs = [
-                URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation"),
-                URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
-            ].compactMap { $0 }
-            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences"),
-               let url = automationURLs.first {
-                let config = NSWorkspace.OpenConfiguration()
-                config.activates = true
-                NSWorkspace.shared.open([url], withApplicationAt: appURL,
-                                        configuration: config, completionHandler: nil)
-            } else {
-                for url in automationURLs where NSWorkspace.shared.open(url) { return }
-            }
+            NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
         default:
             break
         }
