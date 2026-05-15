@@ -72,9 +72,28 @@ final class SubprocessAdapter: MessengerAdapter {
     }
 
     func stop() {
-        process?.terminate()
+        // SIGTERM, then wait until the process actually exits and closes its
+        // file handles. Without this wait, a fast respawn (e.g. user clicks
+        // Retry now twice or registerAdapter is called twice) races the old
+        // process for any single-writer resources — Pyrogram's
+        // session.session SQLite file is the canonical example, where the
+        // second adapter sees "database is locked" because the first still
+        // holds the descriptor.
+        if let p = process {
+            p.terminate()
+            // Give it a graceful 2s, then SIGKILL.
+            let deadline = Date().addingTimeInterval(2.0)
+            while p.isRunning && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.05)
+            }
+            if p.isRunning {
+                kill(p.processIdentifier, SIGKILL)
+                p.waitUntilExit()
+            }
+        }
         writeHandle = nil
         readHandle = nil
+        stderrHandle = nil
         process = nil
         readBuffer.data.removeAll()
         healthStatus = .warning
