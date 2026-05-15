@@ -55,12 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             chatWindowController = windowController
             windowController.onRetryService = { [weak self] serviceID in
                 guard let self else { return }
-                Task {
-                    try? await self.pollEngine?.pollNow(serviceID: serviceID)
-                    if let health = self.pollEngine?.currentServiceHealth {
-                        self.appState?.updateServiceHealth(health)
-                    }
-                }
+                Task { @MainActor in await self.retryService(serviceID) }
             }
 
             let notifications = NotificationManager()
@@ -220,10 +215,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             settingsController.onRetryService = { [weak self] serviceID in
                 guard let self else { return }
-                try? await self.pollEngine?.pollNow(serviceID: serviceID)
-                if let health = self.pollEngine?.currentServiceHealth {
-                    self.appState?.updateServiceHealth(health)
-                }
+                await self.retryService(serviceID)
             }
             let openSettings: () -> Void = { [weak settingsController] in settingsController?.show() }
             menuBar.onOpenSettings = openSettings
@@ -311,50 +303,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            let telegramBinary = telegramAdapterPath()
-            let telegramConfig = (try? db.dbQueue.read { db in
-                try ServiceConfig.fetchOne(db, key: "telegram")
-            }) ?? ServiceConfig.default(for: "telegram")
-
-            if let binaryPath = telegramBinary {
-                let adapter = SubprocessAdapter(
-                    serviceID: "telegram",
-                    adapterPath: binaryPath,
-                    config: telegramAdapterConfig()
-                )
-                engine.register(adapter: adapter, config: telegramConfig)
-                state.adapters["telegram"] = adapter
-            }
-
-            let settingsRepo = SettingsRepository(database: db)
-            if let account = try? settingsRepo.loadSignalAccount(), !account.isEmpty {
-                let signalConfig = (try? db.dbQueue.read { db in
-                    try ServiceConfig.fetchOne(db, key: "signal")
-                }) ?? ServiceConfig.default(for: "signal")
-                let signalAdapter = SignalCLIAdapter(accountNumber: account)
-                engine.register(adapter: signalAdapter, config: signalConfig)
-                state.adapters["signal"] = signalAdapter
-            }
-
-            // iMessage — always available on macOS; requires Contacts + Automation permissions.
-            let imessageConfig = (try? db.dbQueue.read { db in
-                try ServiceConfig.fetchOne(db, key: "imessage")
-            }) ?? ServiceConfig.default(for: "imessage")
-            let imessageAdapter = iMessageAdapter()
-            engine.register(adapter: imessageAdapter, config: imessageConfig)
-            state.adapters["imessage"] = imessageAdapter
-
-            // Slack — register if at least one workspace token is in the Keychain.
-            // The adapter itself handles multi-workspace internally.
-            // Local-only mode skips Slack entirely so no message content leaves the Mac.
-            let isLocalOnly = SettingsRepository().loadLocalOnlyMode()
-            if !isLocalOnly, !SlackWorkspaceStore.load().isEmpty {
-                let slackConfig = (try? db.dbQueue.read { db in
-                    try ServiceConfig.fetchOne(db, key: "slack")
-                }) ?? ServiceConfig.default(for: "slack")
-                let slackAdapter = SlackAdapter()
-                engine.register(adapter: slackAdapter, config: slackConfig)
-                state.adapters["slack"] = slackAdapter
+            // Register every service that's configurable. Each is a no-op if its
+            // prerequisites aren't met (Signal account empty, Telegram binary missing,
+            // Slack workspace list empty, etc) — reregisterAdapter() re-runs the same
+            // logic later when the user adds credentials in Settings or clicks Retry.
+            for svc in ["telegram", "signal", "imessage", "slack"] {
+                self.registerAdapter(serviceID: svc, engine: engine, db: db, state: state)
             }
 
             pollEngine = engine
@@ -368,9 +322,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ) { [weak self] _ in
                 guard let self else { return }
                 Task { @MainActor [weak self] in
-                    guard let self, let db = self.database else { return }
+                    guard let self, let db = self.database,
+                          let engine = self.pollEngine, let state = self.appState
+                    else { return }
                     let configs = (try? db.dbQueue.read { db in try ServiceConfig.fetchAll(db) }) ?? []
-                    for config in configs { self.pollEngine?.reload(config: config) }
+                    for config in configs { engine.reload(config: config) }
+                    // Adapters added after launch (e.g. user pastes Signal account or
+                    // a Slack token) need to actually be instantiated and started.
+                    // reload() only updates configs of already-registered adapters.
+                    for svc in ["telegram", "signal", "imessage", "slack"] {
+                        self.registerAdapter(serviceID: svc, engine: engine, db: db, state: state)
+                    }
                 }
             }
 
@@ -492,6 +454,89 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 model: model,
                 isConfigured: true
             )
+        }
+    }
+
+    /// Shared retry handler — wired to both the chrome chip and the per-card
+    /// "Retry now" button. Ensures the adapter exists (re-registers from settings
+    /// if needed), polls once, and surfaces any failure via appState.lastError so
+    /// the user sees what actually went wrong instead of a silent no-op.
+    @MainActor
+    private func retryService(_ serviceID: String) async {
+        guard let engine = pollEngine, let db = database, let state = appState else { return }
+        // If credentials were added after launch, register the adapter on demand.
+        registerAdapter(serviceID: serviceID, engine: engine, db: db, state: state)
+
+        guard state.adapters[serviceID] != nil else {
+            state.lastError = "\(Theme.serviceName(serviceID)) isn't configured yet — set it up in Settings → Services first."
+            return
+        }
+        do {
+            try await engine.pollNow(serviceID: serviceID)
+            state.lastError = nil
+        } catch {
+            state.lastError = "\(Theme.serviceName(serviceID)) retry failed: \(error.localizedDescription)"
+        }
+        state.updateServiceHealth(engine.currentServiceHealth)
+    }
+
+    /// Registers (or refreshes) a single service adapter from current settings.
+    /// Safe to call repeatedly — skipping a service if prerequisites aren't met,
+    /// replacing an existing registration when something changed. Used at launch,
+    /// when settings change, and when the user clicks Retry on a broken service.
+    @MainActor
+    private func registerAdapter(serviceID: String,
+                                 engine: PollEngine,
+                                 db: AppDatabase,
+                                 state: AppState) {
+        let config = (try? db.dbQueue.read { db in
+            try ServiceConfig.fetchOne(db, key: serviceID)
+        }) ?? ServiceConfig.default(for: serviceID)
+        let isLocalOnly = SettingsRepository().loadLocalOnlyMode()
+
+        switch serviceID {
+        case "imessage":
+            // iMessage is always available; FDA/permission errors surface via health.
+            if state.adapters["imessage"] == nil {
+                let adapter = iMessageAdapter()
+                engine.register(adapter: adapter, config: config)
+                state.adapters["imessage"] = adapter
+            }
+
+        case "signal":
+            let repo = SettingsRepository(database: db)
+            guard let account = try? repo.loadSignalAccount(), !account.isEmpty else { return }
+            // Replace existing adapter if account changed.
+            if let existing = state.adapters["signal"] as? SignalCLIAdapter {
+                existing.stop()
+            }
+            let adapter = SignalCLIAdapter(accountNumber: account)
+            engine.register(adapter: adapter, config: config)
+            state.adapters["signal"] = adapter
+
+        case "telegram":
+            guard let binaryPath = telegramAdapterPath() else { return }
+            if state.adapters["telegram"] as? SubprocessAdapter != nil { return }
+            let adapter = SubprocessAdapter(
+                serviceID: "telegram",
+                adapterPath: binaryPath,
+                config: telegramAdapterConfig()
+            )
+            engine.register(adapter: adapter, config: config)
+            state.adapters["telegram"] = adapter
+
+        case "slack":
+            guard !isLocalOnly, !SlackWorkspaceStore.load().isEmpty else { return }
+            if let existing = state.adapters["slack"] as? SlackAdapter {
+                existing.reloadWorkspaces()
+                return
+            }
+            let adapter = SlackAdapter()
+            engine.register(adapter: adapter, config: config)
+            state.adapters["slack"] = adapter
+
+        default:
+            break
         }
     }
 

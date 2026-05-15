@@ -707,11 +707,11 @@ private struct ServiceCard: View {
         )
     }
 
-    /// Opens the Full Disk Access pane in System Settings. NSWorkspace.shared.open
-    /// historically raced with a running System Settings instance and surfaced
-    /// "The application System Settings is not open anymore". Shelling out to
-    /// /usr/bin/open with -b com.apple.systempreferences side-steps the race and
-    /// just works on macOS 13/14/15.
+    /// Opens the Full Disk Access pane in System Settings. macOS's URL-scheme
+    /// dispatch via `/usr/bin/open <url>` is the recommended path — passing -b
+    /// com.apple.systempreferences alongside the URL was treating the URL as a
+    /// regular argument and breaking the handoff (which is why earlier versions
+    /// fell through to Finder).
     private func openFullDiskAccessSettings() {
         let urls = [
             // macOS 13+ canonical deep-link
@@ -721,17 +721,9 @@ private struct ServiceCard: View {
             // Privacy root as last-ditch
             "x-apple.systempreferences:com.apple.preference.security"
         ]
-        for url in urls {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            process.arguments = ["-b", "com.apple.systempreferences", url]
-            do {
-                try process.run()
-                process.waitUntilExit()
-                if process.terminationStatus == 0 { return }
-            } catch {
-                continue
-            }
+        for urlString in urls {
+            guard let url = URL(string: urlString) else { continue }
+            if NSWorkspace.shared.open(url) { return }
         }
         // Final fallback: reveal LLMessenger.app in Finder so the user can drag it
         // into the FDA list themselves.
