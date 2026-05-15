@@ -9,6 +9,9 @@ final class ChatViewModel: ObservableObject {
     @Published var inputText: String = ""
     @Published var isLoading: Bool = false
     @Published var inputFocusRequest = UUID()
+    /// When set via the @ mention picker, the next send() bypasses the intent router
+    /// and goes straight to draftReply with this target. Cleared after the draft is built.
+    @Published var pendingTarget: MentionTarget?
     /// Keyed by BriefCard.id. Populated on-demand when the user taps "Quick reply" on a card.
     @Published var quickReplies: [String: [QuickReply]] = [:]
     /// Cards currently loading quick replies.
@@ -30,6 +33,13 @@ final class ChatViewModel: ObservableObject {
     private enum IntentRoutingResult {
         case route(IntentRoute)
         case plainText(String)
+    }
+
+    struct MentionTarget: Equatable {
+        let service: String
+        let conversationId: String
+        let displayName: String
+        let isGroup: Bool
     }
 
     init(appState: AppState) {
@@ -83,8 +93,31 @@ final class ChatViewModel: ObservableObject {
         inputFocusRequest = UUID()
     }
 
+    /// Lock the next send() to a specific conversation. Used by the @ mention picker.
+    func setMentionTarget(_ target: MentionTarget) {
+        pendingTarget = target
+        inputFocusRequest = UUID()
+    }
+
+    func clearMentionTarget() {
+        pendingTarget = nil
+    }
+
     private func submit(_ rawInput: String) async {
         guard !rawInput.isEmpty, let brief = currentBrief else { return }
+
+        // Case 0 — Explicit @ mention target: target is already known, skip intent routing
+        // and go straight to the existing draft flow.
+        if let target = pendingTarget {
+            pendingTarget = nil
+            threadItems.append(.userMessage(id: UUID(), text: rawInput))
+            await draftReply(brief: brief,
+                             originalRequest: rawInput,
+                             service: target.service,
+                             convId: target.conversationId,
+                             convName: target.displayName)
+            return
+        }
 
         // Case 1 — Picker resolution: user typed a number to answer an active picker.
         if let picker = activePicker(),

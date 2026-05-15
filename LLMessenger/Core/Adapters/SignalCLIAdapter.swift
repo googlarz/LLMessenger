@@ -137,6 +137,35 @@ final class SignalCLIAdapter: MessengerAdapter {
         }
     }
 
+    func listContacts() async -> [Contact] {
+        var contacts: [Contact] = []
+        // Group DMs by display name so a single person with multiple handles (UUID + phone)
+        // appears once.
+        var byName: [String: [String]] = [:]
+        for (handle, name) in contactNames where handle != accountNumber {
+            byName[name, default: []].append(handle)
+        }
+        for (name, handles) in byName {
+            // Prefer the phone-number handle as the conversation ID; signal-cli uses these
+            // for send. UUIDs work too but are less stable across syncs.
+            let primary = handles.first { $0.hasPrefix("+") } ?? handles.first ?? ""
+            guard !primary.isEmpty else { continue }
+            contacts.append(Contact(
+                id: "signal:dm:\(primary)",
+                displayName: name,
+                handles: [ServiceHandle(service: serviceID, conversationId: primary, isGroup: false)]
+            ))
+        }
+        for (groupID, groupName) in groupNames {
+            contacts.append(Contact(
+                id: "signal:group:\(groupID)",
+                displayName: groupName,
+                handles: [ServiceHandle(service: serviceID, conversationId: groupID, isGroup: true)]
+            ))
+        }
+        return contacts
+    }
+
     func healthCheck() async -> AdapterHealthResult {
         guard FileManager.default.fileExists(atPath: storeDBPath) else {
             healthStatus = .warning

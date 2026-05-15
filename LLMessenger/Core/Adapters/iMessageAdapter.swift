@@ -202,6 +202,86 @@ final class iMessageAdapter: MessengerAdapter {
         }
     }
 
+    func listContacts() async -> [Contact] {
+        guard let dbQueue else { return [] }
+        let names = contactNames
+        struct ChatRow {
+            let chatGUID: String
+            let style: Int64
+            let displayName: String
+            let handleID: String
+        }
+        let rows: [ChatRow] = (try? await dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT DISTINCT
+                    c.guid AS chat_guid,
+                    c.style AS style,
+                    COALESCE(c.display_name, '') AS display_name,
+                    COALESCE(h.id, '') AS handle_id
+                FROM chat c
+                LEFT JOIN chat_handle_join chj ON c.rowid = chj.chat_id
+                LEFT JOIN handle h ON chj.handle_id = h.rowid
+            """).map { row in
+                ChatRow(chatGUID: row["chat_guid"] ?? "",
+                    style: row["style"] ?? 45,
+                    displayName: row["display_name"] ?? "",
+                    handleID: row["handle_id"] ?? "")
+            }
+        }) ?? []
+
+        let resolve: (String) -> String? = { handle in
+            if let name = names[handle] { return name }
+            let digits = handle.filter { $0.isNumber }
+            for len in stride(from: min(digits.count, 10), through: 7, by: -1) {
+                if let name = names[String(digits.suffix(len))] { return name }
+            }
+            return nil
+        }
+
+        // Group by chat. Each group chat = 1 contact entry with all participants listed.
+        // Each DM handle = 1 contact entry.
+        var dmHandles: Set<String> = []
+        var groupBuilder: [String: (display: String, handles: [String])] = [:]
+        for row in rows {
+            if row.style == 43 {
+                if groupBuilder[row.chatGUID] == nil {
+                    groupBuilder[row.chatGUID] = (display: row.displayName, handles: [])
+                }
+                if !row.handleID.isEmpty {
+                    groupBuilder[row.chatGUID]!.handles.append(row.handleID)
+                }
+            } else if !row.handleID.isEmpty {
+                dmHandles.insert(row.handleID)
+            }
+        }
+
+        var contacts: [Contact] = []
+        for handle in dmHandles {
+            let name = resolve(handle) ?? handle
+            contacts.append(Contact(
+                id: "imessage:dm:\(handle)",
+                displayName: name,
+                handles: [ServiceHandle(service: serviceID, conversationId: handle, isGroup: false)]
+            ))
+        }
+        for (guid, entry) in groupBuilder {
+            let label: String
+            if !entry.display.isEmpty {
+                label = entry.display
+            } else if !entry.handles.isEmpty {
+                label = entry.handles.prefix(4).map { resolve($0) ?? $0 }.joined(separator: ", ")
+            } else {
+                label = "Group Chat"
+            }
+            contacts.append(Contact(
+                id: "imessage:group:\(guid)",
+                displayName: label,
+                handles: [ServiceHandle(service: serviceID, conversationId: guid, isGroup: true)]
+            ))
+        }
+        return contacts
+    }
+
     func healthCheck() async -> AdapterHealthResult {
         let messagesDir = NSHomeDirectory() + "/Library/Messages"
         let dirExists = FileManager.default.fileExists(atPath: messagesDir)

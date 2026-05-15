@@ -116,4 +116,12 @@ protocol MessengerAdapter: AnyObject {
 
     /// Check adapter health. Does not throw — returns error status instead.
     func healthCheck() async -> AdapterHealthResult
+
+    /// Enumerate known contacts and group conversations for the @ mention picker.
+    /// Default implementation returns an empty list — adapters opt in.
+    func listContacts() async -> [Contact]
+}
+
+extension MessengerAdapter {
+    func listContacts() async -> [Contact] { [] }
 }

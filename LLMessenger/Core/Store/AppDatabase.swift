@@ -265,6 +265,13 @@ final class AppDatabase: @unchecked Sendable {
                 WHERE service = 'imessage' AND sender = 'Me' AND isSent = 0
             """)
         }
+        migrator.registerMigration("v10_contact_preferences") { db in
+            try db.create(table: "contactPreferences") { t in
+                t.column("displayName", .text).primaryKey()
+                t.column("lastService", .text).notNull()
+                t.column("lastUsedAt", .datetime).notNull()
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

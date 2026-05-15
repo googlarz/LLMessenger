@@ -128,6 +128,29 @@ final class SubprocessAdapter: MessengerAdapter {
         }
     }
 
+    func listContacts() async -> [Contact] {
+        // The remote adapter implements a `contacts` action that returns an array of
+        // {id, display_name, is_group}. Falls back to empty if the adapter doesn't
+        // support it (older versions, missing implementation, or daemon offline).
+        guard let response = try? await roundTrip(["action": "contacts"], timeout: 10),
+              response["success"] as? Bool == true,
+              let raw = response["contacts"] as? [[String: Any]] else {
+            return []
+        }
+        let svc = serviceID
+        return raw.compactMap { entry -> Contact? in
+            guard let convId = entry["id"] as? String, !convId.isEmpty,
+                  let name = entry["display_name"] as? String, !name.isEmpty
+            else { return nil }
+            let isGroup = (entry["is_group"] as? Bool) ?? false
+            return Contact(
+                id: "\(svc):\(isGroup ? "group" : "dm"):\(convId)",
+                displayName: name,
+                handles: [ServiceHandle(service: svc, conversationId: convId, isGroup: isGroup)]
+            )
+        }
+    }
+
     func authRoundTrip(_ request: [String: Any]) async throws -> [String: Any] {
         try await roundTrip(request)
     }

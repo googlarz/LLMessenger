@@ -6,10 +6,12 @@ import SwiftUI
 final class ChatWindowController: NSWindowController, NSWindowDelegate {
     private let appState: AppState
     private let chatViewModel: ChatViewModel
+    private let contactDirectory: ContactDirectory
 
     init(appState: AppState) {
         self.appState = appState
         self.chatViewModel = appState.makeChatViewModel()
+        self.contactDirectory = appState.makeContactDirectory()
 
         let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 620),
@@ -37,7 +39,10 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
         let content = ContentView()
             .environmentObject(appState)
             .environmentObject(chatViewModel)
+            .environmentObject(contactDirectory)
         window.contentView = NSHostingView(rootView: content)
+
+        contactDirectory.refresh()
 
         if window.frame.size == NSSize(width: 900, height: 620) {
             window.center()
@@ -51,6 +56,7 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
             appState.selectedBriefID = id
         }
         appState.refreshBriefs()
+        contactDirectory.refresh()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         showWindow(nil)

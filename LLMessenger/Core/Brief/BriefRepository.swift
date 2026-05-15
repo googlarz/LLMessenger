@@ -503,4 +503,33 @@ struct BriefRepository {
         }
         return array.filter { !$0.isEmpty }
     }
+
+    // MARK: - Contact preferences
+
+    /// Returns the service the user last picked for this display name, or nil if never picked.
+    /// Display name matched case-insensitively via lowercasing on read and write.
+    func preferredService(for displayName: String) throws -> String? {
+        let key = displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !key.isEmpty else { return nil }
+        return try database.dbQueue.read { db in
+            try String.fetchOne(db,
+                sql: "SELECT lastService FROM contactPreferences WHERE displayName = ?",
+                arguments: [key])
+        }
+    }
+
+    /// Records that the user picked `service` for `displayName`. Upserts on the display name PK.
+    func recordContactPick(displayName: String, service: String) throws {
+        let key = displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !key.isEmpty, !service.isEmpty else { return }
+        try database.dbQueue.write { db in
+            try db.execute(sql: """
+                INSERT INTO contactPreferences (displayName, lastService, lastUsedAt)
+                VALUES (?, ?, ?)
+                ON CONFLICT(displayName) DO UPDATE SET
+                    lastService = excluded.lastService,
+                    lastUsedAt = excluded.lastUsedAt
+            """, arguments: [key, service, Date()])
+        }
+    }
 }

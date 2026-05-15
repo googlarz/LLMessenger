@@ -227,6 +227,16 @@ final class AppState: ObservableObject {
         ChatViewModel(appState: self)
     }
 
+    func makeContactDirectory() -> ContactDirectory {
+        ContactDirectory(
+            adapters: { [weak self] in
+                guard let self else { return [] }
+                return Array(self.adapters.values)
+            },
+            repository: repository
+        )
+    }
+
     func makeSettingsRepository() -> SettingsRepository {
         SettingsRepository(database: database)
     }
