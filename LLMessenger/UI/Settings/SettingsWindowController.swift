@@ -13,16 +13,19 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         self.database = database
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 540, height: 480),
-            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 560),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
+        window.minSize = NSSize(width: 640, height: 480)
         window.title = "LLMessenger Settings"
         window.titlebarAppearsTransparent = true
         window.appearance = .dark
         window.backgroundColor = NSColor(Theme.bg)
-        window.setFrameAutosaveName("LLMessengerSettings")
+        // Bumped autosave key so the old cached 540×480 frame (saved before the Privacy
+        // tab + wider layout) doesn't shrink the new larger window on first open.
+        window.setFrameAutosaveName("LLMessengerSettings.v2")
         window.isReleasedWhenClosed = false
 
         super.init(window: window)
