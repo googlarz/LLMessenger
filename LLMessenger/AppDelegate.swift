@@ -534,7 +534,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         case "telegram":
             guard let binaryPath = telegramAdapterPath() else { return }
-            if state.adapters["telegram"] as? SubprocessAdapter != nil { return }
+            // If a Telegram adapter is already registered, leave it alone — the
+            // engine will call its start() on the next poll, which handles
+            // relaunching a dead subprocess. We used to short-circuit ALL retries
+            // here, but if the previous Telegram process died (broken pipe / crash)
+            // it left the session.session SQLite lock held; the next click of
+            // Retry needs to first stop() the dead adapter so its file handles
+            // close, then re-register.
+            if let existing = state.adapters["telegram"] as? SubprocessAdapter {
+                existing.stop()
+            }
             let adapter = SubprocessAdapter(
                 serviceID: "telegram",
                 adapterPath: binaryPath,
