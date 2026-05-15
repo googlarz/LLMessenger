@@ -195,13 +195,30 @@ private struct ServiceCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack(spacing: 12) {
-                ZStack {
+                ZStack(alignment: .bottomTrailing) {
+                    // Icon background desaturates to a neutral grey when the service is
+                    // not in a green state — otherwise a healthy iMessage green badge
+                    // tricks the eye into "looks OK" even though FDA is missing.
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(iconBackground)
+                        .fill(isStatusGreen ? iconBackground : Color(nsColor: .tertiaryLabelColor).opacity(0.45))
                         .frame(width: 36, height: 36)
                     Image(systemName: icon)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(isStatusGreen ? .white : Color(nsColor: .secondaryLabelColor))
+
+                    // Prominent status corner badge — visible at a glance even when the
+                    // small dot in the subtitle row is missed. Hidden in the OK case to
+                    // avoid clutter, since a healthy green icon already conveys status.
+                    if !isStatusGreen {
+                        Image(systemName: statusBadgeIcon)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 14, height: 14)
+                            .background(statusColor)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5))
+                            .offset(x: 3, y: 3)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -210,10 +227,10 @@ private struct ServiceCard: View {
                     HStack(spacing: 4) {
                         Circle()
                             .fill(statusColor)
-                            .frame(width: 6, height: 6)
+                            .frame(width: 8, height: 8)
                         Text(statusLabel)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(statusColor == .red ? .red : Theme.textSecondary)
                     }
                 }
 
@@ -441,10 +458,10 @@ private struct ServiceCard: View {
     }
 
     /// Three-state model for the status dot:
-    /// - .green only when a successful poll has been recorded AND credentials still satisfy
+    /// - .green only when a successful poll has been recorded recently AND credentials still satisfy
     ///   the per-service criteria (e.g. Slack still has ≥1 workspace).
     /// - .orange when credentials are present but the service hasn't been verified yet,
-    ///   or when the last poll surfaced a warning.
+    ///   or when the last poll surfaced a warning, or when health is stale.
     /// - .red on a hard error.
     /// - .grey when credentials are missing (or the service is disabled).
     private var statusColor: Color {
@@ -452,8 +469,8 @@ private struct ServiceCard: View {
         if !hasRequiredCredentials { return Color(nsColor: .tertiaryLabelColor) }
         if let health, health.status == "error" { return .red }
         if let health, health.status == "warning" { return .orange }
-        if let health, health.status == "ok" { return .green }
-        // Credentials look complete but PollEngine hasn't confirmed yet.
+        if let health, health.status == "ok", !isHealthStale { return .green }
+        // Credentials look complete but PollEngine hasn't confirmed (or health is stale).
         return .orange
     }
 
@@ -467,6 +484,7 @@ private struct ServiceCard: View {
             return health.lastError ?? "Warning"
         }
         if let health, health.status == "ok" {
+            if isHealthStale { return "Last poll over \(staleMinutes) min ago" }
             switch service {
             case "imessage": return "Available"
             case "signal":   return signalAccount
@@ -476,6 +494,34 @@ private struct ServiceCard: View {
             }
         }
         return "Pending first poll"
+    }
+
+    /// A health record is "stale" if its lastCheck is older than 2× the configured poll
+    /// interval. A successful poll from yesterday shouldn't keep claiming green today.
+    private var isHealthStale: Bool {
+        guard let lastCheck = health?.lastCheck else { return true }
+        let staleAfter = TimeInterval(max(config.pollIntervalMinutes * 2, 10) * 60)
+        return Date().timeIntervalSince(lastCheck) > staleAfter
+    }
+
+    private var staleMinutes: Int {
+        guard let lastCheck = health?.lastCheck else { return 0 }
+        return max(0, Int(Date().timeIntervalSince(lastCheck) / 60))
+    }
+
+    /// True only when the dot is green. Used to drive the icon's colour treatment
+    /// so brand colours don't mislead at a glance.
+    private var isStatusGreen: Bool {
+        guard config.enabled, hasRequiredCredentials, let health else { return false }
+        return health.status == "ok" && !isHealthStale
+    }
+
+    /// SF Symbol shown as a small badge on top of the (greyed) icon when status isn't green.
+    private var statusBadgeIcon: String {
+        if !config.enabled { return "pause.fill" }
+        if !hasRequiredCredentials { return "exclamationmark" }
+        if let health, health.status == "error" { return "xmark" }
+        return "exclamationmark"
     }
 
     /// True when the per-service credential criteria are satisfied. A green check still
