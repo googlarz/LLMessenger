@@ -748,8 +748,19 @@ private struct ServiceCard: View {
 
         switch alert.runModal() {
         case .alertFirstButtonReturn:
-            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
-            NSWorkspace.shared.open(url)
+            // Launch System Settings.app directly with no deep-link URL.
+            // The URL hand-off via NSWorkspace.shared.open(URL) is what triggers
+            // the "is not open anymore" macOS popup on broken installs — without
+            // a URL there's nothing for System Settings to fail to handle.
+            // The user does steps 2-5 from the alert manually.
+            let appURL = URL(fileURLWithPath: "/System/Applications/System Settings.app")
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, _ in
+                // No-op — async completion. We don't fall back: if even this
+                // bare launch fails, the user has the manual Apple-menu path
+                // already in front of them.
+            }
         case .alertSecondButtonReturn:
             NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
         default:
