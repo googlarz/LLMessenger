@@ -485,6 +485,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Brief pause so the daemon's first poll lands before we retry.
             try? await Task.sleep(nanoseconds: 1_500_000_000)
         }
+        if serviceID == "telegram" {
+            // Clean up SQLite rollback journals left by a previously crashed
+            // adapter process. Pyrogram opens session.session and sees the
+            // .session-journal file as "another writer mid-transaction",
+            // failing with "database is locked" even when no process holds it.
+            let sessionDir = NSHomeDirectory() + "/.config/llmessenger/data/telegram"
+            let leftovers = ["session.session-journal", "session.session-wal", "session.session-shm"]
+            for f in leftovers {
+                try? FileManager.default.removeItem(atPath: "\(sessionDir)/\(f)")
+            }
+        }
 
         do {
             try await engine.pollNow(serviceID: serviceID)
