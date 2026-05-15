@@ -716,63 +716,26 @@ private struct ServiceCard: View {
         )
     }
 
-    /// Opens the Full Disk Access pane in System Settings. The modern
-    /// NSWorkspace.shared.open([URL], withApplicationAt:, configuration:) API
-    /// uses different LaunchServices internals than the legacy open(URL) —
-    /// it succeeds in some cases where the legacy form returns false. We try
-    /// that first, fall back to legacy open + /usr/bin/open, then alert.
+    /// Opens the Full Disk Access pane in System Settings. The single-line
+    /// NSWorkspace.shared.open(URL) call worked for months before I started
+    /// "improving" it — turns out my multi-strategy wrappers were swallowing
+    /// success states or triggering AppleScript popups. Back to the simple
+    /// call. If it ever returns false on a given Mac, show the manual alert.
     private func openFullDiskAccessSettings() {
-        let urls = [
-            URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"),
-            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"),
-            URL(string: "x-apple.systempreferences:com.apple.preference.security")
-        ].compactMap { $0 }
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+        if NSWorkspace.shared.open(url) { return }
 
-        // Strategy 1: modern openURLs-with-app API.
-        // Find System Settings.app and ask LaunchServices to hand the deep-link
-        // to it directly, instead of asking LaunchServices to resolve the URL
-        // scheme. This works around the "scheme handler missing" failure path.
+        // Modern fallback for installs where the legacy URL-scheme dispatch
+        // returns false — hands the URL directly to System Settings.app.
         if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences") {
             let config = NSWorkspace.OpenConfiguration()
             config.activates = true
-            let deepLink = urls.first!
-            NSWorkspace.shared.open([deepLink], withApplicationAt: appURL,
+            NSWorkspace.shared.open([url], withApplicationAt: appURL,
                                     configuration: config,
                                     completionHandler: nil)
             return
         }
 
-        // Strategy 2: legacy NSWorkspace.shared.open(URL).
-        for url in urls {
-            if NSWorkspace.shared.open(url) { return }
-        }
-
-        // Strategy 3: shell out to /usr/bin/open.
-        for url in urls {
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            task.arguments = [url.absoluteString]
-            do {
-                try task.run()
-                task.waitUntilExit()
-                if task.terminationStatus == 0 { return }
-            } catch {
-                continue
-            }
-        }
-
-        // Strategy 4: just open System Settings.app with no deep link, so the
-        // user lands inside Settings and can navigate themselves.
-        let appOnly = Process()
-        appOnly.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        appOnly.arguments = ["-a", "System Settings"]
-        do {
-            try appOnly.run()
-            appOnly.waitUntilExit()
-            if appOnly.terminationStatus == 0 { return }
-        } catch { /* fall through */ }
-
-        // Final: show clear manual steps with multiple action buttons.
         showManualFDAInstructions()
     }
 
