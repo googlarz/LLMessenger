@@ -11,6 +11,7 @@ final class SubprocessAdapter: MessengerAdapter {
     private var process: Process?
     private var writeHandle: FileHandle?
     private var readHandle: FileHandle?
+    private var stderrHandle: FileHandle?
 
     private let ioQueue: DispatchQueue
     private let readBuffer = _IOBuffer()
@@ -32,8 +33,33 @@ final class SubprocessAdapter: MessengerAdapter {
 
     func start() async throws {
         guard process?.isRunning != true else { return }
-        try launchProcess()
-        try await sendInit()
+        do {
+            try launchProcess()
+            try await sendInit()
+        } catch {
+            // Subprocess may have printed why it died on stderr. Bubble that up so
+            // the user sees "ModuleNotFoundError: telethon" instead of just
+            // "Adapter process closed unexpectedly".
+            let detail = drainStderr()
+            if !detail.isEmpty {
+                throw AdapterError.initFailed("\(error.localizedDescription)\n\(detail)")
+            }
+            throw error
+        }
+    }
+
+    /// Non-blocking read of whatever stderr has accumulated since start.
+    /// Returns the trimmed last ~600 chars so a verbose Python stack trace
+    /// surfaces only its final, most actionable lines.
+    private func drainStderr() -> String {
+        guard let handle = stderrHandle else { return "" }
+        let data = handle.availableData
+        guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return "" }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count > 600 {
+            return String(trimmed.suffix(600))
+        }
+        return trimmed
     }
 
     func stop() {
@@ -48,17 +74,18 @@ final class SubprocessAdapter: MessengerAdapter {
     private func launchProcess() throws {
         // Allow relaunch if the previous process has already exited.
         if let existing = process, existing.isRunning { return }
-        process = nil; writeHandle = nil; readHandle = nil
+        process = nil; writeHandle = nil; readHandle = nil; stderrHandle = nil
         readBuffer.data.removeAll()
         let p = Process()
         let inPipe = Pipe()
         let outPipe = Pipe()
+        let errPipe = Pipe()
 
         p.executableURL = URL(fileURLWithPath: adapterPath)
         p.arguments = adapterArgs
         p.standardInput = inPipe
         p.standardOutput = outPipe
-        p.standardError = Pipe()
+        p.standardError = errPipe
 
         p.terminationHandler = { [weak self] _ in
             self?.healthStatus = .error
@@ -68,6 +95,8 @@ final class SubprocessAdapter: MessengerAdapter {
         process = p
         writeHandle = inPipe.fileHandleForWriting
         readHandle = outPipe.fileHandleForReading
+        // Keep the stderr handle so drainStderr() can read it on start failure.
+        stderrHandle = errPipe.fileHandleForReading
     }
 
     private func sendInit() async throws {

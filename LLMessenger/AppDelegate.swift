@@ -459,8 +459,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Shared retry handler — wired to both the chrome chip and the per-card
     /// "Retry now" button. Ensures the adapter exists (re-registers from settings
-    /// if needed), polls once, and surfaces any failure via appState.lastError so
-    /// the user sees what actually went wrong instead of a silent no-op.
+    /// if needed), takes service-specific auto-repair actions before polling
+    /// (e.g. restart the Signal watch daemon if it looks stuck), polls once,
+    /// and surfaces any failure via appState.lastError so the user sees what
+    /// actually went wrong instead of a silent no-op or a vague "daemon stuck".
     @MainActor
     private func retryService(_ serviceID: String) async {
         guard let engine = pollEngine, let db = database, let state = appState else { return }
@@ -471,6 +473,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             state.lastError = "\(Theme.serviceName(serviceID)) isn't configured yet — set it up in Settings → Services first."
             return
         }
+
+        // Service-specific auto-repair: don't just tell the user the daemon
+        // might be stuck — *fix* it before polling.
+        if serviceID == "signal",
+           let signal = state.adapters["signal"] as? SignalCLIAdapter {
+            _ = await signal.restartWatchDaemon()
+            // Brief pause so the daemon's first poll lands before we retry.
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+        }
+
         do {
             try await engine.pollNow(serviceID: serviceID)
             state.lastError = nil

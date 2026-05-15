@@ -707,11 +707,10 @@ private struct ServiceCard: View {
         )
     }
 
-    /// Opens the Full Disk Access pane in System Settings. macOS's URL-scheme
-    /// dispatch via `/usr/bin/open <url>` is the recommended path — passing -b
-    /// com.apple.systempreferences alongside the URL was treating the URL as a
-    /// regular argument and breaking the handoff (which is why earlier versions
-    /// fell through to Finder).
+    /// Opens the Full Disk Access pane in System Settings. macOS has been
+    /// notoriously flaky here across versions (sandbox restrictions, deep-link
+    /// changes, races with a running System Settings instance), so we try
+    /// four strategies in order and stop at the first success.
     private func openFullDiskAccessSettings() {
         let urls = [
             // macOS 13+ canonical deep-link
@@ -721,11 +720,52 @@ private struct ServiceCard: View {
             // Privacy root as last-ditch
             "x-apple.systempreferences:com.apple.preference.security"
         ]
-        for urlString in urls {
-            guard let url = URL(string: urlString) else { continue }
-            if NSWorkspace.shared.open(url) { return }
+
+        // Strategy 1: /usr/bin/open <url>. This is what `open` in Terminal does;
+        // it bypasses any sandboxing on NSWorkspace and almost always works.
+        for u in urls {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = [u]
+            do {
+                try task.run()
+                task.waitUntilExit()
+                if task.terminationStatus == 0 { return }
+            } catch {
+                continue
+            }
         }
-        // Final fallback: reveal LLMessenger.app in Finder so the user can drag it
+
+        // Strategy 2: NSWorkspace.shared.open with each URL.
+        for u in urls {
+            if let url = URL(string: u), NSWorkspace.shared.open(url) { return }
+        }
+
+        // Strategy 3: AppleScript reveal — works around URL-scheme weirdness
+        // by going through the System Settings app directly. Tries both the
+        // macOS 13+ "System Settings" and the legacy "System Preferences" name.
+        let scripts = [
+            """
+            tell application "System Settings"
+                activate
+                reveal anchor "Privacy_AllFiles" of pane id "com.apple.preference.security"
+            end tell
+            """,
+            """
+            tell application "System Preferences"
+                activate
+                reveal anchor "Privacy_AllFiles" of pane id "com.apple.preference.security"
+            end tell
+            """
+        ]
+        for source in scripts {
+            guard let script = NSAppleScript(source: source) else { continue }
+            var err: NSDictionary?
+            _ = script.executeAndReturnError(&err)
+            if err == nil { return }
+        }
+
+        // Strategy 4: reveal LLMessenger.app in Finder so the user can drag it
         // into the FDA list themselves.
         NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
     }
