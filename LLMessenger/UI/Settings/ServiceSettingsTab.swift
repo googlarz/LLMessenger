@@ -10,15 +10,24 @@ struct ServiceSettingsTab: View {
     @State private var telegramApiHash: String = ""
     @State private var saveStatus: SaveStatus = .idle
     @State private var healthByService: [String: ServiceHealth] = [:]
+    @State private var isBuildingSummaries = false
+    @State private var isSyncingContacts = false
+    @State private var maintenanceStatus: String? = nil
     private let repo: SettingsRepository
+    private let onBuild7DaySummaries: (() async -> Void)?
+    private let onSyncContacts: (() async -> Void)?
 
     enum SaveStatus: Equatable {
         case idle, saved
         case error(String)
     }
 
-    init(database: AppDatabase? = nil) {
+    init(database: AppDatabase? = nil,
+         onBuild7DaySummaries: (() async -> Void)? = nil,
+         onSyncContacts: (() async -> Void)? = nil) {
         repo = SettingsRepository(database: database)
+        self.onBuild7DaySummaries = onBuild7DaySummaries
+        self.onSyncContacts = onSyncContacts
     }
 
     var body: some View {
@@ -34,6 +43,7 @@ struct ServiceSettingsTab: View {
                             health: healthByService[cfg.service]
                         )
                     }
+                    maintenanceSection
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
@@ -89,6 +99,78 @@ struct ServiceSettingsTab: View {
         } catch {
             saveStatus = .error(error.localizedDescription)
         }
+    }
+
+    @ViewBuilder
+    private var maintenanceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Data")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+
+            HStack(spacing: 10) {
+                Button {
+                    Task { await runBuildSummaries() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isBuildingSummaries {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "clock.arrow.circlepath")
+                        }
+                        Text("Build 7-day summary")
+                    }
+                }
+                .disabled(isBuildingSummaries || onBuild7DaySummaries == nil)
+
+                Button {
+                    Task { await runSyncContacts() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isSyncingContacts {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "person.2.arrow.trianglehead.counterclockwise")
+                        }
+                        Text("Sync contacts")
+                    }
+                }
+                .disabled(isSyncingContacts || onSyncContacts == nil)
+
+                Spacer()
+            }
+
+            Text(maintenanceStatus ?? "Generates per-conversation context the AI uses to recall older threads. Contact sync refreshes the @ mention picker.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Theme.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Theme.border, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func runBuildSummaries() async {
+        guard let action = onBuild7DaySummaries else { return }
+        isBuildingSummaries = true
+        maintenanceStatus = "Building 7-day summary — this may take a minute…"
+        await action()
+        isBuildingSummaries = false
+        maintenanceStatus = "7-day summary built. New briefs will recall this context."
+    }
+
+    private func runSyncContacts() async {
+        guard let action = onSyncContacts else { return }
+        isSyncingContacts = true
+        maintenanceStatus = "Syncing contacts…"
+        await action()
+        isSyncingContacts = false
+        maintenanceStatus = "Contacts synced."
     }
 }
 

@@ -192,6 +192,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.onboardingWindowController = controller
                 controller.show()
             }
+            settingsController.onBuild7DaySummaries = { [weak self] in
+                guard let self else { return }
+                let adapters = self.appState?.adapters ?? [:]
+                self.appState?.briefGenerationState = .summarizing
+                do {
+                    _ = try await self.briefEngine?.summarizeLast(hours: 168, adapters: adapters)
+                    self.appState?.briefGenerationState = .complete
+                    self.appState?.lastError = nil
+                } catch {
+                    self.appState?.briefGenerationState = .failed
+                    self.appState?.lastError = error.localizedDescription
+                }
+                self.appState?.refreshBriefs()
+            }
+            settingsController.onSyncContacts = { [weak self] in
+                self?.appState?.contactDirectory.refresh()
+            }
             let openSettings: () -> Void = { [weak settingsController] in settingsController?.show() }
             menuBar.onOpenSettings = openSettings
             state.onOpenSettings = openSettings

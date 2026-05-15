@@ -6,6 +6,8 @@ import SwiftUI
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let database: AppDatabase
     var onRunSetup: (() -> Void)?
+    var onBuild7DaySummaries: (() async -> Void)?
+    var onSyncContacts: (() async -> Void)?
 
     init(database: AppDatabase) {
         self.database = database
@@ -27,9 +29,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.delegate = self
 
         // contentView set after super.init so we can capture self
-        window.contentView = NSHostingView(rootView: SettingsView(database: database, onRunSetup: { [weak self] in
-            self?.onRunSetup?()
-        }))
+        window.contentView = NSHostingView(rootView: SettingsView(
+            database: database,
+            onRunSetup: { [weak self] in self?.onRunSetup?() },
+            onBuild7DaySummaries: { [weak self] in await self?.onBuild7DaySummaries?() },
+            onSyncContacts: { [weak self] in await self?.onSyncContacts?() }
+        ))
     }
 
     required init?(coder: NSCoder) { fatalError() }

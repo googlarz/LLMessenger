@@ -136,6 +136,20 @@ final class AppState: ObservableObject {
     /// unread badge in sync after the user opens a brief (which flips it to "open").
     var onBriefsChanged: (() -> Void)?
 
+    /// Shared contact directory — one instance app-wide. Lazily built so callers can
+    /// always read it via @EnvironmentObject from the chat window or invoke `refresh()`
+    /// from the Settings panel. Backing adapters are accessed through the AppState ref,
+    /// so the directory always sees the current adapter list.
+    lazy var contactDirectory: ContactDirectory = {
+        ContactDirectory(
+            adapters: { [weak self] in
+                guard let self else { return [] }
+                return Array(self.adapters.values)
+            },
+            repository: repository
+        )
+    }()
+
     init(database: AppDatabase,
          llmClient: LLMClient,
          llmModel: String,
@@ -225,16 +239,6 @@ final class AppState: ObservableObject {
 
     func makeChatViewModel() -> ChatViewModel {
         ChatViewModel(appState: self)
-    }
-
-    func makeContactDirectory() -> ContactDirectory {
-        ContactDirectory(
-            adapters: { [weak self] in
-                guard let self else { return [] }
-                return Array(self.adapters.values)
-            },
-            repository: repository
-        )
     }
 
     func makeSettingsRepository() -> SettingsRepository {
