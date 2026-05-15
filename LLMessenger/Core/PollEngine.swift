@@ -269,6 +269,13 @@ final class PollEngine {
                 )
                 try health.save(db)
             }
+            // Notify any UI observers that the DB-backed health record changed.
+            // Settings → Services subscribes to this so cards repaint after every
+            // poll (background or manual retry).
+            NotificationCenter.default.post(
+                name: Notification.Name("com.llmessenger.serviceHealthDidChange"),
+                object: nil
+            )
         } catch {
             assertionFailure("writeHealth failed: \(error)")
         }

@@ -6,6 +6,9 @@ extension Notification.Name {
     /// Posted by LLMSettingsTab when provider, API key, or cloud consent changes.
     /// AppDelegate observes this to hot-swap the LLM client without requiring a restart.
     static let llmProviderDidChange = Notification.Name("com.llmessenger.llmProviderDidChange")
+    /// Posted after any health-record write (retry, poll completion, error). The
+    /// Settings tab listens to re-read the health dict and repaint cards.
+    static let serviceHealthDidChange = Notification.Name("com.llmessenger.serviceHealthDidChange")
 }
 
 @MainActor
@@ -490,6 +493,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             state.lastError = "\(Theme.serviceName(serviceID)) retry failed: \(error.localizedDescription)"
         }
         state.updateServiceHealth(engine.currentServiceHealth)
+        // Tell the Settings tab to re-read health from the DB so the card repaints
+        // green/red without the user having to navigate away and back.
+        NotificationCenter.default.post(name: .serviceHealthDidChange, object: nil)
     }
 
     /// Registers (or refreshes) a single service adapter from current settings.

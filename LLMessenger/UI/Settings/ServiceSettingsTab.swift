@@ -79,6 +79,15 @@ struct ServiceSettingsTab: View {
             .padding(.vertical, 12)
         }
         .onAppear { load() }
+        // Refresh health + configs whenever a retry or background poll
+        // updates the DB, so the cards repaint without the user toggling
+        // away and back to this tab.
+        .onReceive(NotificationCenter.default.publisher(for: .serviceHealthDidChange)) { _ in
+            load()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .serviceConfigDidChange)) { _ in
+            load()
+        }
     }
 
     private func load() {
@@ -772,9 +781,31 @@ private struct ServiceCard: View {
             if err == nil { return }
         }
 
-        // Strategy 5: reveal LLMessenger.app in Finder so the user can drag it
-        // into the FDA list themselves.
-        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+        // Strategy 5: every programmatic path failed. Don't silently dump the
+        // user in Finder — explain what's happening and offer manual steps
+        // plus an explicit "Reveal in Finder" button if they still want it.
+        showManualFDAInstructions()
+    }
+
+    private func showManualFDAInstructions() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Couldn't open System Settings automatically"
+        alert.informativeText = """
+        macOS blocked all the ways this app can open System Settings — usually because Automation permission is denied for LLMessenger.
+
+        Open it manually:
+        1. Apple menu → System Settings
+        2. Privacy & Security → Full Disk Access
+        3. Click the + button
+        4. Choose LLMessenger.app from your Applications folder
+        5. Quit and reopen LLMessenger
+        """
+        alert.addButton(withTitle: "Reveal LLMessenger.app in Finder")
+        alert.addButton(withTitle: "OK")
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+        }
     }
 
     private func startTelegramSignIn() {
