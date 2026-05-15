@@ -716,47 +716,30 @@ private struct ServiceCard: View {
         )
     }
 
-    /// Opens the Full Disk Access pane in System Settings. macOS's URL-scheme
-    /// dispatch (used by both NSWorkspace.open and /usr/bin/open) silently fails
-    /// on some installs with LaunchServices error -600 — verified empirically.
-    /// AppleScript goes through the System Settings app directly and works even
-    /// when URL dispatch is broken, so it's tried FIRST.
+    /// Opens the Full Disk Access pane in System Settings. AppleScript is
+    /// deliberately NOT used here — even when wrapped in `try` and with errors
+    /// returned via NSAppleScript's err dictionary, macOS still throws a
+    /// synchronous user-facing "System Settings is not open anymore" alert
+    /// before our error handler can fall through to the next strategy.
+    /// NSWorkspace.shared.open is silent on failure, so we use that.
     private func openFullDiskAccessSettings() {
-        // Strategy 1: AppleScript reveal — most robust because it doesn't depend
-        // on LaunchServices URL handlers being registered. Tries both macOS 13+
-        // "System Settings" and the legacy "System Preferences" app name.
-        let scripts = [
-            """
-            tell application "System Settings"
-                activate
-                reveal anchor "Privacy_AllFiles" of pane id "com.apple.preference.security"
-            end tell
-            """,
-            """
-            tell application "System Preferences"
-                activate
-                reveal anchor "Privacy_AllFiles" of pane id "com.apple.preference.security"
-            end tell
-            """
-        ]
-        for source in scripts {
-            guard let script = NSAppleScript(source: source) else { continue }
-            var err: NSDictionary?
-            _ = script.executeAndReturnError(&err)
-            if err == nil { return }
+        let urls = [
+            URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"),
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"),
+            URL(string: "x-apple.systempreferences:com.apple.preference.security")
+        ].compactMap { $0 }
+
+        // Strategy 1: NSWorkspace.shared.open — silent on failure, never raises a dialog.
+        for url in urls {
+            if NSWorkspace.shared.open(url) { return }
         }
 
-        let urls = [
-            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles",
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
-            "x-apple.systempreferences:com.apple.preference.security"
-        ]
-
-        // Strategy 2: /usr/bin/open <url> via Process.
-        for u in urls {
+        // Strategy 2: shell out to /usr/bin/open — works around any NSWorkspace
+        // sandbox restrictions on the calling process.
+        for url in urls {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            task.arguments = [u]
+            task.arguments = [url.absoluteString]
             do {
                 try task.run()
                 task.waitUntilExit()
@@ -766,24 +749,8 @@ private struct ServiceCard: View {
             }
         }
 
-        // Strategy 3: NSWorkspace.shared.open.
-        for u in urls {
-            if let url = URL(string: u), NSWorkspace.shared.open(url) { return }
-        }
-
-        // Strategy 4: just launch System Settings.app by name, no deep-link.
-        let launchScript = """
-        tell application "System Settings" to activate
-        """
-        if let s = NSAppleScript(source: launchScript) {
-            var err: NSDictionary?
-            _ = s.executeAndReturnError(&err)
-            if err == nil { return }
-        }
-
-        // Strategy 5: every programmatic path failed. Don't silently dump the
-        // user in Finder — explain what's happening and offer manual steps
-        // plus an explicit "Reveal in Finder" button if they still want it.
+        // Strategy 3: every programmatic path failed. Show clear manual steps
+        // instead of silently dumping the user in Finder.
         showManualFDAInstructions()
     }
 
