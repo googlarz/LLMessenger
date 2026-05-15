@@ -8,6 +8,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     var onRunSetup: (() -> Void)?
     var onBuild7DaySummaries: (() async -> Void)?
     var onSyncContacts: (() async -> Void)?
+    var onRetryService: ((String) async -> Void)?
 
     init(database: AppDatabase) {
         self.database = database
@@ -36,7 +37,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             database: database,
             onRunSetup: { [weak self] in self?.onRunSetup?() },
             onBuild7DaySummaries: { [weak self] in await self?.onBuild7DaySummaries?() },
-            onSyncContacts: { [weak self] in await self?.onSyncContacts?() }
+            onSyncContacts: { [weak self] in await self?.onSyncContacts?() },
+            onRetryService: { [weak self] svc in await self?.onRetryService?(svc) }
         ))
     }
 

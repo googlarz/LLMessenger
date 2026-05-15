@@ -6,6 +6,7 @@ struct SettingsView: View {
     var onRunSetup: (() -> Void)? = nil
     var onBuild7DaySummaries: (() async -> Void)? = nil
     var onSyncContacts: (() async -> Void)? = nil
+    var onRetryService: ((String) async -> Void)? = nil
 
     var body: some View {
         TabView {
@@ -15,7 +16,8 @@ struct SettingsView: View {
 
             ServiceSettingsTab(database: database,
                                onBuild7DaySummaries: onBuild7DaySummaries,
-                               onSyncContacts: onSyncContacts)
+                               onSyncContacts: onSyncContacts,
+                               onRetryService: onRetryService)
                 .tabItem { Label("Services", systemImage: "antenna.radiowaves.left.and.right") }
                 .tag(1)
 

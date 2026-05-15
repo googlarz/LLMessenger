@@ -16,6 +16,7 @@ struct ServiceSettingsTab: View {
     private let repo: SettingsRepository
     private let onBuild7DaySummaries: (() async -> Void)?
     private let onSyncContacts: (() async -> Void)?
+    private let onRetryService: ((String) async -> Void)?
 
     enum SaveStatus: Equatable {
         case idle, saved
@@ -24,10 +25,12 @@ struct ServiceSettingsTab: View {
 
     init(database: AppDatabase? = nil,
          onBuild7DaySummaries: (() async -> Void)? = nil,
-         onSyncContacts: (() async -> Void)? = nil) {
+         onSyncContacts: (() async -> Void)? = nil,
+         onRetryService: ((String) async -> Void)? = nil) {
         repo = SettingsRepository(database: database)
         self.onBuild7DaySummaries = onBuild7DaySummaries
         self.onSyncContacts = onSyncContacts
+        self.onRetryService = onRetryService
     }
 
     var body: some View {
@@ -40,7 +43,8 @@ struct ServiceSettingsTab: View {
                             signalAccount: $signalAccount,
                             telegramApiId: $telegramApiId,
                             telegramApiHash: $telegramApiHash,
-                            health: healthByService[cfg.service]
+                            health: healthByService[cfg.service],
+                            onRetry: onRetryService
                         )
                     }
                     maintenanceSection
@@ -182,12 +186,14 @@ private struct ServiceCard: View {
     @Binding var telegramApiId: String
     @Binding var telegramApiHash: String
     var health: ServiceHealth?
+    var onRetry: ((String) async -> Void)? = nil
 
     @State private var showingTelegramSignIn = false
     @State private var telegramSignInAdapter: SubprocessAdapter? = nil
     @State private var telegramSignInError: String? = nil
     @State private var showingSlackWorkspaces = false
     @State private var slackWorkspaceCount: Int = SlackWorkspaceStore.load().count
+    @State private var isRetrying = false
 
     private var service: String { config.service }
 
@@ -265,6 +271,7 @@ private struct ServiceCard: View {
             Spacer()
             Toggle("", isOn: $config.enabled)
                 .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                .tint(.green)
         }
         .padding(14)
         .opacity(0.7)
@@ -306,7 +313,7 @@ private struct ServiceCard: View {
                 Spacer()
                 Toggle("", isOn: $config.enabled)
                     .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                    .tint(Color(nsColor: .tertiaryLabelColor))
+                    .tint(.green)
             }
             Divider()
             brokenBodyContent(reason: reason)
@@ -314,25 +321,30 @@ private struct ServiceCard: View {
         .padding(14)
     }
 
-    /// Per-service fix UI shown below the broken-state header.
+    /// Per-service fix UI shown below the broken-state header. Every variant has at
+    /// least one actionable button so the user is never stuck staring at an error
+    /// they can't address from this screen.
     @ViewBuilder
     private func brokenBodyContent(reason: String) -> some View {
         switch service {
         case "imessage":
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("macOS needs to allow LLMessenger to read your Messages database. Grant Full Disk Access, then quit and reopen the app.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button {
-                    openFullDiskAccessSettings()
-                } label: {
-                    Label("Grant Full Disk Access", systemImage: "lock.shield")
+                HStack(spacing: 8) {
+                    Button {
+                        openFullDiskAccessSettings()
+                    } label: {
+                        Label("Grant Full Disk Access", systemImage: "lock.shield")
+                    }
+                    .buttonStyle(.borderedProminent).controlSize(.regular)
+                    retryButton
                 }
-                .buttonStyle(.borderedProminent).controlSize(.regular)
             }
         case "signal":
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Signal account is configured but the local signal-mcp daemon isn't reachable. Start it and the next poll will go green.")
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Phone number is set but the local signal-mcp watch daemon isn't responding. Start it in a terminal (`signal-mcp watch`) or use Restart, then Retry now.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
@@ -342,15 +354,29 @@ private struct ServiceCard: View {
                     TextField("+1234567890", text: $signalAccount)
                         .textFieldStyle(.roundedBorder).font(.subheadline)
                 }
+                HStack(spacing: 8) {
+                    retryButton
+                    Link("signal-mcp setup →",
+                         destination: URL(string: "https://github.com/googlarz/signal-mcp")!)
+                        .font(.caption)
+                    Spacer()
+                }
             }
         case "telegram":
-            VStack(alignment: .leading, spacing: 8) {
-                Text(reason)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(sessionFileExists
+                     ? "Telegram session exists but the adapter isn't responding. Re-sign in or try Retry now."
+                     : "Telegram session is missing. Sign in to reconnect.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if !sessionFileExists {
-                    Button("Connect Telegram") { startTelegramSignIn() }
+                HStack(spacing: 8) {
+                    Button("Re-sign in") { startTelegramSignIn() }
                         .buttonStyle(.borderedProminent).controlSize(.regular)
+                        .disabled(telegramApiId.isEmpty || telegramApiHash.isEmpty)
+                    retryButton
+                }
+                if let err = telegramSignInError {
+                    Text(err).font(.caption).foregroundStyle(.red)
                 }
             }
             .sheet(isPresented: $showingTelegramSignIn, onDismiss: {
@@ -366,12 +392,15 @@ private struct ServiceCard: View {
                 }
             }
         case "slack":
-            VStack(alignment: .leading, spacing: 8) {
-                Text("A Slack workspace token failed to authenticate. Re-add the workspace.")
+            VStack(alignment: .leading, spacing: 10) {
+                Text("A Slack workspace token failed to authenticate. Manage workspaces to re-add it, or Retry if it's a transient API hiccup.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("Manage workspaces") { showingSlackWorkspaces = true }
-                    .buttonStyle(.borderedProminent).controlSize(.regular)
+                HStack(spacing: 8) {
+                    Button("Manage workspaces") { showingSlackWorkspaces = true }
+                        .buttonStyle(.borderedProminent).controlSize(.regular)
+                    retryButton
+                }
             }
             .sheet(isPresented: $showingSlackWorkspaces, onDismiss: {
                 slackWorkspaceCount = SlackWorkspaceStore.load().count
@@ -381,6 +410,32 @@ private struct ServiceCard: View {
             }
         default:
             EmptyView()
+        }
+    }
+
+    /// "Retry now" trigger that calls back into AppDelegate → pollEngine.pollNow.
+    /// Hidden when no callback was provided (e.g. previews/tests).
+    @ViewBuilder
+    private var retryButton: some View {
+        if onRetry != nil {
+            Button {
+                Task {
+                    isRetrying = true
+                    await onRetry?(service)
+                    isRetrying = false
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    if isRetrying {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    Text("Retry now")
+                }
+            }
+            .controlSize(.regular)
+            .disabled(isRetrying)
         }
     }
 
@@ -403,6 +458,7 @@ private struct ServiceCard: View {
                 Spacer()
                 Toggle("", isOn: $config.enabled)
                     .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    .tint(.green)
             }
             .padding(14)
 
@@ -651,34 +707,35 @@ private struct ServiceCard: View {
         )
     }
 
-    /// Reliably opens the Full Disk Access pane in System Settings. The direct deep-link
-    /// often races with an already-running System Settings instance and flashes
-    /// "is not open anymore" — terminating any existing instance first works around it.
-    /// Fallback chain: deep-link → Privacy root → reveal the bundle in Finder so the
-    /// user can drag it in manually.
+    /// Opens the Full Disk Access pane in System Settings. NSWorkspace.shared.open
+    /// historically raced with a running System Settings instance and surfaced
+    /// "The application System Settings is not open anymore". Shelling out to
+    /// /usr/bin/open with -b com.apple.systempreferences side-steps the race and
+    /// just works on macOS 13/14/15.
     private func openFullDiskAccessSettings() {
-        // 1. Politely quit any running System Settings so the deep-link reliably opens fresh.
-        for app in NSWorkspace.shared.runningApplications
-            where app.bundleIdentifier == "com.apple.systempreferences" {
-            app.terminate()
-        }
-        // 2. After a tiny pause, open the deep link.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            let urls = [
-                // macOS 13+ canonical deep-link
-                URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"),
-                // Legacy form (still works on some installs)
-                URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"),
-                // Privacy root as last-ditch
-                URL(string: "x-apple.systempreferences:com.apple.preference.security")
-            ].compactMap { $0 }
-            for url in urls {
-                if NSWorkspace.shared.open(url) { return }
+        let urls = [
+            // macOS 13+ canonical deep-link
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles",
+            // Legacy form (still works on most installs)
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+            // Privacy root as last-ditch
+            "x-apple.systempreferences:com.apple.preference.security"
+        ]
+        for url in urls {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = ["-b", "com.apple.systempreferences", url]
+            do {
+                try process.run()
+                process.waitUntilExit()
+                if process.terminationStatus == 0 { return }
+            } catch {
+                continue
             }
-            // 3. Final fallback: reveal LLMessenger.app in Finder so the user can drag
-            //    it into the FDA list themselves.
-            NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
         }
+        // Final fallback: reveal LLMessenger.app in Finder so the user can drag it
+        // into the FDA list themselves.
+        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
     }
 
     private func startTelegramSignIn() {

@@ -209,6 +209,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsController.onSyncContacts = { [weak self] in
                 self?.appState?.contactDirectory.refresh()
             }
+            settingsController.onRetryService = { [weak self] serviceID in
+                guard let self else { return }
+                try? await self.pollEngine?.pollNow(serviceID: serviceID)
+                if let health = self.pollEngine?.currentServiceHealth {
+                    self.appState?.updateServiceHealth(health)
+                }
+            }
             let openSettings: () -> Void = { [weak settingsController] in settingsController?.show() }
             menuBar.onOpenSettings = openSettings
             state.onOpenSettings = openSettings
