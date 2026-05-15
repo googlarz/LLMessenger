@@ -2,7 +2,12 @@ import Foundation
 
 final class SubprocessAdapter: MessengerAdapter {
     let serviceID: String
-    private(set) var healthStatus: AdapterHealthResult.Status = .ok
+    // .warning until start() has successfully completed. Matters because
+    // PollEngine.pollOnce only calls adapter.start() when healthStatus != .ok;
+    // if we default to .ok the subprocess never spawns and fetch() throws
+    // .notRunning. The other three adapters (iMessage/Signal/Slack) also
+    // default to .warning for the same reason.
+    private(set) var healthStatus: AdapterHealthResult.Status = .warning
 
     private let adapterPath: String
     private let adapterArgs: [String]
@@ -36,7 +41,11 @@ final class SubprocessAdapter: MessengerAdapter {
         do {
             try launchProcess()
             try await sendInit()
+            // Flip to .ok so PollEngine.pollOnce stops retrying start() and
+            // moves on to fetch() on subsequent polls.
+            healthStatus = .ok
         } catch {
+            healthStatus = .error
             // Subprocess may have printed why it died on stderr. Bubble that up so
             // the user sees "ModuleNotFoundError: telethon" instead of just
             // "Adapter process closed unexpectedly".
