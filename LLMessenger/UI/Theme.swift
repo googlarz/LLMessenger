@@ -24,12 +24,14 @@ enum Theme {
     static let serviceIMessage = Color(red: 0.29, green: 0.73, blue: 0.38)
     static let serviceTelegram = Color(red: 0.25, green: 0.60, blue: 0.85)
     static let serviceSignal   = Color(red: 0.38, green: 0.48, blue: 0.88)
+    static let serviceSlack    = Color(red: 0.55, green: 0.36, blue: 0.66)
 
     static func serviceName(_ service: String) -> String {
         switch service {
         case "imessage": return "iMessage"
         case "telegram": return "Telegram"
         case "signal":   return "Signal"
+        case "slack":    return "Slack"
         default:         return service.capitalized
         }
     }
@@ -39,6 +41,7 @@ enum Theme {
         case "imessage": return serviceIMessage
         case "telegram": return serviceTelegram
         case "signal":   return serviceSignal
+        case "slack":    return serviceSlack
         default:         return accent
         }
     }

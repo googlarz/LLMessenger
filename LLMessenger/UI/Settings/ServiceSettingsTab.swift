@@ -1,7 +1,7 @@
 // LLMessenger/UI/Settings/ServiceSettingsTab.swift
 import SwiftUI
 
-private let kAllServices = ["imessage", "signal", "telegram"]
+private let kAllServices = ["imessage", "signal", "telegram", "slack"]
 
 struct ServiceSettingsTab: View {
     @State private var configs: [ServiceConfig] = kAllServices.map { ServiceConfig.default(for: $0) }
@@ -186,6 +186,8 @@ private struct ServiceCard: View {
     @State private var showingTelegramSignIn = false
     @State private var telegramSignInAdapter: SubprocessAdapter? = nil
     @State private var telegramSignInError: String? = nil
+    @State private var showingSlackWorkspaces = false
+    @State private var slackWorkspaceCount: Int = SlackWorkspaceStore.load().count
 
     private var service: String { config.service }
 
@@ -295,6 +297,34 @@ private struct ServiceCard: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.subheadline)
             }
+        } else if service == "slack" {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Workspaces")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 110, alignment: .leading)
+                    Text(slackWorkspaceCount == 0
+                         ? "None — add at least one to start polling."
+                         : "\(slackWorkspaceCount) workspace\(slackWorkspaceCount == 1 ? "" : "s") configured")
+                        .font(.subheadline)
+                    Spacer()
+                    Button("Manage…") { showingSlackWorkspaces = true }
+                        .controlSize(.small)
+                }
+                HStack {
+                    Spacer()
+                    Link("How to get a Slack token →",
+                         destination: URL(string: "https://api.slack.com/apps")!)
+                        .font(.caption)
+                }
+            }
+            .sheet(isPresented: $showingSlackWorkspaces, onDismiss: {
+                slackWorkspaceCount = SlackWorkspaceStore.load().count
+                NotificationCenter.default.post(name: .serviceConfigDidChange, object: nil)
+            }) {
+                SlackWorkspacesView()
+            }
         } else if service == "telegram" {
             VStack(spacing: 8) {
                 HStack {
@@ -366,6 +396,7 @@ private struct ServiceCard: View {
         case "imessage": return "iMessage"
         case "signal":   return "Signal"
         case "telegram": return "Telegram"
+        case "slack":    return "Slack"
         default:         return service.capitalized
         }
     }
@@ -375,6 +406,7 @@ private struct ServiceCard: View {
         case "imessage": return "message.fill"
         case "signal":   return "lock.shield.fill"
         case "telegram": return "paperplane.fill"
+        case "slack":    return "number"
         default:         return "antenna.radiowaves.left.and.right"
         }
     }
@@ -384,6 +416,7 @@ private struct ServiceCard: View {
         case "imessage": return Color(red: 0.20, green: 0.78, blue: 0.35)   // iMessage green
         case "signal":   return Color(red: 0.22, green: 0.53, blue: 0.95)   // Signal blue
         case "telegram": return Color(red: 0.20, green: 0.66, blue: 0.90)   // Telegram blue
+        case "slack":    return Color(red: 0.55, green: 0.36, blue: 0.66)   // Slack aubergine
         default:         return .accentColor
         }
     }
@@ -400,6 +433,8 @@ private struct ServiceCard: View {
         case "telegram":
             return !telegramApiId.trimmingCharacters(in: .whitespaces).isEmpty
                 && !telegramApiHash.trimmingCharacters(in: .whitespaces).isEmpty
+        case "slack":
+            return slackWorkspaceCount > 0
         default:
             return false
         }
@@ -429,6 +464,7 @@ private struct ServiceCard: View {
             case "imessage": return "Available"
             case "signal":   return signalAccount
             case "telegram": return "Credentials configured"
+            case "slack":    return "\(slackWorkspaceCount) workspace\(slackWorkspaceCount == 1 ? "" : "s")"
             default:         return "Connected"
             }
         }

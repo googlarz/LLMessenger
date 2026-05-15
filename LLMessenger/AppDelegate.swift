@@ -328,6 +328,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             engine.register(adapter: imessageAdapter, config: imessageConfig)
             state.adapters["imessage"] = imessageAdapter
 
+            // Slack — register if at least one workspace token is in the Keychain.
+            // The adapter itself handles multi-workspace internally.
+            if !SlackWorkspaceStore.load().isEmpty {
+                let slackConfig = (try? db.dbQueue.read { db in
+                    try ServiceConfig.fetchOne(db, key: "slack")
+                }) ?? ServiceConfig.default(for: "slack")
+                let slackAdapter = SlackAdapter()
+                engine.register(adapter: slackAdapter, config: slackConfig)
+                state.adapters["slack"] = slackAdapter
+            }
+
             pollEngine = engine
             startTask = Task {
                 await engine.start()

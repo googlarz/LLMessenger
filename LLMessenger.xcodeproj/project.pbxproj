@@ -10,6 +10,7 @@
 		051BE19FFE796E11D9312A4E /* DeepIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 276519F649E84201C4C1D365 /* DeepIntegrationTests.swift */; };
 		0A29CB4614513C5DD5552425 /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5153C5FA624AF8042F72A30 /* AppStateTests.swift */; };
 		0AA8FC1D3F625AABF5777C9F /* SubprocessAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */; };
+		0B6747556DAC812373FD0745 /* SlackAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F863A1D7C0B0D2C9C06967 /* SlackAdapterTests.swift */; };
 		0F820A2720B766AD8F46C688 /* MentionPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CBE24D05550B0F805958D37 /* MentionPickerView.swift */; };
 		10FDEC3A7ECBB49B4D3812E1 /* PinBriefTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0942C43F58EB4A94C42A00 /* PinBriefTests.swift */; };
 		12A2A2099247A96860DD28E5 /* SearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D375CCA30EA1A7BE26C8F209 /* SearchTests.swift */; };
@@ -30,6 +31,7 @@
 		31E46F341085D08259EC4962 /* PromptBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE76AF586A612F980FC97D19 /* PromptBuilderTests.swift */; };
 		3441518A42C1C5815D1026B9 /* IntentRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865BE46F6C10FA7E2EE342A6 /* IntentRoute.swift */; };
 		34ACCAF6781DDF51A663A56F /* PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76E282A1175D7AE8E61BA9E1 /* PromptBuilder.swift */; };
+		34C2302B885F6FE20720220B /* SlackWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFE2E2C0171471D3DD23F19 /* SlackWorkspace.swift */; };
 		362A008262AA38403555B958 /* InstructionsSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD22DF77EE0F38928663192 /* InstructionsSettingsTab.swift */; };
 		396B16C71848A738B4564FBE /* BriefCardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7AAA3D7B964F21F64A8D29 /* BriefCardSource.swift */; };
 		3CD5F5A70910F91189DA2D0B /* PollEngineCycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 749BBC4D526298A26ACEFABB /* PollEngineCycleTests.swift */; };
@@ -41,6 +43,7 @@
 		4C99D6243BB753BAB14DE7E1 /* PriorityCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113724A6E99E26E8CD720DFE /* PriorityCorrection.swift */; };
 		502774F71461059F83BA8C05 /* SettingsRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309F6600675F13496583B3AA /* SettingsRepositoryTests.swift */; };
 		506E010AE6C91F8A4476F492 /* InstrumentationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C809F386CA25C62428FFF6DF /* InstrumentationManager.swift */; };
+		5125EF7EC0F2348B9C4B684A /* SlackAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BC84610C1FBB1A47EE9B2A4 /* SlackAdapter.swift */; };
 		55D5BEFF888909CDB585F8F2 /* DeepValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C2EEA87E1CE3CFC017BF0B /* DeepValidationTests.swift */; };
 		570A01C0F98874233CA618A5 /* MessengerAdapterTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */; };
 		57A0A183DA4F04B687597823 /* AnthropicClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5505C31BEA21DA121B801309 /* AnthropicClient.swift */; };
@@ -62,6 +65,7 @@
 		74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */; };
 		7A1C42ABBA573144C4FF9C7F /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DE9B36EDDE0DDEA40BC7DB /* OpenAIClient.swift */; };
 		7B7A3506F3DF564A1595A4A8 /* LLMessengerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */; };
+		855341464B239E648E65A068 /* SlackAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB475651CD2CEBBB7A66D36 /* SlackAPIClient.swift */; };
 		85D75B32679B8196954EE50E /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C06B210F56BF4ED8F4EDD76 /* NotificationManager.swift */; };
 		89D9474481B146BB8EFB761C /* BriefEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 306739C4ABE143E1957D677D /* BriefEngineTests.swift */; };
 		8F6E46E1E8A362D1B0918AE5 /* MessengerAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */; };
@@ -85,6 +89,7 @@
 		AF6BE9979D35F02876AF59D8 /* AutoLaunchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 806576F921F0C0A99AB00DC3 /* AutoLaunchManager.swift */; };
 		B3CF5BF36060C33F25099D53 /* ChatViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B8A33ADE90F0EC79A61D4D /* ChatViewModelTests.swift */; };
 		B47F50B3DD0A86EE369C8549 /* BriefListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17E2FC6E580C483A5220F007 /* BriefListView.swift */; };
+		B69FC59BC25181FC0389FB9D /* SlackWorkspacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 724CEB5405989BE4B7824CA8 /* SlackWorkspacesView.swift */; };
 		B93451BF2E596033EE00C54C /* BriefCardRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1551568E73E6646226FE66C3 /* BriefCardRecord.swift */; };
 		BAB6F302E2FD6409D2BEEAA5 /* BriefRepositoryExtendedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */; };
 		BCFC2235AC318EA2A9019F83 /* ConversationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95C2ACF68692E965BA4055BA /* ConversationStateTests.swift */; };
@@ -135,6 +140,7 @@
 		077FE5D051B4131476BEDD07 /* LLMessenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LLMessenger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubprocessAdapter.swift; sourceTree = "<group>"; };
 		09D44892CD851C4994CEA012 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
+		09F863A1D7C0B0D2C9C06967 /* SlackAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAdapterTests.swift; sourceTree = "<group>"; };
 		0B01BD5888FD90D28050A644 /* ServiceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealth.swift; sourceTree = "<group>"; };
 		113724A6E99E26E8CD720DFE /* PriorityCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriorityCorrection.swift; sourceTree = "<group>"; };
 		14DE9B36EDDE0DDEA40BC7DB /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
@@ -147,6 +153,7 @@
 		2415F8132629B43CC77A08F8 /* ChatWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWindowController.swift; sourceTree = "<group>"; };
 		26D15D68069F866198719ECA /* ConversationContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContext.swift; sourceTree = "<group>"; };
 		276519F649E84201C4C1D365 /* DeepIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepIntegrationTests.swift; sourceTree = "<group>"; };
+		2AFE2E2C0171471D3DD23F19 /* SlackWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackWorkspace.swift; sourceTree = "<group>"; };
 		306739C4ABE143E1957D677D /* BriefEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefEngineTests.swift; sourceTree = "<group>"; };
 		3083103C313177E5561AF1A6 /* MessageSearchResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSearchResult.swift; sourceTree = "<group>"; };
 		309F6600675F13496583B3AA /* SettingsRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepositoryTests.swift; sourceTree = "<group>"; };
@@ -178,8 +185,10 @@
 		62EF6B3B6345490B504E7D0C /* OllamaClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaClientTests.swift; sourceTree = "<group>"; };
 		66D9CFBB9722856E912EABC7 /* FrontendRobustnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontendRobustnessTests.swift; sourceTree = "<group>"; };
 		6BC6FDFCFADDCEE5A74B7FB0 /* OllamaModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaModelPicker.swift; sourceTree = "<group>"; };
+		6BC84610C1FBB1A47EE9B2A4 /* SlackAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAdapter.swift; sourceTree = "<group>"; };
 		6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepositoryExtendedTests.swift; sourceTree = "<group>"; };
 		700C9AE93DA56553E631CE85 /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
+		724CEB5405989BE4B7824CA8 /* SlackWorkspacesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackWorkspacesView.swift; sourceTree = "<group>"; };
 		749BBC4D526298A26ACEFABB /* PollEngineCycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollEngineCycleTests.swift; sourceTree = "<group>"; };
 		758A1B093F09B6DE98D3613C /* BriefHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefHeaderView.swift; sourceTree = "<group>"; };
 		764C95853B55B31A7FDBCA54 /* ConversationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationState.swift; sourceTree = "<group>"; };
@@ -215,6 +224,7 @@
 		C809F386CA25C62428FFF6DF /* InstrumentationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentationManager.swift; sourceTree = "<group>"; };
 		C8B86E6E485D934BB3558CD3 /* BackendWorkflowE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendWorkflowE2ETests.swift; sourceTree = "<group>"; };
 		CC762565E52A3E618204CC24 /* BriefEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefEngine.swift; sourceTree = "<group>"; };
+		CEB475651CD2CEBBB7A66D36 /* SlackAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAPIClient.swift; sourceTree = "<group>"; };
 		D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubprocessAdapterTests.swift; sourceTree = "<group>"; };
 		D2E743B88282AE993C10C526 /* BriefProseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefProseView.swift; sourceTree = "<group>"; };
 		D375CCA30EA1A7BE26C8F209 /* SearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchTests.swift; sourceTree = "<group>"; };
@@ -397,10 +407,21 @@
 				D375CCA30EA1A7BE26C8F209 /* SearchTests.swift */,
 				309F6600675F13496583B3AA /* SettingsRepositoryTests.swift */,
 				3CEF84891E1C875158D7F4B4 /* SignalCLIAdapterTests.swift */,
+				09F863A1D7C0B0D2C9C06967 /* SlackAdapterTests.swift */,
 				D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */,
 				F27CBD218CE0D49903AC0ECE /* SystemInvariantTests.swift */,
 			);
 			path = LLMessengerTests;
+			sourceTree = "<group>";
+		};
+		49D4C07FE7D28CDA724674AC /* Slack */ = {
+			isa = PBXGroup;
+			children = (
+				6BC84610C1FBB1A47EE9B2A4 /* SlackAdapter.swift */,
+				CEB475651CD2CEBBB7A66D36 /* SlackAPIClient.swift */,
+				2AFE2E2C0171471D3DD23F19 /* SlackWorkspace.swift */,
+			);
+			path = Slack;
 			sourceTree = "<group>";
 		};
 		5E8C8AC34E3CA9EBA8112275 /* Products */ = {
@@ -464,6 +485,7 @@
 				999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */,
 				FB4B8C1E7C4BDF5C7E5490F0 /* SignalCLIAdapter.swift */,
 				08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */,
+				49D4C07FE7D28CDA724674AC /* Slack */,
 			);
 			path = Adapters;
 			sourceTree = "<group>";
@@ -505,6 +527,7 @@
 				DF6366D0E1F8A72B71A9F530 /* ServiceSettingsTab.swift */,
 				E310D3698200C661D0937036 /* SettingsView.swift */,
 				874EAADE41BC00D431B7655A /* SettingsWindowController.swift */,
+				724CEB5405989BE4B7824CA8 /* SlackWorkspacesView.swift */,
 				173C28CE4F72A153E9132291 /* TelegramSignInView.swift */,
 			);
 			path = Settings;
@@ -670,6 +693,10 @@
 				478DEBF976DFFFF26DB08556 /* SettingsView.swift in Sources */,
 				6515871374A6975B0B2432DF /* SettingsWindowController.swift in Sources */,
 				95A2593B4891EC65019E1568 /* SignalCLIAdapter.swift in Sources */,
+				855341464B239E648E65A068 /* SlackAPIClient.swift in Sources */,
+				5125EF7EC0F2348B9C4B684A /* SlackAdapter.swift in Sources */,
+				34C2302B885F6FE20720220B /* SlackWorkspace.swift in Sources */,
+				B69FC59BC25181FC0389FB9D /* SlackWorkspacesView.swift in Sources */,
 				EAB0DE7548B574521670DA15 /* SubprocessAdapter.swift in Sources */,
 				7485667FD9BB75A498987D0F /* TelegramSignInView.swift in Sources */,
 				40B16522FD6D885CF5BA5741 /* Theme.swift in Sources */,
@@ -720,6 +747,7 @@
 				12A2A2099247A96860DD28E5 /* SearchTests.swift in Sources */,
 				502774F71461059F83BA8C05 /* SettingsRepositoryTests.swift in Sources */,
 				EE574346F9B9265CA3795AB7 /* SignalCLIAdapterTests.swift in Sources */,
+				0B6747556DAC812373FD0745 /* SlackAdapterTests.swift in Sources */,
 				0AA8FC1D3F625AABF5777C9F /* SubprocessAdapterTests.swift in Sources */,
 				6590441FCAED6F40B1C1E6A9 /* SystemInvariantTests.swift in Sources */,
 			);
