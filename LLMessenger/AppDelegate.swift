@@ -330,7 +330,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Slack — register if at least one workspace token is in the Keychain.
             // The adapter itself handles multi-workspace internally.
-            if !SlackWorkspaceStore.load().isEmpty {
+            // Local-only mode skips Slack entirely so no message content leaves the Mac.
+            let isLocalOnly = SettingsRepository().loadLocalOnlyMode()
+            if !isLocalOnly, !SlackWorkspaceStore.load().isEmpty {
                 let slackConfig = (try? db.dbQueue.read { db in
                     try ServiceConfig.fetchOne(db, key: "slack")
                 }) ?? ServiceConfig.default(for: "slack")
@@ -419,6 +421,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func resolvedProvider() -> ResolvedProvider {
         let repo = SettingsRepository()
+        // Local-only mode short-circuits provider selection: Ollama only, no cloud LLMs.
+        if repo.loadLocalOnlyMode() {
+            let savedModel = repo.loadOllamaModel()
+            let provider: LLMProvider = .ollama
+            let model = savedModel.isEmpty ? provider.defaultModel : savedModel
+            return ResolvedProvider(
+                provider: provider,
+                client: provider.makeClient(apiKey: nil),
+                model: model,
+                isConfigured: true
+            )
+        }
+
         guard let provider = repo.loadSelectedLLMProvider() else {
             return ResolvedProvider(
                 provider: nil,

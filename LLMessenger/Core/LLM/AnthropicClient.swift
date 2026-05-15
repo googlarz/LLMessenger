@@ -11,8 +11,13 @@ final class AnthropicClient: LLMClient {
     }
 
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
-        let systemContent = messages.first { $0.role == .system }?.content ?? ""
-        let chatMessages = messages.filter { $0.role != .system }.map { msg -> [String: Any] in
+        // Opt-in pre-send sanitization redacts CC/SSN/IBAN/email patterns before they
+        // leave the machine. Off by default; see SettingsRepository.loadSanitizeBeforeSend.
+        let outgoing = SettingsRepository().loadSanitizeBeforeSend()
+            ? MessageSanitizer.sanitize(messages)
+            : messages
+        let systemContent = outgoing.first { $0.role == .system }?.content ?? ""
+        let chatMessages = outgoing.filter { $0.role != .system }.map { msg -> [String: Any] in
             ["role": msg.role == .user ? "user" : "assistant", "content": msg.content]
         }
 
@@ -30,14 +35,21 @@ final class AnthropicClient: LLMClient {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        let start = Date()
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            let ms = Int(Date().timeIntervalSince(start) * 1000)
+            NetworkAuditLog.shared.record(provider: "Anthropic", request: request,
+                                          status: nil, durationMs: ms, error: error)
             throw LLMError.networkFailed(error.localizedDescription)
         }
 
         guard let http = response as? HTTPURLResponse else { throw LLMError.invalidResponse }
+        let durationMs = Int(Date().timeIntervalSince(start) * 1000)
+        NetworkAuditLog.shared.record(provider: "Anthropic", request: request,
+                                      status: http.statusCode, durationMs: durationMs, error: nil)
         if http.statusCode == 429 {
             let retryAfter = http.value(forHTTPHeaderField: "retry-after").flatMap { Int($0) }
             throw LLMError.rateLimited(retryAfter: retryAfter)

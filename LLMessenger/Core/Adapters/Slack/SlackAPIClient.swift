@@ -176,10 +176,25 @@ final class SlackAPIClient {
         req.setValue("Bearer \(workspace.token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
         req.httpBody = formEncode(params).data(using: .utf8)
-        let (data, response) = try await session.data(for: req)
+        let start = Date()
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: req)
+        } catch {
+            let ms = Int(Date().timeIntervalSince(start) * 1000)
+            NetworkAuditLog.shared.record(provider: "Slack", request: req,
+                                          status: nil, durationMs: ms, error: error)
+            throw error
+        }
+        let durationMs = Int(Date().timeIntervalSince(start) * 1000)
         guard let http = response as? HTTPURLResponse else {
+            NetworkAuditLog.shared.record(provider: "Slack", request: req,
+                                          status: nil, durationMs: durationMs, error: nil)
             throw AdapterError.invalidResponse
         }
+        NetworkAuditLog.shared.record(provider: "Slack", request: req,
+                                      status: http.statusCode, durationMs: durationMs, error: nil)
         if http.statusCode == 429 {
             // Honor Retry-After if present, otherwise wait 2s.
             let retry = Int(http.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 2

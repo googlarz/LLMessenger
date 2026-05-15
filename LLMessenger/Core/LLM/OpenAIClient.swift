@@ -11,7 +11,10 @@ final class OpenAIClient: LLMClient {
     }
 
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
-        let chatMessages = messages.map { msg -> [String: Any] in
+        let outgoing = SettingsRepository().loadSanitizeBeforeSend()
+            ? MessageSanitizer.sanitize(messages)
+            : messages
+        let chatMessages = outgoing.map { msg -> [String: Any] in
             ["role": msg.role.rawValue, "content": msg.content]
         }
 
@@ -27,14 +30,21 @@ final class OpenAIClient: LLMClient {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        let start = Date()
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            let ms = Int(Date().timeIntervalSince(start) * 1000)
+            NetworkAuditLog.shared.record(provider: "OpenAI", request: request,
+                                          status: nil, durationMs: ms, error: error)
             throw LLMError.networkFailed(error.localizedDescription)
         }
 
         guard let http = response as? HTTPURLResponse else { throw LLMError.invalidResponse }
+        let durationMs = Int(Date().timeIntervalSince(start) * 1000)
+        NetworkAuditLog.shared.record(provider: "OpenAI", request: request,
+                                      status: http.statusCode, durationMs: durationMs, error: nil)
         if http.statusCode == 429 {
             let retryAfter = http.value(forHTTPHeaderField: "retry-after").flatMap { Int($0) }
             throw LLMError.rateLimited(retryAfter: retryAfter)

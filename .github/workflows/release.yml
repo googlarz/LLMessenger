@@ -1,0 +1,84 @@
+name: Release
+
+# Builds an unsigned .app from a tagged commit and uploads it as a workflow artifact.
+# Anyone can re-run this workflow on a clean macOS-14 runner to verify the binary
+# matches the source. The artifact is intentionally unsigned — users who want a
+# notarised binary should sign locally with their own Developer ID.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Ref (commit, branch, or tag) to build"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build LLMessenger.app
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Show toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Regenerate project from project.yml
+        run: xcodegen generate
+
+      - name: Build Release
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -scheme LLMessenger \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee build.log
+
+      - name: Locate built app
+        id: locate
+        run: |
+          APP="$(find build/Build/Products/Release -name 'LLMessenger.app' -maxdepth 2 | head -1)"
+          if [ -z "$APP" ]; then
+            echo "::error::LLMessenger.app not found"
+            exit 1
+          fi
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+
+      - name: Compute SHA-256 of the binary
+        run: |
+          shasum -a 256 "${{ steps.locate.outputs.app }}/Contents/MacOS/LLMessenger" | tee SHA256SUMS
+
+      - name: Zip the .app
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "${{ steps.locate.outputs.app }}" \
+            LLMessenger-unsigned.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LLMessenger-unsigned-${{ github.ref_name }}
+          path: |
+            LLMessenger-unsigned.zip
+            SHA256SUMS
+            build.log
+          retention-days: 90

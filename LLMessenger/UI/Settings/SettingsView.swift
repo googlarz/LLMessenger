@@ -19,13 +19,17 @@ struct SettingsView: View {
                 .tabItem { Label("Services", systemImage: "antenna.radiowaves.left.and.right") }
                 .tag(1)
 
+            PrivacySettingsTab()
+                .tabItem { Label("Privacy", systemImage: "lock.shield") }
+                .tag(2)
+
             InstructionsSettingsTab()
                 .tabItem { Label("Instructions", systemImage: "text.bubble") }
-                .tag(2)
+                .tag(3)
 
             AboutSettingsTab(onRunSetup: onRunSetup)
                 .tabItem { Label("About", systemImage: "info.circle") }
-                .tag(3)
+                .tag(4)
         }
         .frame(width: 540, height: 480)
         .background(Theme.bg)

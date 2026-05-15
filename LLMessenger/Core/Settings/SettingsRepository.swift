@@ -63,6 +63,27 @@ struct SettingsRepository {
         userDefaults.bool(forKey: "cloud_auto_briefs_consent")
     }
 
+    /// Local-only mode forces the LLM to Ollama and skips registering any adapter that
+    /// would send message content off this Mac (currently Slack). When this is on,
+    /// no message content can leave the machine.
+    func saveLocalOnlyMode(_ on: Bool) {
+        userDefaults.set(on, forKey: "local_only_mode")
+    }
+
+    func loadLocalOnlyMode() -> Bool {
+        userDefaults.bool(forKey: "local_only_mode")
+    }
+
+    /// Pre-send sanitization redacts patterns that match credit cards, SSNs, and emails
+    /// before the prompt is sent to a cloud LLM. Off by default.
+    func saveSanitizeBeforeSend(_ on: Bool) {
+        userDefaults.set(on, forKey: "sanitize_before_send")
+    }
+
+    func loadSanitizeBeforeSend() -> Bool {
+        userDefaults.bool(forKey: "sanitize_before_send")
+    }
+
     func saveOllamaModel(_ model: String) {
         if model.isEmpty {
             userDefaults.removeObject(forKey: "ollama_model")
