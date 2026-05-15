@@ -748,23 +748,58 @@ private struct ServiceCard: View {
 
         switch alert.runModal() {
         case .alertFirstButtonReturn:
-            // Launch System Settings.app directly with no deep-link URL.
-            // The URL hand-off via NSWorkspace.shared.open(URL) is what triggers
-            // the "is not open anymore" macOS popup on broken installs — without
-            // a URL there's nothing for System Settings to fail to handle.
-            // The user does steps 2-5 from the alert manually.
-            let appURL = URL(fileURLWithPath: "/System/Applications/System Settings.app")
-            let config = NSWorkspace.OpenConfiguration()
-            config.activates = true
-            NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, _ in
-                // No-op — async completion. We don't fall back: if even this
-                // bare launch fails, the user has the manual Apple-menu path
-                // already in front of them.
-            }
+            tryLaunchSystemSettings()
         case .alertSecondButtonReturn:
             NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
         default:
             break
+        }
+    }
+
+    /// Try multiple launch paths in sequence. Each child-process attempt runs
+    /// with its own TCC context — when in-process NSWorkspace.shared.open is
+    /// blocked at the TCC layer, shelling out to /usr/bin/open or osascript
+    /// often succeeds because they're separately approved (or unapproved at
+    /// a different boundary). If everything fails the user already has the
+    /// manual Apple-menu path in the alert above.
+    private func tryLaunchSystemSettings() {
+        // Path 1: /usr/bin/open -a "System Settings" via Process. Same as
+        // typing `open -a "System Settings"` in Terminal. Most reliable.
+        if runShell("/usr/bin/open", ["-a", "System Settings"]) { return }
+
+        // Path 2: /usr/bin/open by path. Different LaunchServices code path
+        // than -a name lookup.
+        if runShell("/usr/bin/open", ["/System/Applications/System Settings.app"]) { return }
+
+        // Path 3: osascript activate. Distinct from in-process NSAppleScript —
+        // osascript is its own binary with separate Automation TCC entries.
+        if runShell("/usr/bin/osascript",
+                    ["-e", "tell application \"System Settings\" to activate"]) {
+            return
+        }
+
+        // Path 4: in-process NSWorkspace.openApplication, no URL.
+        let appURL = URL(fileURLWithPath: "/System/Applications/System Settings.app")
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        NSWorkspace.shared.openApplication(at: appURL, configuration: config,
+                                          completionHandler: nil)
+    }
+
+    /// Runs an external command, returns true if it exited with status 0.
+    /// Stdout/stderr are captured silently so failure doesn't leak to the user.
+    private func runShell(_ executable: String, _ args: [String]) -> Bool {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: executable)
+        task.arguments = args
+        task.standardOutput = Pipe()
+        task.standardError = Pipe()
+        do {
+            try task.run()
+            task.waitUntilExit()
+            return task.terminationStatus == 0
+        } catch {
+            return false
         }
     }
 
