@@ -10,6 +10,16 @@ struct ConversationPickerView: View {
 
     @EnvironmentObject var chatViewModel: ChatViewModel
 
+    /// Prefer the human-readable display name; fall back to the service name only
+    /// when displayName is missing or identical to the opaque conversationId.
+    private func primaryLabel(for opt: ConversationOption) -> String {
+        let name = opt.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty && name != opt.convId {
+            return name
+        }
+        return Theme.serviceName(opt.service)
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Rectangle()
@@ -40,23 +50,22 @@ struct ConversationPickerView: View {
                             }
                         } label: {
                             HStack(spacing: 10) {
-                                Text("\(opt.number)")
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 22, height: 22)
-                                    .background(Theme.accent)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
                                 SourceGlyphView(service: opt.service, size: 18)
-                                Text(Theme.serviceName(opt.service))
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(Theme.textPrimary)
-                                if !opt.displayName.isEmpty && opt.displayName != opt.convId {
-                                    Text("·").foregroundStyle(Theme.textTertiary)
-                                    Text(opt.displayName)
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(Theme.textSecondary)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(primaryLabel(for: opt))
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(Theme.textPrimary)
+                                    Text(Theme.serviceName(opt.service))
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(Theme.textTertiary)
                                 }
                                 Spacer()
+                                Text("\(opt.number)")
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(Theme.textTertiary)
+                                    .frame(width: 18, height: 18)
+                                    .background(Theme.surface)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
@@ -67,7 +76,7 @@ struct ConversationPickerView: View {
                     }
                 }
 
-                Text("Or type a number and press ↵")
+                Text("Tap a row, or type a name or number and press ↵")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textTertiary)
             }

@@ -124,11 +124,11 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
-        // Case 1 — Picker resolution: user typed a number to answer an active picker.
+        // Case 1 — Picker resolution: user typed a number, service name, or
+        // contact name to answer an active picker. Matching is case-insensitive
+        // substring against displayName and the service's human name.
         if let picker = activePicker(),
-           let n = singleDigit(rawInput),
-           n >= 1 && n <= picker.options.count {
-            let chosen = picker.options[n - 1]
+           let chosen = resolvePickerChoice(rawInput, options: picker.options) {
             removePicker(id: picker.id)
             await draftReply(brief: brief,
                              originalRequest: picker.originalRequest,
@@ -945,6 +945,37 @@ final class ChatViewModel: ObservableObject {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.count == 1, let n = Int(t) else { return nil }
         return n
+    }
+
+    /// Resolves a free-text input against an active picker's options. Priority:
+    /// 1. A single digit equal to the option number.
+    /// 2. Case-insensitive substring match against the option's displayName.
+    /// 3. Case-insensitive match against the service's display name when the input
+    ///    is the bare service word ("iMessage" / "signal" / "telegram" / "slack").
+    /// Returns the unique winner only — ambiguous inputs return nil so the user
+    /// can disambiguate further.
+    private func resolvePickerChoice(_ rawInput: String,
+                                     options: [ConversationOption]) -> ConversationOption? {
+        let query = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return nil }
+
+        if let n = singleDigit(query), n >= 1 && n <= options.count {
+            return options[n - 1]
+        }
+
+        let lower = query.lowercased()
+        let nameMatches = options.filter { opt in
+            opt.displayName.lowercased().contains(lower)
+        }
+        if nameMatches.count == 1 { return nameMatches[0] }
+
+        let serviceMatches = options.filter {
+            Theme.serviceName($0.service).lowercased() == lower
+                || $0.service.lowercased() == lower
+        }
+        if serviceMatches.count == 1 { return serviceMatches[0] }
+
+        return nil
     }
 
     /// Parses "write/send/reply/message (to) <name>: <text>" into (name, text).
