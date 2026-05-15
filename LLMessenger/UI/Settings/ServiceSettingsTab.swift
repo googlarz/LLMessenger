@@ -236,10 +236,27 @@ private struct ServiceCard: View {
 
                 Spacer()
 
+                // A red "Fix" pill next to the toggle when the service has missing
+                // credentials or a hard error — makes it visually obvious that
+                // enabled ≠ working. The toggle itself only carries the user's intent.
+                if config.enabled, !isStatusGreen {
+                    Text(toggleAdornmentLabel)
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.5)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(statusColor.opacity(0.18))
+                        .foregroundStyle(statusColor == .red ? .red : .orange)
+                        .clipShape(Capsule())
+                }
+
                 Toggle("", isOn: $config.enabled)
                     .toggleStyle(.switch)
                     .labelsHidden()
                     .controlSize(.small)
+                    // Grey-out the toggle when the user has nothing to do at this point
+                    // (service is broken-but-on); avoids the "blue = good" misread.
+                    .tint(isStatusGreen ? .accentColor : Color(nsColor: .tertiaryLabelColor))
             }
             .padding(14)
 
@@ -297,9 +314,7 @@ private struct ServiceCard: View {
                         .foregroundStyle(.secondary)
                 }
                 Button("Open Privacy & Security Settings →") {
-                    NSWorkspace.shared.open(
-                        URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
-                    )
+                    openFullDiskAccessSettings()
                 }
                 .font(.caption)
                 .buttonStyle(.link)
@@ -524,6 +539,15 @@ private struct ServiceCard: View {
         return "exclamationmark"
     }
 
+    /// Pill label shown next to the toggle. Tells the user *what* action is needed
+    /// rather than just "broken".
+    private var toggleAdornmentLabel: String {
+        if !hasRequiredCredentials { return "ACTION NEEDED" }
+        if let health, health.status == "error" { return "ERROR" }
+        if let health, health.status == "warning" || isHealthStale { return "PENDING" }
+        return "PENDING"
+    }
+
     /// True when the per-service credential criteria are satisfied. A green check still
     /// requires a successful poll on top of this — credentials present alone is not enough.
     private var hasRequiredCredentials: Bool {
@@ -575,6 +599,36 @@ private struct ServiceCard: View {
         FileManager.default.fileExists(
             atPath: NSHomeDirectory() + "/.config/llmessenger/data/telegram/session.session"
         )
+    }
+
+    /// Reliably opens the Full Disk Access pane in System Settings. The direct deep-link
+    /// often races with an already-running System Settings instance and flashes
+    /// "is not open anymore" — terminating any existing instance first works around it.
+    /// Fallback chain: deep-link → Privacy root → reveal the bundle in Finder so the
+    /// user can drag it in manually.
+    private func openFullDiskAccessSettings() {
+        // 1. Politely quit any running System Settings so the deep-link reliably opens fresh.
+        for app in NSWorkspace.shared.runningApplications
+            where app.bundleIdentifier == "com.apple.systempreferences" {
+            app.terminate()
+        }
+        // 2. After a tiny pause, open the deep link.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            let urls = [
+                // macOS 13+ canonical deep-link
+                URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"),
+                // Legacy form (still works on some installs)
+                URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"),
+                // Privacy root as last-ditch
+                URL(string: "x-apple.systempreferences:com.apple.preference.security")
+            ].compactMap { $0 }
+            for url in urls {
+                if NSWorkspace.shared.open(url) { return }
+            }
+            // 3. Final fallback: reveal LLMessenger.app in Finder so the user can drag
+            //    it into the FDA list themselves.
+            NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+        }
     }
 
     private func startTelegramSignIn() {
