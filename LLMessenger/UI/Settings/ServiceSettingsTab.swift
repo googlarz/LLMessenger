@@ -707,43 +707,15 @@ private struct ServiceCard: View {
         )
     }
 
-    /// Opens the Full Disk Access pane in System Settings. macOS has been
-    /// notoriously flaky here across versions (sandbox restrictions, deep-link
-    /// changes, races with a running System Settings instance), so we try
-    /// four strategies in order and stop at the first success.
+    /// Opens the Full Disk Access pane in System Settings. macOS's URL-scheme
+    /// dispatch (used by both NSWorkspace.open and /usr/bin/open) silently fails
+    /// on some installs with LaunchServices error -600 — verified empirically.
+    /// AppleScript goes through the System Settings app directly and works even
+    /// when URL dispatch is broken, so it's tried FIRST.
     private func openFullDiskAccessSettings() {
-        let urls = [
-            // macOS 13+ canonical deep-link
-            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles",
-            // Legacy form (still works on most installs)
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
-            // Privacy root as last-ditch
-            "x-apple.systempreferences:com.apple.preference.security"
-        ]
-
-        // Strategy 1: /usr/bin/open <url>. This is what `open` in Terminal does;
-        // it bypasses any sandboxing on NSWorkspace and almost always works.
-        for u in urls {
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            task.arguments = [u]
-            do {
-                try task.run()
-                task.waitUntilExit()
-                if task.terminationStatus == 0 { return }
-            } catch {
-                continue
-            }
-        }
-
-        // Strategy 2: NSWorkspace.shared.open with each URL.
-        for u in urls {
-            if let url = URL(string: u), NSWorkspace.shared.open(url) { return }
-        }
-
-        // Strategy 3: AppleScript reveal — works around URL-scheme weirdness
-        // by going through the System Settings app directly. Tries both the
-        // macOS 13+ "System Settings" and the legacy "System Preferences" name.
+        // Strategy 1: AppleScript reveal — most robust because it doesn't depend
+        // on LaunchServices URL handlers being registered. Tries both macOS 13+
+        // "System Settings" and the legacy "System Preferences" app name.
         let scripts = [
             """
             tell application "System Settings"
@@ -765,7 +737,42 @@ private struct ServiceCard: View {
             if err == nil { return }
         }
 
-        // Strategy 4: reveal LLMessenger.app in Finder so the user can drag it
+        let urls = [
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles",
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+            "x-apple.systempreferences:com.apple.preference.security"
+        ]
+
+        // Strategy 2: /usr/bin/open <url> via Process.
+        for u in urls {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = [u]
+            do {
+                try task.run()
+                task.waitUntilExit()
+                if task.terminationStatus == 0 { return }
+            } catch {
+                continue
+            }
+        }
+
+        // Strategy 3: NSWorkspace.shared.open.
+        for u in urls {
+            if let url = URL(string: u), NSWorkspace.shared.open(url) { return }
+        }
+
+        // Strategy 4: just launch System Settings.app by name, no deep-link.
+        let launchScript = """
+        tell application "System Settings" to activate
+        """
+        if let s = NSAppleScript(source: launchScript) {
+            var err: NSDictionary?
+            _ = s.executeAndReturnError(&err)
+            if err == nil { return }
+        }
+
+        // Strategy 5: reveal LLMessenger.app in Finder so the user can drag it
         // into the FDA list themselves.
         NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
     }
