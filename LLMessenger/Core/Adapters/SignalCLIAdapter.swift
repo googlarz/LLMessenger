@@ -172,30 +172,64 @@ final class SignalCLIAdapter: MessengerAdapter {
             return AdapterHealthResult(status: .warning, reason: "signal-mcp store not found", retryAfter: nil)
         }
 
-        let stalenessResult = await checkDataFreshness()
-        if stalenessResult.isStale {
-            let hasLockConflict = detectReceiveLockConflict()
-            if hasLockConflict {
-                NSLog("[SignalCLIAdapter] Receive lock conflict detected — attempting auto-recovery")
-                let recovered = await restartWatchDaemon()
-                if recovered {
-                    NSLog("[SignalCLIAdapter] Auto-recovery: watch daemon restarted")
-                    healthStatus = .warning
-                    return AdapterHealthResult(
-                        status: .warning,
-                        reason: "Signal watch daemon was stuck (receive lock conflict) — restarted automatically",
-                        retryAfter: nil
-                    )
-                }
-            }
-            let daemonDiag = readWatchDaemonError()
-            let reason = stalenessResult.reason + (daemonDiag.map { "\n\($0)" } ?? "")
-            healthStatus = .warning
-            return AdapterHealthResult(status: .warning, reason: reason, retryAfter: nil)
+        // Daemon liveness is the source of truth. If launchd reports the watch
+        // service as running, the daemon is fine — even if the user just hasn't
+        // received any Signal messages for hours. Don't mistake "quiet" for "stuck".
+        let daemonRunning = isWatchDaemonRunning()
+        if daemonRunning {
+            healthStatus = .ok
+            return AdapterHealthResult(status: .ok, reason: nil, retryAfter: nil)
         }
 
-        healthStatus = .ok
-        return AdapterHealthResult(status: .ok, reason: nil, retryAfter: nil)
+        // Daemon is NOT running. Try the existing auto-recovery (lock conflict
+        // detection + kickstart) before giving up.
+        let hasLockConflict = detectReceiveLockConflict()
+        if hasLockConflict {
+            NSLog("[SignalCLIAdapter] Receive lock conflict detected — attempting auto-recovery")
+            let recovered = await restartWatchDaemon()
+            if recovered {
+                healthStatus = .warning
+                return AdapterHealthResult(
+                    status: .warning,
+                    reason: "Signal watch daemon was stuck — restarted; next poll will go green",
+                    retryAfter: nil
+                )
+            }
+        }
+
+        let daemonDiag = readWatchDaemonError()
+        let stale = await checkDataFreshness()
+        var reason = "Signal watch daemon isn't running. Start it (`signal-mcp watch`) or click Retry now."
+        if let diag = daemonDiag { reason += "\n" + diag }
+        if let last = stale.newestMessageDate {
+            let hours = Int(Date().timeIntervalSince(last) / 3600)
+            reason += "\nLast message synced \(hours)h ago."
+        }
+        healthStatus = .warning
+        return AdapterHealthResult(status: .warning, reason: reason, retryAfter: nil)
+    }
+
+    /// True when launchd reports gui/<uid>/com.signal-mcp.watch as running.
+    /// This is the actual signal we want — distinguishes "daemon alive, just quiet"
+    /// from "daemon dead". `launchctl print` is the canonical check.
+    private func isWatchDaemonRunning() -> Bool {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        task.arguments = ["print", "gui/\(getuid())/com.signal-mcp.watch"]
+        let outPipe = Pipe()
+        task.standardOutput = outPipe
+        task.standardError = Pipe()
+        do {
+            try task.run()
+            task.waitUntilExit()
+            guard task.terminationStatus == 0 else { return false }
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+            guard let text = String(data: data, encoding: .utf8) else { return false }
+            // launchctl print includes "state = running" when the service is up.
+            return text.contains("state = running")
+        } catch {
+            return false
+        }
     }
 
     private static let stalenessThreshold: TimeInterval = 2 * 3600
