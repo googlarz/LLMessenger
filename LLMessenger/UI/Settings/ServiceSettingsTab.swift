@@ -440,19 +440,26 @@ private struct ServiceCard: View {
         }
     }
 
+    /// Three-state model for the status dot:
+    /// - .green only when a successful poll has been recorded AND credentials still satisfy
+    ///   the per-service criteria (e.g. Slack still has ≥1 workspace).
+    /// - .orange when credentials are present but the service hasn't been verified yet,
+    ///   or when the last poll surfaced a warning.
+    /// - .red on a hard error.
+    /// - .grey when credentials are missing (or the service is disabled).
     private var statusColor: Color {
         guard config.enabled else { return Color(nsColor: .tertiaryLabelColor) }
+        if !hasRequiredCredentials { return Color(nsColor: .tertiaryLabelColor) }
         if let health, health.status == "error" { return .red }
         if let health, health.status == "warning" { return .orange }
         if let health, health.status == "ok" { return .green }
-        // No health record yet — PollEngine hasn't confirmed status.
-        // Don't trust isConnected for iMessage (isReadableFile ignores TCC/FDA).
-        if service == "imessage" { return .orange }
-        return isConnected ? .green : .orange
+        // Credentials look complete but PollEngine hasn't confirmed yet.
+        return .orange
     }
 
     private var statusLabel: String {
         guard config.enabled else { return "Disabled" }
+        if let reason = missingCredentialReason { return reason }
         if let health, health.status == "error" {
             return health.lastError ?? "Error"
         }
@@ -468,17 +475,53 @@ private struct ServiceCard: View {
             default:         return "Connected"
             }
         }
-        // No health record yet — show neutral status.
+        return "Pending first poll"
+    }
+
+    /// True when the per-service credential criteria are satisfied. A green check still
+    /// requires a successful poll on top of this — credentials present alone is not enough.
+    private var hasRequiredCredentials: Bool {
         switch service {
         case "imessage":
-            return "Checking…"
+            // Best signal we have without a real probe: the chat.db file is readable.
+            // Full Disk Access may still block a real query — surfaced via the health record.
+            let path = NSHomeDirectory() + "/Library/Messages/chat.db"
+            return FileManager.default.isReadableFile(atPath: path)
         case "signal":
-            return isConnected ? "Checking…" : "Phone number required"
+            return !signalAccount.trimmingCharacters(in: .whitespaces).isEmpty
         case "telegram":
-            if isConnected && !sessionFileExists { return "Session required" }
-            return isConnected ? "Checking…" : "API credentials required"
+            return !telegramApiId.trimmingCharacters(in: .whitespaces).isEmpty
+                && !telegramApiHash.trimmingCharacters(in: .whitespaces).isEmpty
+                && sessionFileExists
+        case "slack":
+            return slackWorkspaceCount > 0
         default:
-            return isConnected ? "Checking…" : "Not configured"
+            return false
+        }
+    }
+
+    /// Human-readable description of what's missing — only set when hasRequiredCredentials is false.
+    /// Drives the status label so the user sees the exact next step instead of a vague warning.
+    private var missingCredentialReason: String? {
+        if hasRequiredCredentials { return nil }
+        switch service {
+        case "imessage":
+            return "Full Disk Access required"
+        case "signal":
+            return signalAccount.trimmingCharacters(in: .whitespaces).isEmpty
+                ? "Phone number required"
+                : "Signal daemon not reachable"
+        case "telegram":
+            if telegramApiId.trimmingCharacters(in: .whitespaces).isEmpty
+                || telegramApiHash.trimmingCharacters(in: .whitespaces).isEmpty {
+                return "API credentials required"
+            }
+            if !sessionFileExists { return "Sign-in required" }
+            return "Not configured"
+        case "slack":
+            return "Add a workspace"
+        default:
+            return "Not configured"
         }
     }
 
