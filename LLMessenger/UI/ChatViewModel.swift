@@ -106,11 +106,16 @@ final class ChatViewModel: ObservableObject {
     private func submit(_ rawInput: String) async {
         guard !rawInput.isEmpty, let brief = currentBrief else { return }
 
+        // Echo the user's message immediately, before any routing or LLM call.
+        // Every downstream path used to append this itself; centralising it here
+        // means the bubble shows up the instant Send is tapped, and routing/LLM
+        // latency only delays the assistant's reply, not the user's own line.
+        threadItems.append(.userMessage(id: UUID(), text: rawInput))
+
         // Case 0 — Explicit @ mention target: target is already known, skip intent routing
         // and go straight to the existing draft flow.
         if let target = pendingTarget {
             pendingTarget = nil
-            threadItems.append(.userMessage(id: UUID(), text: rawInput))
             await draftReply(brief: brief,
                              originalRequest: rawInput,
                              service: target.service,
@@ -124,7 +129,6 @@ final class ChatViewModel: ObservableObject {
            let n = singleDigit(rawInput),
            n >= 1 && n <= picker.options.count {
             let chosen = picker.options[n - 1]
-            threadItems.append(.userMessage(id: UUID(), text: rawInput))
             removePicker(id: picker.id)
             await draftReply(brief: brief,
                              originalRequest: picker.originalRequest,
@@ -146,7 +150,6 @@ final class ChatViewModel: ObservableObject {
                 if await processLegacyShortcuts(brief: brief, rawInput: rawInput) {
                     return
                 }
-                threadItems.append(.userMessage(id: UUID(), text: rawInput))
                 processAssistantResponseText(responseText,
                                              originalRequest: rawInput,
                                              services: briefServices(for: brief))
@@ -156,7 +159,6 @@ final class ChatViewModel: ObservableObject {
             if await processLegacyShortcuts(brief: brief, rawInput: rawInput) {
                 return
             }
-            threadItems.append(.userMessage(id: UUID(), text: rawInput))
             threadItems.append(.assistantResponse(id: UUID(),
                                                    text: "Error: \(error.localizedDescription)"))
             return
@@ -167,7 +169,7 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
-        await answerQuestion(brief: brief, rawInput: rawInput, echoUserMessage: true)
+        await answerQuestion(brief: brief, rawInput: rawInput, echoUserMessage: false)
     }
 
     private func routeIntents(brief: Brief,
@@ -220,7 +222,7 @@ final class ChatViewModel: ObservableObject {
         }
         guard !executableActions.isEmpty else { return false }
 
-        threadItems.append(.userMessage(id: UUID(), text: originalText))
+        // The user message was already echoed at the top of submit(); don't re-append.
 
         for action in executableActions {
             switch action.type {
@@ -407,11 +409,13 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func processLegacyShortcuts(brief: Brief, rawInput: String) async -> Bool {
+        // The user message is echoed by submit() before this runs, so no path here
+        // appends another userMessage — only branches that *do* something downstream
+        // (a draft, a picker, a follow-up question) return true.
         if let request = extractNaturalReplyRequest(from: rawInput) {
             let matches = conversations(matching: request.targetName)
             if matches.count == 1 {
                 let conv = matches[0]
-                threadItems.append(.userMessage(id: UUID(), text: rawInput))
                 await draftReply(brief: brief,
                                  originalRequest: request.messageText,
                                  service: conv.service,
@@ -422,7 +426,6 @@ final class ChatViewModel: ObservableObject {
                 }
                 return true
             } else if matches.count > 1 {
-                threadItems.append(.userMessage(id: UUID(), text: rawInput))
                 threadItems.append(.conversationPicker(id: UUID(),
                                                        originalRequest: request.messageText,
                                                        options: conversationOptions(from: matches)))
@@ -437,7 +440,6 @@ final class ChatViewModel: ObservableObject {
             let matches = conversations(matching: targetName)
             if matches.count == 1 {
                 let conv = matches[0]
-                threadItems.append(.userMessage(id: UUID(), text: rawInput))
                 await draftReply(brief: brief,
                                  originalRequest: messageText,
                                  service: conv.service,
@@ -445,7 +447,6 @@ final class ChatViewModel: ObservableObject {
                                  convName: conv.name)
                 return true
             } else if matches.count > 1 {
-                threadItems.append(.userMessage(id: UUID(), text: rawInput))
                 threadItems.append(.conversationPicker(id: UUID(),
                                                        originalRequest: rawInput,
                                                        options: conversationOptions(from: matches)))
@@ -861,11 +862,33 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func stripDraftPrefix(_ responseText: String) -> String {
-        if let range = responseText.range(of: "DRAFT:", options: .caseInsensitive) {
-            return String(responseText[range.upperBound...])
+        var text = responseText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Strip "DRAFT:" / "Reply:" / "Message:" / "Response:" leaders, case-insensitive.
+        for keyword in ["DRAFT:", "Reply:", "Message:", "Response:", "Here's the reply:", "Here's a draft:"] {
+            if let range = text.range(of: keyword, options: [.caseInsensitive, .anchored]) {
+                text = String(text[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        // Strip a leading "1:" / "1." / "1)" pattern — when the user picks option 1
+        // from a numbered conversation picker, the LLM sometimes copies that style
+        // into the draft body. Only matches single- or two-digit leaders to avoid
+        // damaging legitimate content like "2025-…".
+        if let regex = try? NSRegularExpression(pattern: #"^\d{1,2}\s*[:.\)]\s*"#) {
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            text = regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        return responseText
+
+        // Strip surrounding straight or smart quotes so the body sends cleanly.
+        let quoteChars: [Character] = ["\"", "'", "\u{201C}", "\u{201D}", "\u{2018}", "\u{2019}"]
+        if let first = text.first, quoteChars.contains(first),
+           let last = text.last, quoteChars.contains(last), text.count > 1 {
+            text = String(text.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return text
     }
 
     private func buildConvList(from messages: [Message],
