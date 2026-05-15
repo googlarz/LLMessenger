@@ -189,9 +189,12 @@ final class SubprocessAdapter: MessengerAdapter {
                         do {
                             var data = try JSONSerialization.data(withJSONObject: request)
                             data.append(UInt8(ascii: "\n"))
-                            writeHandle.write(data)
+                            // Modern throwing API: a dead pipe surfaces as a Swift error
+                            // (NSCocoaErrorDomain / EPIPE) instead of an uncatchable NSException.
+                            // The legacy writeData(_:) raises an ObjC exception that crashes Swift.
+                            try writeHandle.write(contentsOf: data)
                         } catch {
-                            continuation.resume(throwing: error)
+                            continuation.resume(throwing: AdapterError.processClosed)
                             return
                         }
 
