@@ -716,12 +716,11 @@ private struct ServiceCard: View {
         )
     }
 
-    /// Opens the Full Disk Access pane in System Settings. AppleScript is
-    /// deliberately NOT used here — even when wrapped in `try` and with errors
-    /// returned via NSAppleScript's err dictionary, macOS still throws a
-    /// synchronous user-facing "System Settings is not open anymore" alert
-    /// before our error handler can fall through to the next strategy.
-    /// NSWorkspace.shared.open is silent on failure, so we use that.
+    /// Opens the Full Disk Access pane in System Settings. The modern
+    /// NSWorkspace.shared.open([URL], withApplicationAt:, configuration:) API
+    /// uses different LaunchServices internals than the legacy open(URL) —
+    /// it succeeds in some cases where the legacy form returns false. We try
+    /// that first, fall back to legacy open + /usr/bin/open, then alert.
     private func openFullDiskAccessSettings() {
         let urls = [
             URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"),
@@ -729,13 +728,26 @@ private struct ServiceCard: View {
             URL(string: "x-apple.systempreferences:com.apple.preference.security")
         ].compactMap { $0 }
 
-        // Strategy 1: NSWorkspace.shared.open — silent on failure, never raises a dialog.
+        // Strategy 1: modern openURLs-with-app API.
+        // Find System Settings.app and ask LaunchServices to hand the deep-link
+        // to it directly, instead of asking LaunchServices to resolve the URL
+        // scheme. This works around the "scheme handler missing" failure path.
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences") {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            let deepLink = urls.first!
+            NSWorkspace.shared.open([deepLink], withApplicationAt: appURL,
+                                    configuration: config,
+                                    completionHandler: nil)
+            return
+        }
+
+        // Strategy 2: legacy NSWorkspace.shared.open(URL).
         for url in urls {
             if NSWorkspace.shared.open(url) { return }
         }
 
-        // Strategy 2: shell out to /usr/bin/open — works around any NSWorkspace
-        // sandbox restrictions on the calling process.
+        // Strategy 3: shell out to /usr/bin/open.
         for url in urls {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -749,8 +761,18 @@ private struct ServiceCard: View {
             }
         }
 
-        // Strategy 3: every programmatic path failed. Show clear manual steps
-        // instead of silently dumping the user in Finder.
+        // Strategy 4: just open System Settings.app with no deep link, so the
+        // user lands inside Settings and can navigate themselves.
+        let appOnly = Process()
+        appOnly.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        appOnly.arguments = ["-a", "System Settings"]
+        do {
+            try appOnly.run()
+            appOnly.waitUntilExit()
+            if appOnly.terminationStatus == 0 { return }
+        } catch { /* fall through */ }
+
+        // Final: show clear manual steps with multiple action buttons.
         showManualFDAInstructions()
     }
 
@@ -759,19 +781,44 @@ private struct ServiceCard: View {
         alert.alertStyle = .informational
         alert.messageText = "Couldn't open System Settings automatically"
         alert.informativeText = """
-        macOS blocked all the ways this app can open System Settings — usually because Automation permission is denied for LLMessenger.
+        macOS blocked all the ways this app can open System Settings — usually because LLMessenger doesn't have Automation permission, or its TCC entry got out of sync.
 
-        Open it manually:
-        1. Apple menu → System Settings
-        2. Privacy & Security → Full Disk Access
-        3. Click the + button
-        4. Choose LLMessenger.app from your Applications folder
-        5. Quit and reopen LLMessenger
+        Manual steps:
+          1. Apple menu → System Settings
+          2. Privacy & Security → Full Disk Access
+          3. Click +
+          4. Choose LLMessenger.app
+          5. Quit and reopen LLMessenger
+
+        If LLMessenger isn't in /Applications, use the Finder button below to find it.
         """
-        alert.addButton(withTitle: "Reveal LLMessenger.app in Finder")
-        alert.addButton(withTitle: "OK")
-        if alert.runModal() == .alertFirstButtonReturn {
+        // Button order shows right-to-left on macOS.
+        alert.addButton(withTitle: "Reveal LLMessenger.app")    // rightmost
+        alert.addButton(withTitle: "Open Automation settings")  // middle
+        alert.addButton(withTitle: "OK")                        // leftmost (default)
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
             NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+        case .alertSecondButtonReturn:
+            // Take the user to the Automation panel so they can re-grant
+            // permission for LLMessenger → System Settings. Same five-strategy
+            // chain but for a different URL.
+            let automationURLs = [
+                URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation"),
+                URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
+            ].compactMap { $0 }
+            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences"),
+               let url = automationURLs.first {
+                let config = NSWorkspace.OpenConfiguration()
+                config.activates = true
+                NSWorkspace.shared.open([url], withApplicationAt: appURL,
+                                        configuration: config, completionHandler: nil)
+            } else {
+                for url in automationURLs where NSWorkspace.shared.open(url) { return }
+            }
+        default:
+            break
         }
     }
 
