@@ -191,165 +191,187 @@ private struct ServiceCard: View {
 
     private var service: String { config.service }
 
+    @State private var showAdvanced = false
+
+    /// Four explicit states. Each state below renders ONE coherent card variant —
+    /// never the same visual treatment repeated. This is the single source of truth
+    /// for everything the card displays.
+    enum CardState {
+        case disabled                  // user toggled service off
+        case notConfigured             // no credentials, prompt setup
+        case broken(reason: String)    // credentials present but service not working
+        case working                   // credentials + recent ok poll
+    }
+
+    var state: CardState {
+        if !config.enabled { return .disabled }
+        if !hasRequiredCredentials { return .notConfigured }
+        if let health, health.status == "error" {
+            return .broken(reason: health.lastError ?? "Connection error")
+        }
+        if let health, health.status == "warning" {
+            return .broken(reason: health.lastError ?? "Connection warning")
+        }
+        if let health, health.status == "ok", !isHealthStale { return .working }
+        // Credentials look complete but no fresh successful poll yet.
+        return .broken(reason: health == nil ? "Pending first poll…" : "Last poll \(staleMinutes) min ago")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack(spacing: 12) {
-                ZStack(alignment: .bottomTrailing) {
-                    // Icon background desaturates to a neutral grey when the service is
-                    // not in a green state — otherwise a healthy iMessage green badge
-                    // tricks the eye into "looks OK" even though FDA is missing.
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(isStatusGreen ? iconBackground : Color(nsColor: .tertiaryLabelColor).opacity(0.45))
-                        .frame(width: 36, height: 36)
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(isStatusGreen ? .white : Color(nsColor: .secondaryLabelColor))
-
-                    // Prominent status corner badge — visible at a glance even when the
-                    // small dot in the subtitle row is missed. Hidden in the OK case to
-                    // avoid clutter, since a healthy green icon already conveys status.
-                    if !isStatusGreen {
-                        Image(systemName: statusBadgeIcon)
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 14, height: 14)
-                            .background(statusColor)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5))
-                            .offset(x: 3, y: 3)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(displayName)
-                        .font(.headline)
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(statusColor)
-                            .frame(width: 8, height: 8)
-                        Text(statusLabel)
-                            .font(.caption)
-                            .foregroundStyle(statusColor == .red ? .red : Theme.textSecondary)
-                    }
-                }
-
-                Spacer()
-
-                // A red "Fix" pill next to the toggle when the service has missing
-                // credentials or a hard error — makes it visually obvious that
-                // enabled ≠ working. The toggle itself only carries the user's intent.
-                if config.enabled, !isStatusGreen {
-                    Text(toggleAdornmentLabel)
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.5)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(statusColor.opacity(0.18))
-                        .foregroundStyle(statusColor == .red ? .red : .orange)
-                        .clipShape(Capsule())
-                }
-
-                Toggle("", isOn: $config.enabled)
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                    .controlSize(.small)
-                    // Grey-out the toggle when the user has nothing to do at this point
-                    // (service is broken-but-on); avoids the "blue = good" misread.
-                    .tint(isStatusGreen ? .accentColor : Color(nsColor: .tertiaryLabelColor))
-            }
-            .padding(14)
-
-            // Credentials row (only when enabled)
-            if config.enabled {
-                Divider().padding(.horizontal, 14)
-                credentialsSection
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                Divider().padding(.horizontal, 14)
-            }
-
-            // Poll interval row
-            if config.enabled {
-                HStack {
-                    Text("Poll interval")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Stepper(
-                        "\(config.pollIntervalMinutes) min",
-                        value: $config.pollIntervalMinutes,
-                        in: 5...120, step: 5
-                    )
-                    .fixedSize()
-                    .controlSize(.small)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+            switch state {
+            case .disabled:        disabledBody
+            case .notConfigured:   notConfiguredBody
+            case .broken(let r):   brokenBody(reason: r)
+            case .working:         workingBody
             }
         }
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
+        .overlay(accentStripe, alignment: .leading)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
+                .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
         )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .animation(.easeInOut(duration: 0.15), value: config.enabled)
     }
 
-    // MARK: Credentials
+    /// A 3pt accent stripe down the left edge so each state is identifiable from a
+    /// peripheral glance: green = working, orange = needs attention, transparent otherwise.
+    @ViewBuilder private var accentStripe: some View {
+        switch state {
+        case .working:
+            Rectangle().fill(Color.green).frame(width: 3)
+        case .broken:
+            Rectangle().fill(Color.orange).frame(width: 3)
+        case .notConfigured, .disabled:
+            EmptyView()
+        }
+    }
 
+    // MARK: - State: disabled
+
+    private var disabledBody: some View {
+        HStack(spacing: 12) {
+            serviceIcon(tinted: false)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayName).font(.headline).foregroundStyle(.secondary)
+                Text("Off — not polling")
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
+            Spacer()
+            Toggle("", isOn: $config.enabled)
+                .toggleStyle(.switch).labelsHidden().controlSize(.small)
+        }
+        .padding(14)
+        .opacity(0.7)
+    }
+
+    // MARK: - State: notConfigured
+
+    private var notConfiguredBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                serviceIcon(tinted: false)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayName).font(.headline)
+                    Text("Not connected")
+                        .font(.caption).foregroundStyle(.tertiary)
+                }
+                Spacer()
+            }
+            Text(setupBlurb)
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            primarySetupAction
+        }
+        .padding(14)
+    }
+
+    // MARK: - State: broken
+
+    private func brokenBody(reason: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                serviceIcon(tinted: false)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayName).font(.headline)
+                    Text(reason)
+                        .font(.caption).foregroundStyle(.orange)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: $config.enabled)
+                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    .tint(Color(nsColor: .tertiaryLabelColor))
+            }
+            Divider()
+            brokenBodyContent(reason: reason)
+        }
+        .padding(14)
+    }
+
+    /// Per-service fix UI shown below the broken-state header.
     @ViewBuilder
-    private var credentialsSection: some View {
-        if service == "imessage" {
+    private func brokenBodyContent(reason: String) -> some View {
+        switch service {
+        case "imessage":
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "lock.shield.fill")
-                        .foregroundStyle(.orange)
-                        .font(.subheadline)
-                    Text("Requires Full Disk Access to read your Messages database.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Button("Open Privacy & Security Settings →") {
+                Text("macOS needs to allow LLMessenger to read your Messages database. Grant Full Disk Access, then quit and reopen the app.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
                     openFullDiskAccessSettings()
+                } label: {
+                    Label("Grant Full Disk Access", systemImage: "lock.shield")
                 }
-                .font(.caption)
-                .buttonStyle(.link)
+                .buttonStyle(.borderedProminent).controlSize(.regular)
             }
-        } else if service == "signal" {
-            HStack {
-                Text("Phone number")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 110, alignment: .leading)
-                TextField("+1234567890", text: $signalAccount)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.subheadline)
-            }
-        } else if service == "slack" {
+        case "signal":
             VStack(alignment: .leading, spacing: 8) {
+                Text("Signal account is configured but the local signal-mcp daemon isn't reachable. Start it and the next poll will go green.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    Text("Workspaces")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 110, alignment: .leading)
-                    Text(slackWorkspaceCount == 0
-                         ? "None — add at least one to start polling."
-                         : "\(slackWorkspaceCount) workspace\(slackWorkspaceCount == 1 ? "" : "s") configured")
-                        .font(.subheadline)
-                    Spacer()
-                    Button("Manage…") { showingSlackWorkspaces = true }
-                        .controlSize(.small)
+                    Text("Phone")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .leading)
+                    TextField("+1234567890", text: $signalAccount)
+                        .textFieldStyle(.roundedBorder).font(.subheadline)
                 }
-                HStack {
-                    Spacer()
-                    Link("How to get a Slack token →",
-                         destination: URL(string: "https://api.slack.com/apps")!)
-                        .font(.caption)
+            }
+        case "telegram":
+            VStack(alignment: .leading, spacing: 8) {
+                Text(reason)
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !sessionFileExists {
+                    Button("Connect Telegram") { startTelegramSignIn() }
+                        .buttonStyle(.borderedProminent).controlSize(.regular)
                 }
+            }
+            .sheet(isPresented: $showingTelegramSignIn, onDismiss: {
+                telegramSignInAdapter?.stop()
+                telegramSignInAdapter = nil
+            }) {
+                if let adapter = telegramSignInAdapter {
+                    TelegramSignInView(adapter: adapter) {
+                        NotificationCenter.default.post(name: .serviceConfigDidChange, object: nil)
+                    }
+                } else {
+                    ProgressView("Starting adapter…").padding(40)
+                }
+            }
+        case "slack":
+            VStack(alignment: .leading, spacing: 8) {
+                Text("A Slack workspace token failed to authenticate. Re-add the workspace.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Manage workspaces") { showingSlackWorkspaces = true }
+                    .buttonStyle(.borderedProminent).controlSize(.regular)
             }
             .sheet(isPresented: $showingSlackWorkspaces, onDismiss: {
                 slackWorkspaceCount = SlackWorkspaceStore.load().count
@@ -357,67 +379,202 @@ private struct ServiceCard: View {
             }) {
                 SlackWorkspacesView()
             }
-        } else if service == "telegram" {
-            VStack(spacing: 8) {
+        default:
+            EmptyView()
+        }
+    }
+
+    // MARK: - State: working
+
+    private var workingBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                serviceIcon(tinted: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(displayName).font(.headline)
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.green)
+                    }
+                    Text(workingIdentity)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("", isOn: $config.enabled)
+                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
+            }
+            .padding(14)
+
+            DisclosureGroup(isExpanded: $showAdvanced) {
+                advancedBody
+                    .padding(.top, 8)
+            } label: {
+                Text("Advanced")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 10)
+        }
+    }
+
+    /// Compact identity line shown under the service name in the working state.
+    private var workingIdentity: String {
+        switch service {
+        case "imessage": return "Reading ~/Library/Messages — every \(config.pollIntervalMinutes) min"
+        case "signal":   return "\(signalAccount) — every \(config.pollIntervalMinutes) min"
+        case "telegram": return "Signed in — every \(config.pollIntervalMinutes) min"
+        case "slack":
+            let plural = slackWorkspaceCount == 1 ? "" : "s"
+            return "\(slackWorkspaceCount) workspace\(plural) — every \(config.pollIntervalMinutes) min"
+        default: return "Connected — every \(config.pollIntervalMinutes) min"
+        }
+    }
+
+    /// Things you rarely change — collapsed behind a disclosure so the card is calm.
+    @ViewBuilder
+    private var advancedBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Poll interval").font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                Stepper("\(config.pollIntervalMinutes) min",
+                        value: $config.pollIntervalMinutes,
+                        in: 5...120, step: 5)
+                    .fixedSize().controlSize(.small)
+            }
+            switch service {
+            case "signal":
                 HStack {
-                    Text("API ID")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 110, alignment: .leading)
+                    Text("Phone").font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .leading)
+                    TextField("+1234567890", text: $signalAccount)
+                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                }
+            case "telegram":
+                HStack {
+                    Text("API ID").font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .leading)
                     TextField("", text: $telegramApiId)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.subheadline)
+                        .textFieldStyle(.roundedBorder).font(.subheadline)
                 }
                 HStack {
-                    Text("API Hash")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 110, alignment: .leading)
+                    Text("API Hash").font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .leading)
                     SecureField("", text: $telegramApiHash)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.subheadline)
+                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                }
+            case "slack":
+                Button("Manage workspaces…") { showingSlackWorkspaces = true }
+                    .controlSize(.small)
+                    .sheet(isPresented: $showingSlackWorkspaces, onDismiss: {
+                        slackWorkspaceCount = SlackWorkspaceStore.load().count
+                        NotificationCenter.default.post(name: .serviceConfigDidChange, object: nil)
+                    }) {
+                        SlackWorkspacesView()
+                    }
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    // MARK: - Shared building blocks
+
+    private func serviceIcon(tinted: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(tinted ? iconBackground : Color(nsColor: .tertiaryLabelColor).opacity(0.35))
+                .frame(width: 36, height: 36)
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(tinted ? .white : Color(nsColor: .secondaryLabelColor))
+        }
+    }
+
+    private var setupBlurb: String {
+        switch service {
+        case "imessage": return "Summarise your iMessage conversations. Requires Full Disk Access."
+        case "signal":   return "Summarise your Signal conversations. Requires the signal-mcp daemon and your phone number."
+        case "telegram": return "Summarise your Telegram conversations. Requires API credentials from my.telegram.org and a one-time sign-in."
+        case "slack":    return "Summarise messages across one or more Slack workspaces. You'll paste an OAuth token from a private Slack app you create."
+        default:         return ""
+        }
+    }
+
+    @ViewBuilder
+    private var primarySetupAction: some View {
+        switch service {
+        case "imessage":
+            Button {
+                openFullDiskAccessSettings()
+            } label: {
+                Label("Grant Full Disk Access", systemImage: "lock.shield")
+            }
+            .buttonStyle(.borderedProminent).controlSize(.regular)
+        case "signal":
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Phone").font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .leading)
+                    TextField("+1234567890", text: $signalAccount)
+                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                }
+                Text("Then start the signal-mcp watch daemon to begin polling.")
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
+        case "telegram":
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("API ID").font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .leading)
+                    TextField("", text: $telegramApiId)
+                        .textFieldStyle(.roundedBorder).font(.subheadline)
                 }
                 HStack {
-                    Spacer()
+                    Text("API Hash").font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .leading)
+                    SecureField("", text: $telegramApiHash)
+                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                }
+                HStack {
                     Link("Get credentials at my.telegram.org →",
                          destination: URL(string: "https://my.telegram.org")!)
                         .font(.caption)
-                }
-                if isConnected && !sessionFileExists {
-                    Divider()
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Session not found")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if let err = telegramSignInError {
-                                Text(err)
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
-                            }
-                        }
-                        Spacer()
-                        Button("Connect Telegram") {
-                            startTelegramSignIn()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                    }
-                    .sheet(isPresented: $showingTelegramSignIn, onDismiss: {
-                        telegramSignInAdapter?.stop()
-                        telegramSignInAdapter = nil
-                    }) {
-                        if let adapter = telegramSignInAdapter {
-                            TelegramSignInView(adapter: adapter) {
-                                NotificationCenter.default.post(
-                                    name: .serviceConfigDidChange, object: nil)
-                            }
-                        } else {
-                            ProgressView("Starting adapter…").padding(40)
-                        }
+                    Spacer()
+                    if !telegramApiId.isEmpty && !telegramApiHash.isEmpty {
+                        Button("Connect Telegram") { startTelegramSignIn() }
+                            .buttonStyle(.borderedProminent).controlSize(.small)
                     }
                 }
             }
+            .sheet(isPresented: $showingTelegramSignIn, onDismiss: {
+                telegramSignInAdapter?.stop()
+                telegramSignInAdapter = nil
+            }) {
+                if let adapter = telegramSignInAdapter {
+                    TelegramSignInView(adapter: adapter) {
+                        NotificationCenter.default.post(name: .serviceConfigDidChange, object: nil)
+                    }
+                } else {
+                    ProgressView("Starting adapter…").padding(40)
+                }
+            }
+        case "slack":
+            Button {
+                showingSlackWorkspaces = true
+            } label: {
+                Label("Add a workspace", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent).controlSize(.regular)
+            .sheet(isPresented: $showingSlackWorkspaces, onDismiss: {
+                slackWorkspaceCount = SlackWorkspaceStore.load().count
+                NotificationCenter.default.post(name: .serviceConfigDidChange, object: nil)
+            }) {
+                SlackWorkspacesView()
+            }
+        default:
+            EmptyView()
         }
     }
 
@@ -453,64 +610,6 @@ private struct ServiceCard: View {
         }
     }
 
-    private var isConnected: Bool {
-        switch service {
-        case "imessage":
-            // fileExists returns true even without Full Disk Access; try to open for reading
-            // to distinguish "file present + FDA granted" from "file present, FDA missing".
-            let path = NSHomeDirectory() + "/Library/Messages/chat.db"
-            return FileManager.default.isReadableFile(atPath: path)
-        case "signal":
-            return !signalAccount.trimmingCharacters(in: .whitespaces).isEmpty
-        case "telegram":
-            return !telegramApiId.trimmingCharacters(in: .whitespaces).isEmpty
-                && !telegramApiHash.trimmingCharacters(in: .whitespaces).isEmpty
-        case "slack":
-            return slackWorkspaceCount > 0
-        default:
-            return false
-        }
-    }
-
-    /// Three-state model for the status dot:
-    /// - .green only when a successful poll has been recorded recently AND credentials still satisfy
-    ///   the per-service criteria (e.g. Slack still has ≥1 workspace).
-    /// - .orange when credentials are present but the service hasn't been verified yet,
-    ///   or when the last poll surfaced a warning, or when health is stale.
-    /// - .red on a hard error.
-    /// - .grey when credentials are missing (or the service is disabled).
-    private var statusColor: Color {
-        guard config.enabled else { return Color(nsColor: .tertiaryLabelColor) }
-        if !hasRequiredCredentials { return Color(nsColor: .tertiaryLabelColor) }
-        if let health, health.status == "error" { return .red }
-        if let health, health.status == "warning" { return .orange }
-        if let health, health.status == "ok", !isHealthStale { return .green }
-        // Credentials look complete but PollEngine hasn't confirmed (or health is stale).
-        return .orange
-    }
-
-    private var statusLabel: String {
-        guard config.enabled else { return "Disabled" }
-        if let reason = missingCredentialReason { return reason }
-        if let health, health.status == "error" {
-            return health.lastError ?? "Error"
-        }
-        if let health, health.status == "warning" {
-            return health.lastError ?? "Warning"
-        }
-        if let health, health.status == "ok" {
-            if isHealthStale { return "Last poll over \(staleMinutes) min ago" }
-            switch service {
-            case "imessage": return "Available"
-            case "signal":   return signalAccount
-            case "telegram": return "Credentials configured"
-            case "slack":    return "\(slackWorkspaceCount) workspace\(slackWorkspaceCount == 1 ? "" : "s")"
-            default:         return "Connected"
-            }
-        }
-        return "Pending first poll"
-    }
-
     /// A health record is "stale" if its lastCheck is older than 2× the configured poll
     /// interval. A successful poll from yesterday shouldn't keep claiming green today.
     private var isHealthStale: Bool {
@@ -524,32 +623,8 @@ private struct ServiceCard: View {
         return max(0, Int(Date().timeIntervalSince(lastCheck) / 60))
     }
 
-    /// True only when the dot is green. Used to drive the icon's colour treatment
-    /// so brand colours don't mislead at a glance.
-    private var isStatusGreen: Bool {
-        guard config.enabled, hasRequiredCredentials, let health else { return false }
-        return health.status == "ok" && !isHealthStale
-    }
-
-    /// SF Symbol shown as a small badge on top of the (greyed) icon when status isn't green.
-    private var statusBadgeIcon: String {
-        if !config.enabled { return "pause.fill" }
-        if !hasRequiredCredentials { return "exclamationmark" }
-        if let health, health.status == "error" { return "xmark" }
-        return "exclamationmark"
-    }
-
-    /// Pill label shown next to the toggle. Tells the user *what* action is needed
-    /// rather than just "broken".
-    private var toggleAdornmentLabel: String {
-        if !hasRequiredCredentials { return "ACTION NEEDED" }
-        if let health, health.status == "error" { return "ERROR" }
-        if let health, health.status == "warning" || isHealthStale { return "PENDING" }
-        return "PENDING"
-    }
-
-    /// True when the per-service credential criteria are satisfied. A green check still
-    /// requires a successful poll on top of this — credentials present alone is not enough.
+    /// True when the per-service credential criteria are satisfied. A working state still
+    /// requires a recent successful poll on top of this — credentials present alone is not enough.
     private var hasRequiredCredentials: Bool {
         switch service {
         case "imessage":
@@ -567,31 +642,6 @@ private struct ServiceCard: View {
             return slackWorkspaceCount > 0
         default:
             return false
-        }
-    }
-
-    /// Human-readable description of what's missing — only set when hasRequiredCredentials is false.
-    /// Drives the status label so the user sees the exact next step instead of a vague warning.
-    private var missingCredentialReason: String? {
-        if hasRequiredCredentials { return nil }
-        switch service {
-        case "imessage":
-            return "Full Disk Access required"
-        case "signal":
-            return signalAccount.trimmingCharacters(in: .whitespaces).isEmpty
-                ? "Phone number required"
-                : "Signal daemon not reachable"
-        case "telegram":
-            if telegramApiId.trimmingCharacters(in: .whitespaces).isEmpty
-                || telegramApiHash.trimmingCharacters(in: .whitespaces).isEmpty {
-                return "API credentials required"
-            }
-            if !sessionFileExists { return "Sign-in required" }
-            return "Not configured"
-        case "slack":
-            return "Add a workspace"
-        default:
-            return "Not configured"
         }
     }
 
