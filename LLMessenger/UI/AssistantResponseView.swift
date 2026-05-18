@@ -108,7 +108,13 @@ struct UserMessageView: View {
 }
 
 struct AssistantResponseView: View {
+    @EnvironmentObject var appState: AppState
     let text: String
+
+    private var providerLabel: String? {
+        guard let provider = appState.llmProvider else { return nil }
+        return provider.isCloud ? "via \(provider.displayName) API" : "on-device · \(provider.displayName)"
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -127,6 +133,11 @@ struct AssistantResponseView: View {
                     Text("LLMessenger")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.accent)
+                    if let label = providerLabel {
+                        Text("· \(label)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
                 }
                 Text(text)
                     .font(.system(size: 13))

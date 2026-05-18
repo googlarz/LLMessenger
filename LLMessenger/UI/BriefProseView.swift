@@ -302,27 +302,36 @@ struct BriefProseView: View {
 
             if let _ = parsedJSON {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Failed services warning
+                    // Failed services warning — only surface services that are STILL
+                    // unhealthy. A service that failed validation/LLM at brief time but
+                    // is currently `.ok` shouldn't be advertised as "unavailable" —
+                    // that confuses users who see the green indicator everywhere else.
                     if let failedJSON = brief.failedServices,
                        let data = failedJSON.data(using: .utf8),
-                       let failed = try? JSONDecoder().decode([String].self, from: data),
-                       !failed.isEmpty {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color(red: 0.90, green: 0.72, blue: 0.30))
-                            Text("\(failed.map { Theme.serviceName($0) }.joined(separator: ", ")) unavailable — threads from \(failed.count == 1 ? "this service were" : "these services were") not included.")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.textSecondary)
+                       let allFailed = try? JSONDecoder().decode([String].self, from: data),
+                       !allFailed.isEmpty {
+                        let stillBroken = allFailed.filter { svc in
+                            let s = appState.serviceHealth[svc]
+                            return s != nil && s != .ok
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color(red: 0.90, green: 0.72, blue: 0.30).opacity(0.10))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(red: 0.90, green: 0.72, blue: 0.30).opacity(0.3), lineWidth: 1))
-                        .padding(.horizontal, 28)
-                        .padding(.bottom, 16)
+                        if !stillBroken.isEmpty {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color(red: 0.90, green: 0.72, blue: 0.30))
+                                Text("\(stillBroken.map { Theme.serviceName($0) }.joined(separator: ", ")) is currently having connection issues — its threads aren't in this brief.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color(red: 0.90, green: 0.72, blue: 0.30).opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(red: 0.90, green: 0.72, blue: 0.30).opacity(0.3), lineWidth: 1))
+                            .padding(.horizontal, 28)
+                            .padding(.bottom, 16)
+                        }
                     }
 
                     if !highPriorityCards.isEmpty {
@@ -601,17 +610,32 @@ struct BriefProseView: View {
                 }
 
                 HStack(spacing: 8) {
-                    cardActionButton(title: "More detail", systemImage: "text.magnifyingglass") {
-                        Task {
-                            await chatViewModel.askForDetails(
-                                service: card.service,
-                                conversationID: card.conversationId,
-                                displayName: card.conversation ?? "",
-                                headline: card.headline
-                            )
+                    // "Catch me up" replaces "More detail" when the thread is large (>20 msgs)
+                    if card.counts.messages > 20 {
+                        cardActionButton(title: "Catch me up ↓", systemImage: "arrow.down.circle") {
+                            Task {
+                                await chatViewModel.askForDetails(
+                                    service: card.service,
+                                    conversationID: card.conversationId,
+                                    displayName: card.conversation ?? "",
+                                    headline: "Give me the full arc — what's been going on in this thread?"
+                                )
+                            }
                         }
+                        .help("Get a deeper summary of this conversation")
+                    } else {
+                        cardActionButton(title: "More detail", systemImage: "text.magnifyingglass") {
+                            Task {
+                                await chatViewModel.askForDetails(
+                                    service: card.service,
+                                    conversationID: card.conversationId,
+                                    displayName: card.conversation ?? "",
+                                    headline: card.headline
+                                )
+                            }
+                        }
+                        .help("Ask for more detail")
                     }
-                    .help("Ask for more detail")
 
                     cardActionButton(title: "Reply", systemImage: "arrowshape.turn.up.left") {
                         chatViewModel.prepareReply(

@@ -377,6 +377,27 @@ struct BriefRepository {
         }
     }
 
+    /// Returns the most recent high-priority card per conversation, across all briefs.
+    /// Used by the "Needs Reply" triage view. Deduplicates by service+conversationId,
+    /// keeping only the newest card per conversation so each thread appears once.
+    func fetchRecentHighPriorityCards(limit: Int = 30) throws -> [(card: BriefCardRecord, briefCreatedAt: Date)] {
+        try database.dbQueue.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT bc.*, b.createdAt AS briefCreatedAt
+                FROM briefCards bc
+                JOIN briefs b ON bc.briefId = b.id
+                WHERE bc.priority = 'high'
+                ORDER BY bc.createdAt DESC
+                LIMIT ?
+            """, arguments: [limit])
+            return rows.compactMap { row in
+                guard let card = try? BriefCardRecord(row: row),
+                      let briefCreatedAt = row["briefCreatedAt"] as? Date else { return nil }
+                return (card: card, briefCreatedAt: briefCreatedAt)
+            }
+        }
+    }
+
     func fetchLatestBriefCard(service: String, conversationID: String) throws -> BriefCardRecord? {
         try database.dbQueue.read { db in
             try BriefCardRecord

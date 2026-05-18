@@ -13,6 +13,7 @@ struct BriefListView: View {
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>? = nil
     @State private var loadTask: Task<Void, Never>? = nil
+    @State private var needsReplyCards: [(card: BriefCardRecord, briefCreatedAt: Date)] = []
 
     var filteredGroups: [BriefListGroup] {
         appState.briefGroups(from: dateFrom, to: dateTo)
@@ -71,6 +72,22 @@ struct BriefListView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
+                        // Needs Reply triage section
+                        let unhandled = needsReplyCards.filter {
+                            !appState.isCardHandled(briefID: $0.card.briefId, cardID: $0.card.id)
+                        }
+                        if !unhandled.isEmpty {
+                            NeedsReplySection(
+                                cards: unhandled,
+                                onTap: { card in
+                                    // Select the brief containing this card
+                                    if let brief = appState.briefs.first(where: { $0.id == card.briefId }) {
+                                        selectBrief(brief)
+                                    }
+                                }
+                            )
+                        }
+
                         // Pinned section
                         let pinned = appState.pinnedBriefs
                         if !pinned.isEmpty {
@@ -102,9 +119,22 @@ struct BriefListView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
         }
+        .onAppear { refreshNeedsReply() }
+        .onChange(of: appState.briefs.count) { _ in refreshNeedsReply() }
+        .onChange(of: appState.handledCardKeys) { _ in refreshNeedsReply() }
     }
 
     // MARK: - Helpers
+
+    private func refreshNeedsReply() {
+        let raw = appState.fetchNeedsReplyCards()
+        // Deduplicate: keep the newest card per service+conversationId
+        var seen = Set<String>()
+        needsReplyCards = raw.filter { item in
+            let key = "\(item.card.service)|\(item.card.conversationId)"
+            return seen.insert(key).inserted
+        }
+    }
 
     private func selectBrief(_ brief: Brief) {
         guard let id = brief.id else { return }
@@ -430,5 +460,76 @@ private struct SettingsButtonView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Needs Reply triage section
+
+private struct NeedsReplySection: View {
+    @EnvironmentObject var appState: AppState
+    let cards: [(card: BriefCardRecord, briefCreatedAt: Date)]
+    let onTap: (BriefCardRecord) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "bell.badge")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.25))
+                Text("NEEDS REPLY")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.25))
+                    .tracking(0.7)
+                Spacer()
+                Text("\(cards.count)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
+            ForEach(cards, id: \.card.id) { item in
+                Button { onTap(item.card) } label: {
+                    HStack(spacing: 8) {
+                        SourceGlyphView(service: item.card.service, size: 18)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.card.conversationTitle ?? Theme.serviceName(item.card.service))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                                .lineLimit(1)
+                            Text(item.card.headline)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.textSecondary)
+                                .lineLimit(2)
+                        }
+                        Spacer(minLength: 4)
+                        Text(briefAge(item.briefCreatedAt))
+                            .font(.system(size: 10))
+                            .foregroundStyle(Theme.textTertiary)
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color(red: 0.95, green: 0.45, blue: 0.25).opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Divider()
+                .background(Theme.border.opacity(0.5))
+                .padding(.top, 8)
+        }
+    }
+
+    private func briefAge(_ date: Date) -> String {
+        let s = Date().timeIntervalSince(date)
+        if s < 3600  { return "\(Int(s / 60))m" }
+        if s < 86400 { return "\(Int(s / 3600))h" }
+        return "\(Int(s / 86400))d"
     }
 }

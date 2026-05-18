@@ -237,6 +237,10 @@ final class AppState: ObservableObject {
         return BriefListGrouper.group(filtered)
     }
 
+    func fetchNeedsReplyCards() -> [(card: BriefCardRecord, briefCreatedAt: Date)] {
+        (try? repository.fetchRecentHighPriorityCards(limit: 30)) ?? []
+    }
+
     func makeChatViewModel() -> ChatViewModel {
         ChatViewModel(appState: self)
     }
