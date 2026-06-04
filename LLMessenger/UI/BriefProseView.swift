@@ -425,9 +425,9 @@ struct BriefProseView: View {
     @ViewBuilder
     private func cardsView(_ cards: [NumberedBriefCard]) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            ForEach(Array(cards.enumerated()), id: \.element.id) { idx, card in
+            ForEach(cards) { card in
                 cardView(card)
-                if idx < cards.count - 1 && card.card.priority == "high" {
+                if card.id != cards.last?.id && card.card.priority == "high" {
                     Divider()
                         .background(Theme.border.opacity(0.3))
                         .padding(.top, 4)
