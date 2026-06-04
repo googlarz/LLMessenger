@@ -9,6 +9,7 @@ final class PollEngine {
     private var timers: [String: Timer] = [:]
     private var nextFireDates: [String: Date] = [:]
     private var inFlight: Set<String> = []
+    private var pollAllInFlight = false
     var failureCounts: [String: Int] = [:]
     var onPollSucceeded: (() async -> Void)?
     var onPollFailed: ((String, Error) async -> Void)?
@@ -16,6 +17,11 @@ final class PollEngine {
 
     init(database: AppDatabase) {
         self.database = database
+    }
+
+    deinit {
+        timers.values.forEach { $0.invalidate() }
+        timers.removeAll()
     }
 
     func register(adapter: MessengerAdapter, config: ServiceConfig) {
@@ -69,6 +75,8 @@ final class PollEngine {
 
     // Poll all enabled adapters; fire onPollSucceeded exactly once if any new messages were stored.
     func pollAll() async {
+        pollAllInFlight = true
+        defer { pollAllInFlight = false }
         let serviceIDs = adapters.keys.filter { configs[$0]?.enabled == true }
         let anyNew = await withTaskGroup(of: Bool.self) { group in
             for serviceID in serviceIDs {
@@ -86,9 +94,10 @@ final class PollEngine {
 
     // Public: poll one service and fire onPollSucceeded if new messages arrived.
     // Only fires for eager services — on_demand services store messages without auto-briefing.
+    // Skips onPollSucceeded if pollAll() is already in flight to avoid duplicate notifications.
     func pollNow(serviceID: String) async throws {
         let isEager = configs[serviceID]?.resolvedPrivacyMode == .eager
-        if try await pollOnce(serviceID: serviceID) && isEager {
+        if try await pollOnce(serviceID: serviceID) && isEager && !pollAllInFlight {
             await onPollSucceeded?()
         }
     }
@@ -166,7 +175,7 @@ final class PollEngine {
         timers[serviceID]?.invalidate()
         let interval = TimeInterval(intervalMinutes * 60)
         nextFireDates[serviceID] = Date().addingTimeInterval(interval)
-        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -178,6 +187,7 @@ final class PollEngine {
                 }
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
         timers[serviceID] = timer
     }
 
@@ -200,13 +210,15 @@ final class PollEngine {
     private func checkCatchUp(serviceID: String) async {
         guard let config = configs[serviceID] else { return }
         guard let lastCheck = await readLastCheck(serviceID: serviceID) else {
-            try? await pollNow(serviceID: serviceID)
+            do { try await pollNow(serviceID: serviceID) }
+            catch { await onPollFailed?(serviceID, error) }
             return
         }
         let elapsed = Date().timeIntervalSince(lastCheck)
         let interval = TimeInterval(config.pollIntervalMinutes * 60)
         if elapsed >= interval {
-            try? await pollNow(serviceID: serviceID)
+            do { try await pollNow(serviceID: serviceID) }
+            catch { await onPollFailed?(serviceID, error) }
         }
     }
 
