@@ -189,16 +189,22 @@ final class AppState: ObservableObject {
             InstrumentationManager.shared.track(event: .briefOpened, metadata: ["briefID": briefID])
             refreshBriefs()
         } catch {
-            // silently ignore — UI state will be stale at worst
+            lastError = error.localizedDescription
         }
     }
 
     func refreshBriefs() {
-        do {
-            briefs = try repository.fetchAllBriefs()
-            onBriefsChanged?()
-        } catch {
-            // Silently ignore — UI shows empty state
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                let fetched = try self.repository.fetchAllBriefs()
+                await MainActor.run {
+                    self.briefs = fetched
+                    self.onBriefsChanged?()
+                }
+            } catch {
+                await MainActor.run { self.lastError = error.localizedDescription }
+            }
         }
     }
 
@@ -231,7 +237,7 @@ final class AppState: ObservableObject {
             try repository.setPinned(briefID: briefID, pinned: pinned)
             refreshBriefs()
         } catch {
-            // Silently ignore — UI state will be stale at worst
+            lastError = error.localizedDescription
         }
     }
 
@@ -270,7 +276,11 @@ final class AppState: ObservableObject {
             priorityHint: priorityHint,
             updatedAt: Date()
         )
-        try? repository.upsertConversationContext(ctx)
+        do {
+            try repository.upsertConversationContext(ctx)
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     func fetchConversationContext(service: String, conversationId: String) -> ConversationContext? {
@@ -289,6 +299,10 @@ final class AppState: ObservableObject {
             userPriority: userPriority,
             createdAt: Date()
         )
-        try? repository.insertPriorityCorrection(correction)
+        do {
+            try repository.insertPriorityCorrection(correction)
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 }
