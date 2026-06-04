@@ -144,7 +144,7 @@ struct BriefListView: View {
                 .padding(.vertical, 6)
         }
         .onAppear { refreshNeedsReply() }
-        .onChange(of: appState.briefs.count) { _ in refreshNeedsReply() }
+        .onChange(of: appState.briefs.map { $0.id }) { _ in refreshNeedsReply() }
         .onChange(of: appState.handledCardKeys) { _ in refreshNeedsReply() }
     }
 
@@ -165,6 +165,8 @@ struct BriefListView: View {
         guard let id = brief.id else { return }
         appState.selectedBriefID = id
         appState.markAsOpen(briefID: id)
+        chatViewModel.inputText = ""
+        chatViewModel.pendingTarget = nil
         // Cancel any in-flight load so a rapid second tap doesn't race and leave
         // brief A's threadItems displayed while selectedBriefID points to brief B.
         loadTask?.cancel()
