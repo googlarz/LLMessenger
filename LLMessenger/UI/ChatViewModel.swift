@@ -556,9 +556,25 @@ final class ChatViewModel: ObservableObject {
     }
 
     func discardDraft(id: UUID) {
+        // Capture the draft's conversationID before removing it so we can prune quickReplies.
+        let discardedConvID: String? = threadItems.compactMap {
+            if case .replyDraft(let i, let draft) = $0, i == id { return draft.conversationID }
+            return nil
+        }.first
+
         threadItems.removeAll {
             if case .replyDraft(let i, _) = $0 { return i == id }
             return false
+        }
+
+        // Prune quickReplies entries for cards belonging to the discarded draft's conversation.
+        if let convID = discardedConvID,
+           let summary = currentBrief?.openingSummary,
+           let data = summary.data(using: .utf8),
+           let json = try? JSONDecoder().decode(BriefJSON.self, from: data) {
+            for card in json.cards where card.conversationId == convID {
+                quickReplies.removeValue(forKey: card.id)
+            }
         }
     }
 
