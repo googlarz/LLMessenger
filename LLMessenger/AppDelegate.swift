@@ -74,7 +74,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menuBar.onNewBrief = { [weak self] in
                 guard let self else { return }
                 InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "menuBar"])
-                Task {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
                     self.appState?.briefGenerationState = .fetching
                     self.menuBarController?.setLoading(true)
                     let start = Date()
@@ -115,7 +116,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             menuBar.onLast24h = { [weak self] in
                 guard let self else { return }
-                Task {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
                     self.appState?.briefGenerationState = .fetching
                     self.menuBarController?.setLoading(true)
                     let start = Date()
@@ -149,7 +151,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             menuBar.onLast7d = { [weak self] in
                 guard let self else { return }
-                Task {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
                     self.appState?.briefGenerationState = .fetching
                     self.menuBarController?.setLoading(true)
                     let start = Date()
@@ -232,7 +235,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             menuBar.onRestartSignalWatch = { [weak self] in
                 guard let self else { return }
-                Task {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
                     guard let signalAdapter = self.appState?.adapters["signal"] as? SignalCLIAdapter else { return }
                     let ok = await signalAdapter.restartWatchDaemon()
                     if ok {

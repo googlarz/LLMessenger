@@ -44,7 +44,11 @@ final class SignalCLIAdapter: MessengerAdapter {
         for (key, name) in storeNames.groups where groupNames[key] == nil {
             groupNames[key] = name
         }
-        healthStatus = .ok
+        if contactNames.isEmpty && groupNames.isEmpty && !isWatchDaemonRunning() {
+            healthStatus = .warning
+        } else {
+            healthStatus = .ok
+        }
     }
 
     func stop() {
@@ -349,8 +353,15 @@ final class SignalCLIAdapter: MessengerAdapter {
 
     private func loadContactNames() async -> [String: String] {
         // allNumbers: true returns phone-book contacts (97) not just Signal-known ones (39).
-        guard let contacts = try? await rpc("listContacts", params: ["allNumbers": true])
-                as? [[String: Any]] else { return [:] }
+        let contactsResult: [[String: Any]]?
+        do {
+            contactsResult = try await rpc("listContacts", params: ["allNumbers": true]) as? [[String: Any]]
+        } catch {
+            NSLog("[SignalCLIAdapter] loadContactNames failed: %@", error.localizedDescription)
+            if !isWatchDaemonRunning() { healthStatus = .warning }
+            return [:]
+        }
+        guard let contacts = contactsResult else { return [:] }
         var names: [String: String] = [:]
         for c in contacts {
             let name = extractContactName(from: c)
@@ -360,7 +371,14 @@ final class SignalCLIAdapter: MessengerAdapter {
         }
         // Cross-reference group members: a group member UUID with a known phone number
         // can be resolved even when that UUID isn't in the contacts list directly.
-        if let groups = try? await rpc("listGroups") as? [[String: Any]] {
+        let groupsForCrossRef: [[String: Any]]?
+        do {
+            groupsForCrossRef = try await rpc("listGroups") as? [[String: Any]]
+        } catch {
+            NSLog("[SignalCLIAdapter] loadContactNames/listGroups failed: %@", error.localizedDescription)
+            groupsForCrossRef = nil
+        }
+        if let groups = groupsForCrossRef {
             for group in groups {
                 guard let members = group["members"] as? [[String: Any]] else { continue }
                 for member in members {
@@ -451,7 +469,15 @@ final class SignalCLIAdapter: MessengerAdapter {
     }
 
     private func loadGroupNames() async -> [String: String] {
-        guard let groups = try? await rpc("listGroups") as? [[String: Any]] else { return [:] }
+        let groupsResult: [[String: Any]]?
+        do {
+            groupsResult = try await rpc("listGroups") as? [[String: Any]]
+        } catch {
+            NSLog("[SignalCLIAdapter] loadGroupNames failed: %@", error.localizedDescription)
+            if !isWatchDaemonRunning() { healthStatus = .warning }
+            return [:]
+        }
+        guard let groups = groupsResult else { return [:] }
         var names: [String: String] = [:]
         for g in groups {
             guard let id = g["id"] as? String, !id.isEmpty else { continue }

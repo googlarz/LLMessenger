@@ -118,10 +118,6 @@ protocol MessengerAdapter: AnyObject {
     func healthCheck() async -> AdapterHealthResult
 
     /// Enumerate known contacts and group conversations for the @ mention picker.
-    /// Default implementation returns an empty list — adapters opt in.
+    /// Adapters that don't support contacts must explicitly return [].
     func listContacts() async -> [Contact]
-}
-
-extension MessengerAdapter {
-    func listContacts() async -> [Contact] { [] }
 }

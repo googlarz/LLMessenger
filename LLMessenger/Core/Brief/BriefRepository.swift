@@ -145,11 +145,28 @@ struct BriefRepository {
 
         // Single bulk read: fetch existing rows for this service matching the incoming IDs.
         // This replaces the per-message fetchOne inside the write transaction (N+1 → 1 read).
-        let placeholders = incomingIDs.map { _ in "?" }.joined(separator: ",")
-        let existingMessages: [Message] = try database.dbQueue.read { db in
-            let sql = "SELECT * FROM messages WHERE service = ? AND messageId IN (\(placeholders))"
-            let args = StatementArguments([service] + incomingIDs)
-            return try Message.fetchAll(db, sql: sql, arguments: args)
+        // For large batches (>500 IDs) SQLite's bound-parameter limit requires chunking.
+        let existingMessages: [Message]
+        if incomingIDs.count <= 500 {
+            let placeholders = incomingIDs.map { _ in "?" }.joined(separator: ",")
+            existingMessages = try database.dbQueue.read { db in
+                let sql = "SELECT * FROM messages WHERE service = ? AND messageId IN (\(placeholders))"
+                let args = StatementArguments([service] + incomingIDs)
+                return try Message.fetchAll(db, sql: sql, arguments: args)
+            }
+        } else {
+            var all: [Message] = []
+            for batchStart in stride(from: 0, to: incomingIDs.count, by: 500) {
+                let batch = Array(incomingIDs[batchStart..<min(batchStart + 500, incomingIDs.count)])
+                let placeholders = batch.map { _ in "?" }.joined(separator: ",")
+                let sql = "SELECT * FROM messages WHERE service = ? AND messageId IN (\(placeholders))"
+                let args = StatementArguments([service] + batch)
+                let fetched = try database.dbQueue.read { db in
+                    try Message.fetchAll(db, sql: sql, arguments: args)
+                }
+                all.append(contentsOf: fetched)
+            }
+            existingMessages = all
         }
         // Map messageId → existing record for O(1) lookup in the write loop.
         let existingByID = Dictionary(existingMessages.map { ($0.messageId, $0) }, uniquingKeysWith: { a, _ in a })

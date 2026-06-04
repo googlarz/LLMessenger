@@ -3,6 +3,7 @@
 Telegram adapter for LLMessenger.
 Reads NDJSON from stdin, writes NDJSON to stdout.
 """
+import os
 import sys
 import json
 import asyncio
@@ -76,7 +77,11 @@ async def handle_fetch(app: Client, req: dict) -> dict:
     return {"conversations": conversations}
 
 async def handle_send(app: Client, req: dict) -> dict:
-    await app.send_message(int(req["conversation_id"]), req["text"])
+    cid_str = str(req["conversation_id"]).strip()
+    if not cid_str.lstrip("-").isdigit():
+        raise ValueError(f"Invalid conversation_id format: {cid_str!r}")
+    cid = int(cid_str)
+    await app.send_message(cid, req["text"])
     return {"success": True}
 
 async def handle_auth_loop(app: Client):
@@ -121,6 +126,29 @@ async def handle_auth_loop(app: Client):
         print(json.dumps(result), flush=True)
 
 
+async def command_loop(app: Client):
+    """Read newline-delimited JSON requests from stdin, dispatch, write replies."""
+    for raw_line in sys.stdin:
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+            action = req.get("action")
+            if action == "fetch":
+                result = await handle_fetch(app, req)
+            elif action == "send":
+                result = await handle_send(app, req)
+            elif action == "health":
+                result = {"status": "ok"}
+            else:
+                result = {"error": f"unknown action: {action}"}
+        except Exception as e:
+            result = {"error": str(e)}
+
+        print(json.dumps(result), flush=True)
+
+
 async def main():
     # Read init line
     init_line = sys.stdin.readline().strip()
@@ -138,50 +166,39 @@ async def main():
     api_hash     = cfg["api_hash"]
     session_path = cfg.get("session_path", "telegram_session")
 
-    # Connect without calling authorize() so stdin stays available for auth actions.
-    app = Client(session_path, api_id=api_id, api_hash=api_hash)
-    await app.connect()
-    try:
-        is_authorized = await app.is_user_authorized()
-    except Exception:
-        is_authorized = False
+    has_session = os.path.exists(f"{session_path}.session")
 
-    if not is_authorized:
-        # Tell the Swift side we're ready but need auth.
-        print(json.dumps({"success": True, "needs_auth": True}), flush=True)
-        await handle_auth_loop(app)
-        # After auth, disconnect and reconnect via the normal path so session is flushed.
-        await app.disconnect()
-        # Fall through to the normal `async with` block below.
-    else:
-        await app.disconnect()
-
-    async with Client(session_path, api_id=api_id, api_hash=api_hash) as app:
-        if not is_authorized:
-            # Reconnection after auth — no second init response needed; Swift already got success.
-            pass
-        else:
+    if has_session:
+        # Authorized path: a single context-managed Client. `async with` calls
+        # start() (which connects and sets up the dispatcher). On exit it
+        # disconnects and releases the SQLite handle cleanly.
+        async with Client(session_path, api_id=api_id, api_hash=api_hash) as app:
             print(json.dumps({"success": True}), flush=True)
-
-        for raw_line in sys.stdin:
-            line = raw_line.strip()
-            if not line:
-                continue
+            await command_loop(app)
+    else:
+        # First-run / unauthorized: connect manually so stdin stays available
+        # for the auth flow, then keep the SAME client connected for fetch/send.
+        # We intentionally never disconnect/reconnect in this lifetime — doing
+        # so leaves Pyrogram's SQLite session journal in a locked state and the
+        # next open fails with "database is locked".
+        app = Client(session_path, api_id=api_id, api_hash=api_hash)
+        await app.connect()
+        try:
+            print(json.dumps({"success": True, "needs_auth": True}), flush=True)
+            await handle_auth_loop(app)
+            # Auth loop returned, so the user is authorized on this connection.
+            # Manually initialise the dispatcher so get_dialogs() works.
+            await app.initialize()
+            await command_loop(app)
+        finally:
             try:
-                req = json.loads(line)
-                action = req.get("action")
-                if action == "fetch":
-                    result = await handle_fetch(app, req)
-                elif action == "send":
-                    result = await handle_send(app, req)
-                elif action == "health":
-                    result = {"status": "ok"}
-                else:
-                    result = {"error": f"unknown action: {action}"}
-            except Exception as e:
-                result = {"error": str(e)}
-
-            print(json.dumps(result), flush=True)
+                await app.terminate()
+            except Exception:
+                pass
+            try:
+                await app.disconnect()
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     asyncio.run(main())
