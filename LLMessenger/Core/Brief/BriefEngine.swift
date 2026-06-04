@@ -73,17 +73,23 @@ final class BriefEngine {
             let success: Bool
         }
 
+        // Snapshot @MainActor properties before entering the task group so child tasks
+        // use a stable copy and don't race on the `var client` property.
+        let client = self.client
+        let model = self.model
+        let basePrompt = self.basePrompt
+
         let results = await withTaskGroup(of: ServiceResult?.self) { group in
             for service in services {
                 let serviceMessages = messagesByService[service] ?? []
                 let recent = (try? repository.recentEpisodicSummaries(service: service, limit: 3)) ?? []
                 let signalAdapter = adapters[service] as? SignalCLIAdapter
-                
+
                 group.addTask {
                     do {
                         let systemPrompt = PromptBuilder.build(
                             mode: .summarizer,
-                            basePrompt: self.basePrompt,
+                            basePrompt: basePrompt,
                             services: [service],
                             episodicSummaries: recent,
                             now: Date()
@@ -93,7 +99,7 @@ final class BriefEngine {
                         let rankedConvIds = byConversation.keys
                             .sorted { (byConversation[$0]?.count ?? 0) > (byConversation[$1]?.count ?? 0) }
                             .prefix(maxConversations)
-                        
+
                         var conversationBlocks: [String] = []
                         for convId in rankedConvIds {
                             let convMessages = byConversation[convId]!.sorted { $0.timestamp < $1.timestamp }
@@ -103,10 +109,6 @@ final class BriefEngine {
                                 ?? signalAdapter?.contactName(for: convId)
                                 ?? convId
                             let omitted = convMessages.count - capped.count
-                            // SECURITY: message.text is inserted into the LLM user content without escaping.
-                            // A malicious sender whose text contains "=== [service] id | Title ===" could
-                            // inject a fake conversation header. Mitigation: strip or escape "===" from
-                            // user-supplied text before building conversation blocks. Tracked as a known gap.
                             let block = try self.buildConversationBlock(
                                 service: service,
                                 conversationID: convId,
@@ -123,8 +125,8 @@ final class BriefEngine {
                         }
                         let threadText = conversationBlocks.joined(separator: "\n\n")
 
-                        let response = try await self.client.complete(
-                            model: self.model,
+                        let response = try await client.complete(
+                            model: model,
                             messages: [
                                 LLMMessage(role: .system, content: systemPrompt),
                                 LLMMessage(role: .user,   content: threadText)
@@ -196,13 +198,33 @@ final class BriefEngine {
             notificationText: notificationText,
             episodicSummary: nil
         )
-        let briefID = try repository.insertBrief(brief)
-        try persistBriefCards(allCards, briefID: briefID, sourceMessagesByService: sourceMessagesByService)
-        try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
         // Only attach messages from services whose LLM response parsed successfully.
         // Messages from failed services stay unattached for the next poll cycle.
         let messagesToAttach = messages.filter { parsedServices.contains($0.service) }
-        try repository.attach(messages: messagesToAttach, toBriefID: briefID)
+
+        // Build record arrays on the main actor before entering the transaction closure.
+        let (cardRecords, cardSources) = try buildBriefCardRecords(
+            allCards, briefID: 0, sourceMessagesByService: sourceMessagesByService
+        )
+
+        // Atomic transaction: Brief row + all cards + all sources + message attachment.
+        // If any step throws, the entire transaction rolls back — no partial brief is committed.
+        let briefID = try await database.dbQueue.write { db in
+            let insertedID = try BriefRepository.insertBrief(brief, db: db)
+            // Re-stamp briefId now that we have a real ID.
+            let stampedCards = cardRecords.map { card -> BriefCardRecord in
+                var c = card
+                c.briefId = insertedID
+                return c
+            }
+            let stampedSources = cardSources  // briefCardId is already the UUID; no re-stamp needed
+            try BriefRepository.insertBriefCardsBatch(stampedCards, db: db)
+            try BriefRepository.insertBriefCardSources(stampedSources, db: db)
+            try BriefRepository.attach(messages: messagesToAttach, toBriefID: insertedID, db: db)
+            return insertedID
+        }
+
+        try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
 
         return briefID
     }
@@ -249,6 +271,11 @@ final class BriefEngine {
             let newlyStored: [Message]
             let success: Bool
         }
+
+        // Snapshot @MainActor properties before entering the task group.
+        let client2 = self.client
+        let model2 = self.model
+        let basePrompt2 = self.basePrompt
 
         let results = await withTaskGroup(of: ServiceResult?.self) { group in
             // Collect service IDs from both live adapters and DB (covers adapters that failed to start).
@@ -327,7 +354,7 @@ final class BriefEngine {
                         }
                         let systemPrompt = PromptBuilder.build(
                             mode: .summarizer,
-                            basePrompt: self.basePrompt,
+                            basePrompt: basePrompt2,
                             services: [serviceID],
                             episodicSummaries: recent,
                             now: Date(),
@@ -368,8 +395,8 @@ final class BriefEngine {
                         let threadText = conversationBlocks.joined(separator: "\n\n")
                         guard !threadText.isEmpty else { return nil }
 
-                        let response = try await self.client.complete(
-                            model: self.model,
+                        let response = try await client2.complete(
+                            model: model2,
                             messages: [
                                 LLMMessage(role: .system, content: systemPrompt),
                                 LLMMessage(role: .user,   content: threadText)
@@ -442,12 +469,31 @@ final class BriefEngine {
             episodicSummary: nil,
             windowStart: since
         )
-        let briefID = try repository.insertBrief(brief)
-        try persistBriefCards(allCards, briefID: briefID, sourceMessagesByService: sourceMessagesByService)
-        try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
-        if !messagesToAttach.isEmpty {
-            try repository.attach(messages: messagesToAttach, toBriefID: briefID)
+        // Build record arrays on the main actor before entering the transaction closure.
+        let (cardRecords2, cardSources2) = try buildBriefCardRecords(
+            allCards, briefID: 0, sourceMessagesByService: sourceMessagesByService
+        )
+
+        // Capture messagesToAttach in a local let so the @Sendable write closure can capture it.
+        let messagesToAttachSnapshot = messagesToAttach
+
+        // Atomic transaction: Brief row + all cards + all sources + message attachment.
+        let briefID = try await database.dbQueue.write { db in
+            let insertedID = try BriefRepository.insertBrief(brief, db: db)
+            let stampedCards = cardRecords2.map { card -> BriefCardRecord in
+                var c = card
+                c.briefId = insertedID
+                return c
+            }
+            try BriefRepository.insertBriefCardsBatch(stampedCards, db: db)
+            try BriefRepository.insertBriefCardSources(cardSources2, db: db)
+            if !messagesToAttachSnapshot.isEmpty {
+                try BriefRepository.attach(messages: messagesToAttachSnapshot, toBriefID: insertedID, db: db)
+            }
+            return insertedID
         }
+
+        try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
         return briefID
     }
 
@@ -511,15 +557,13 @@ final class BriefEngine {
         )
     }
 
-    private func persistBriefCards(
+    /// Builds card records and source records in memory. Called inside the atomic transaction.
+    private nonisolated func buildBriefCardRecords(
         _ cards: [BriefCard],
         briefID: Int64,
         sourceMessagesByService: [String: [String: Message]]
-    ) throws {
+    ) throws -> (cardRecords: [BriefCardRecord], sources: [BriefCardSource]) {
         let now = Date()
-
-        // Build all card records and their sources up front, skipping cards that fail
-        // validation. Errors are logged per-card, matching the original behaviour.
         var cardRecords: [BriefCardRecord] = []
         var allSources: [BriefCardSource] = []
 
@@ -527,6 +571,13 @@ final class BriefEngine {
             // Always generate a fresh UUID — the LLM-produced card.id is reused across
             // brief runs for the same conversation, causing UNIQUE constraint failures.
             let cardID = UUID().uuidString
+
+            // Validate before adding — mirrors the guard inside insertBriefCard.
+            guard !card.sourceMessageIds.isEmpty else {
+                print("[BriefEngine] buildBriefCardRecords: skipping card \(cardID) (\(card.service)/\(card.conversationId)): no source message IDs")
+                continue
+            }
+
             let record = BriefCardRecord(
                 id: cardID,
                 briefId: briefID,
@@ -541,12 +592,6 @@ final class BriefEngine {
                 sourceMessageIds: try encodeStringArray(card.sourceMessageIds),
                 createdAt: now
             )
-
-            // Validate before adding — mirrors the guard inside insertBriefCard.
-            guard !card.sourceMessageIds.isEmpty else {
-                print("[BriefEngine] persistBriefCards: skipping card \(cardID) (\(card.service)/\(card.conversationId)): no source message IDs")
-                continue
-            }
 
             let quoteMessageIDs = Set(card.quotes.compactMap(\.messageId))
             let sources = card.sourceMessageIds.map { messageID in
@@ -568,22 +613,7 @@ final class BriefEngine {
             allSources.append(contentsOf: sources)
         }
 
-        // Batch all card inserts into one transaction, then all source inserts into one
-        // transaction — replacing N+N individual transactions with 2 total.
-        if !cardRecords.isEmpty {
-            do {
-                try repository.insertBriefCardsBatch(cardRecords)
-            } catch {
-                print("[BriefEngine] persistBriefCards: failed to batch-insert cards: \(error)")
-            }
-        }
-        if !allSources.isEmpty {
-            do {
-                try repository.insertBriefCardSources(allSources)
-            } catch {
-                print("[BriefEngine] persistBriefCards: failed to batch-insert sources: \(error)")
-            }
-        }
+        return (cardRecords, allSources)
     }
 
     private func persistConversationStates(
@@ -639,6 +669,7 @@ final class BriefEngine {
             // Highest priority wins when cards disagree.
             let priority = convCards.map(\.priority).min(by: { priorityRank($0) < priorityRank($1) })
                 ?? firstCard.priority
+            let safePriority = ["high", "medium", "med", "low"].contains(priority.lowercased()) ? priority.lowercased() : "low"
             let lastCardId = convCards.last?.id ?? firstCard.id
 
             let state = ConversationState(
@@ -651,7 +682,7 @@ final class BriefEngine {
                 knownEntities: existing?.knownEntities,
                 unresolvedActions: allActionItems.isEmpty ? nil : try encodeStringArray(allActionItems),
                 lastBriefCardId: lastCardId,
-                prioritySignals: #"{"priority":"\#(priority)"}"#,
+                prioritySignals: #"{"priority":"\#(safePriority)"}"#,
                 sourceMessageIds: try encodeStringArray(allSourceIDs),
                 updatedAt: now
             )
@@ -677,8 +708,12 @@ final class BriefEngine {
         dateFormatter: DateFormatter,
         senderNameResolver: (String) -> String
     ) throws -> String {
+        // Sanitize user-supplied strings to prevent delimiter spoofing in the structured prompt.
+        let safeConvID = conversationID.replacingOccurrences(of: "===", with: "—")
+        let safeTitle = conversationTitle.replacingOccurrences(of: "===", with: "—")
+
         guard let firstNewMessageDate = newMessages.first?.timestamp else {
-            return "=== [\(service)] \(conversationID) | \(conversationTitle) ==="
+            return "=== [\(service)] \(safeConvID) | \(safeTitle) ==="
         }
 
         let state = try repository.fetchConversationState(service: service, conversationID: conversationID)
@@ -694,7 +729,7 @@ final class BriefEngine {
         // Header format: === [service] conversationID | conversationTitle ===
         // The [service] tag lets the LLM reliably extract service and conversationId
         // without guessing from the opaque ID format.
-        var lines: [String] = ["=== [\(service)] \(conversationID) | \(conversationTitle) ==="]
+        var lines: [String] = ["=== [\(service)] \(safeConvID) | \(safeTitle) ==="]
 
         // Inject user-defined relationship context (label + priority hint).
         if let ctx = try? repository.fetchConversationContext(service: service, conversationId: conversationID) {
@@ -735,7 +770,9 @@ final class BriefEngine {
         // [YOU] marks your own sent messages so the LLM can detect reply state and assign
         // priority correctly — threads where YOU sent last are rarely urgent.
         let senderLabel = message.isSent ? "YOU" : senderNameResolver(message.sender)
-        return "[id=\(message.messageId) | \(dateFormatter.string(from: message.timestamp))] \(senderLabel): \(message.text)"
+        // Sanitize message text to prevent delimiter spoofing.
+        let safeText = message.text.replacingOccurrences(of: "===", with: "—")
+        return "[id=\(message.messageId) | \(dateFormatter.string(from: message.timestamp))] \(senderLabel): \(safeText)"
     }
 
     private nonisolated func messageSortAscending(_ lhs: Message, _ rhs: Message) -> Bool {

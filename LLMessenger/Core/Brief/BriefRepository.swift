@@ -57,20 +57,30 @@ struct BriefRepository {
 
     func attach(messages: [Message], toBriefID briefID: Int64) throws {
         try database.dbQueue.write { db in
-            for var msg in messages {
-                msg.briefId = briefID
-                try msg.update(db)
-            }
+            try Self.attach(messages: messages, toBriefID: briefID, db: db)
+        }
+    }
+
+    /// Participates in a caller-supplied write transaction.
+    static func attach(messages: [Message], toBriefID briefID: Int64, db: Database) throws {
+        for var msg in messages {
+            msg.briefId = briefID
+            try msg.update(db)
         }
     }
 
     func insertBrief(_ brief: Brief) throws -> Int64 {
         try database.dbQueue.write { db in
-            var b = brief
-            try b.insert(db)
-            guard let id = b.id else { throw DatabaseError(message: "insertBrief: no rowid after insert") }
-            return id
+            try Self.insertBrief(brief, db: db)
         }
+    }
+
+    /// Participates in a caller-supplied write transaction.
+    static func insertBrief(_ brief: Brief, db: Database) throws -> Int64 {
+        var b = brief
+        try b.insert(db)
+        guard let id = b.id else { throw DatabaseError(message: "insertBrief: no rowid after insert") }
+        return id
     }
 
     func update(brief: Brief) throws {
@@ -404,14 +414,21 @@ struct BriefRepository {
 
     /// Inserts all cards in a single write transaction. Each card must have at least one source ID.
     func insertBriefCardsBatch(_ cards: [BriefCardRecord]) throws {
+        try database.dbQueue.write { db in
+            try Self.insertBriefCardsBatch(cards, db: db)
+        }
+    }
+
+    /// Participates in a caller-supplied write transaction.
+    static func insertBriefCardsBatch(_ cards: [BriefCardRecord], db: Database) throws {
         for card in cards {
-            let sourceIDs = decodedStringArray(card.sourceMessageIds)
+            let sourceIDs = card.sourceMessageIds.data(using: .utf8)
+                .flatMap { try? JSONDecoder().decode([String].self, from: $0) }
+                .map { $0.filter { !$0.isEmpty } } ?? []
             guard !sourceIDs.isEmpty else { throw BriefRepositoryError.briefCardMissingSources }
         }
-        try database.dbQueue.write { db in
-            for card in cards {
-                try card.insert(db)
-            }
+        for card in cards {
+            try card.insert(db)
         }
     }
 
@@ -457,9 +474,14 @@ struct BriefRepository {
 
     func insertBriefCardSources(_ sources: [BriefCardSource]) throws {
         try database.dbQueue.write { db in
-            for var source in sources {
-                try source.insert(db)
-            }
+            try Self.insertBriefCardSources(sources, db: db)
+        }
+    }
+
+    /// Participates in a caller-supplied write transaction.
+    static func insertBriefCardSources(_ sources: [BriefCardSource], db: Database) throws {
+        for var source in sources {
+            try source.insert(db)
         }
     }
 
