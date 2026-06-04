@@ -49,11 +49,10 @@ final class SubprocessAdapter: MessengerAdapter {
             // moves on to fetch() on subsequent polls.
             healthStatus = .ok
         } catch {
-            healthStatus = .error
-            // Subprocess may have printed why it died on stderr. Bubble that up so
-            // the user sees "ModuleNotFoundError: telethon" instead of just
-            // "Adapter process closed unexpectedly".
+            // Drain stderr before stop() clears the handle, then terminate the process.
             let detail = drainStderr()
+            stop()
+            healthStatus = .error
             if !detail.isEmpty {
                 throw AdapterError.initFailed("\(error.localizedDescription)\n\(detail)")
             }
@@ -62,17 +61,25 @@ final class SubprocessAdapter: MessengerAdapter {
     }
 
     /// Non-blocking read of whatever stderr has accumulated since start.
-    /// Returns the trimmed last ~600 chars so a verbose Python stack trace
-    /// surfaces only its final, most actionable lines.
+    /// Strips lines containing credentials and returns only the first
+    /// meaningful error line so tracebacks don't leak secrets into the UI.
     private func drainStderr() -> String {
         guard let handle = stderrHandle else { return "" }
         let data = handle.availableData
         guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return "" }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.count > 600 {
-            return String(trimmed.suffix(600))
+        return sanitizeStderr(text)
+    }
+
+    private func sanitizeStderr(_ raw: String) -> String {
+        let lines = raw.components(separatedBy: .newlines)
+        let safe = lines.filter { line in
+            let lower = line.lowercased()
+            return !lower.contains("api_id") &&
+                   !lower.contains("api_hash") &&
+                   !lower.contains("secret") &&
+                   !lower.contains("token")
         }
-        return trimmed
+        return safe.first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? ""
     }
 
     func stop() {
