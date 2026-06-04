@@ -8,7 +8,7 @@ final class OllamaClient: LLMClient {
     init(baseURL: URL = URL(string: "http://127.0.0.1:11434")!,
          session: URLSession = {
              let config = URLSessionConfiguration.default
-             config.timeoutIntervalForRequest = 300
+             config.timeoutIntervalForRequest = 30
              return URLSession(configuration: config)
          }()) {
         self.baseURL = baseURL
@@ -16,6 +16,14 @@ final class OllamaClient: LLMClient {
     }
 
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
+        // Quick liveness check — fail fast if Ollama is not running.
+        let livenessConfig = URLSessionConfiguration.ephemeral
+        livenessConfig.timeoutIntervalForRequest = 2
+        let livenessSession = URLSession(configuration: livenessConfig)
+        if (try? await livenessSession.data(from: baseURL)) == nil {
+            throw LLMError.networkFailed("Ollama server not reachable — is it running?")
+        }
+
         let chatMessages = messages.map { msg -> [String: Any] in
             ["role": msg.role.rawValue, "content": msg.content]
         }
