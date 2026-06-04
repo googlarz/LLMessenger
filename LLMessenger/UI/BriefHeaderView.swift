@@ -176,10 +176,10 @@ struct BriefHeaderView: View {
 
     private var stateLabel: String {
         switch generationState {
-        case .cached: return "CACHED"
+        case .cached: return ""
         case .fetching: return "FETCHING"
         case .summarizing: return "UPDATING"
-        case .partial: return "PARTIAL"
+        case .partial: return "Partially updated"
         case .complete: return "READY"
         case .noNewMessages: return "NO NEW MESSAGES"
         case .failed: return "FAILED"

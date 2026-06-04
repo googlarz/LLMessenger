@@ -239,6 +239,18 @@ struct SendConfirmationView: View {
                         .foregroundStyle(Theme.accent)
                 }
 
+                if !draft.senderName.isEmpty || !draft.conversationID.isEmpty {
+                    HStack(spacing: 4) {
+                        Text("→")
+                        Text(Theme.serviceName(draft.serviceID))
+                            .fontWeight(.medium)
+                        Text("·")
+                        Text(draft.senderName.isEmpty ? draft.conversationID : draft.senderName)
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+                }
+
                 Text(draft.text)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textPrimary)
@@ -267,6 +279,7 @@ struct SendConfirmationView: View {
                     .background(Theme.accent)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.return, modifiers: .command)
                 }
             }
 

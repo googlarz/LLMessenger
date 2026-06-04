@@ -517,6 +517,12 @@ final class BriefEngine {
         sourceMessagesByService: [String: [String: Message]]
     ) throws {
         let now = Date()
+
+        // Build all card records and their sources up front, skipping cards that fail
+        // validation. Errors are logged per-card, matching the original behaviour.
+        var cardRecords: [BriefCardRecord] = []
+        var allSources: [BriefCardSource] = []
+
         for card in cards {
             // Always generate a fresh UUID — the LLM-produced card.id is reused across
             // brief runs for the same conversation, causing UNIQUE constraint failures.
@@ -535,10 +541,10 @@ final class BriefEngine {
                 sourceMessageIds: try encodeStringArray(card.sourceMessageIds),
                 createdAt: now
             )
-            do {
-                try repository.insertBriefCard(record)
-            } catch {
-                print("[BriefEngine] persistBriefCards: failed to insert card \(cardID) (\(card.service)/\(card.conversationId)): \(error)")
+
+            // Validate before adding — mirrors the guard inside insertBriefCard.
+            guard !card.sourceMessageIds.isEmpty else {
+                print("[BriefEngine] persistBriefCards: skipping card \(cardID) (\(card.service)/\(card.conversationId)): no source message IDs")
                 continue
             }
 
@@ -557,10 +563,25 @@ final class BriefEngine {
                     createdAt: now
                 )
             }
+
+            cardRecords.append(record)
+            allSources.append(contentsOf: sources)
+        }
+
+        // Batch all card inserts into one transaction, then all source inserts into one
+        // transaction — replacing N+N individual transactions with 2 total.
+        if !cardRecords.isEmpty {
             do {
-                try repository.insertBriefCardSources(sources)
+                try repository.insertBriefCardsBatch(cardRecords)
             } catch {
-                print("[BriefEngine] persistBriefCards: failed to insert sources for card \(cardID): \(error)")
+                print("[BriefEngine] persistBriefCards: failed to batch-insert cards: \(error)")
+            }
+        }
+        if !allSources.isEmpty {
+            do {
+                try repository.insertBriefCardSources(allSources)
+            } catch {
+                print("[BriefEngine] persistBriefCards: failed to batch-insert sources: \(error)")
             }
         }
     }

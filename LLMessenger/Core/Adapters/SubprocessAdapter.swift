@@ -36,6 +36,10 @@ final class SubprocessAdapter: MessengerAdapter {
         self.ioQueue = DispatchQueue(label: "com.llmessenger.adapter.\(serviceID)", qos: .default)
     }
 
+    deinit {
+        process?.terminate()
+    }
+
     func start() async throws {
         guard process?.isRunning != true else { return }
         do {

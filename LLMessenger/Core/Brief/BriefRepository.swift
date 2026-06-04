@@ -139,10 +139,32 @@ struct BriefRepository {
     // Used by summarizeLast to persist adapter-fetched messages so chat works.
     @discardableResult
     func storeMessages(from result: AdapterFetchResult, service: String) throws -> [Message] {
+        // Collect all incoming message IDs up front.
+        let incomingIDs = result.conversations.flatMap { $0.messages.map(\.id) }
+        guard !incomingIDs.isEmpty else { return [] }
+
+        // Single bulk read: fetch existing rows for this service matching the incoming IDs.
+        // This replaces the per-message fetchOne inside the write transaction (N+1 → 1 read).
+        let placeholders = incomingIDs.map { _ in "?" }.joined(separator: ",")
+        let existingMessages: [Message] = try database.dbQueue.read { db in
+            let sql = "SELECT * FROM messages WHERE service = ? AND messageId IN (\(placeholders))"
+            let args = StatementArguments([service] + incomingIDs)
+            return try Message.fetchAll(db, sql: sql, arguments: args)
+        }
+        // Map messageId → existing record for O(1) lookup in the write loop.
+        let existingByID = Dictionary(existingMessages.map { ($0.messageId, $0) }, uniquingKeysWith: { a, _ in a })
+
         var stored: [Message] = []
         try database.dbQueue.write { db in
             for conv in result.conversations {
                 for msg in conv.messages {
+                    if let existing = existingByID[msg.id] {
+                        // Already in DB — include it if unattached, same as before.
+                        if existing.briefId == nil {
+                            stored.append(existing)
+                        }
+                        continue
+                    }
                     var record = Message(
                         briefId: nil,
                         service: service,
@@ -157,11 +179,6 @@ struct BriefRepository {
                     try record.insert(db, onConflict: .ignore)
                     if db.changesCount > 0 {
                         stored.append(record)
-                    } else if let existing = try Message
-                        .filter(Column("service") == service)
-                        .filter(Column("messageId") == msg.id)
-                        .fetchOne(db), existing.briefId == nil {
-                        stored.append(existing)
                     }
                 }
             }
@@ -365,6 +382,19 @@ struct BriefRepository {
 
         try database.dbQueue.write { db in
             try card.insert(db)
+        }
+    }
+
+    /// Inserts all cards in a single write transaction. Each card must have at least one source ID.
+    func insertBriefCardsBatch(_ cards: [BriefCardRecord]) throws {
+        for card in cards {
+            let sourceIDs = decodedStringArray(card.sourceMessageIds)
+            guard !sourceIDs.isEmpty else { throw BriefRepositoryError.briefCardMissingSources }
+        }
+        try database.dbQueue.write { db in
+            for card in cards {
+                try card.insert(db)
+            }
         }
     }
 

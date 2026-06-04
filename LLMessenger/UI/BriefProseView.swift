@@ -130,6 +130,7 @@ struct BriefCardEvidenceView: View {
     let repository: BriefRepository
     @State private var sources: [(source: BriefCardSource, message: Message?)] = []
     @State private var isLoading = true
+    @State private var loadError: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -144,12 +145,25 @@ struct BriefCardEvidenceView: View {
             } else {
                 let items = sources
                 if items.isEmpty {
-                    Text("No direct evidence found in database.")
-                        .font(.system(size: 12))
-                        .italic()
-                        .foregroundStyle(Theme.textTertiary)
+                    if let error = loadError {
+                        VStack(spacing: 6) {
+                            Text("Could not load evidence")
+                                .font(.system(size: 12))
+                                .italic()
+                                .foregroundStyle(Theme.textTertiary)
+                            Button("Retry") { Task { await loadEvidence() } }
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.accent)
+                                .buttonStyle(.plain)
+                        }
+                    } else {
+                        Text("No direct evidence found in database.")
+                            .font(.system(size: 12))
+                            .italic()
+                            .foregroundStyle(Theme.textTertiary)
+                    }
                 } else {
-                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    ForEach(items, id: \.source.id) { item in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
                                 Text(item.message?.sender ?? "Unknown")
@@ -168,7 +182,7 @@ struct BriefCardEvidenceView: View {
                                     .background(Theme.surfaceHigh)
                                     .clipShape(RoundedRectangle(cornerRadius: 3))
                             }
-                            
+
                             Text(item.message?.text ?? item.source.quoteText ?? "(No message text)")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.textPrimary)
@@ -185,16 +199,19 @@ struct BriefCardEvidenceView: View {
             }
         }
         .padding(.top, 4)
-        .onAppear {
-            Task {
-                do {
-                    sources = try repository.fetchSourcesWithMessages(briefID: briefID, service: card.service, conversationID: card.conversationId)
-                } catch {
-                    print("Evidence error: \(error)")
-                }
-                isLoading = false
-            }
+        .task { await loadEvidence() }
+    }
+
+    private func loadEvidence() async {
+        isLoading = true
+        loadError = nil
+        do {
+            sources = try repository.fetchSourcesWithMessages(briefID: briefID, service: card.service, conversationID: card.conversationId)
+        } catch {
+            print("Evidence error: \(error)")
+            loadError = error.localizedDescription
         }
+        isLoading = false
     }
     
     private func roleLabel(_ role: String) -> String {
@@ -364,6 +381,23 @@ struct BriefProseView: View {
                         }
                         cardsView(otherCards)
                     }
+
+                    if let briefID = brief.id {
+                        let unhandledCount = numberedVisibleCards.filter { !appState.isCardHandled(briefID: briefID, cardID: $0.card.id) }.count
+                        if unhandledCount > 0 {
+                            HStack {
+                                Spacer()
+                                Button("Mark all handled (\(unhandledCount))") {
+                                    appState.markAllHandled(briefID: briefID)
+                                }
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.textTertiary)
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 28)
+                                .padding(.bottom, 8)
+                            }
+                        }
+                    }
                 }
             } else {
                 fallbackView
@@ -371,6 +405,19 @@ struct BriefProseView: View {
         }
         .padding(.top, 12)
         .padding(.bottom, 8)
+        // H key: toggle handled on the first unhandled card visible in the current filter.
+        .background {
+            if let briefID = brief.id,
+               let firstUnhandled = numberedVisibleCards.first(where: {
+                   !appState.isCardHandled(briefID: briefID, cardID: $0.card.id)
+               }) {
+                Button("") {
+                    appState.markCardHandled(briefID: briefID, cardID: firstUnhandled.card.id)
+                }
+                .keyboardShortcut("h", modifiers: [])
+                .hidden()
+            }
+        }
     }
 
     // MARK: - JSON card rendering

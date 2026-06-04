@@ -11,7 +11,8 @@ final class AppDatabase: @unchecked Sendable {
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("LLMessenger")
         try FileManager.default.createDirectory(at: appSupport,
-                                                withIntermediateDirectories: true)
+                                                withIntermediateDirectories: true,
+                                                attributes: [FileAttributeKey.posixPermissions: 0o700])
         let dbPath = appSupport.appendingPathComponent("llmessenger.db").path
         try self.init(path: dbPath)
     }
@@ -25,6 +26,7 @@ final class AppDatabase: @unchecked Sendable {
 
     private init(path: String) throws {
         dbQueue = try DatabaseQueue(path: path)
+        try? FileManager.default.setAttributes([FileAttributeKey.posixPermissions: 0o600], ofItemAtPath: path)
         try migrate()
     }
 
@@ -271,6 +273,10 @@ final class AppDatabase: @unchecked Sendable {
                 t.column("lastService", .text).notNull()
                 t.column("lastUsedAt", .datetime).notNull()
             }
+        }
+        migrator.registerMigration("v11_indexes") { db in
+            try db.create(index: "messages_on_service_conversation", on: "messages", columns: ["service", "conversationId"])
+            try db.create(index: "conversationState_on_service_conversation", on: "conversationState", columns: ["service", "conversationId"])
         }
         try migrator.migrate(dbQueue)
     }

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ChatInputView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
+    @EnvironmentObject var appState: AppState
     @FocusState private var isFocused: Bool
     @State private var showMentionPicker = false
     @State private var mentionQuery = ""
@@ -10,6 +11,16 @@ struct ChatInputView: View {
     @State private var mentionRange: Range<String.Index>?
 
     var body: some View {
+        if !appState.isLLMConfigured {
+            Text("LLM not configured — tap to open Settings")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 14)
+                .background(Theme.surface)
+                .onTapGesture { appState.onOpenSettings?() }
+        } else {
         VStack(alignment: .leading, spacing: 6) {
             if let target = chatViewModel.pendingTarget {
                 MentionTargetChip(target: target) {
@@ -69,11 +80,13 @@ struct ChatInputView: View {
                 .disabled(!canSend)
                 .animation(.easeInOut(duration: 0.15), value: canSend)
                 .keyboardShortcut(.return, modifiers: .command)
+                .help("Send (⌘↩)")
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Theme.surface)
+        } // end else
     }
 
     private var placeholder: String {

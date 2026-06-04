@@ -75,12 +75,13 @@ final class iMessageAdapter: MessengerAdapter {
 
         rows = try await dbQueue.read { db in
             // Discover the attributed body column name (varies by macOS version).
+            let allowedAttrColumns: Set<String> = ["attributedBody", "attributed_body"]
             let columns = try Row.fetchAll(db, sql: "PRAGMA table_info(message)")
-            let attrCol = columns.compactMap { $0["name"] as? String }
-                .first { $0 == "attributedBody" || $0 == "attributed_body" }
+            let safeAttrCol = columns.compactMap { $0["name"] as? String }
+                .first { allowedAttrColumns.contains($0) }
 
-            let attrSelect = attrCol.map { ", m.\($0) AS attr_body" } ?? ""
-            let attrWhere = attrCol.map { " OR m.\($0) IS NOT NULL" } ?? ""
+            let attrSelect = safeAttrCol.map { ", m.\($0) AS attr_body" } ?? ""
+            let attrWhere = safeAttrCol.map { " OR m.\($0) IS NOT NULL" } ?? ""
             let sql = """
                 SELECT
                     c.guid        AS chat_guid,
@@ -152,45 +153,28 @@ final class iMessageAdapter: MessengerAdapter {
     }
 
     func send(conversationID: String, text: String) async throws {
-        // conversationID is either a handle id (DM) or a chat GUID (group).
-        let isGroup = conversationID.contains(";+;") || conversationID.hasPrefix("iMessage;+;")
-
-        let escapedText = text
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\" & linefeed & \"")
-            .replacingOccurrences(of: "\r", with: "\" & return & \"")
-            .replacingOccurrences(of: "\0", with: "")
-
-        let script: String
-        if isGroup {
-            let escapedGUID = conversationID
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "\"", with: "\\\"")
-                .replacingOccurrences(of: "\0", with: "")
-            script = """
+        // Fixed AppleScript with no user data interpolated — conversationID and text
+        // are passed as separate argv elements to eliminate injection risk entirely.
+        let script = """
+        on run argv
+            set chatID to item 1 of argv
+            set msgText to item 2 of argv
             tell application "Messages"
-                set targetChat to first chat whose id is "\(escapedGUID)"
-                send "\(escapedText)" to targetChat
+                set targetChats to (every chat whose id is chatID)
+                if (count of targetChats) > 0 then
+                    send msgText to item 1 of targetChats
+                else
+                    set targetService to 1st service whose service type = iMessage
+                    set targetBuddy to buddy chatID of targetService
+                    send msgText to targetBuddy
+                end if
             end tell
-            """
-        } else {
-            let escapedID = conversationID
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "\"", with: "\\\"")
-                .replacingOccurrences(of: "\0", with: "")
-            script = """
-            tell application "Messages"
-                set targetService to 1st service whose service type is iMessage
-                set targetBuddy to buddy "\(escapedID)" of targetService
-                send "\(escapedText)" to targetBuddy
-            end tell
-            """
-        }
+        end run
+        """
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        proc.arguments = ["-e", script]
+        proc.arguments = ["-e", script, "--", conversationID, text]
         let errPipe = Pipe()
         proc.standardError = errPipe
         try proc.run()

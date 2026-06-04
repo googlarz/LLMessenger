@@ -117,19 +117,23 @@ final class PollEngine {
             }
         }
 
-        let fetchConfig = makeFetchConfig(config: config, serviceID: serviceID)
+        let fetchConfig = await makeFetchConfig(config: config, serviceID: serviceID)
         let result: AdapterFetchResult
         do {
             result = try await adapter.fetch(config: fetchConfig)
         } catch {
             let failures = (failureCounts[serviceID] ?? 0) + 1
             failureCounts[serviceID] = failures
+            NSLog("[PollEngine] %@", "\(serviceID): fetch failed: \(error.localizedDescription)")
             // Fetch failed — write error status; lastCheck advances so the next poll
             // starts from now rather than re-fetching the same (failed) window again.
             writeHealth(service: serviceID, status: "error",
                         error: error.localizedDescription, updateLastCheck: true)
             throw error
         }
+
+        let totalMsgs = result.conversations.reduce(0) { $0 + $1.messages.count }
+        NSLog("[PollEngine] %@", "\(serviceID): fetched \(result.conversations.count) conversations, \(totalMsgs) messages")
 
         do {
             let hadNew = try store(result: result, service: serviceID)
@@ -185,15 +189,17 @@ final class PollEngine {
         adapters.mapValues { $0.healthStatus }
     }
 
-    private func readLastCheck(serviceID: String) -> Date? {
-        try? database.dbQueue.read { db in
-            try ServiceHealth.fetchOne(db, key: serviceID)
-        }?.lastCheck
+    private func readLastCheck(serviceID: String) async -> Date? {
+        await Task.detached(priority: .utility) { [database = self.database] in
+            try? database.dbQueue.read { db in
+                try ServiceHealth.fetchOne(db, key: serviceID)
+            }?.lastCheck
+        }.value
     }
 
     private func checkCatchUp(serviceID: String) async {
         guard let config = configs[serviceID] else { return }
-        guard let lastCheck = readLastCheck(serviceID: serviceID) else {
+        guard let lastCheck = await readLastCheck(serviceID: serviceID) else {
             try? await pollNow(serviceID: serviceID)
             return
         }
@@ -204,19 +210,19 @@ final class PollEngine {
         }
     }
 
-    private func makeFetchConfig(config: ServiceConfig, serviceID: String) -> FetchConfig {
+    private func makeFetchConfig(config: ServiceConfig, serviceID: String) async -> FetchConfig {
         // On first run (no prior check recorded), fetch the last 48 hours so recent
         // messages are not missed. Subsequent polls use the last-check timestamp.
         let firstRunWindow: TimeInterval = 48 * 3600
         switch config.resolvedFetchMode {
         case .time:
-            let since = readLastCheck(serviceID: serviceID)
+            let since = await readLastCheck(serviceID: serviceID)
                 ?? Date().addingTimeInterval(-firstRunWindow)
             return FetchConfig(mode: .byTime(since: since))
         case .count:
             // Always include a time anchor so adapters that respect `since` don't
             // return unlimited history on first run (when lastCheck is nil).
-            if let lastCheck = readLastCheck(serviceID: serviceID) {
+            if let lastCheck = await readLastCheck(serviceID: serviceID) {
                 return FetchConfig(mode: .byTime(since: lastCheck))
             }
             let since = Date().addingTimeInterval(-firstRunWindow)

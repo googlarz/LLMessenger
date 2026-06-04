@@ -92,8 +92,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         if let id = newID {
                             self.appState?.lastError = nil
                             let brief = try? self.appState?.repository.fetchBrief(id: id)
-                            let body = brief?.notificationText ?? "You have new messages"
-                            self.notificationManager?.post(briefID: id, title: "New messages", body: body)
+                            let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
+                            self.notificationManager?.post(briefID: id, title: title, body: body)
                         }
                         self.appState?.briefGenerationState = newID == nil ? .noNewMessages : .complete
                     } catch {
@@ -124,8 +124,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self.appState?.briefGenerationState = .summarizing
                         if let briefID = try await self.briefEngine?.summarizeLast(hours: 48, adapters: adapters) {
                             let brief = try? self.appState?.repository.fetchBrief(id: briefID)
-                            let body = brief?.notificationText ?? "48h summary ready"
-                            self.notificationManager?.post(briefID: briefID, title: "48h Summary", body: body)
+                            let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "48h Summary")
+                            self.notificationManager?.post(briefID: briefID, title: title, body: body)
                             self.appState?.briefGenerationState = .complete
                         } else {
                             self.appState?.briefGenerationState = .noNewMessages
@@ -158,8 +158,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self.appState?.briefGenerationState = .summarizing
                         if let briefID = try await self.briefEngine?.summarizeLast(hours: 168, adapters: adapters) {
                             let brief = try? self.appState?.repository.fetchBrief(id: briefID)
-                            let body = brief?.notificationText ?? "7-day summary ready"
-                            self.notificationManager?.post(briefID: briefID, title: "7-Day Summary", body: body)
+                            let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "7-Day Summary")
+                            self.notificationManager?.post(briefID: briefID, title: title, body: body)
                             self.appState?.briefGenerationState = .complete
                         } else {
                             self.appState?.briefGenerationState = .noNewMessages
@@ -264,8 +264,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.menuBarController?.setLoading(false)
                     if let id = newID {
                         let brief = try? self.appState?.repository.fetchBrief(id: id)
-                        let body = brief?.notificationText ?? "You have new messages"
-                        self.notificationManager?.post(briefID: id, title: "New messages", body: body)
+                        let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
+                        self.notificationManager?.post(briefID: id, title: title, body: body)
                     }
                 } catch {
                     self.appState?.lastError = error.localizedDescription
@@ -576,6 +576,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         default:
             break
         }
+    }
+
+    /// Builds a high-priority-aware notification title and body for a brief.
+    /// When the brief contains at least one high-priority card, the title names
+    /// the count and the body is the top high-priority headline.
+    /// Falls back to the generic "New messages" / notificationText pair.
+    private func highPriorityNotification(brief: Brief?, defaultTitle: String) -> (title: String, body: String) {
+        let defaultBody = brief?.notificationText ?? "You have new messages"
+        guard let summary = brief?.openingSummary,
+              let data = summary.data(using: .utf8),
+              let parsed = try? JSONDecoder().decode(BriefJSON.self, from: data)
+        else {
+            return (defaultTitle, defaultBody)
+        }
+        let highCards = parsed.cards.filter { $0.priority == "high" }
+        guard !highCards.isEmpty, let topHeadline = highCards.first?.headline else {
+            return (defaultTitle, defaultBody)
+        }
+        let title = highCards.count == 1 ? "1 item needs your reply" : "\(highCards.count) items need your reply"
+        return (title, topHeadline)
     }
 
     private func telegramAdapterPath() -> String? {

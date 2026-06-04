@@ -35,14 +35,14 @@ struct KeychainStore {
         // Update payload sets the accessibility class, migrating legacy items on first write.
         let updateAttributes: [String: Any] = [
             kSecValueData as String:        data,
-            kSecAttrAccessible as String:   kSecAttrAccessibleAfterFirstUnlock
+            kSecAttrAccessible as String:   kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
         let updateStatus = SecItemUpdate(searchQuery as CFDictionary, updateAttributes as CFDictionary)
         if updateStatus == errSecSuccess { return }
         if updateStatus == errSecItemNotFound {
             var addQuery = searchQuery
             addQuery[kSecValueData as String]      = data
-            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             guard addStatus == errSecSuccess else {
                 throw KeychainError.unexpectedStatus(addStatus)

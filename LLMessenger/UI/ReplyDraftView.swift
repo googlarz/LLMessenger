@@ -30,7 +30,11 @@ struct ReplyDraftView: View {
                         Image(systemName: "xmark")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(Theme.textTertiary)
+                            .frame(minWidth: 24, minHeight: 24)
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("Discard draft")
+                    .help("Discard this draft")
                     .buttonStyle(.plain)
                 }
 

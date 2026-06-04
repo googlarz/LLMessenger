@@ -19,7 +19,15 @@ struct ChatPanelView: View {
 
     private var headerStats: (messages: Int, services: Int, briefs: Int, threads: Int, people: Int, highPriority: Int, failed: [String]) {
         let msgs = briefMessages
-        let failed = decodedStringArray(appState.selectedBrief?.failedServices)
+        // Filter out services that are currently healthy. A historical failure
+        // at brief-build time (e.g. LLM validation hiccup) shouldn't be advertised
+        // as "Signal failed" when Signal is green right now — that scares users
+        // into thinking the connection is broken.
+        let recordedFailed = decodedStringArray(appState.selectedBrief?.failedServices)
+        let failed = recordedFailed.filter { svc in
+            let s = appState.serviceHealth[svc]
+            return s != nil && s != .ok
+        }
 
         if var summary = appState.selectedBrief?.openingSummary {
             let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)

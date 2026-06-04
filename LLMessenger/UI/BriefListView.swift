@@ -88,6 +88,30 @@ struct BriefListView: View {
                             )
                         }
 
+                        // Empty state
+                        if filteredGroups.isEmpty && appState.pinnedBriefs.isEmpty && needsReplyCards.isEmpty && searchQuery.isEmpty {
+                            VStack(spacing: 12) {
+                                Spacer().frame(height: 20)
+                                Image(systemName: "tray")
+                                    .font(.system(size: 32))
+                                    .foregroundStyle(Theme.textTertiary)
+                                Text("No briefs yet")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Theme.textSecondary)
+                                Text("Your first brief will appear after the next poll.\nCheck Settings to confirm your services are connected.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.textTertiary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 16)
+                                Button("Open Settings") { appState.onOpenSettings?() }
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.accent)
+                                    .buttonStyle(.plain)
+                                Spacer()
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+
                         // Pinned section
                         let pinned = appState.pinnedBriefs
                         if !pinned.isEmpty {
@@ -137,6 +161,7 @@ struct BriefListView: View {
     }
 
     private func selectBrief(_ brief: Brief) {
+        appState.lastError = nil
         guard let id = brief.id else { return }
         appState.selectedBriefID = id
         appState.markAsOpen(briefID: id)

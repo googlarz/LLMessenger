@@ -590,6 +590,14 @@ final class ChatViewModel: ObservableObject {
             try await adapter.send(conversationID: draft.conversationID, text: draft.text)
             cancelSendConfirmation(id: id)
             discardDraft(id: draft.id)
+            if let brief = appState.selectedBrief,
+               let briefID = brief.id,
+               let summary = brief.openingSummary,
+               let data = summary.data(using: .utf8),
+               let json = try? JSONDecoder().decode(BriefJSON.self, from: data),
+               let card = json.cards.first(where: { $0.service == draft.serviceID && $0.conversationId == draft.conversationID }) {
+                appState.markCardHandled(briefID: briefID, cardID: card.id)
+            }
             threadItems.append(.assistantResponse(id: UUID(), text: "Sent."))
         } catch {
             threadItems.append(.assistantResponse(id: UUID(),

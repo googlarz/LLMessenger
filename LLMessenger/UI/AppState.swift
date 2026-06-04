@@ -183,6 +183,7 @@ final class AppState: ObservableObject {
     }
 
     func markAsOpen(briefID: Int64) {
+        lastError = nil
         do {
             try repository.markAsOpen(briefID: briefID)
             InstrumentationManager.shared.track(event: .briefOpened, metadata: ["briefID": briefID])
@@ -213,6 +214,16 @@ final class AppState: ObservableObject {
 
     func isCardHandled(briefID: Int64, cardID: String) -> Bool {
         handledCardKeys.contains("\(briefID):\(cardID)")
+    }
+
+    func markAllHandled(briefID: Int64) {
+        guard let brief = briefs.first(where: { $0.id == briefID }),
+              let summary = brief.openingSummary,
+              let data = summary.data(using: .utf8),
+              let json = try? JSONDecoder().decode(BriefJSON.self, from: data) else { return }
+        for card in json.cards {
+            markCardHandled(briefID: briefID, cardID: card.id)
+        }
     }
 
     func setPinnedBrief(briefID: Int64, pinned: Bool) {
