@@ -24,7 +24,7 @@ final class AppDatabase: @unchecked Sendable {
         try migrate()
     }
 
-    private init(path: String) throws {
+    init(path: String) throws {
         dbQueue = try DatabaseQueue(path: path)
         try? FileManager.default.setAttributes([FileAttributeKey.posixPermissions: 0o600], ofItemAtPath: path)
         try migrate()
@@ -276,7 +276,22 @@ final class AppDatabase: @unchecked Sendable {
         }
         migrator.registerMigration("v11_indexes") { db in
             try db.create(index: "messages_on_service_conversation", on: "messages", columns: ["service", "conversationId"])
-            try db.create(index: "conversationState_on_service_conversation", on: "conversationState", columns: ["service", "conversationId"])
+            // Note: conversationState(service, conversationId) is the composite PK — GRDB creates an
+            // autoindex for it, so no explicit index is needed here.
+        }
+        migrator.registerMigration("v12_schema_hardening") { db in
+            // Hot query path: brief generation reads messages by service + time window
+            try db.create(index: "messages_on_service_timestamp",
+                          on: "messages",
+                          columns: ["service", "timestamp"],
+                          ifNotExists: true)
+
+            // ORDER BY createdAt queries on briefs table
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS briefs_on_createdAt ON briefs(createdAt DESC)")
+
+            // llmRuns analytics
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS llmRuns_on_startedAt ON llmRuns(startedAt DESC)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS llmRuns_on_status ON llmRuns(status)")
         }
         try migrator.migrate(dbQueue)
     }

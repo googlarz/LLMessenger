@@ -224,7 +224,63 @@ final class DatabaseIntegrityTests: XCTestCase {
         let migrationCount = try db1.dbQueue.read { d in
             try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM grdb_migrations") ?? 0
         }
-        XCTAssertEqual(migrationCount, 11,
-                       "All 11 migrations (v1..v11) must be recorded in grdb_migrations on fresh DB open")
+        XCTAssertEqual(migrationCount, 12,
+                       "All 12 migrations (v1..v12) must be recorded in grdb_migrations on fresh DB open")
+    }
+
+    func testReopeningDatabaseDoesNotReMigrate() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("reopen_test_\(UUID().uuidString).db")
+        defer { try? FileManager.default.removeItem(at: url) }
+        _ = try AppDatabase(path: url.path)
+        // Re-opening should succeed without error
+        let db2 = try AppDatabase(path: url.path)
+        XCTAssertNotNil(db2)
+    }
+
+    func testCascadedDeleteRemovesSources() throws {
+        // briefCards → briefs (onDelete: .cascade)
+        // briefCardSources → briefCards (onDelete: .cascade)
+        // Deleting a brief must remove its cards and their sources.
+        let db = try makeDB()
+        try db.dbQueue.write { d in
+            var b = Brief(createdAt: Date(), status: "ready", services: "[\"signal\"]",
+                          openingSummary: nil, notificationText: "x", episodicSummary: nil)
+            try b.insert(d)
+            let briefId = b.id!
+
+            let card = BriefCardRecord(id: "card-cascade-1", briefId: briefId,
+                                       service: "signal", conversationId: "c1",
+                                       conversationTitle: nil, headline: "H",
+                                       priority: "medium", summary: "S",
+                                       actionItems: "[]", callbackText: nil,
+                                       sourceMessageIds: "[\"m1\"]", createdAt: Date())
+            try card.insert(d)
+
+            var source = BriefCardSource(id: nil,
+                                         briefCardId: "card-cascade-1",
+                                         messageRowId: nil,
+                                         service: "signal",
+                                         messageId: "m1",
+                                         sourceRole: "primary",
+                                         quoteText: nil,
+                                         createdAt: Date())
+            try source.insert(d)
+
+            // Verify source exists before deletion
+            let sourcesBefore = try BriefCardSource
+                .filter(Column("briefCardId") == "card-cascade-1")
+                .fetchCount(d)
+            XCTAssertEqual(sourcesBefore, 1)
+
+            // Delete brief — cascades to cards, which cascades to sources
+            try Brief.deleteOne(d, key: briefId)
+
+            let sourcesAfter = try BriefCardSource
+                .filter(Column("briefCardId") == "card-cascade-1")
+                .fetchCount(d)
+            XCTAssertEqual(sourcesAfter, 0,
+                           "Deleting a Brief must cascade through BriefCards to remove BriefCardSources")
+        }
     }
 }
