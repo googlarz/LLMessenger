@@ -48,6 +48,17 @@ final class NotificationManager: NSObject {
         userInfo["briefID"] as? Int64
     }
 
+    nonisolated static func scheduleSnoozeNotification(briefID: Int64, headline: String, at date: Date) {
+        let content = UNMutableNotificationContent()
+        content.title = "Snoozed brief"
+        content.body = headline
+        content.userInfo = ["briefID": briefID]
+        let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let request = UNNotificationRequest(identifier: "snooze-\(briefID)", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+
     nonisolated static func postDraftReadyNotification(senderName: String, briefID: Int64) {
         let content = UNMutableNotificationContent()
         content.title = "Draft ready"

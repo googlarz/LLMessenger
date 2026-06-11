@@ -14,6 +14,9 @@ struct BriefListView: View {
     @State private var searchTask: Task<Void, Never>? = nil
     @State private var loadTask: Task<Void, Never>? = nil
     @State private var needsReplyCards: [(card: BriefCardRecord, briefCreatedAt: Date)] = []
+    @State private var showArchivedSection = false
+    @State private var snoozeTargetBriefID: Int64? = nil
+    @State private var showSnoozePopover = false
 
     var filteredGroups: [BriefListGroup] {
         appState.briefGroups(from: dateFrom, to: dateTo)
@@ -72,6 +75,11 @@ struct BriefListView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
+                        // Tasks section
+                        if !appState.tasks.isEmpty {
+                            TaskListView()
+                        }
+
                         // Needs Reply triage section
                         let unhandled = needsReplyCards.filter {
                             !appState.isCardHandled(briefID: $0.card.briefId, cardID: $0.card.id)
@@ -121,6 +129,7 @@ struct BriefListView: View {
                                              isSelected: appState.selectedBriefID == brief.id)
                                     .onTapGesture { selectBrief(brief) }
                                     .contextMenu { briefContextMenu(brief) }
+                                    .swipeActions(edge: .trailing) { briefSwipeActions(brief) }
                             }
                         }
 
@@ -132,6 +141,47 @@ struct BriefListView: View {
                                              isSelected: appState.selectedBriefID == brief.id)
                                     .onTapGesture { selectBrief(brief) }
                                     .contextMenu { briefContextMenu(brief) }
+                                    .swipeActions(edge: .trailing) { briefSwipeActions(brief) }
+                            }
+                        }
+
+                        // Archived section
+                        let archived = appState.archivedBriefs
+                        if !archived.isEmpty {
+                            Button {
+                                withAnimation { showArchivedSection.toggle() }
+                            } label: {
+                                HStack {
+                                    Image(systemName: showArchivedSection ? "chevron.down" : "chevron.right")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundStyle(Theme.textTertiary)
+                                    Text("ARCHIVED (\(archived.count))")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(Theme.textTertiary)
+                                        .kerning(0.6)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+                                .padding(.bottom, 3)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            if showArchivedSection {
+                                ForEach(archived, id: \.id) { brief in
+                                    BriefRowView(brief: brief,
+                                                 isSelected: appState.selectedBriefID == brief.id)
+                                        .onTapGesture { selectBrief(brief) }
+                                        .swipeActions(edge: .trailing) {
+                                            Button {
+                                                if let id = brief.id { appState.unarchiveBrief(id) }
+                                            } label: {
+                                                Label("Unarchive", systemImage: "arrow.uturn.backward")
+                                            }
+                                            .tint(.blue)
+                                        }
+                                }
                             }
                         }
                     }
@@ -143,8 +193,8 @@ struct BriefListView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
         }
-        .onAppear { refreshNeedsReply() }
-        .onChange(of: appState.briefs.map { $0.id }) { _ in refreshNeedsReply() }
+        .onAppear { refreshNeedsReply(); appState.refreshTasks() }
+        .onChange(of: appState.briefs.map { $0.id }) { _ in refreshNeedsReply(); appState.refreshTasks() }
         .onChange(of: appState.handledCardKeys) { _ in refreshNeedsReply() }
     }
 
@@ -171,6 +221,38 @@ struct BriefListView: View {
         // brief A's threadItems displayed while selectedBriefID points to brief B.
         loadTask?.cancel()
         loadTask = Task { try? await chatViewModel.loadBrief(brief) }
+    }
+
+    @ViewBuilder
+    private func briefSwipeActions(_ brief: Brief) -> some View {
+        Button {
+            if let id = brief.id { appState.archiveBrief(id) }
+        } label: {
+            Label("Archive", systemImage: "archivebox")
+        }
+        .tint(.orange)
+
+        Button {
+            snoozeTargetBriefID = brief.id
+            showSnoozePopover = true
+        } label: {
+            Label("Snooze", systemImage: "moon.zzz")
+        }
+        .tint(.indigo)
+        .popover(isPresented: $showSnoozePopover) {
+            if let briefID = snoozeTargetBriefID,
+               let brief = appState.briefs.first(where: { $0.id == briefID }) {
+                SnoozePickerView(brief: brief) { date in
+                    appState.snoozeBrief(id: briefID, until: date)
+                    NotificationManager.scheduleSnoozeNotification(
+                        briefID: briefID,
+                        headline: brief.notificationText,
+                        at: date
+                    )
+                    showSnoozePopover = false
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -487,6 +569,41 @@ private struct SettingsButtonView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Snooze picker
+
+private struct SnoozePickerView: View {
+    let brief: Brief
+    let onSelect: (Date) -> Void
+
+    private var tonight8pm: Date {
+        Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
+    }
+
+    private var tomorrowMorning: Date {
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        return Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Snooze until…")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .padding(.bottom, 4)
+
+            Button("In 2 hours") { onSelect(Date().addingTimeInterval(2 * 3600)) }
+            Button("Tonight at 8pm") { onSelect(tonight8pm) }
+            Button("Tomorrow morning") { onSelect(tomorrowMorning) }
+        }
+        .padding(14)
+        .frame(width: 200)
+        .background(Theme.surface)
+        .buttonStyle(.plain)
+        .font(.system(size: 13))
+        .foregroundStyle(Theme.accent)
     }
 }
 

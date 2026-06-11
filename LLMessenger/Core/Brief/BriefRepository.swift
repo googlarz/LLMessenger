@@ -275,6 +275,24 @@ struct BriefRepository {
         }
     }
 
+    func setArchived(briefID: Int64, archivedAt: Date?) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE briefs SET archivedAt = ? WHERE id = ?",
+                arguments: [archivedAt, briefID]
+            )
+        }
+    }
+
+    func setSnoozed(briefID: Int64, snoozedUntil: Date?) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE briefs SET snoozedUntil = ? WHERE id = ?",
+                arguments: [snoozedUntil, briefID]
+            )
+        }
+    }
+
     func fetchPinnedBriefs() throws -> [Brief] {
         try database.dbQueue.read { db in
             try Brief
@@ -639,6 +657,40 @@ struct BriefRepository {
                     lastService = excluded.lastService,
                     lastUsedAt = excluded.lastUsedAt
             """, arguments: [key, service, Date()])
+        }
+    }
+
+    // MARK: - Tasks
+
+    /// Inserts Task rows for a batch of cards inside an existing write transaction.
+    /// Only creates tasks for cards with priority "high" or "med" that have non-empty action items.
+    static func insertTasksForCards(_ cards: [BriefCardRecord], db: Database) throws {
+        let decoder = JSONDecoder()
+        for card in cards where card.priority == "high" || card.priority == "med" {
+            guard let data = card.actionItems.data(using: .utf8),
+                  let items = try? decoder.decode([String].self, from: data) else { continue }
+            for item in items where !item.isEmpty {
+                var task = BriefTask(briefCardId: card.id, text: item, completedAt: nil, createdAt: Date())
+                try task.insert(db)
+            }
+        }
+    }
+
+    func fetchPendingTasks() throws -> [BriefTask] {
+        try database.dbQueue.read { db in
+            try BriefTask
+                .filter(Column("completedAt") == nil)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+        }
+    }
+
+    func completeTask(id: Int64) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE tasks SET completedAt = ? WHERE id = ?",
+                arguments: [Date(), id]
+            )
         }
     }
 }

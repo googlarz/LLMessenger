@@ -111,6 +111,7 @@ struct BriefListGrouper {
 @MainActor
 final class AppState: ObservableObject {
     @Published var briefs: [Brief] = []
+    @Published var tasks: [BriefTask] = []
     @Published var selectedBriefID: Int64?
     @Published var serviceHealth: [String: AdapterHealthResult.Status] = [:]
     @Published var serviceHealthMap: [String: ServiceHealth] = [:]
@@ -204,7 +205,7 @@ final class AppState: ObservableObject {
 
     func refreshBriefs() {
         let settingsRepo = makeSettingsRepository()
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Swift.Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             do {
                 let fetched = try self.repository.fetchAllBriefs()
@@ -217,6 +218,23 @@ final class AppState: ObservableObject {
             } catch {
                 await MainActor.run { self.lastError = error.localizedDescription }
             }
+        }
+    }
+
+    func refreshTasks() {
+        Swift.Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let fetched = (try? self.repository.fetchPendingTasks()) ?? []
+            await MainActor.run { self.tasks = fetched }
+        }
+    }
+
+    func completeTask(_ taskID: Int64) {
+        do {
+            try repository.completeTask(id: taskID)
+            refreshTasks()
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 
@@ -254,16 +272,50 @@ final class AppState: ObservableObject {
     }
 
     var pinnedBriefs: [Brief] {
-        briefs.filter { $0.pinned }.sorted { $0.createdAt > $1.createdAt }
+        briefs.filter { $0.pinned && $0.archivedAt == nil }.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    var archivedBriefs: [Brief] {
+        briefs.filter { $0.archivedAt != nil }.sorted { $0.createdAt > $1.createdAt }
     }
 
     func briefGroups(from: Date? = nil, to: Date? = nil) -> [BriefListGroup] {
+        let now = Date()
         let filtered = briefs.filter { brief in
+            guard brief.archivedAt == nil else { return false }
+            if let snoozedUntil = brief.snoozedUntil, snoozedUntil > now { return false }
             if let from = from, brief.createdAt < from { return false }
             if let to = to, brief.createdAt > to { return false }
             return true
         }
         return BriefListGrouper.group(filtered)
+    }
+
+    func archiveBrief(_ briefID: Int64) {
+        do {
+            try repository.setArchived(briefID: briefID, archivedAt: Date())
+            refreshBriefs()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func unarchiveBrief(_ briefID: Int64) {
+        do {
+            try repository.setArchived(briefID: briefID, archivedAt: nil)
+            refreshBriefs()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func snoozeBrief(id briefID: Int64, until date: Date) {
+        do {
+            try repository.setSnoozed(briefID: briefID, snoozedUntil: date)
+            refreshBriefs()
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     func fetchNeedsReplyCards() -> [(card: BriefCardRecord, briefCreatedAt: Date)] {

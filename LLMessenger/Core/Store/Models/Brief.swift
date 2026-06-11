@@ -19,6 +19,8 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
     var pinned: Bool
     /// Start of the fetch window. nil for hourly auto-poll briefs; set for on-demand summarizeLast() briefs.
     var windowStart: Date?
+    var archivedAt: Date?
+    var snoozedUntil: Date?
 
     static let databaseTableName = "briefs"
 
@@ -33,7 +35,9 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
          notificationText: String,
          episodicSummary: String? = nil,
          pinned: Bool = false,
-         windowStart: Date? = nil) {
+         windowStart: Date? = nil,
+         archivedAt: Date? = nil,
+         snoozedUntil: Date? = nil) {
         self.id = id
         self.createdAt = createdAt
         self.status = status
@@ -44,6 +48,8 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
         self.episodicSummary = episodicSummary
         self.pinned = pinned
         self.windowStart = windowStart
+        self.archivedAt = archivedAt
+        self.snoozedUntil = snoozedUntil
     }
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
