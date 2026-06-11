@@ -21,6 +21,7 @@ struct OllamaModelPicker: View {
             case .idle, .loading:
                 TextField("Model name (e.g. llama3.1)", text: $selectedModel)
                     .textFieldStyle(.roundedBorder)
+                    .font(Theme.sans(13))
                 if case .loading = loadState {
                     ProgressView().controlSize(.small)
                 }
@@ -39,7 +40,7 @@ struct OllamaModelPicker: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.secondary)
+                        .foregroundStyle(Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .help("Refresh model list")
@@ -47,12 +48,13 @@ struct OllamaModelPicker: View {
             case .loaded, .failed:
                 TextField("Model name (e.g. llama3.1)", text: $selectedModel)
                     .textFieldStyle(.roundedBorder)
+                    .font(Theme.sans(13))
                 Button {
                     Task { await load() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12))
-                        .foregroundStyle(loadState == .failed ? Color.red : Color.secondary)
+                        .foregroundStyle(loadState == .failed ? Theme.signal : Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .help(loadState == .failed ? "Ollama not running — click to retry" : "Refresh")

@@ -3,14 +3,12 @@ import SwiftUI
 /// Top chrome bar — the single zone that answers:
 /// "Are my services working? Which brief am I on? How do I search?"
 ///
-/// Replaces the old ContentHeaderBar (which only carried sidebar + media toggles).
 /// Layout, left to right:
-///   • Hamburger to reveal the full sidebar drawer (escape hatch for power users)
-///   • Service-health chips (iM / Sg / Tg / Sk) with hover popover + Retry
-///   • Brief picker pill: ◂ [Today 21:16 ▾] ▸  (popover lists recent briefs)
+///   • Sidebar toggle (escape hatch for the full archive drawer)
+///   • Service-health stamps (IM / SG / TG / SL) with status dot + Retry
+///   • Brief picker: ◂ [TODAY 09:12 ▾] ▸  (popover lists the archive)
 ///   • Spacer
-///   • Search button
-///   • Media toggle (existing)
+///   • Search · Media
 struct MainChromeBar: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
@@ -20,140 +18,109 @@ struct MainChromeBar: View {
     var onRetryService: ((String) -> Void)? = nil
 
     @State private var showingBriefPicker = false
-    @State private var hoveredService: String? = nil
 
     var body: some View {
         ZStack {
             Theme.sidebar
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 // Traffic-lights spacer
-                Spacer().frame(width: 72)
+                Spacer().frame(width: 70)
 
-                // Hamburger — escape hatch for users who want the full sidebar
-                Button {
-                    withAnimation(.easeInOut(duration: 0.22)) { sidebarCollapsed.toggle() }
-                } label: {
-                    Image(systemName: "sidebar.left")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(sidebarCollapsed ? Theme.textTertiary : Theme.textPrimary)
-                        .frame(width: 26, height: 26)
-                        .contentShape(Rectangle())
+                chromeIcon("sidebar.left", active: !sidebarCollapsed, help: "Toggle archive (⌥⌘S)") {
+                    withAnimation(Theme.spring) { sidebarCollapsed.toggle() }
                 }
-                .buttonStyle(.plain)
-                .help("Toggle sidebar")
 
-                Divider().frame(height: 14).opacity(0.6)
+                Theme.border.frame(width: Theme.hairline, height: 14)
 
-                // Service health chips + last-checked line
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 6) {
-                        ForEach(orderedServices, id: \.self) { svc in
-                            ServiceHealthChip(
-                                service: svc,
-                                status: appState.serviceHealth[svc],
-                                onRetry: { onRetryService?(svc) }
-                            )
-                        }
-                    }
-                    if let checked = appState.lastCheckedDate {
-                        Text(lastCheckedLabel(from: checked))
-                            .font(.system(size: 10))
-                            .foregroundStyle(appState.hasServiceError ? Color.orange : Theme.textTertiary)
-                    } else if appState.hasServiceError {
-                        Text("⚠ Service error")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.orange)
+                // Service health stamps + last-checked line
+                HStack(spacing: 4) {
+                    ForEach(orderedServices, id: \.self) { svc in
+                        ServiceHealthChip(
+                            service: svc,
+                            status: appState.serviceHealth[svc],
+                            onRetry: { onRetryService?(svc) }
+                        )
                     }
                 }
 
-                // Brief picker — ◂ pill ▸
+                if let checked = appState.lastCheckedDate {
+                    Text(lastCheckedLabel(from: checked).uppercased())
+                        .font(Theme.mono(9))
+                        .tracking(0.8)
+                        .foregroundStyle(appState.hasServiceError ? Theme.standby : Theme.textTertiary)
+                } else if appState.hasServiceError {
+                    WireLabel("Service error", color: Theme.standby)
+                }
+
                 briefPickerCluster
 
                 Spacer()
 
-                // Search
-                Button {
+                chromeIcon("magnifyingglass", active: showSearch, help: "Search messages and briefs (⌘F)") {
                     showSearch.toggle()
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(showSearch ? Theme.textPrimary : Theme.textTertiary)
-                        .frame(width: 26, height: 26)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help("Search messages and briefs (⌘F)")
                 .keyboardShortcut("f", modifiers: .command)
 
-                // Media toggle (existing)
-                Button {
-                    withAnimation(.easeInOut(duration: 0.22)) { showMedia.toggle() }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 11))
-                        Text("Media")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(showMedia ? Theme.surfaceHigh : Color.clear)
-                    .foregroundStyle(showMedia ? Theme.textPrimary : Theme.textTertiary)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7)
-                            .stroke(showMedia ? Theme.border : Color.clear, lineWidth: 1)
-                    )
+                chromeIcon("photo.on.rectangle.angled", active: showMedia, help: "Media drawer") {
+                    withAnimation(Theme.spring) { showMedia.toggle() }
                 }
-                .buttonStyle(.plain)
                 .padding(.trailing, 14)
             }
         }
-        .frame(height: 38)
+        .frame(height: 40)
+    }
+
+    private func chromeIcon(_ symbol: String, active: Bool, help: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(active ? Theme.textPrimary : Theme.textTertiary)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.controlRadius)
+                        .fill(active ? Theme.surfaceHigh : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     // MARK: - Brief picker cluster
 
     private var briefPickerCluster: some View {
         HStack(spacing: 0) {
-            // ◂ Previous brief (older)
-            Button {
+            arrowButton("chevron.left", enabled: canGoOlder, key: "[") {
                 navigate(offset: 1)  // older = later index in newest-first list
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(canGoOlder ? Theme.textSecondary : Theme.textTertiary.opacity(0.4))
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .disabled(!canGoOlder)
-            .keyboardShortcut("[", modifiers: .command)
 
-            // Brief label pill
             Button {
                 showingBriefPicker.toggle()
             } label: {
-                HStack(spacing: 4) {
-                    Text(currentBriefLabel)
-                        .font(.system(size: 12, weight: .semibold))
+                HStack(spacing: 5) {
+                    Text(currentBriefLabel.uppercased())
+                        .font(Theme.mono(10.5, weight: .semibold))
+                        .tracking(0.8)
                         .foregroundStyle(Theme.textPrimary)
-                        .monospacedDigit()
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(Theme.textTertiary)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(Theme.surfaceHigh)
-                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.controlRadius)
+                        .fill(Theme.surface)
+                )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .stroke(Theme.border, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: Theme.controlRadius)
+                        .strokeBorder(Theme.border, lineWidth: Theme.hairline)
                 )
             }
             .buttonStyle(.plain)
+            .help("Browse the brief archive")
             .popover(isPresented: $showingBriefPicker, arrowEdge: .bottom) {
                 BriefListView()
                     .environmentObject(appState)
@@ -161,30 +128,34 @@ struct MainChromeBar: View {
                     .frame(width: 320, height: 460)
             }
 
-            // ▸ Next brief (newer)
-            Button {
+            arrowButton("chevron.right", enabled: canGoNewer, key: "]") {
                 navigate(offset: -1)  // newer = earlier index in newest-first list
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(canGoNewer ? Theme.textSecondary : Theme.textTertiary.opacity(0.4))
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .disabled(!canGoNewer)
-            .keyboardShortcut("]", modifiers: .command)
         }
         .padding(.leading, 4)
+    }
+
+    private func arrowButton(_ symbol: String, enabled: Bool, key: Character,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(enabled ? Theme.textSecondary : Theme.textTertiary.opacity(0.35))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .keyboardShortcut(KeyEquivalent(key), modifiers: .command)
     }
 
     // MARK: - Helpers
 
     private func lastCheckedLabel(from date: Date) -> String {
-        if appState.hasServiceError { return "⚠ Service error" }
+        if appState.hasServiceError { return "Service error" }
         let minutes = Int(Date().timeIntervalSince(date) / 60)
-        if minutes < 1 { return "Checked just now" }
-        return "Checked \(minutes) min ago"
+        if minutes < 1 { return "Checked now" }
+        return "Checked \(minutes)m ago"
     }
 
     private var orderedServices: [String] {
@@ -234,7 +205,7 @@ struct MainChromeBar: View {
     }
 }
 
-// MARK: - Service health chip
+// MARK: - Service health stamp
 
 private struct ServiceHealthChip: View {
     let service: String
@@ -245,18 +216,21 @@ private struct ServiceHealthChip: View {
 
     var body: some View {
         Button(action: onRetry) {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Circle()
                     .fill(dotColor)
-                    .frame(width: 6, height: 6)
+                    .frame(width: 5, height: 5)
                 Text(shortName)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(Theme.mono(9.5, weight: .bold))
+                    .tracking(0.6)
                     .foregroundStyle(textColor)
             }
-            .padding(.horizontal, 7)
+            .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(hovering ? Theme.surfaceHigh : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(hovering ? Theme.surfaceHigh : Color.clear)
+            )
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -265,20 +239,20 @@ private struct ServiceHealthChip: View {
 
     private var shortName: String {
         switch service {
-        case "imessage": return "iM"
-        case "signal":   return "Sg"
-        case "telegram": return "Tg"
-        case "slack":    return "Sk"
+        case "imessage": return "IM"
+        case "signal":   return "SG"
+        case "telegram": return "TG"
+        case "slack":    return "SL"
         default:         return service.prefix(2).uppercased()
         }
     }
 
     private var dotColor: Color {
-        guard let status else { return Color(nsColor: .tertiaryLabelColor) }
+        guard let status else { return Theme.textTertiary.opacity(0.4) }
         switch status {
-        case .ok:      return .green
-        case .warning: return .orange
-        case .error:   return .red
+        case .ok:      return Theme.ok
+        case .warning: return Theme.standby
+        case .error:   return Theme.signal
         }
     }
 

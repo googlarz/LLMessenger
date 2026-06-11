@@ -9,53 +9,40 @@ struct AboutSettingsTab: View {
             Spacer()
 
             VStack(spacing: 20) {
-                // App icon
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Theme.accentMuted)
-                        .frame(width: 72, height: 72)
-                    Text("L")
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
-                        .foregroundStyle(Theme.accent)
-                }
-
-                VStack(spacing: 4) {
+                // Masthead: serif wordmark over a mono version line — typeset, not badged.
+                VStack(spacing: 6) {
                     Text("LLMessenger")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(Theme.display(26))
                         .foregroundStyle(Theme.textPrimary)
-                    Text("Version \(appVersion)")
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.textSecondary)
+                    Text("v\(appVersion)")
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.textTertiary)
                 }
 
-                Divider().frame(maxWidth: 320).overlay(Theme.border)
+                Rule().frame(maxWidth: 320)
 
                 VStack(spacing: 8) {
                     Text("Made by Dawid Piaskowski")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(Theme.sans(13, weight: .medium))
                         .foregroundStyle(Theme.textPrimary)
 
                     Link("github.com/googlarz/LLMessenger",
                          destination: URL(string: "https://github.com/googlarz/LLMessenger")!)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.accent)
+                        .font(Theme.mono(11))
+                        .tint(Theme.textSecondary)
                 }
 
-                Divider().frame(maxWidth: 320).overlay(Theme.border)
+                Rule().frame(maxWidth: 320)
 
                 Text("Released under the MIT License\nFree to use, modify, and distribute")
-                    .font(.system(size: 11))
+                    .font(Theme.sans(11))
                     .foregroundStyle(Theme.textTertiary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
 
                 if let onRunSetup {
-                    Button(action: onRunSetup) {
-                        Label("Run Setup Wizard", systemImage: "wand.and.stars")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .foregroundStyle(Theme.textSecondary)
+                    Button("Run Setup Wizard", action: onRunSetup)
+                        .buttonStyle(PaperButtonStyle())
                 }
             }
 

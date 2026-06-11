@@ -70,32 +70,27 @@ struct ChatPanelView: View {
                                 highPriorityCount: stats.highPriority,
                                 failedServices: stats.failed,
                                 generationState: appState.briefGenerationState,
-                                errorText: appState.lastError
+                                errorText: appState.lastError,
+                                onRefresh: { appState.onRequestRefresh?() }
                             )
 
-                            Divider().background(Theme.border.opacity(0.6))
+                            Rule()
+                                .padding(.horizontal, Theme.gutter)
 
                             BriefProseView(brief: brief, messages: briefMessages)
                                 .id(brief.id)
                         }
 
-                        // Chat zone — visually distinct from brief content above. Tinted
-                        // background + small "Chat" label tells the user this is a side
-                        // conversation about the brief, not the brief itself.
+                        // Q&A zone — a side conversation about the brief, set apart
+                        // by a section label and a faint ink wash, not the brief itself.
                         if !aiItems.isEmpty || chatViewModel.isLoading {
                             VStack(alignment: .leading, spacing: 0) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "sparkles")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundStyle(Theme.accent)
-                                    Text("Chat")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .tracking(0.8)
-                                        .foregroundStyle(Theme.textTertiary)
-                                    Spacer()
+                                HStack(spacing: 10) {
+                                    WireLabel("Q&A")
+                                    Rule()
                                 }
-                                .padding(.horizontal, 28)
-                                .padding(.top, 12)
+                                .padding(.horizontal, Theme.gutter)
+                                .padding(.top, 14)
                                 .padding(.bottom, 4)
 
                                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -110,7 +105,7 @@ struct ChatPanelView: View {
                                         .id("loading")
                                 }
                             }
-                            .background(Theme.accentMuted.opacity(0.25))
+                            .background(Theme.surface.opacity(0.35))
                             .padding(.top, 8)
                         }
                     }
@@ -139,7 +134,7 @@ struct ChatPanelView: View {
             // Footer: countdown + disclaimer
             BriefFooterView()
 
-            Divider().background(Theme.border)
+            Rule()
             ChatInputView()
         }
         // Sync chatViewModel with appState whenever the selected brief changes.
@@ -186,15 +181,16 @@ private struct BriefFooterView: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        Divider().background(Theme.border.opacity(0.4))
+        Rule(color: Theme.border.opacity(0.6))
         TimelineView(.periodic(from: .now, by: 1)) { _ in
-            Text(footerText)
-                .font(.system(size: 11.5))
+            Text(footerText.uppercased())
+                .font(Theme.mono(9.5))
+                .tracking(1.0)
                 .foregroundStyle(Theme.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
-                .padding(.vertical, 8)
+                .padding(.vertical, 7)
         }
     }
 
@@ -205,10 +201,10 @@ private struct BriefFooterView: View {
             if secs > 0 {
                 let m = secs / 60
                 let s = secs % 60
-                parts.append("Next brief in \(String(format: "%dm %02ds", m, s))")
+                parts.append("Next brief \(String(format: "%dm %02ds", m, s))")
             }
         }
-        parts.append("Summaries are AI-generated and may miss nuance")
-        return parts.joined(separator: " · ")
+        parts.append("AI-generated · may miss nuance")
+        return parts.joined(separator: "  ·  ")
     }
 }

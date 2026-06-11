@@ -36,7 +36,7 @@ struct ServiceSettingsTab: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: 10) {
+                VStack(spacing: 0) {
                     ForEach($configs, id: \.service) { $cfg in
                         ServiceCard(
                             config: $cfg,
@@ -46,6 +46,7 @@ struct ServiceSettingsTab: View {
                             health: healthByService[cfg.service],
                             onRetry: onRetryService
                         )
+                        Rule()
                     }
                     maintenanceSection
                 }
@@ -53,26 +54,21 @@ struct ServiceSettingsTab: View {
                 .padding(.vertical, 16)
             }
 
-            Divider()
+            Rule()
 
             // Footer: status + save
             HStack {
-                Group {
-                    switch saveStatus {
-                    case .saved:
-                        Label("Saved", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    case .error(let msg):
-                        Label(msg, systemImage: "exclamationmark.circle.fill")
-                            .foregroundStyle(.red)
-                    case .idle:
-                        EmptyView()
-                    }
+                switch saveStatus {
+                case .saved:
+                    statusLine("Saved", color: Theme.ok)
+                case .error(let msg):
+                    statusLine(msg, color: Theme.signal)
+                case .idle:
+                    EmptyView()
                 }
-                .font(.subheadline)
                 Spacer()
                 Button("Save") { save() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PaperButtonStyle(prominent: true))
                     .keyboardShortcut(.return, modifiers: .command)
             }
             .padding(.horizontal, 20)
@@ -114,12 +110,21 @@ struct ServiceSettingsTab: View {
         }
     }
 
+    private func statusLine(_ text: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(text)
+                .font(Theme.sans(11))
+                .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
     @ViewBuilder
     private var maintenanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Data")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.textSecondary)
+            WireLabel("Data")
 
             HStack(spacing: 10) {
                 Button {
@@ -128,12 +133,11 @@ struct ServiceSettingsTab: View {
                     HStack(spacing: 6) {
                         if isBuildingSummaries {
                             ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "clock.arrow.circlepath")
                         }
                         Text("Build 7-day summary")
                     }
                 }
+                .buttonStyle(PaperButtonStyle())
                 .disabled(isBuildingSummaries || onBuild7DaySummaries == nil)
 
                 Button {
@@ -142,30 +146,23 @@ struct ServiceSettingsTab: View {
                     HStack(spacing: 6) {
                         if isSyncingContacts {
                             ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "person.2.arrow.trianglehead.counterclockwise")
                         }
                         Text("Sync contacts")
                     }
                 }
+                .buttonStyle(PaperButtonStyle())
                 .disabled(isSyncingContacts || onSyncContacts == nil)
 
                 Spacer()
             }
 
             Text(maintenanceStatus ?? "Generates per-conversation context the AI uses to recall older threads. Contact sync refreshes the @ mention picker.")
-                .font(.system(size: 11))
+                .font(Theme.sans(11))
                 .foregroundStyle(Theme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Theme.surface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Theme.border, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.top, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func runBuildSummaries() async {
@@ -233,56 +230,75 @@ private struct ServiceCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            switch state {
-            case .disabled:        disabledBody
-            case .notConfigured:   notConfiguredBody
-            case .broken(let r):   brokenBody(reason: r)
-            case .working:         workingBody
+        HStack(alignment: .top, spacing: 0) {
+            marginRule
+                .padding(.trailing, 12)
+            VStack(alignment: .leading, spacing: 0) {
+                switch state {
+                case .disabled:        disabledBody
+                case .notConfigured:   notConfiguredBody
+                case .broken(let r):   brokenBody(reason: r)
+                case .working:         workingBody
+                }
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay(accentStripe, alignment: .leading)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.vertical, 14)
         .animation(.easeInOut(duration: 0.15), value: config.enabled)
     }
 
-    /// A 3pt accent stripe down the left edge so each state is identifiable from a
-    /// peripheral glance: green = working, orange = needs attention, transparent otherwise.
-    @ViewBuilder private var accentStripe: some View {
+    /// A 2pt margin rule down the left edge — the galley-proof redline. Only a
+    /// service that needs attention gets colour: vermilion for errors, amber for
+    /// warnings and stale polls. Healthy and idle entries stay unmarked.
+    @ViewBuilder private var marginRule: some View {
+        Group {
+            switch state {
+            case .broken:
+                health?.status == "error" ? Theme.signal : Theme.standby
+            case .working, .notConfigured, .disabled:
+                Color.clear
+            }
+        }
+        .frame(width: 2)
+        .clipShape(RoundedRectangle(cornerRadius: 1))
+    }
+
+    /// Status dot matching the chrome bar's service health chips:
+    /// sage = connected, amber = warning, vermilion = error, faint = idle.
+    private var statusDot: some View {
+        Circle()
+            .fill(statusDotColor)
+            .frame(width: 6, height: 6)
+    }
+
+    private var statusDotColor: Color {
         switch state {
         case .working:
-            Rectangle().fill(Color.green).frame(width: 3)
+            return Theme.ok
         case .broken:
-            Rectangle().fill(Color.orange).frame(width: 3)
+            return health?.status == "error" ? Theme.signal : Theme.standby
         case .notConfigured, .disabled:
-            EmptyView()
+            return Theme.textTertiary.opacity(0.4)
         }
     }
 
     // MARK: - State: disabled
 
     private var disabledBody: some View {
-        HStack(spacing: 12) {
-            serviceIcon(tinted: false)
+        HStack(spacing: 10) {
+            statusDot
+            ServiceStamp(service: service, size: 20)
             VStack(alignment: .leading, spacing: 2) {
-                Text(displayName).font(.headline).foregroundStyle(.secondary)
+                Text(displayName)
+                    .font(Theme.sans(13.5, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
                 Text("Off — not polling")
-                    .font(.caption).foregroundStyle(.tertiary)
+                    .font(Theme.sans(11)).foregroundStyle(Theme.textTertiary)
             }
             Spacer()
             Toggle("", isOn: $config.enabled)
                 .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                .tint(.green)
+                .tint(Theme.ok)
         }
-        .padding(14)
         .opacity(0.7)
     }
 
@@ -290,44 +306,49 @@ private struct ServiceCard: View {
 
     private var notConfiguredBody: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                serviceIcon(tinted: false)
+            HStack(spacing: 10) {
+                statusDot
+                ServiceStamp(service: service, size: 20)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(displayName).font(.headline)
+                    Text(displayName)
+                        .font(Theme.sans(13.5, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
                     Text("Not connected")
-                        .font(.caption).foregroundStyle(.tertiary)
+                        .font(Theme.sans(11)).foregroundStyle(Theme.textTertiary)
                 }
                 Spacer()
             }
             Text(setupBlurb)
-                .font(.callout).foregroundStyle(.secondary)
+                .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             primarySetupAction
         }
-        .padding(14)
     }
 
     // MARK: - State: broken
 
     private func brokenBody(reason: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                serviceIcon(tinted: false)
+            HStack(spacing: 10) {
+                statusDot
+                ServiceStamp(service: service, size: 20)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(displayName).font(.headline)
+                    Text(displayName)
+                        .font(Theme.sans(13.5, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
                     Text(reason)
-                        .font(.caption).foregroundStyle(.orange)
+                        .font(Theme.sans(11))
+                        .foregroundStyle(health?.status == "error" ? Theme.signal : Theme.standby)
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Toggle("", isOn: $config.enabled)
                     .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                    .tint(.green)
+                    .tint(Theme.ok)
             }
-            Divider()
+            Rule()
             brokenBodyContent(reason: reason)
         }
-        .padding(14)
     }
 
     /// Per-service fix UI shown below the broken-state header. Every variant has at
@@ -339,35 +360,33 @@ private struct ServiceCard: View {
         case "imessage":
             VStack(alignment: .leading, spacing: 10) {
                 Text("macOS needs to allow LLMessenger to read your Messages database. Grant Full Disk Access, then quit and reopen the app.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                    Button {
+                    Button("Grant Full Disk Access") {
                         openFullDiskAccessSettings()
-                    } label: {
-                        Label("Grant Full Disk Access", systemImage: "lock.shield")
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.regular)
+                    .buttonStyle(PaperButtonStyle(prominent: true))
                     retryButton
                 }
             }
         case "signal":
             VStack(alignment: .leading, spacing: 10) {
                 Text("Phone number is set but the local signal-mcp watch daemon isn't responding. Start it in a terminal (`signal-mcp watch`) or use Restart, then Retry now.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    Text("Phone")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                    WireLabel("Phone")
                         .frame(width: 70, alignment: .leading)
                     TextField("+1234567890", text: $signalAccount)
-                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                        .textFieldStyle(.roundedBorder).font(Theme.sans(13))
                 }
                 HStack(spacing: 8) {
                     retryButton
                     Link("signal-mcp setup →",
                          destination: URL(string: "https://github.com/googlarz/signal-mcp")!)
-                        .font(.caption)
+                        .font(Theme.sans(11))
+                        .tint(Theme.textSecondary)
                     Spacer()
                 }
             }
@@ -376,25 +395,25 @@ private struct ServiceCard: View {
                 Text(sessionFileExists
                      ? "Telegram session exists. Try Retry now — your existing session should reconnect without signing in again."
                      : "Telegram session is missing. Sign in to reconnect.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
                     if sessionFileExists {
                         // Session is fine — Retry leads, re-sign-in is the escape hatch.
                         retryButton
                         Button("Re-sign in") { startTelegramSignIn() }
-                            .controlSize(.regular)
+                            .buttonStyle(PaperButtonStyle())
                             .disabled(telegramApiId.isEmpty || telegramApiHash.isEmpty)
                     } else {
                         // No session — sign-in is the primary action.
                         Button("Sign in") { startTelegramSignIn() }
-                            .buttonStyle(.borderedProminent).controlSize(.regular)
+                            .buttonStyle(PaperButtonStyle(prominent: true))
                             .disabled(telegramApiId.isEmpty || telegramApiHash.isEmpty)
                         retryButton
                     }
                 }
                 if let err = telegramSignInError {
-                    Text(err).font(.caption).foregroundStyle(.red)
+                    Text(err).font(Theme.sans(11)).foregroundStyle(Theme.signal)
                 }
             }
             .sheet(isPresented: $showingTelegramSignIn, onDismiss: {
@@ -412,11 +431,11 @@ private struct ServiceCard: View {
         case "slack":
             VStack(alignment: .leading, spacing: 10) {
                 Text("A Slack workspace token failed to authenticate. Manage workspaces to re-add it, or Retry if it's a transient API hiccup.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
                     Button("Manage workspaces") { showingSlackWorkspaces = true }
-                        .buttonStyle(.borderedProminent).controlSize(.regular)
+                        .buttonStyle(PaperButtonStyle(prominent: true))
                     retryButton
                 }
             }
@@ -452,7 +471,7 @@ private struct ServiceCard: View {
                     Text("Retry now")
                 }
             }
-            .controlSize(.regular)
+            .buttonStyle(PaperButtonStyle())
             .disabled(isRetrying)
         }
     }
@@ -460,35 +479,30 @@ private struct ServiceCard: View {
     // MARK: - State: working
 
     private var workingBody: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                serviceIcon(tinted: true)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                statusDot
+                ServiceStamp(service: service, size: 20)
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(displayName).font(.headline)
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.green)
-                    }
+                    Text(displayName)
+                        .font(Theme.sans(13.5, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
                     Text(workingIdentity)
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(Theme.sans(11)).foregroundStyle(Theme.textTertiary)
                 }
                 Spacer()
                 Toggle("", isOn: $config.enabled)
                     .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                    .tint(.green)
+                    .tint(Theme.ok)
             }
-            .padding(14)
 
             DisclosureGroup(isExpanded: $showAdvanced) {
                 advancedBody
                     .padding(.top, 8)
             } label: {
                 Text("Advanced")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(Theme.sans(11)).foregroundStyle(Theme.textTertiary)
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
         }
     }
 
@@ -525,7 +539,7 @@ private struct ServiceCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Poll every")
-                    .font(.system(size: 12))
+                    .font(Theme.sans(12))
                     .foregroundStyle(Theme.textSecondary)
                 Picker("", selection: $config.pollIntervalSeconds) {
                     Text("5 min").tag(300)
@@ -540,27 +554,27 @@ private struct ServiceCard: View {
             switch service {
             case "signal":
                 HStack {
-                    Text("Phone").font(.subheadline).foregroundStyle(.secondary)
+                    WireLabel("Phone")
                         .frame(width: 70, alignment: .leading)
                     TextField("+1234567890", text: $signalAccount)
-                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                        .textFieldStyle(.roundedBorder).font(Theme.sans(13))
                 }
             case "telegram":
                 HStack {
-                    Text("API ID").font(.subheadline).foregroundStyle(.secondary)
+                    WireLabel("API ID")
                         .frame(width: 70, alignment: .leading)
                     TextField("", text: $telegramApiId)
-                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                        .textFieldStyle(.roundedBorder).font(Theme.sans(13))
                 }
                 HStack {
-                    Text("API Hash").font(.subheadline).foregroundStyle(.secondary)
+                    WireLabel("API Hash")
                         .frame(width: 70, alignment: .leading)
                     SecureField("", text: $telegramApiHash)
-                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                        .textFieldStyle(.roundedBorder).font(Theme.sans(13))
                 }
             case "slack":
                 Button("Manage workspaces…") { showingSlackWorkspaces = true }
-                    .controlSize(.small)
+                    .buttonStyle(PaperButtonStyle())
                     .sheet(isPresented: $showingSlackWorkspaces, onDismiss: {
                         slackWorkspaceCount = SlackWorkspaceStore.load().count
                         NotificationCenter.default.post(name: .serviceConfigDidChange, object: nil)
@@ -574,17 +588,6 @@ private struct ServiceCard: View {
     }
 
     // MARK: - Shared building blocks
-
-    private func serviceIcon(tinted: Bool) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(tinted ? iconBackground : Color(nsColor: .tertiaryLabelColor).opacity(0.35))
-                .frame(width: 36, height: 36)
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(tinted ? .white : Color(nsColor: .secondaryLabelColor))
-        }
-    }
 
     private var setupBlurb: String {
         switch service {
@@ -600,45 +603,44 @@ private struct ServiceCard: View {
     private var primarySetupAction: some View {
         switch service {
         case "imessage":
-            Button {
+            Button("Grant Full Disk Access") {
                 openFullDiskAccessSettings()
-            } label: {
-                Label("Grant Full Disk Access", systemImage: "lock.shield")
             }
-            .buttonStyle(.borderedProminent).controlSize(.regular)
+            .buttonStyle(PaperButtonStyle(prominent: true))
         case "signal":
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Phone").font(.subheadline).foregroundStyle(.secondary)
+                    WireLabel("Phone")
                         .frame(width: 70, alignment: .leading)
                     TextField("+1234567890", text: $signalAccount)
-                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                        .textFieldStyle(.roundedBorder).font(Theme.sans(13))
                 }
                 Text("Then start the signal-mcp watch daemon to begin polling.")
-                    .font(.caption).foregroundStyle(.tertiary)
+                    .font(Theme.sans(11)).foregroundStyle(Theme.textTertiary)
             }
         case "telegram":
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("API ID").font(.subheadline).foregroundStyle(.secondary)
+                    WireLabel("API ID")
                         .frame(width: 70, alignment: .leading)
                     TextField("", text: $telegramApiId)
-                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                        .textFieldStyle(.roundedBorder).font(Theme.sans(13))
                 }
                 HStack {
-                    Text("API Hash").font(.subheadline).foregroundStyle(.secondary)
+                    WireLabel("API Hash")
                         .frame(width: 70, alignment: .leading)
                     SecureField("", text: $telegramApiHash)
-                        .textFieldStyle(.roundedBorder).font(.subheadline)
+                        .textFieldStyle(.roundedBorder).font(Theme.sans(13))
                 }
                 HStack {
                     Link("Get credentials at my.telegram.org →",
                          destination: URL(string: "https://my.telegram.org")!)
-                        .font(.caption)
+                        .font(Theme.sans(11))
+                        .tint(Theme.textSecondary)
                     Spacer()
                     if !telegramApiId.isEmpty && !telegramApiHash.isEmpty {
                         Button("Connect Telegram") { startTelegramSignIn() }
-                            .buttonStyle(.borderedProminent).controlSize(.small)
+                            .buttonStyle(PaperButtonStyle(prominent: true))
                     }
                 }
             }
@@ -655,12 +657,10 @@ private struct ServiceCard: View {
                 }
             }
         case "slack":
-            Button {
+            Button("Add a workspace") {
                 showingSlackWorkspaces = true
-            } label: {
-                Label("Add a workspace", systemImage: "plus")
             }
-            .buttonStyle(.borderedProminent).controlSize(.regular)
+            .buttonStyle(PaperButtonStyle(prominent: true))
             .sheet(isPresented: $showingSlackWorkspaces, onDismiss: {
                 slackWorkspaceCount = SlackWorkspaceStore.load().count
                 NotificationCenter.default.post(name: .serviceConfigDidChange, object: nil)
@@ -681,26 +681,6 @@ private struct ServiceCard: View {
         case "telegram": return "Telegram"
         case "slack":    return "Slack"
         default:         return service.capitalized
-        }
-    }
-
-    private var icon: String {
-        switch service {
-        case "imessage": return "message.fill"
-        case "signal":   return "lock.shield.fill"
-        case "telegram": return "paperplane.fill"
-        case "slack":    return "number"
-        default:         return "antenna.radiowaves.left.and.right"
-        }
-    }
-
-    private var iconBackground: Color {
-        switch service {
-        case "imessage": return Color(red: 0.20, green: 0.78, blue: 0.35)   // iMessage green
-        case "signal":   return Color(red: 0.22, green: 0.53, blue: 0.95)   // Signal blue
-        case "telegram": return Color(red: 0.20, green: 0.66, blue: 0.90)   // Telegram blue
-        case "slack":    return Color(red: 0.55, green: 0.36, blue: 0.66)   // Slack aubergine
-        default:         return .accentColor
         }
     }
 

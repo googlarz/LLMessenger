@@ -58,7 +58,7 @@ struct LoadingIndicatorView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Rectangle()
-                .fill(Theme.accent)
+                .fill(Theme.textTertiary)
                 .frame(width: 2)
                 .cornerRadius(1)
                 .frame(height: 20)
@@ -66,14 +66,13 @@ struct LoadingIndicatorView: View {
             HStack(spacing: 6) {
                 ProgressView()
                     .scaleEffect(0.65)
-                    .tint(Theme.accent)
+                    .tint(Theme.textSecondary)
                 Text("Thinking…")
-                    .font(.system(size: 12))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.textTertiary)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Theme.accentMuted)
     }
 }

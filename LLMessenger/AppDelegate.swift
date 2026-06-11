@@ -71,9 +71,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             notificationManager = notifications
 
             let menuBar = MenuBarController()
-            menuBar.onNewBrief = { [weak self] in
+            // Shared by the menu bar's "New Brief" and the brief header's
+            // "Refresh" — full poll → summarize → notify cycle. Call sites
+            // track their own instrumentation source.
+            let runBriefRefresh: () -> Void = { [weak self] in
                 guard let self else { return }
-                InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "menuBar"])
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.appState?.briefGenerationState = .fetching
@@ -114,6 +116,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.menuBarController?.setUnreadCount(unread)
                 }
             }
+            menuBar.onNewBrief = {
+                InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "menuBar"])
+                runBriefRefresh()
+            }
+            state.onRequestRefresh = runBriefRefresh
             menuBar.onLast24h = { [weak self] in
                 guard let self else { return }
                 Task { @MainActor [weak self] in
@@ -379,6 +386,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.runModal()
             NSApp.terminate(nil)
         }
+    }
+
+    /// Reopen events (Dock-less `open -a LLMessenger`, Spotlight relaunch)
+    /// should surface the panel — standard menu-bar-app behaviour.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { chatWindowController?.show() }
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {

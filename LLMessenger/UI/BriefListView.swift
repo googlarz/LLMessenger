@@ -1,4 +1,9 @@
 // LLMessenger/UI/BriefListView.swift
+//
+// The archive drawer: search, date filter, needs-reply triage, and the brief
+// history grouped by day. Rows read like an index — mono dateline, headline,
+// vermilion dot for unread.
+
 import SwiftUI
 
 struct BriefListView: View {
@@ -29,8 +34,8 @@ struct BriefListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 6) {
-                NextRefreshWidget()
+            VStack(spacing: 8) {
+                NextRefreshLine()
                 HStack(spacing: 6) {
                     SearchBarView(query: $searchQuery)
                         .onChange(of: searchQuery) { q in performSearch(q) }
@@ -41,32 +46,28 @@ struct BriefListView: View {
                         }
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
 
             if dateFrom != nil || dateTo != nil {
                 HStack(spacing: 6) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.accent)
-                    Text(dateRangeLabel)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.textSecondary)
+                    WireLabel(dateRangeLabel, color: Theme.textSecondary)
                     Spacer()
                     Button { dateFrom = nil; dateTo = nil } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(Theme.textTertiary)
                     }
                     .buttonStyle(.plain)
+                    .help("Clear date filter")
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 5)
-                .background(Theme.accentMuted)
+                .padding(.vertical, 6)
+                .background(Theme.surface)
             }
 
-            Divider().background(Theme.border)
+            Rule()
 
             if !searchQuery.isEmpty {
                 SearchResultsView(messageResults: searchResults,
@@ -98,23 +99,19 @@ struct BriefListView: View {
 
                         // Empty state
                         if filteredGroups.isEmpty && appState.pinnedBriefs.isEmpty && needsReplyCards.isEmpty && searchQuery.isEmpty {
-                            VStack(spacing: 12) {
-                                Spacer().frame(height: 20)
-                                Image(systemName: "tray")
-                                    .font(.system(size: 32))
-                                    .foregroundStyle(Theme.textTertiary)
-                                Text("No briefs yet")
-                                    .font(.system(size: 13, weight: .semibold))
+                            VStack(spacing: 10) {
+                                Spacer().frame(height: 28)
+                                WireLabel("Archive empty")
+                                Text("Your first brief lands\nafter the next poll.")
+                                    .font(Theme.display(14))
                                     .foregroundStyle(Theme.textSecondary)
-                                Text("Your first brief will appear after the next poll.\nCheck Settings to confirm your services are connected.")
-                                    .font(.system(size: 12))
+                                    .multilineTextAlignment(.center)
+                                Text("Check Settings to confirm your\nservices are connected.")
+                                    .font(Theme.sans(11.5))
                                     .foregroundStyle(Theme.textTertiary)
                                     .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 16)
-                                Button("Open Settings") { appState.onOpenSettings?() }
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(Theme.accent)
-                                    .buttonStyle(.plain)
+                                Button("OPEN SETTINGS") { appState.onOpenSettings?() }
+                                    .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
                                 Spacer()
                             }
                             .frame(maxWidth: .infinity)
@@ -123,7 +120,7 @@ struct BriefListView: View {
                         // Pinned section
                         let pinned = appState.pinnedBriefs
                         if !pinned.isEmpty {
-                            SectionHeaderView(label: "📌 Pinned")
+                            SectionHeaderView(label: "Pinned")
                             ForEach(pinned, id: \.id) { brief in
                                 BriefRowView(brief: brief,
                                              isSelected: appState.selectedBriefID == brief.id)
@@ -149,21 +146,19 @@ struct BriefListView: View {
                         let archived = appState.archivedBriefs
                         if !archived.isEmpty {
                             Button {
-                                withAnimation { showArchivedSection.toggle() }
+                                withAnimation(Theme.spring) { showArchivedSection.toggle() }
                             } label: {
-                                HStack {
-                                    Image(systemName: showArchivedSection ? "chevron.down" : "chevron.right")
-                                        .font(.system(size: 9, weight: .semibold))
+                                HStack(spacing: 6) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 8, weight: .bold))
                                         .foregroundStyle(Theme.textTertiary)
-                                    Text("ARCHIVED (\(archived.count))")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundStyle(Theme.textTertiary)
-                                        .kerning(0.6)
+                                        .rotationEffect(.degrees(showArchivedSection ? 90 : 0))
+                                    WireLabel("Filed away (\(archived.count))")
                                     Spacer()
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.top, 12)
-                                .padding(.bottom, 3)
+                                .padding(.top, 14)
+                                .padding(.bottom, 4)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -188,10 +183,10 @@ struct BriefListView: View {
                 }
             }
 
-            Divider().background(Theme.border)
+            Rule()
             SettingsButtonView()
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
         }
         .onAppear { refreshNeedsReply(); appState.refreshTasks() }
         .onChange(of: appState.briefs.map { $0.id }) { _ in refreshNeedsReply(); appState.refreshTasks() }
@@ -320,13 +315,15 @@ private struct DateFilterButton: View {
     var body: some View {
         Button { showPopover.toggle() } label: {
             Image(systemName: isActive ? "calendar.badge.clock" : "calendar")
-                .font(.system(size: 14))
-                .foregroundStyle(isActive ? Theme.accent : Theme.textTertiary)
-                .frame(width: 30, height: 30)
+                .font(.system(size: 13))
+                .foregroundStyle(isActive ? Theme.textPrimary : Theme.textTertiary)
+                .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
-        .background(isActive ? Theme.accentMuted : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .background(
+            RoundedRectangle(cornerRadius: Theme.controlRadius)
+                .fill(isActive ? Theme.surfaceHigh : Color.clear)
+        )
         .help("Filter by date range")
     }
 }
@@ -341,41 +338,34 @@ private struct DateFilterPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Filter by Date")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
+            WireLabel("Filter by date")
 
-            HStack(spacing: 8) {
-                Button("Last 7 days")  { applyQuick(days: 7) }
-                Button("Last 30 days") { applyQuick(days: 30) }
-                Button("Last 90 days") { applyQuick(days: 90) }
+            HStack(spacing: 12) {
+                Button("7 DAYS")  { applyQuick(days: 7) }
+                Button("30 DAYS") { applyQuick(days: 30) }
+                Button("90 DAYS") { applyQuick(days: 90) }
             }
-            .buttonStyle(.plain)
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.accent)
+            .buttonStyle(WireActionStyle())
 
-            Divider().background(Theme.border)
+            Rule()
 
             DatePicker("From", selection: $localFrom, displayedComponents: .date)
             DatePicker("To",   selection: $localTo,   displayedComponents: .date)
 
             HStack {
                 Button("Clear") { dateFrom = nil; dateTo = nil }
-                    .foregroundStyle(Theme.textSecondary)
+                    .buttonStyle(WireActionStyle())
                 Spacer()
                 Button("Apply") {
                     dateFrom = Calendar.current.startOfDay(for: localFrom)
                     dateTo   = Calendar.current.date(bySettingHour: 23, minute: 59,
                                                      second: 59, of: localTo) ?? localTo
                 }
-                .foregroundStyle(Theme.accent)
+                .buttonStyle(PaperButtonStyle(prominent: true))
             }
-            .font(.system(size: 12, weight: .medium))
-            .buttonStyle(.plain)
         }
         .padding(16)
         .frame(width: 260)
-        .background(Theme.surface)
     }
 
     private func applyQuick(days: Int) {
@@ -385,46 +375,28 @@ private struct DateFilterPopover: View {
     }
 }
 
-// MARK: - Next refresh countdown widget
+// MARK: - Next refresh line
 
-private struct NextRefreshWidget: View {
+private struct NextRefreshLine: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Theme.accentMuted)
-                    .frame(width: 28, height: 28)
-                Image(systemName: "clock")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.accent)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                Text("NEXT REFRESH")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Theme.textTertiary)
-                    .tracking(0.5)
-                TimelineView(.periodic(from: .now, by: 1)) { _ in
-                    Text(countdownText)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                        .monospacedDigit()
-                }
-            }
+        HStack {
+            WireLabel("Next brief")
             Spacer()
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                Text(countdownText)
+                    .font(Theme.mono(11, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Theme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
+        .padding(.horizontal, 2)
     }
 
     private var countdownText: String {
         guard let next = appState.nextPollDate else { return "—" }
         let secs = max(0, Int(next.timeIntervalSinceNow))
-        if secs == 0 { return "Now" }
+        if secs == 0 { return "now" }
         return String(format: "%dm %02ds", secs / 60, secs % 60)
     }
 }
@@ -438,29 +410,34 @@ private struct SearchBarView: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(Theme.textTertiary)
-            TextField("Search messages & briefs", text: $query)
-                .font(.system(size: 13))
+            TextField("Search the archive", text: $query)
+                .font(Theme.sans(12.5))
                 .textFieldStyle(.plain)
                 .foregroundStyle(Theme.textPrimary)
                 .focused($focused)
             if !query.isEmpty {
                 Button { query = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(Theme.textTertiary)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(Theme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8)
-            .stroke(focused ? Theme.accent : Theme.border, lineWidth: 1))
-        .animation(.easeInOut(duration: 0.12), value: focused)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.controlRadius)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.controlRadius)
+                .strokeBorder(focused ? Theme.textSecondary : Theme.border,
+                              lineWidth: focused ? 1 : Theme.hairline)
+        )
+        .animation(Theme.quick, value: focused)
     }
 }
 
@@ -470,15 +447,12 @@ private struct SectionHeaderView: View {
     let label: String
     var body: some View {
         HStack {
-            Text(label.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Theme.textTertiary)
-                .kerning(0.6)
+            WireLabel(label)
             Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 3)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
     }
 }
 
@@ -488,60 +462,50 @@ private struct BriefRowView: View {
     let brief: Brief
     let isSelected: Bool
 
+    @State private var hovering = false
+
     var isUnread: Bool { brief.status == "ready" }
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
+            // Selection is interaction, not urgency — the rule is paper, not vermilion.
             Rectangle()
-                .fill(isSelected ? Theme.accent : Color.clear)
+                .fill(isSelected ? Theme.textPrimary : Color.clear)
                 .frame(width: 2)
-            HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text(syncDate)
-                            .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
-                            .foregroundStyle(Theme.textPrimary)
-                        Text(syncTime)
-                            .font(.system(size: 11, weight: .medium))
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    // Day lives in the section header — the row carries time only.
+                    Text(timeLabel)
+                        .font(Theme.mono(9.5, weight: .semibold))
+                        .foregroundStyle(isSelected ? Theme.textSecondary : Theme.textTertiary)
+                    if brief.pinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 7))
                             .foregroundStyle(Theme.textTertiary)
-                            .monospacedDigit()
-                        if brief.pinned {
-                            Image(systemName: "pin.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(Theme.accent.opacity(0.7))
-                        }
                     }
-                    HStack(spacing: 3) {
-                        Text(syncDate)
-                        Text("·")
-                        Text(brief.createdAt, style: .relative)
+                    Spacer(minLength: 4)
+                    if isUnread {
+                        Circle()
+                            .fill(Theme.signal)
+                            .frame(width: 6, height: 6)
                     }
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
-                    .monospacedDigit()
                 }
-                Spacer(minLength: 4)
-                if isUnread {
-                    Circle()
-                        .fill(isSelected ? Theme.accent : Theme.accent.opacity(0.7))
-                        .frame(width: 7, height: 7)
-                }
+                Text(brief.notificationText)
+                    .font(Theme.sans(12.5, weight: isUnread ? .semibold : .regular))
+                    .foregroundStyle(isUnread || isSelected ? Theme.textPrimary : Theme.textSecondary)
+                    .lineLimit(1)
             }
-            .padding(.leading, 10)
+            .padding(.leading, 12)
             .padding(.trailing, 12)
-            .padding(.vertical, 9)
+            .padding(.vertical, 8)
         }
-        .background(isSelected ? Theme.surfaceHigh : Color.clear)
+        .background(isSelected ? Theme.selection : hovering ? Theme.surface.opacity(0.6) : Color.clear)
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .animation(Theme.quick, value: hovering)
     }
 
-    private var syncDate: String {
-        let f = DateFormatter()
-        f.dateFormat = "EEE d MMM"
-        return f.string(from: brief.createdAt)
-    }
-
-    private var syncTime: String {
+    private var timeLabel: String {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f.string(from: brief.createdAt)
@@ -555,16 +519,14 @@ private struct SettingsButtonView: View {
 
     var body: some View {
         Button { appState.onOpenSettings?() } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 13))
+                    .font(.system(size: 11))
                     .foregroundStyle(Theme.textTertiary)
-                Text("Settings")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
+                WireLabel("Settings", color: Theme.textSecondary)
                 Spacer()
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 6)
             .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
@@ -588,22 +550,29 @@ private struct SnoozePickerView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Snooze until…")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
-                .padding(.bottom, 4)
+        VStack(alignment: .leading, spacing: 2) {
+            WireLabel("Snooze until")
+                .padding(.bottom, 6)
 
-            Button("In 2 hours") { onSelect(Date().addingTimeInterval(2 * 3600)) }
-            Button("Tonight at 8pm") { onSelect(tonight8pm) }
-            Button("Tomorrow morning") { onSelect(tomorrowMorning) }
+            snoozeOption("In 2 hours") { onSelect(Date().addingTimeInterval(2 * 3600)) }
+            snoozeOption("Tonight at 8pm") { onSelect(tonight8pm) }
+            snoozeOption("Tomorrow morning") { onSelect(tomorrowMorning) }
         }
         .padding(14)
         .frame(width: 200)
-        .background(Theme.surface)
+    }
+
+    private func snoozeOption(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(Theme.sans(13))
+                .foregroundStyle(Theme.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 5)
+                .padding(.horizontal, 6)
+                .contentShape(Rectangle())
+        }
         .buttonStyle(.plain)
-        .font(.system(size: 13))
-        .foregroundStyle(Theme.accent)
     }
 }
 
@@ -616,56 +585,50 @@ private struct NeedsReplySection: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "bell.badge")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.25))
-                Text("NEEDS REPLY")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.25))
-                    .tracking(0.7)
+            HStack(spacing: 6) {
+                WireLabel("Needs reply", color: Theme.signal)
                 Spacer()
                 Text("\(cards.count)")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(Theme.mono(10, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
-                    .monospacedDigit()
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
             .padding(.bottom, 6)
 
             ForEach(cards, id: \.card.id) { item in
                 Button { onTap(item.card) } label: {
-                    HStack(spacing: 8) {
-                        SourceGlyphView(service: item.card.service, size: 18)
+                    HStack(alignment: .top, spacing: 8) {
+                        Theme.signal.frame(width: 2)
+                            .clipShape(RoundedRectangle(cornerRadius: 1))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(item.card.conversationTitle ?? Theme.serviceName(item.card.service))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.textPrimary)
-                                .lineLimit(1)
+                            HStack(spacing: 6) {
+                                ServiceStamp(service: item.card.service, size: 14)
+                                Text((item.card.conversationTitle ?? Theme.serviceName(item.card.service)).uppercased())
+                                    .font(Theme.mono(9, weight: .semibold))
+                                    .tracking(0.8)
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .lineLimit(1)
+                                Spacer(minLength: 4)
+                                Text(briefAge(item.briefCreatedAt))
+                                    .font(Theme.mono(9))
+                                    .foregroundStyle(Theme.textTertiary)
+                            }
                             Text(item.card.headline)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Theme.textSecondary)
+                                .font(Theme.sans(11.5))
+                                .foregroundStyle(Theme.textPrimary)
                                 .lineLimit(2)
+                                .multilineTextAlignment(.leading)
                         }
-                        Spacer(minLength: 4)
-                        Text(briefAge(item.briefCreatedAt))
-                            .font(.system(size: 10))
-                            .foregroundStyle(Theme.textTertiary)
-                            .monospacedDigit()
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(Color(red: 0.95, green: 0.45, blue: 0.25).opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
 
-            Divider()
-                .background(Theme.border.opacity(0.5))
+            Rule()
                 .padding(.top, 8)
         }
     }

@@ -26,63 +26,73 @@ struct AISettingsTab: View {
     }
 
     var body: some View {
-        Form {
-            Section("AI Backend") {
-                Picker("Provider", selection: $selectedProviderRaw) {
-                    Text("Choose...").tag("")
-                    ForEach(LLMProvider.allCases, id: \.rawValue) { provider in
-                        Text(provider.displayName).tag(provider.rawValue)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    section("AI Backend") {
+                        Picker("Provider", selection: $selectedProviderRaw) {
+                            Text("Choose...").tag("")
+                            ForEach(LLMProvider.allCases, id: \.rawValue) { provider in
+                                Text(provider.displayName).tag(provider.rawValue)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+
+                        caption("LLMessenger only uses the backend selected here. API keys by themselves never enable cloud processing.")
                     }
-                }
-                .pickerStyle(.segmented)
 
-                Text("LLMessenger only uses the backend selected here. API keys by themselves never enable cloud processing.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+                    Rule()
 
-            Section("Anthropic") {
-                SecureField("API Key (sk-ant-…)", text: $anthropicKey)
-                    .textFieldStyle(.roundedBorder)
-                Text("Used only when Anthropic is explicitly selected above.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("OpenAI") {
-                SecureField("API Key (sk-…)", text: $openAIKey)
-                    .textFieldStyle(.roundedBorder)
-                Text("Used only when OpenAI is explicitly selected above.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Ollama (local)") {
-                OllamaModelPicker(selectedModel: $ollamaModel)
-                Text("Runs locally via Ollama when Ollama is explicitly selected above. The picker loads available models from the local Ollama API; falls back to a text field if Ollama is not running.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Automatic Brief Privacy") {
-                Toggle("Allow automatic briefs with the selected cloud provider", isOn: $cloudAutoBriefsConsent)
-                    .disabled(!selectedProviderIsCloud)
-                Text(consentHelpText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("General") {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { enabled in
-                        try? AutoLaunchManager.setEnabled(enabled)
+                    section("Anthropic") {
+                        SecureField("API Key (sk-ant-…)", text: $anthropicKey)
+                            .textFieldStyle(.roundedBorder)
+                            .font(Theme.sans(13))
+                        caption("Used only when Anthropic is explicitly selected above.")
                     }
-            }
 
-            // Test connection row
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
+                    Rule()
+
+                    section("OpenAI") {
+                        SecureField("API Key (sk-…)", text: $openAIKey)
+                            .textFieldStyle(.roundedBorder)
+                            .font(Theme.sans(13))
+                        caption("Used only when OpenAI is explicitly selected above.")
+                    }
+
+                    Rule()
+
+                    section("Ollama — Local") {
+                        OllamaModelPicker(selectedModel: $ollamaModel)
+                        caption("Runs locally via Ollama when Ollama is explicitly selected above. The picker loads available models from the local Ollama API; falls back to a text field if Ollama is not running.")
+                    }
+
+                    Rule()
+
+                    section("Automatic Brief Privacy") {
+                        Toggle("Allow automatic briefs with the selected cloud provider", isOn: $cloudAutoBriefsConsent)
+                            .toggleStyle(.switch).controlSize(.small)
+                            .font(Theme.sans(13))
+                            .tint(Theme.ok)
+                            .disabled(!selectedProviderIsCloud)
+                        caption(consentHelpText)
+                    }
+
+                    Rule()
+
+                    section("General") {
+                        Toggle("Launch at login", isOn: $launchAtLogin)
+                            .toggleStyle(.switch).controlSize(.small)
+                            .font(Theme.sans(13))
+                            .tint(Theme.ok)
+                            .onChange(of: launchAtLogin) { enabled in
+                                try? AutoLaunchManager.setEnabled(enabled)
+                            }
+                    }
+
+                    Rule()
+
+                    section("Connection") {
                         Button(action: { Task { await testConnection() } }) {
                             if case .running = testState {
                                 HStack(spacing: 6) {
@@ -90,70 +100,111 @@ struct AISettingsTab: View {
                                     Text("Testing…")
                                 }
                             } else {
-                                Label("Test AI Connection", systemImage: "bolt.circle")
+                                Text("Test AI Connection")
                             }
                         }
+                        .buttonStyle(PaperButtonStyle())
                         .disabled(currentClientSpec == nil || testState == .running)
-                    }
 
-                    switch testState {
-                    case .idle:
-                        EmptyView()
-                    case .running:
-                        EmptyView()
-                    case .success(let model):
-                        Label("Connected — \(model) responded", systemImage: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    case .failure(let msg):
-                        Label(msg, systemImage: "xmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                }
-            } footer: {
-                Text("Sends a one-word test prompt using the settings above (no need to save first).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if !usageRows.isEmpty {
-                Section("Usage this month") {
-                    ForEach(usageRows, id: \.provider) { row in
-                        HStack {
-                            Text(row.provider)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Text("\(row.inputK)k in / \(row.outputK)k out")
-                                .foregroundStyle(.secondary)
-                            Text("est. $\(String(format: "%.4f", row.cost))")
-                                .monospacedDigit()
+                        switch testState {
+                        case .idle, .running:
+                            EmptyView()
+                        case .success(let model):
+                            statusLine("Connected — \(model) responded", color: Theme.ok)
+                        case .failure(let msg):
+                            statusLine(msg, color: Theme.signal)
                         }
+
+                        caption("Sends a one-word test prompt using the settings above (no need to save first).")
                     }
-                    let total = usageRows.reduce(0) { $0 + $1.cost }
-                    HStack {
-                        Text("Total")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .bold()
-                        Text("est. $\(String(format: "%.4f", total))")
-                            .monospacedDigit()
-                            .bold()
+
+                    if !usageRows.isEmpty {
+                        Rule()
+                        usageSection
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
 
+            Rule()
+
+            // Footer: status + save
             HStack {
-                Spacer()
                 if !saveStatus.isEmpty {
                     Text(saveStatus)
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.textSecondary)
                 }
+                Spacer()
                 Button("Save") { save() }
+                    .buttonStyle(PaperButtonStyle(prominent: true))
                     .keyboardShortcut(.return, modifiers: .command)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
         .onAppear { load() }
         .task { await loadUsage() }
+    }
+
+    // MARK: - Section scaffolding
+
+    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            WireLabel(title)
+            content()
+        }
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.sans(11))
+            .foregroundStyle(Theme.textTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func statusLine(_ text: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(text)
+                .font(Theme.sans(11))
+                .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    private var usageSection: some View {
+        section("Usage This Month") {
+            ForEach(usageRows, id: \.provider) { row in
+                HStack {
+                    Text(row.provider)
+                        .font(Theme.sans(12))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("\(row.inputK)k in / \(row.outputK)k out")
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.textTertiary)
+                    Text("est. $\(String(format: "%.4f", row.cost))")
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            let total = usageRows.reduce(0) { $0 + $1.cost }
+            Rule()
+            HStack {
+                Text("Total")
+                    .font(Theme.sans(12, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("est. $\(String(format: "%.4f", total))")
+                    .font(Theme.mono(11, weight: .bold))
+                    .foregroundStyle(Theme.textPrimary)
+            }
+        }
     }
 
     // MARK: - Test

@@ -79,7 +79,7 @@ private struct OnboardingView: View {
                     if currentStep != .welcome {
                         Button(action: goBack) {
                             Label("Back", systemImage: "chevron.left")
-                                .font(.subheadline)
+                                .font(Theme.sans(12.5))
                                 .foregroundStyle(Theme.textSecondary)
                         }
                         .buttonStyle(.plain)
@@ -120,7 +120,7 @@ private struct OnboardingView: View {
         HStack(spacing: 8) {
             ForEach(Array(Step.dotSteps.enumerated()), id: \.offset) { index, step in
                 Circle()
-                    .fill(currentStep == step ? Theme.accent : Theme.border)
+                    .fill(currentStep == step ? Theme.textPrimary : Theme.border)
                     .frame(width: 6, height: 6)
             }
         }
@@ -156,15 +156,15 @@ private struct OnboardingView: View {
         VStack(spacing: 28) {
             Spacer()
             Image(systemName: "tray.2.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(Theme.accent)
+                .font(Theme.sans(56, weight: .thin))
+                .foregroundStyle(Theme.textSecondary)
 
             VStack(spacing: 10) {
                 Text("Welcome to LLMessenger")
-                    .font(.title.bold())
+                    .font(Theme.display(26))
                     .foregroundStyle(Theme.textPrimary)
                 Text("Your private AI inbox assistant.\nSet up in 3 minutes.")
-                    .font(.body)
+                    .font(Theme.bodyFont)
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -194,7 +194,11 @@ private struct OnboardingView: View {
                     }
                 }
                 .background(Theme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radius)
+                        .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+                )
 
                 // Key / model field
                 VStack(alignment: .leading, spacing: 8) {
@@ -209,13 +213,13 @@ private struct OnboardingView: View {
                         TextField("Model (e.g. llama3.1)", text: $ollamaModel)
                             .textFieldStyle(DarkTextFieldStyle())
                         Text("Requires Ollama running locally")
-                            .font(.caption)
+                            .font(Theme.sans(11))
                             .foregroundStyle(Theme.textSecondary)
                     }
 
                     if selectedProvider.requiresAPIKey {
                         Text("Your messages are processed by \(selectedProvider.displayName) to generate summaries.")
-                            .font(.caption)
+                            .font(Theme.sans(11))
                             .foregroundStyle(Theme.textSecondary)
                     }
                 }
@@ -268,7 +272,7 @@ private struct OnboardingView: View {
                 if signalEnabled {
                     VStack(spacing: 8) {
                         Text("Enter your Signal phone number. LLMessenger uses signal-cli to read messages.")
-                            .font(.subheadline)
+                            .font(Theme.sans(12.5))
                             .foregroundStyle(Theme.textSecondary)
                             .multilineTextAlignment(.center)
 
@@ -313,7 +317,11 @@ private struct OnboardingView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
                     .background(Theme.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.radius)
+                            .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+                    )
 
                     Button("Open Privacy Settings") {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
@@ -335,13 +343,12 @@ private struct OnboardingView: View {
     private func instructionRow(number: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(number)
-                .font(.caption.bold())
-                .foregroundStyle(Theme.accent)
+                .font(Theme.mono(10, weight: .bold))
+                .foregroundStyle(Theme.textSecondary)
                 .frame(width: 18, height: 18)
-                .background(Theme.accentMuted)
-                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(Theme.border, lineWidth: 1))
             Text(text)
-                .font(.subheadline)
+                .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -369,13 +376,17 @@ private struct OnboardingView: View {
                     } else {
                         VStack(spacing: 12) {
                             Text("Telegram requires API credentials from my.telegram.org and the LLMessenger Telegram adapter binary.")
-                                .font(.subheadline)
+                                .font(Theme.sans(12.5))
                                 .foregroundStyle(Theme.textSecondary)
                                 .multilineTextAlignment(.center)
                         }
                         .padding(20)
                         .background(Theme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.radius)
+                                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+                        )
                     }
                 }
 
@@ -426,15 +437,15 @@ private struct OnboardingView: View {
         VStack(spacing: 28) {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(.green)
+                .font(Theme.sans(56, weight: .thin))
+                .foregroundStyle(Theme.ok)
 
             VStack(spacing: 10) {
                 Text("You're all set!")
-                    .font(.title.bold())
+                    .font(Theme.display(26))
                     .foregroundStyle(Theme.textPrimary)
                 Text("LLMessenger is ready. It will check your messages\nand generate briefs automatically.")
-                    .font(.body)
+                    .font(Theme.bodyFont)
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -455,15 +466,15 @@ private struct OnboardingView: View {
     private func serviceToggleHeader(title: String, icon: String, color: Color, isEnabled: Binding<Bool>) -> some View {
         HStack(spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(color.opacity(0.15))
+                RoundedRectangle(cornerRadius: Theme.radius)
+                    .strokeBorder(color.opacity(0.55), lineWidth: 1)
                     .frame(width: 44, height: 44)
                 Image(systemName: icon)
-                    .font(.system(size: 20))
+                    .font(Theme.sans(20))
                     .foregroundStyle(color)
             }
             Text(title)
-                .font(.title3.bold())
+                .font(Theme.display(17))
                 .foregroundStyle(Theme.textPrimary)
             Spacer()
             Toggle("", isOn: isEnabled)
@@ -472,7 +483,11 @@ private struct OnboardingView: View {
         }
         .padding(16)
         .background(Theme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius)
+                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+        )
     }
 
     private func saveServiceEnabled(_ service: String, _ enabled: Bool) {
@@ -484,11 +499,11 @@ private struct OnboardingView: View {
     private func stepHeader(title: String, subtitle: String?) -> some View {
         VStack(spacing: 8) {
             Text(title)
-                .font(.title2.bold())
+                .font(Theme.headlineFont)
                 .foregroundStyle(Theme.textPrimary)
             if let subtitle {
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(Theme.sans(12.5))
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -498,27 +513,40 @@ private struct OnboardingView: View {
 
 // MARK: - Button Styles
 
+/// Paper on ink — onboarding's prominent action, sized up from PaperButtonStyle.
 private struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.subheadline.bold())
-            .foregroundStyle(.white)
+            .font(Theme.sans(13, weight: .semibold))
+            .foregroundStyle(Theme.bg)
             .padding(.horizontal, 24)
             .padding(.vertical, 10)
-            .background(Theme.accent.opacity(configuration.isPressed ? 0.8 : 1))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(
+                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .fill(Theme.textPrimary)
+            )
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(Theme.quick, value: configuration.isPressed)
     }
 }
 
 private struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.subheadline)
+            .font(Theme.sans(12.5, weight: .semibold))
             .foregroundStyle(Theme.textSecondary)
             .padding(.horizontal, 24)
             .padding(.vertical, 10)
-            .background(Theme.surface.opacity(configuration.isPressed ? 0.6 : 1))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(
+                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .fill(Theme.surface.opacity(configuration.isPressed ? 0.6 : 1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+            )
+            .animation(Theme.quick, value: configuration.isPressed)
     }
 }
 
@@ -527,12 +555,12 @@ private struct SegmentButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.subheadline)
+            .font(Theme.sans(12.5, weight: isSelected ? .semibold : .regular))
             .foregroundStyle(isSelected ? Theme.textPrimary : Theme.textSecondary)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(isSelected ? Theme.surfaceHigh : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
             .padding(2)
     }
 }
@@ -543,12 +571,12 @@ private struct DarkTextFieldStyle: TextFieldStyle {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(Theme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Theme.border, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .strokeBorder(Theme.border, lineWidth: 1)
             )
             .foregroundStyle(Theme.textPrimary)
-            .font(.subheadline)
+            .font(Theme.sans(12.5))
     }
 }

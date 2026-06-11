@@ -22,12 +22,10 @@ struct TelegramSignInView: View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 24) {
                 // Header
-                VStack(spacing: 6) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(Theme.serviceTelegram)
+                VStack(spacing: 8) {
+                    ServiceStamp(service: "telegram", size: 24)
                     Text("Connect Telegram")
-                        .font(.title2.bold())
+                        .font(Theme.display(20))
                         .foregroundStyle(Theme.textPrimary)
                 }
 
@@ -46,15 +44,15 @@ struct TelegramSignInView: View {
                 // Error
                 if let msg = errorMessage {
                     Text(msg)
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.signal)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // Always-visible Cancel/Close at the bottom too.
                 Button("Close") { dismiss() }
-                    .controlSize(.small)
+                    .buttonStyle(WireActionStyle())
                     .keyboardShortcut(.cancelAction)
             }
             .padding(28)
@@ -63,8 +61,8 @@ struct TelegramSignInView: View {
             Button {
                 dismiss()
             } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .buttonStyle(.plain)
@@ -90,13 +88,13 @@ struct TelegramSignInView: View {
     private var phoneStep: some View {
         VStack(spacing: 16) {
             Text("Enter your phone number in international format.")
-                .font(.subheadline)
+                .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             TextField("+491234567890", text: $phone)
                 .textFieldStyle(.roundedBorder)
-                .font(.subheadline)
+                .font(Theme.sans(13))
                 .disabled(isLoading)
 
             Button(action: sendCode) {
@@ -107,7 +105,7 @@ struct TelegramSignInView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PaperButtonStyle(prominent: true))
             .disabled(phone.trimmingCharacters(in: .whitespaces).isEmpty || isLoading)
         }
     }
@@ -117,13 +115,13 @@ struct TelegramSignInView: View {
     private func codeStep(phoneCodeHash: String) -> some View {
         VStack(spacing: 16) {
             Text("Enter the code sent to your phone.")
-                .font(.subheadline)
+                .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             TextField("12345", text: $code)
                 .textFieldStyle(.roundedBorder)
-                .font(.subheadline)
+                .font(Theme.mono(13))
                 .disabled(isLoading)
 
             Button(action: { verify(phoneCodeHash: phoneCodeHash) }) {
@@ -134,7 +132,7 @@ struct TelegramSignInView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PaperButtonStyle(prominent: true))
             .disabled(code.trimmingCharacters(in: .whitespaces).isEmpty || isLoading)
         }
     }
@@ -144,13 +142,13 @@ struct TelegramSignInView: View {
     private var passwordStep: some View {
         VStack(spacing: 16) {
             Text("Two-factor authentication is enabled. Enter your password.")
-                .font(.subheadline)
+                .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             SecureField("Password", text: $password)
                 .textFieldStyle(.roundedBorder)
-                .font(.subheadline)
+                .font(Theme.sans(13))
                 .disabled(isLoading)
 
             Button(action: checkPassword) {
@@ -161,7 +159,7 @@ struct TelegramSignInView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PaperButtonStyle(prominent: true))
             .disabled(password.isEmpty || isLoading)
         }
     }
@@ -170,19 +168,17 @@ struct TelegramSignInView: View {
 
     private var successStep: some View {
         VStack(spacing: 16) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.green)
-            Text("Telegram connected successfully!")
-                .font(.subheadline)
-                .foregroundStyle(Theme.textSecondary)
+            WireLabel("Connected", color: Theme.ok)
+            Text("Telegram is linked.")
+                .font(Theme.display(17))
+                .foregroundStyle(Theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             Button("Done") {
                 onSuccess()
                 dismiss()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PaperButtonStyle(prominent: true))
             .frame(maxWidth: .infinity)
         }
     }

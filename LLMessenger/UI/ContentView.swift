@@ -20,17 +20,16 @@ struct ContentView: View {
                 showSearch: $showSearch,
                 onRetryService: onRetryService
             )
-            Divider().background(Theme.border)
+            Rule()
 
             HStack(spacing: 0) {
                 if !sidebarCollapsed {
                     BriefListView()
-                        .frame(width: 240)
+                        .frame(width: 248)
                         .background(Theme.sidebar)
                         .transition(.move(edge: .leading).combined(with: .opacity))
 
-                    Divider()
-                        .background(Theme.border)
+                    Theme.border.frame(width: Theme.hairline)
                         .transition(.opacity)
                 }
 
@@ -43,11 +42,10 @@ struct ContentView: View {
                 }
 
                 if showMedia {
-                    Divider()
-                        .background(Theme.border)
+                    Theme.border.frame(width: Theme.hairline)
                         .transition(.opacity)
 
-                    MediaPanelView(onClose: { withAnimation(.easeInOut(duration: 0.22)) { showMedia = false } })
+                    MediaPanelView(onClose: { withAnimation(Theme.spring) { showMedia = false } })
                         .frame(width: 260)
                         .background(Theme.sidebar)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -56,8 +54,8 @@ struct ContentView: View {
         }
         .background(Theme.bg)
         .ignoresSafeArea(.all, edges: .top)
-        .animation(.easeInOut(duration: 0.22), value: sidebarCollapsed)
-        .animation(.easeInOut(duration: 0.22), value: showMedia)
+        .animation(Theme.spring, value: sidebarCollapsed)
+        .animation(Theme.spring, value: showMedia)
     }
 }
 
@@ -65,15 +63,13 @@ struct ContentView: View {
 
 private struct EmptyStateView: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "tray.2")
-                .font(.system(size: 40, weight: .thin))
-                .foregroundStyle(Theme.textTertiary)
-            Text("No brief selected")
-                .font(.title3)
+        VStack(spacing: 10) {
+            WireLabel("Nothing selected")
+            Text("The desk is clear.")
+                .font(Theme.display(21))
                 .foregroundStyle(Theme.textSecondary)
-            Text("Pick a brief from the sidebar")
-                .font(.callout)
+            Text("Pick a brief from the archive, or wait for the next round.")
+                .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textTertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -10,47 +10,76 @@ struct InstructionsSettingsTab: View {
     private let repo = SettingsRepository()
 
     var body: some View {
-        Form {
-            Section {
-                TextEditor(text: $prompt)
-                    .font(.system(size: 12, design: .monospaced))
-                    .frame(minHeight: 140)
-                    .scrollContentBackground(.hidden)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        WireLabel("System Prompt")
 
-                HStack {
-                    Text("This prompt is prepended to every LLM request. Changes take effect on next launch.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Reset to Default") { prompt = PromptBuilder.defaultBasePrompt }
-                        .buttonStyle(.borderless)
+                        TextEditor(text: $prompt)
+                            .font(Theme.mono(12))
+                            .foregroundStyle(Theme.textPrimary)
+                            .frame(minHeight: 140)
+                            .scrollContentBackground(.hidden)
+                            .padding(6)
+                            .background(Theme.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                                    .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+                            )
+
+                        HStack {
+                            Text("This prompt is prepended to every LLM request. Changes take effect on next launch.")
+                                .font(Theme.sans(11))
+                                .foregroundStyle(Theme.textTertiary)
+                            Spacer()
+                            Button("Reset to Default") { prompt = PromptBuilder.defaultBasePrompt }
+                                .buttonStyle(WireActionStyle())
+                        }
+                    }
+                    .padding(.vertical, 14)
+
+                    Rule()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        WireLabel("Appearance")
+                        HStack {
+                            Text("Theme")
+                                .font(Theme.sans(12))
+                                .foregroundStyle(Theme.textSecondary)
+                            Picker("", selection: $theme) {
+                                Text("System").tag("system")
+                                Text("Light").tag("light")
+                                Text("Dark").tag("dark")
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .frame(maxWidth: 250)
+                        }
+                    }
+                    .padding(.vertical, 14)
                 }
-            } header: {
-                Text("System Prompt")
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Section("Appearance") {
-                Picker("Theme", selection: $theme) {
-                    Text("System").tag("system")
-                    Text("Light").tag("light")
-                    Text("Dark").tag("dark")
-                }
-                .pickerStyle(.segmented)
-            }
+            Rule()
 
             HStack {
-                Spacer()
                 if !saveStatus.isEmpty {
                     Text(saveStatus)
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.textSecondary)
                 }
+                Spacer()
                 Button("Save") { save() }
+                    .buttonStyle(PaperButtonStyle(prominent: true))
                     .keyboardShortcut(.return, modifiers: .command)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
         .onAppear { load() }
     }

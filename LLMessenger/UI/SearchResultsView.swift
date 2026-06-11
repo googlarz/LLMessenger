@@ -16,13 +16,13 @@ struct SearchResultsView: View {
                     HStack {
                         ProgressView().controlSize(.small)
                         Text("Searching…")
-                            .font(.system(size: 12))
+                            .font(Theme.sans(12))
                             .foregroundStyle(Theme.textTertiary)
                     }
                     .padding(.vertical, 20)
                 } else if messageResults.isEmpty && briefResults.isEmpty {
                     Text("No results")
-                        .font(.system(size: 13))
+                        .font(Theme.sans(13))
                         .foregroundStyle(Theme.textTertiary)
                         .padding(.vertical, 30)
                         .frame(maxWidth: .infinity)
@@ -64,10 +64,7 @@ private struct SectionLabel: View {
     let text: String
     var body: some View {
         HStack {
-            Text(text)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Theme.textTertiary)
-                .kerning(0.6)
+            WireLabel(text)
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -82,14 +79,14 @@ private struct BriefSearchResultRow: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
                 Image(systemName: "doc.text")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.accent)
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.textTertiary)
                 Text(brief.createdAt, style: .date)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Theme.mono(10.5))
                     .foregroundStyle(Theme.textTertiary)
             }
             Text(brief.notificationText)
-                .font(.system(size: 12))
+                .font(Theme.sans(12))
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(2)
         }
@@ -106,27 +103,21 @@ private struct MessageSearchResultRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                Text(serviceLabel)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Theme.serviceColor(result.service))
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                ServiceStamp(service: result.service, size: 16)
                 if let name = result.conversationName {
                     Text(name)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(Theme.sans(11, weight: .medium))
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
                 }
                 Spacer()
                 Text(result.timestamp, style: .relative)
-                    .font(.system(size: 10))
+                    .font(Theme.mono(10))
                     .foregroundStyle(Theme.textTertiary)
             }
             // Strip << >> highlight markers for plain display
             Text(plainSnippet)
-                .font(.system(size: 12))
+                .font(Theme.sans(12))
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(2)
         }
@@ -134,15 +125,6 @@ private struct MessageSearchResultRow: View {
         .padding(.vertical, 8)
         .background(Color.clear)
         .contentShape(Rectangle())
-    }
-
-    private var serviceLabel: String {
-        switch result.service {
-        case "imessage": return "iM"
-        case "telegram": return "Tg"
-        case "signal":   return "Sg"
-        default:         return String(result.service.prefix(2)).uppercased()
-        }
     }
 
     private var plainSnippet: String {

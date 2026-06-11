@@ -8,29 +8,21 @@ struct ReplyDraftView: View {
     let draft: ReplyDraft
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Rectangle()
-                .fill(Theme.accent)
+        HStack(alignment: .top, spacing: 14) {
+            Theme.textSecondary.opacity(0.5)
                 .frame(width: 2)
-                .cornerRadius(1)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
                 .padding(.vertical, 2)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 9) {
                 HStack {
-                    HStack(spacing: 5) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Theme.accent)
-                        Text("Draft reply" + (draft.senderName.isEmpty ? "" : " to \(draft.senderName)"))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Theme.accent)
-                    }
+                    WireLabel(draft.senderName.isEmpty ? "Draft reply" : "Draft reply · \(draft.senderName)")
                     Spacer()
                     Button { chatViewModel.discardDraft(id: draftID) } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(Theme.textTertiary)
-                            .frame(minWidth: 24, minHeight: 24)
+                            .frame(minWidth: 22, minHeight: 22)
                             .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Discard draft")
@@ -40,60 +32,51 @@ struct ReplyDraftView: View {
 
                 if draft.conversationID == "unknown" {
                     Text("Cannot determine recipient — brief spans multiple conversations. Discard and ask about one conversation specifically.")
-                        .font(.system(size: 11))
+                        .font(Theme.sans(11.5))
                         .foregroundStyle(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else if !draft.conversationID.isEmpty {
-                    Text("→ \(draft.serviceID) · \(draft.conversationID)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.textTertiary)
+                    HStack(spacing: 7) {
+                        ServiceStamp(service: draft.serviceID, size: 14)
+                        Text(draft.conversationID.uppercased())
+                            .font(Theme.mono(9))
+                            .tracking(0.6)
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Text(draft.text)
-                    .font(.system(size: 13))
+                    .font(Theme.sans(13))
+                    .lineSpacing(4)
                     .foregroundStyle(Theme.textPrimary)
                     .textSelection(.enabled)
+                    .padding(.leading, 12)
+                    .overlay(alignment: .leading) {
+                        Theme.border.frame(width: Theme.hairline)
+                    }
 
-                Text("Nothing has been sent. Copy the draft and review it in the target app.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
-
-                HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    WireLabel("Nothing has been sent")
                     Spacer()
                     Button("Discard") { chatViewModel.discardDraft(id: draftID) }
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textSecondary)
-                        .buttonStyle(.plain)
+                        .buttonStyle(WireActionStyle())
 
-                    Button("Open App") {
-                        openTargetApp()
-                    }
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .buttonStyle(.plain)
-                    .disabled(!canOpenTargetApp)
+                    Button("Open App") { openTargetApp() }
+                        .buttonStyle(WireActionStyle())
+                        .disabled(!canOpenTargetApp)
+                        .help("Open the target app to review and send")
 
-                    Button("Copy") {
-                        copyDraft()
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .background(Theme.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .buttonStyle(.plain)
+                    Button("Copy") { copyDraft() }
+                        .buttonStyle(PaperButtonStyle(prominent: true))
+                        .help("Copy the draft to the clipboard")
                 }
             }
+
+            Spacer(minLength: 28)
         }
-        .padding(12)
-        .background(Theme.accentMuted)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Theme.accent.opacity(0.25), lineWidth: 1)
-        )
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 9)
     }
 
     private var canOpenTargetApp: Bool {

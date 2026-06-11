@@ -12,18 +12,30 @@ struct RulesSettingsTab: View {
     }
 
     var body: some View {
-        Form {
-            Section("Priority Rules") {
-                ForEach(rules) { rule in
-                    RuleRowView(rule: rule, onDelete: { deleteRule(rule) })
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                WireLabel("Priority Rules")
+                    .padding(.bottom, 10)
+
+                VStack(spacing: 0) {
+                    ForEach(rules) { rule in
+                        RuleRowView(rule: rule, onDelete: { deleteRule(rule) })
+                        Rule()
+                    }
                 }
+
                 Button("Add Rule") { showingAddRule = true }
-            }
-            Section {
+                    .buttonStyle(PaperButtonStyle())
+                    .padding(.top, 12)
+
                 Text("Rules are applied after AI analysis. First matching rule wins.")
-                    .font(.system(size: 11))
+                    .font(Theme.sans(11))
                     .foregroundStyle(Theme.textTertiary)
+                    .padding(.top, 14)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task { await loadRules() }
         .sheet(isPresented: $showingAddRule) {
@@ -78,16 +90,17 @@ private struct RuleRowView: View {
     var body: some View {
         HStack {
             Text(ruleSummary)
-                .font(.system(size: 12))
-                .foregroundStyle(.primary)
+                .font(Theme.mono(11))
+                .foregroundStyle(Theme.textSecondary)
             Spacer()
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "minus.circle")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Theme.textTertiary)
             }
             .buttonStyle(.plain)
+            .help("Delete rule")
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 8)
     }
 
     private var ruleSummary: String {
@@ -128,12 +141,15 @@ private struct AddRuleView: View {
     private let priorityOptions = [("", "No change"), ("high", "High"), ("med", "Med"), ("low", "Low")]
 
     var body: some View {
-        Form {
-            Section("Conditions") {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                WireLabel("Conditions")
                 TextField("Contact name contains (optional)", text: $contactPattern)
                     .textFieldStyle(.roundedBorder)
+                    .font(Theme.sans(13))
                 TextField("Message contains (optional)", text: $keywordPattern)
                     .textFieldStyle(.roundedBorder)
+                    .font(Theme.sans(13))
                 Picker("Service", selection: $service) {
                     Text("Any").tag("any")
                     Text("Signal").tag("signal")
@@ -141,28 +157,42 @@ private struct AddRuleView: View {
                     Text("iMessage").tag("imessage")
                     Text("Slack").tag("slack")
                 }
+                .font(Theme.sans(13))
             }
-            Section("Action") {
+            .padding(.bottom, 14)
+
+            Rule()
+
+            VStack(alignment: .leading, spacing: 10) {
+                WireLabel("Action")
                 Picker("Set priority", selection: $setPriority) {
                     ForEach(priorityOptions, id: \.0) { value, label in
                         Text(label).tag(value)
                     }
                 }
+                .font(Theme.sans(13))
                 Toggle("Suppress notification", isOn: $suppress)
+                    .font(Theme.sans(13))
                 Toggle("Always notify", isOn: $alwaysNotify)
+                    .font(Theme.sans(13))
             }
-            Section {
-                HStack {
-                    Button("Cancel") { dismiss() }
-                    Spacer()
-                    Button("Save Rule") { save() }
-                        .disabled(contactPattern.isEmpty && keywordPattern.isEmpty && service == "any")
-                        .buttonStyle(.borderedProminent)
-                }
+            .padding(.vertical, 14)
+
+            Rule()
+
+            HStack {
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(PaperButtonStyle())
+                Spacer()
+                Button("Save Rule") { save() }
+                    .disabled(contactPattern.isEmpty && keywordPattern.isEmpty && service == "any")
+                    .buttonStyle(PaperButtonStyle(prominent: true))
             }
+            .padding(.top, 14)
         }
         .frame(width: 400)
-        .padding()
+        .padding(22)
+        .background(Theme.surface)
     }
 
     private func save() {

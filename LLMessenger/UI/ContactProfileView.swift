@@ -17,24 +17,22 @@ struct ContactProfileView: View {
                     SourceGlyphView(service: service, size: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(displayName)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(Theme.display(17))
                             .foregroundStyle(Theme.textPrimary)
                         Text(Theme.serviceName(service))
-                            .font(.system(size: 12))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.textTertiary)
                     }
                 }
 
-                Divider()
+                Rule()
 
                 // Notes
                 if let notes = profile?.notes, !notes.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Notes")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Theme.textTertiary)
+                        WireLabel("Notes")
                         Text(notes)
-                            .font(.system(size: 13))
+                            .font(Theme.sans(13))
                             .foregroundStyle(Theme.textPrimary)
                     }
                 }
@@ -42,11 +40,9 @@ struct ContactProfileView: View {
                 // Pending ask
                 if let ask = profile?.pendingAsk, !ask.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Pending")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.orange)
+                        WireLabel("Pending", color: Theme.standby)
                         Text(ask)
-                            .font(.system(size: 13))
+                            .font(Theme.sans(13))
                             .foregroundStyle(Theme.textPrimary)
                     }
                 }
@@ -54,9 +50,7 @@ struct ContactProfileView: View {
                 // Recent brief cards
                 if !recentCards.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Recent mentions")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Theme.textTertiary)
+                        WireLabel("Recent mentions")
                         ForEach(recentCards, id: \.id) { card in
                             ContactBriefCardRow(card: card)
                         }
@@ -98,14 +92,20 @@ private struct ContactBriefCardRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(card.headline)
-                .font(.system(size: 12))
+                .font(Theme.sans(12))
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(2)
             Spacer()
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
-        .background(Theme.surfaceHigh)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radius)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius)
+                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+        )
     }
 }

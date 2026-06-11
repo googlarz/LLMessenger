@@ -6,36 +6,29 @@ struct MessageBubbleView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            // Avatar
+            // Avatar — quiet ink monogram, not a saturated badge
             ZStack {
                 Circle()
-                    .fill(avatarColor)
+                    .fill(Theme.surface)
+                    .overlay(Circle().strokeBorder(Theme.border, lineWidth: Theme.hairline))
                     .frame(width: 28, height: 28)
                 Text(String(message.sender.prefix(1)).uppercased())
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(Theme.mono(11, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
             }
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(displayName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(Theme.sans(11, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                     Text(message.timestamp, style: .time)
-                        .font(.system(size: 10))
+                        .font(Theme.mono(10))
                         .foregroundStyle(Theme.textTertiary)
-                    Text(message.service.capitalized)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(Theme.textTertiary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 3)
-                                .stroke(Theme.border, lineWidth: 0.5)
-                        )
+                    ServiceStamp(service: message.service, size: 16)
                 }
                 Text(message.text)
-                    .font(.system(size: 13))
+                    .font(Theme.sans(13))
                     .foregroundStyle(Theme.textPrimary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -52,16 +45,5 @@ struct MessageBubbleView: View {
             return "…" + message.sender.suffix(4)
         }
         return message.sender
-    }
-
-    private var avatarColor: Color {
-        let palette: [Color] = [
-            Color(red: 0.35, green: 0.55, blue: 0.75),
-            Color(red: 0.55, green: 0.45, blue: 0.75),
-            Color(red: 0.75, green: 0.45, blue: 0.45),
-            Color(red: 0.40, green: 0.65, blue: 0.55),
-            Color(red: 0.65, green: 0.55, blue: 0.35),
-        ]
-        return palette[abs(message.sender.hashValue) % palette.count]
     }
 }

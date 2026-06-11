@@ -1,6 +1,8 @@
 // LLMessenger/UI/BriefHeaderView.swift
 import SwiftUI
 
+/// The brief masthead — typeset like the front page of a wire digest:
+/// kicker line (edition · window · state), serif headline, mono dateline.
 struct BriefHeaderView: View {
     let brief: Brief
     let messageCount: Int
@@ -17,173 +19,139 @@ struct BriefHeaderView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Theme.accentMuted)
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(briefKind) · \(timeRange) · \(stateLabel)")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(stateColor)
-                        .tracking(0.8)
-
-                    // Headline now leads with the action-needed count, since that's
-                    // the only number the user actually opens the app to learn.
-                    Text(actionHeadline)
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(highPriorityCount > 0 ? Theme.textPrimary : Theme.textSecondary)
-                        .tracking(-0.5)
-
-                    HStack(spacing: 5) {
-                        Text("\(briefCount) brief\(briefCount == 1 ? "" : "s")")
-                        Text("·")
-                        Text("\(messageCount) message\(messageCount == 1 ? "" : "s")")
-                        Text("·")
-                        Text("\(peopleCount) \(peopleCount == 1 ? "person" : "people")")
-                        if !failedServices.isEmpty {
-                            Text("·")
-                            Text("\(failedServices.count) failed")
-                                .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.25))
-                        }
-                    }
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.textSecondary)
-                }
-
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                WireLabel("\(briefKind) · \(timeRange)\(stateSuffix)", color: stateColor)
                 Spacer()
-
-                HStack(spacing: 8) {
-                    Button {
+                HStack(spacing: 6) {
+                    Button("What changed?") {
                         chatViewModel.inputText = "What changed since the last brief?"
                         Task { await chatViewModel.send() }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "clock.arrow.2.circlepath")
-                                .font(.system(size: 11, weight: .bold))
-                            Text("What changed ↗")
-                                .font(.system(size: 13, weight: .bold))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Theme.surface)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Theme.border, lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Theme.textSecondary)
+                    .buttonStyle(WireActionStyle())
+                    .help("Ask what changed since the last brief")
 
                     Button {
                         InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "header"])
                         onRefresh?()
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11, weight: .bold))
-                            Text("Refresh")
-                                .font(.system(size: 13, weight: .bold))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Theme.surface)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Theme.border, lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        Text(isWorking ? "Working…" : "Refresh")
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Theme.textPrimary)
+                    .buttonStyle(PaperButtonStyle())
+                    .disabled(isWorking)
+                    .help("Fetch new messages and rebuild the brief")
+                }
+            }
+            .padding(.bottom, 14)
+
+            Text(actionHeadline)
+                .font(Theme.display(27))
+                .foregroundStyle(highPriorityCount > 0 ? Theme.textPrimary : Theme.textSecondary)
+                .kerning(0.2)
+                .padding(.bottom, 8)
+
+            HStack(spacing: 0) {
+                datelineItem("\(briefCount)", briefCount == 1 ? "thread" : "threads")
+                datelineDot
+                datelineItem("\(messageCount)", messageCount == 1 ? "message" : "messages")
+                datelineDot
+                datelineItem("\(peopleCount)", peopleCount == 1 ? "person" : "people")
+                if !failedServices.isEmpty {
+                    datelineDot
+                    Text("\(failedServices.count) unreachable".uppercased())
+                        .font(Theme.labelFont)
+                        .tracking(Theme.labelTracking)
+                        .foregroundStyle(Theme.standby)
                 }
             }
 
             if !failedServices.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.25))
-                    Text("Partial brief:")
-                        .font(.system(size: 12, weight: .bold))
-                    Text("Failed to reach \(failedServices.map { Theme.serviceName($0) }.joined(separator: ", ")).")
-                        .font(.system(size: 12))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(red: 0.95, green: 0.45, blue: 0.25).opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .foregroundStyle(Theme.textPrimary)
-            }
-
-            if highPriorityCount > 0 {
-                HStack(spacing: 10) {
-                    Image(systemName: "bell.badge.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.25))
-                    
-                    Text("\(highPriorityCount) items require your attention now")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color(red: 0.95, green: 0.45, blue: 0.25).opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(red: 0.95, green: 0.45, blue: 0.25).opacity(0.2), lineWidth: 1)
+                noticeRow(
+                    color: Theme.standby,
+                    label: "Partial brief",
+                    text: "Could not reach \(failedServices.map { Theme.serviceName($0) }.joined(separator: ", ")) — its threads are missing here."
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.top, 16)
             }
 
             if let errorText, !errorText.isEmpty {
-                Text(errorText)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.25))
-                    .padding(.top, -4)
+                noticeRow(color: Theme.signal, label: "Error", text: errorText)
+                    .padding(.top, 12)
             }
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 22)
+        .padding(.horizontal, Theme.gutter)
+        .padding(.top, 26)
+        .padding(.bottom, 20)
     }
 
-    private var headlineText: String {
-        if briefCount == 0 && messageCount == 0 { return "No new messages" }
-        if briefCount == 0 { return "\(messageCount) message\(messageCount == 1 ? "" : "s")" }
-        return "\(briefCount) brief\(briefCount == 1 ? "" : "s") across \(serviceCount) app\(serviceCount == 1 ? "" : "s")"
+    // MARK: - Pieces
+
+    private func datelineItem(_ value: String, _ unit: String) -> some View {
+        HStack(spacing: 4) {
+            Text(value)
+                .font(Theme.mono(11, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+            Text(unit.uppercased())
+                .font(Theme.labelFont)
+                .tracking(Theme.labelTracking)
+                .foregroundStyle(Theme.textTertiary)
+        }
     }
 
-    /// What the user came here to learn, in priority order:
-    ///   • some action needed → "1 action needed"
-    ///   • no actions but some content → "Nothing urgent · 1 brief"
-    ///   • empty brief → "No new messages"
+    private var datelineDot: some View {
+        Text("·")
+            .font(Theme.mono(11))
+            .foregroundStyle(Theme.textTertiary)
+            .padding(.horizontal, 7)
+    }
+
+    /// Editorial notice: vertical rule + mono label + plain sentence.
+    private func noticeRow(color: Color, label: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            color.frame(width: 2)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
+            VStack(alignment: .leading, spacing: 3) {
+                WireLabel(label, color: color)
+                Text(text)
+                    .font(Theme.sans(12.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var isWorking: Bool {
+        generationState == .fetching || generationState == .summarizing
+    }
+
+    // MARK: - Copy
+
+    /// What the user came here to learn, in priority order.
     private var actionHeadline: String {
-        if briefCount == 0 && messageCount == 0 { return "No new messages" }
+        if briefCount == 0 && messageCount == 0 { return "No new messages." }
         if highPriorityCount > 0 {
-            return "\(highPriorityCount) action\(highPriorityCount == 1 ? "" : "s") needed"
+            return highPriorityCount == 1
+                ? "One thing needs you."
+                : "\(spelled(highPriorityCount)) things need you."
         }
-        if briefCount > 0 {
-            return "Nothing urgent · \(briefCount) brief\(briefCount == 1 ? "" : "s")"
-        }
-        return "\(messageCount) new message\(messageCount == 1 ? "" : "s")"
+        if briefCount > 0 { return "Nothing urgent." }
+        return "\(messageCount) new message\(messageCount == 1 ? "" : "s")."
+    }
+
+    private func spelled(_ n: Int) -> String {
+        let words = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]
+        return n < words.count ? words[n] : "\(n)"
     }
 
     private var briefKind: String {
-        guard let start = brief.windowStart else { return "HOURLY BRIEF" }
+        guard let start = brief.windowStart else { return "Hourly brief" }
         let hours = Int(brief.createdAt.timeIntervalSince(start) / 3600)
-        if hours >= 24 * 6 { return "7-DAY BRIEF" }
-        if hours >= 24 { return "\(hours / 24)D BRIEF" }
-        if hours >= 2  { return "\(hours)H BRIEF" }
-        return "HOURLY BRIEF"
+        if hours >= 24 * 6 { return "7-day brief" }
+        if hours >= 24 { return "\(hours / 24)-day brief" }
+        if hours >= 2  { return "\(hours)-hour brief" }
+        return "Hourly brief"
     }
 
     private var timeRange: String {
@@ -199,15 +167,14 @@ struct BriefHeaderView: View {
         return "\(f.string(from: start)) – \(f.string(from: end))"
     }
 
-    private var stateLabel: String {
+    private var stateSuffix: String {
         switch generationState {
-        case .cached: return ""
-        case .fetching: return "FETCHING"
-        case .summarizing: return "UPDATING"
-        case .partial: return "Partially updated"
-        case .complete: return "READY"
-        case .noNewMessages: return "NO NEW MESSAGES"
-        case .failed: return "FAILED"
+        case .cached, .complete: return ""
+        case .fetching: return " · fetching"
+        case .summarizing: return " · updating"
+        case .partial: return " · partial"
+        case .noNewMessages: return " · no new messages"
+        case .failed: return " · failed"
         }
     }
 
@@ -216,11 +183,11 @@ struct BriefHeaderView: View {
         case .complete, .cached, .noNewMessages:
             return Theme.textTertiary
         case .fetching, .summarizing:
-            return Theme.accent
+            return Theme.textSecondary
         case .partial:
-            return Color(red: 0.90, green: 0.72, blue: 0.30)
+            return Theme.standby
         case .failed:
-            return Color(red: 0.95, green: 0.45, blue: 0.25)
+            return Theme.signal
         }
     }
 }

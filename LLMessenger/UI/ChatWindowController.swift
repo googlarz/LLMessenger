@@ -13,7 +13,7 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
         self.chatViewModel = appState.makeChatViewModel()
 
         let window = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 620),
+            contentRect: NSRect(x: 0, y: 0, width: 1040, height: 700),
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView,
                         .nonactivatingPanel],
             backing: .buffered,
@@ -46,7 +46,7 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
 
         appState.contactDirectory.refresh()
 
-        if window.frame.size == NSSize(width: 900, height: 620) {
+        if window.frame.size == NSSize(width: 1040, height: 700) {
             window.center()
         }
     }

@@ -152,12 +152,32 @@ final class MenuBarController {
 
     private func updateButton() {
         guard let button = statusItem.button else { return }
-        button.image = NSImage(systemSymbolName: "envelope.fill", accessibilityDescription: nil)
+        button.image = Self.briefGlyph
         button.action = nil
         button.target = self
         button.title = unreadCount > 0 ? " \(unreadCount)" : ""
         button.imagePosition = unreadCount > 0 ? .imageLeft : .imageOnly
     }
+
+    /// Three typeset lines — "the brief". Template image so it adapts to the
+    /// menu bar appearance; distinctive but quiet next to system items.
+    private static let briefGlyph: NSImage = {
+        let size = NSSize(width: 16, height: 16)
+        let image = NSImage(size: size, flipped: false) { _ in
+            NSColor.black.setFill()
+            let lineHeight: CGFloat = 1.7
+            let widths: [CGFloat] = [12, 12, 7.5]
+            let ys: [CGFloat] = [11.4, 7.15, 2.9]
+            for (w, y) in zip(widths, ys) {
+                let line = NSRect(x: 2, y: y, width: w, height: lineHeight)
+                NSBezierPath(roundedRect: line, xRadius: lineHeight / 2, yRadius: lineHeight / 2).fill()
+            }
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "LLMessenger brief"
+        return image
+    }()
 
     private func rebuildMenu() {
         let menu = NSMenu()

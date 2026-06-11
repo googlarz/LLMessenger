@@ -20,7 +20,7 @@ struct MentionPickerView: View {
         VStack(alignment: .leading, spacing: 0) {
             if filtered.isEmpty {
                 Text(directory.contacts.isEmpty ? "Loading contacts…" : "No matches")
-                    .font(.system(size: 12))
+                    .font(Theme.sans(12))
                     .foregroundStyle(Theme.textTertiary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
@@ -40,7 +40,7 @@ struct MentionPickerView: View {
                                                isGroup: handle.isGroup
                                            ))
                                        })
-                            Divider().background(Theme.border.opacity(0.4))
+                            Rule(color: Theme.border.opacity(0.4))
                         }
                     }
                 }
@@ -50,10 +50,10 @@ struct MentionPickerView: View {
         .frame(width: 320)
         .background(Theme.surface)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Theme.border, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Theme.radius)
+                .strokeBorder(Theme.border, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
         .shadow(radius: 12, y: 4)
         .onTapGesture {} // swallow taps so they don't dismiss
     }
@@ -68,7 +68,7 @@ private struct ContactRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text(contact.displayName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Theme.sans(13, weight: .medium))
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                 Spacer()
@@ -83,17 +83,21 @@ private struct ContactRow: View {
                                 .fill(Theme.serviceColor(handle.service))
                                 .frame(width: 6, height: 6)
                             Text(Theme.serviceName(handle.service))
-                                .font(.system(size: 11, weight: .medium))
+                                .font(Theme.mono(10, weight: .semibold))
+                                .foregroundStyle(Theme.textSecondary)
                             if handle.isGroup {
-                                Text("group")
-                                    .font(.system(size: 10))
+                                Text("GROUP")
+                                    .font(Theme.mono(8.5, weight: .semibold))
+                                    .tracking(0.5)
                                     .foregroundStyle(Theme.textTertiary)
                             }
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Theme.surfaceHigh)
-                        .clipShape(Capsule())
+                        .background(
+                            RoundedRectangle(cornerRadius: Theme.controlRadius)
+                                .fill(Theme.surfaceHigh)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
