@@ -323,6 +323,15 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "snoozedUntil", .datetime)
             }
         }
+        // ServiceConfig gained `pollIntervalSeconds` (per-service poll interval
+        // feature) without a matching migration — every serviceConfig INSERT
+        // failed with "no column named pollIntervalSeconds". 900s mirrors the
+        // model's default.
+        migrator.registerMigration("v16_poll_interval_seconds") { db in
+            try db.alter(table: "serviceConfig") { t in
+                t.add(column: "pollIntervalSeconds", .integer).notNull().defaults(to: 900)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }
