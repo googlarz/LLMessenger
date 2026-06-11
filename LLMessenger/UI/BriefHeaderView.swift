@@ -14,6 +14,8 @@ struct BriefHeaderView: View {
     let errorText: String?
     var onRefresh: (() -> Void)? = nil
 
+    @EnvironmentObject var chatViewModel: ChatViewModel
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 12) {
@@ -57,28 +59,51 @@ struct BriefHeaderView: View {
 
                 Spacer()
 
-                Button {
-                    InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "header"])
-                    onRefresh?()
-                } label: {
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("Refresh")
-                            .font(.system(size: 13, weight: .bold))
+                HStack(spacing: 8) {
+                    Button {
+                        chatViewModel.inputText = "What changed since the last brief?"
+                        Task { await chatViewModel.send() }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "clock.arrow.2.circlepath")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("What changed ↗")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Theme.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Theme.border, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Theme.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Theme.border, lineWidth: 1)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Theme.textSecondary)
+
+                    Button {
+                        InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "header"])
+                        onRefresh?()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Refresh")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Theme.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Theme.border, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Theme.textPrimary)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.textPrimary)
             }
 
             if !failedServices.isEmpty {
