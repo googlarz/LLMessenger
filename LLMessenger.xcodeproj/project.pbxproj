@@ -83,6 +83,7 @@
 		A4888E40CE69CDE1673C16D6 /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C662F360723B5576ACCA35 /* ChatInputView.swift */; };
 		A4AAEAA892F516B7F9D4B3B7 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A14FF85C448907397AC9412 /* ThreadView.swift */; };
 		A7678C24739CB1709B5418C1 /* DatabaseIntegrityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DEDA8ED7C4E649DCBD9BEE7 /* DatabaseIntegrityTests.swift */; };
+		AA1B2C3D4E5F6A7B8C9D0E1F /* ConversationTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2C3D4E5F6A7B8C9D0E1F2A /* ConversationTimelineView.swift */; };
 		AA6E78AED377D90FC3EBAA02 /* AutoLaunchManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD6470BF1FD4618456E18C6D /* AutoLaunchManagerTests.swift */; };
 		ACD272260C85A265D50055A1 /* ServiceSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6366D0E1F8A72B71A9F530 /* ServiceSettingsTab.swift */; };
 		ADE6785F10D5F0FB2A55C6C6 /* BriefRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */; };
@@ -100,6 +101,7 @@
 		C64A51B8478050E8D749A2D1 /* PromptRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D585C9E79CE6C3373CBFD739 /* PromptRegressionTests.swift */; };
 		C6E78A674132D16A32E143B9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96FD9BD1839DC30E92065C7E /* ContentView.swift */; };
 		C88C4CE66FA9F37B15DD2D1B /* MessageSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A205B592C8CBF382F66BB303 /* MessageSanitizer.swift */; };
+		CB97C26A4E5E9DF5354B7F38 /* LLMessengerFocusFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 694449F6BC5E242A67998975 /* LLMessengerFocusFilter.swift */; };
 		CDC3A3BE61AF399A26C898AD /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BAACF8C7BC99014F710229 /* SearchResultsView.swift */; };
 		D09A7CAA48767CB5A4547E12 /* ChatViewModelSendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0761450986849BBC1F441151 /* ChatViewModelSendTests.swift */; };
 		D2E04218C7BB48081762903B /* FrontendRobustnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D9CFBB9722856E912EABC7 /* FrontendRobustnessTests.swift */; };
@@ -189,6 +191,7 @@
 		5F1ADA68A6D2F9D76588BF7A /* iMessageAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iMessageAdapter.swift; sourceTree = "<group>"; };
 		62EF6B3B6345490B504E7D0C /* OllamaClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaClientTests.swift; sourceTree = "<group>"; };
 		66D9CFBB9722856E912EABC7 /* FrontendRobustnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontendRobustnessTests.swift; sourceTree = "<group>"; };
+		694449F6BC5E242A67998975 /* LLMessengerFocusFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LLMessengerFocusFilter.swift; sourceTree = "<group>"; };
 		6BC6FDFCFADDCEE5A74B7FB0 /* OllamaModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaModelPicker.swift; sourceTree = "<group>"; };
 		6BC84610C1FBB1A47EE9B2A4 /* SlackAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAdapter.swift; sourceTree = "<group>"; };
 		6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepositoryExtendedTests.swift; sourceTree = "<group>"; };
@@ -226,6 +229,7 @@
 		B0E3E5C7F80F5E5EACF5E3E9 /* ChatPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPanelView.swift; sourceTree = "<group>"; };
 		B70F5BB0EE53BF59D4BAC943 /* PrivacySettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySettingsTab.swift; sourceTree = "<group>"; };
 		B748E0A7F24D6131687A769E /* BriefEngineHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefEngineHistoryTests.swift; sourceTree = "<group>"; };
+		BB2C3D4E5F6A7B8C9D0E1F2A /* ConversationTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTimelineView.swift; sourceTree = "<group>"; };
 		BCE1A2AD60D1E42D7AAB4F4A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C20CEA789D8047744320CFBF /* ReplyDraftView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyDraftView.swift; sourceTree = "<group>"; };
 		C581342159C8F31C26BDE07C /* BriefJSONTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefJSONTests.swift; sourceTree = "<group>"; };
@@ -296,6 +300,7 @@
 				1958C796DA475A22D89DE79A /* Core */,
 				8418CC4CB8ADF8512F3A2299 /* MenuBar */,
 				CFF5E8DAB84A19E3F26BD8A6 /* UI */,
+				334DCD0AE820EA8307D2FA6E /* AppIntents */,
 			);
 			path = LLMessenger;
 			sourceTree = "<group>";
@@ -350,6 +355,15 @@
 				37E8FE3B928D05E300F53453 /* SettingsRepository.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		334DCD0AE820EA8307D2FA6E /* AppIntents */ = {
+			isa = PBXGroup;
+			children = (
+				694449F6BC5E242A67998975 /* LLMessengerFocusFilter.swift */,
+			);
+			name = AppIntents;
+			path = AppIntents;
 			sourceTree = "<group>";
 		};
 		364507FCF3614EFBB0D459DF /* LLM */ = {
@@ -508,6 +522,7 @@
 				758A1B093F09B6DE98D3613C /* BriefHeaderView.swift */,
 				17E2FC6E580C483A5220F007 /* BriefListView.swift */,
 				D2E743B88282AE993C10C526 /* BriefProseView.swift */,
+				BB2C3D4E5F6A7B8C9D0E1F2A /* ConversationTimelineView.swift */,
 				98C662F360723B5576ACCA35 /* ChatInputView.swift */,
 				31422A7C01764570369907E7 /* ChatInteractionContext.swift */,
 				B0E3E5C7F80F5E5EACF5E3E9 /* ChatPanelView.swift */,
@@ -659,6 +674,7 @@
 				2837CF2B8EB456AA3092F0D4 /* BriefJSON.swift in Sources */,
 				B47F50B3DD0A86EE369C8549 /* BriefListView.swift in Sources */,
 				5A7F8A5FF820AE804CFC2BEC /* BriefProseView.swift in Sources */,
+				AA1B2C3D4E5F6A7B8C9D0E1F /* ConversationTimelineView.swift in Sources */,
 				ADE6785F10D5F0FB2A55C6C6 /* BriefRepository.swift in Sources */,
 				A4888E40CE69CDE1673C16D6 /* ChatInputView.swift in Sources */,
 				2B4D78D5DDA0209E861CCE7A /* ChatInteractionContext.swift in Sources */,
@@ -718,6 +734,7 @@
 				40B16522FD6D885CF5BA5741 /* Theme.swift in Sources */,
 				A4AAEAA892F516B7F9D4B3B7 /* ThreadView.swift in Sources */,
 				F37C2D2EABCEB3FA7BF41E5D /* iMessageAdapter.swift in Sources */,
+				CB97C26A4E5E9DF5354B7F38 /* LLMessengerFocusFilter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
