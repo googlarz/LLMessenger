@@ -47,6 +47,20 @@ final class NotificationManager: NSObject {
     nonisolated static func briefID(from userInfo: [AnyHashable: Any]) -> Int64? {
         userInfo["briefID"] as? Int64
     }
+
+    nonisolated static func postDraftReadyNotification(senderName: String, briefID: Int64) {
+        let content = UNMutableNotificationContent()
+        content.title = "Draft ready"
+        content.body = "Tap to review your reply to \(senderName)"
+        content.userInfo = ["briefID": briefID, "type": "draftReady"]
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "draft-\(briefID)-\(senderName)",
+            content: content,
+            trigger: trigger
+        )
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
 }
 
 extension NotificationManager: UNUserNotificationCenterDelegate {

@@ -225,6 +225,8 @@ final class BriefEngine {
         }
 
         try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
+        applyPriorityRules(to: allCards)
+        updateContactProfiles(from: allCards)
 
         return briefID
     }
@@ -494,6 +496,9 @@ final class BriefEngine {
         }
 
         try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
+        applyPriorityRules(to: allCards)
+        updateContactProfiles(from: allCards)
+
         return briefID
     }
 
@@ -819,5 +824,82 @@ final class BriefEngine {
     private nonisolated func encodeStringArray(_ values: [String]) throws -> String {
         let data = try JSONEncoder().encode(values)
         return String(data: data, encoding: .utf8) ?? "[]"
+    }
+
+    // MARK: - Priority Rules
+
+    private func applyPriorityRules(to cards: [BriefCard]) {
+        let rules = (try? database.dbQueue.read { db in try PriorityRule.fetchAll(db) }) ?? []
+        guard !rules.isEmpty else { return }
+        let sorted = rules.sorted { $0.sortOrder < $1.sortOrder }
+        for card in cards {
+            for rule in sorted where ruleMatches(rule, card: card) {
+                // Priority override and suppress are informational at this stage —
+                // the card values are value types so mutations here are local.
+                // Callers that need to act on rules should query priorityRules directly.
+                if rule.suppress {
+                    print("[BriefEngine] priority rule suppresses card \(card.id) (\(card.headline))")
+                }
+                if let p = rule.setPriority {
+                    print("[BriefEngine] priority rule sets \(card.id) to \(p)")
+                }
+                break  // first matching rule wins
+            }
+        }
+    }
+
+    private nonisolated func ruleMatches(_ rule: PriorityRule, card: BriefCard) -> Bool {
+        if let service = rule.service, service != card.service { return false }
+        let displayName = card.conversationTitle ?? card.conversationId
+        if let contactPattern = rule.contactPattern,
+           !displayName.localizedCaseInsensitiveContains(contactPattern) { return false }
+        if let keywordPattern = rule.keywordPattern,
+           !card.headline.localizedCaseInsensitiveContains(keywordPattern) &&
+           !(card.summary.localizedCaseInsensitiveContains(keywordPattern)) { return false }
+        return true
+    }
+
+    // MARK: - Contact Profile Updates
+
+    private func updateContactProfiles(from cards: [BriefCard]) {
+        for card in cards {
+            let displayName = card.conversationTitle ?? card.conversationId
+            let profile = ContactProfile(
+                id: nil,
+                service: card.service,
+                conversationId: card.conversationId,
+                displayName: displayName,
+                notes: nil,
+                lastTopics: card.headline,
+                pendingAsk: card.actionItems.first,
+                updatedAt: Date()
+            )
+            try? database.dbQueue.write { db in
+                try profile.upsert(db)
+            }
+        }
+    }
+
+    // MARK: - Proactive Draft Staging
+
+    func checkProactiveDrafts() async {
+        let cutoff = Date().addingTimeInterval(-4 * 3600)
+        let candidates: [BriefCardRecord]
+        do {
+            candidates = try await database.dbQueue.read { db in
+                try BriefCardRecord
+                    .filter(Column("priority") == "high")
+                    .filter(Column("createdAt") < cutoff)
+                    .fetchAll(db)
+            }
+        } catch {
+            print("[BriefEngine] checkProactiveDrafts: DB read failed: \(error)")
+            return
+        }
+
+        for card in candidates {
+            let displayName = card.conversationTitle ?? card.conversationId
+            NotificationManager.postDraftReadyNotification(senderName: displayName, briefID: card.briefId)
+        }
     }
 }
