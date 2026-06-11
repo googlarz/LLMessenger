@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 @MainActor
 final class ContactDirectory: ObservableObject {
@@ -50,6 +51,25 @@ final class ContactDirectory: ObservableObject {
             if a.service == preferred && b.service != preferred { return true }
             if b.service == preferred && a.service != preferred { return false }
             return a.service < b.service
+        }
+    }
+
+    // MARK: - Contact Profiles
+
+    /// Returns the stored ContactProfile for the given service+conversationId pair, or nil if none exists.
+    func loadProfile(service: String, conversationId: String) -> ContactProfile? {
+        try? repository.database.dbQueue.read { db in
+            try ContactProfile
+                .filter(Column("service") == service)
+                .filter(Column("conversationId") == conversationId)
+                .fetchOne(db)
+        }
+    }
+
+    /// Upserts a ContactProfile. Called by BriefEngine after brief generation.
+    func upsertProfile(_ profile: ContactProfile) {
+        try? repository.database.dbQueue.write { db in
+            try profile.save(db)
         }
     }
 
