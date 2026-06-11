@@ -472,6 +472,25 @@ struct BriefRepository {
         }
     }
 
+    /// Returns all cards for a single (service, conversationId) pair across all briefs,
+    /// newest brief first. Used by ConversationTimelineView.
+    func fetchConversationTimeline(service: String, conversationID: String) throws -> [(briefDate: Date, card: BriefCardRecord)] {
+        try database.dbQueue.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT bc.*, b.createdAt AS briefCreatedAt
+                FROM briefCards bc
+                JOIN briefs b ON bc.briefId = b.id
+                WHERE bc.service = ? AND bc.conversationId = ?
+                ORDER BY b.createdAt DESC
+            """, arguments: [service, conversationID])
+            return rows.compactMap { row in
+                guard let card = try? BriefCardRecord(row: row),
+                      let briefDate = row["briefCreatedAt"] as? Date else { return nil }
+                return (briefDate: briefDate, card: card)
+            }
+        }
+    }
+
     func insertBriefCardSources(_ sources: [BriefCardSource]) throws {
         try database.dbQueue.write { db in
             try Self.insertBriefCardSources(sources, db: db)

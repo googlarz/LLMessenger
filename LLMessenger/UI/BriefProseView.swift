@@ -245,6 +245,14 @@ struct BriefProseView: View {
     @State private var labelPopoverCardID: String? = nil
     @State private var labelEditText: String = ""
     @State private var labelEditHint: String = "auto"
+    @State private var showingTimeline: TimelineTarget? = nil
+
+    struct TimelineTarget: Identifiable {
+        let service: String
+        let conversationId: String
+        let displayName: String
+        var id: String { "\(service)/\(conversationId)" }
+    }
 
     private var parsedJSON: BriefJSON? {
         guard var summary = brief.openingSummary else { return nil }
@@ -405,6 +413,14 @@ struct BriefProseView: View {
         }
         .padding(.top, 12)
         .padding(.bottom, 8)
+        .sheet(item: $showingTimeline) { target in
+            ConversationTimelineView(
+                service: target.service,
+                conversationId: target.conversationId,
+                displayName: target.displayName,
+                repository: appState.repository
+            )
+        }
         // H key: toggle handled on the first unhandled card visible in the current filter.
         .background {
             if let briefID = brief.id,
@@ -505,6 +521,20 @@ struct BriefProseView: View {
                         onCancel: { labelPopoverCardID = nil }
                     )
                 }
+
+                Button {
+                    showingTimeline = TimelineTarget(
+                        service: card.service,
+                        conversationId: card.conversationId,
+                        displayName: convName
+                    )
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textTertiary.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .help("View full conversation history across briefs")
 
                 Spacer()
 
