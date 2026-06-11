@@ -113,6 +113,7 @@ final class AppState: ObservableObject {
     @Published var briefs: [Brief] = []
     @Published var selectedBriefID: Int64?
     @Published var serviceHealth: [String: AdapterHealthResult.Status] = [:]
+    @Published var serviceHealthMap: [String: ServiceHealth] = [:]
     @Published var nextPollDate: Date?
     @Published var lastError: String?
     @Published var briefGenerationState: BriefGenerationState = .cached
@@ -178,6 +179,14 @@ final class AppState: ObservableObject {
         briefs.filter { $0.briefStatus == .ready }.count
     }
 
+    var lastCheckedDate: Date? {
+        serviceHealthMap.values.compactMap(\.lastCheck).max()
+    }
+
+    var hasServiceError: Bool {
+        serviceHealthMap.values.contains { $0.status == "error" }
+    }
+
     func updateServiceHealth(_ health: [String: AdapterHealthResult.Status]) {
         serviceHealth = health
     }
@@ -194,12 +203,15 @@ final class AppState: ObservableObject {
     }
 
     func refreshBriefs() {
+        let settingsRepo = makeSettingsRepository()
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             do {
                 let fetched = try self.repository.fetchAllBriefs()
+                let healthMap = (try? settingsRepo.loadAllServiceHealth()) ?? [:]
                 await MainActor.run {
                     self.briefs = fetched
+                    self.serviceHealthMap = healthMap
                     self.onBriefsChanged?()
                 }
             } catch {

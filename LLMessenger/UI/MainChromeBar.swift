@@ -45,14 +45,25 @@ struct MainChromeBar: View {
 
                 Divider().frame(height: 14).opacity(0.6)
 
-                // Service health chips
-                HStack(spacing: 6) {
-                    ForEach(orderedServices, id: \.self) { svc in
-                        ServiceHealthChip(
-                            service: svc,
-                            status: appState.serviceHealth[svc],
-                            onRetry: { onRetryService?(svc) }
-                        )
+                // Service health chips + last-checked line
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        ForEach(orderedServices, id: \.self) { svc in
+                            ServiceHealthChip(
+                                service: svc,
+                                status: appState.serviceHealth[svc],
+                                onRetry: { onRetryService?(svc) }
+                            )
+                        }
+                    }
+                    if let checked = appState.lastCheckedDate {
+                        Text(lastCheckedLabel(from: checked))
+                            .font(.system(size: 10))
+                            .foregroundStyle(appState.hasServiceError ? Color.orange : Theme.textTertiary)
+                    } else if appState.hasServiceError {
+                        Text("⚠ Service error")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.orange)
                     }
                 }
 
@@ -168,6 +179,13 @@ struct MainChromeBar: View {
     }
 
     // MARK: - Helpers
+
+    private func lastCheckedLabel(from date: Date) -> String {
+        if appState.hasServiceError { return "⚠ Service error" }
+        let minutes = Int(Date().timeIntervalSince(date) / 60)
+        if minutes < 1 { return "Checked just now" }
+        return "Checked \(minutes) min ago"
+    }
 
     private var orderedServices: [String] {
         ["imessage", "signal", "telegram", "slack"]
