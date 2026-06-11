@@ -133,7 +133,7 @@ final class PipelineScenarioTests: XCTestCase {
 
         // AppState sees exactly 1 unread brief
         let appState = AppState(database: db, llmClient: mock, llmModel: "m", basePrompt: "B")
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
         XCTAssertEqual(appState.unreadCount, 1)
     }
 

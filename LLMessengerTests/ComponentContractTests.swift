@@ -79,7 +79,7 @@ final class ComponentContractTests: XCTestCase {
                                   convName: "Bob", messageIds: ["m2"])
 
         let appState = AppState(database: db, llmClient: MockLLMClient(), llmModel: "test", basePrompt: "B")
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
 
         XCTAssertEqual(appState.unreadCount, 2,
                        "Contract: AppState.unreadCount must equal the number of ready briefs produced by BriefEngine")
@@ -96,10 +96,10 @@ final class ComponentContractTests: XCTestCase {
                                             convName: "Alice", messageIds: ["m1"])
 
         let appState = AppState(database: db, llmClient: MockLLMClient(), llmModel: "test", basePrompt: "B")
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
         XCTAssertEqual(appState.unreadCount, 1, "Pre-condition: one ready brief")
 
-        appState.markAsOpen(briefID: briefId)
+        await appState.markAsOpen(briefID: briefId).value
 
         XCTAssertEqual(appState.unreadCount, 0,
                        "Contract: markAsOpen must decrement unreadCount — the badge must clear when the brief is opened")

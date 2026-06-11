@@ -14,6 +14,21 @@ final class PollEngineReloadTests: XCTestCase {
 
     private func makeDB() throws -> AppDatabase { try AppDatabase(inMemory: true) }
 
+    /// reload(enabled: true) fires an async catch-up poll that can race a
+    /// directly-awaited pollAll() via the engine's in-flight guard — wait for
+    /// the observable effect instead of asserting synchronously.
+    private func waitUntil(timeout: TimeInterval = 2, _ message: String,
+                           _ condition: @escaping () -> Bool) async throws {
+        let start = Date()
+        while !condition() {
+            if Date().timeIntervalSince(start) > timeout {
+                XCTFail("Timed out waiting for: \(message)")
+                return
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+    }
+
     private func makeConfig(service: String = "signal", enabled: Bool,
                             interval: Int = 30) -> ServiceConfig {
         ServiceConfig(service: service, enabled: enabled,
@@ -39,6 +54,7 @@ final class PollEngineReloadTests: XCTestCase {
         // Re-enable via reload
         engine.reload(config: makeConfig(enabled: true))
         await engine.pollAll()
+        try await waitUntil("re-enabled service to be polled") { !adapter.fetchConfigs.isEmpty }
 
         XCTAssertFalse(adapter.fetchConfigs.isEmpty,
                        "After reload(enabled: true), the service must be polled on next pollAll()")
@@ -55,7 +71,13 @@ final class PollEngineReloadTests: XCTestCase {
         engine.reload(config: makeConfig(enabled: true))
         await engine.pollAll()
 
-        let count = try await db.dbQueue.read { d in try Message.fetchCount(d) }
+        var count = 0
+        let deadline = Date().addingTimeInterval(2)
+        repeat {
+            count = try await db.dbQueue.read { d in try Message.fetchCount(d) }
+            if count == 1 { break }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        } while Date() < deadline
         XCTAssertEqual(count, 1,
                        "After reload(enabled: true), messages must be stored when pollAll runs")
     }
@@ -148,6 +170,7 @@ final class PollEngineReloadTests: XCTestCase {
         // Re-enable
         engine.reload(config: makeConfig(enabled: true))
         await engine.pollAll()
+        try await waitUntil("re-enabled service to resume polling") { !adapter.fetchConfigs.isEmpty }
         XCTAssertFalse(adapter.fetchConfigs.isEmpty,
                        "After re-enabling via reload, service must resume polling — toggle must be reversible")
     }
@@ -189,6 +212,7 @@ final class PollEngineReloadTests: XCTestCase {
         adapter.addMessage(convId: "c1", msgId: "m1")
         engine.reload(config: makeConfig(enabled: true))
         await engine.pollAll()
+        try await waitUntil("onPollSucceeded to fire") { callbackFired }
 
         XCTAssertTrue(callbackFired,
                       "onPollSucceeded must fire after re-enabling a service and polling with new messages")

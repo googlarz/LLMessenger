@@ -134,6 +134,9 @@ final class AppState: ObservableObject {
     let basePrompt: String
     var adapters: [String: any MessengerAdapter] = [:]
     var onOpenSettings: (() -> Void)?
+    /// Triggers the full poll → summarize cycle (wired by AppDelegate).
+    /// Used by the brief header's Refresh button.
+    var onRequestRefresh: (() -> Void)?
     /// Fires whenever `briefs` is reloaded. Used by AppDelegate to keep the menu bar
     /// unread badge in sync after the user opens a brief (which flips it to "open").
     var onBriefsChanged: (() -> Void)?
@@ -192,20 +195,25 @@ final class AppState: ObservableObject {
         serviceHealth = health
     }
 
-    func markAsOpen(briefID: Int64) {
+    /// Returns the reload task so callers that need deterministic sequencing
+    /// (tests, chained UI updates) can await it; UI call sites discard it.
+    @discardableResult
+    func markAsOpen(briefID: Int64) -> Swift.Task<Void, Never> {
         lastError = nil
         do {
             try repository.markAsOpen(briefID: briefID)
             InstrumentationManager.shared.track(event: .briefOpened, metadata: ["briefID": briefID])
-            refreshBriefs()
+            return refreshBriefs()
         } catch {
             lastError = error.localizedDescription
+            return Swift.Task {}
         }
     }
 
-    func refreshBriefs() {
+    @discardableResult
+    func refreshBriefs() -> Swift.Task<Void, Never> {
         let settingsRepo = makeSettingsRepository()
-        Swift.Task.detached(priority: .userInitiated) { [weak self] in
+        return Swift.Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             do {
                 let fetched = try self.repository.fetchAllBriefs()

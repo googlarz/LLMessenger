@@ -746,6 +746,23 @@ final class BackendWorkflowE2ETests: XCTestCase {
 
     // MARK: - Group 7: AppState Observation Contract
 
+    /// `refreshBriefs()` loads off the main actor (Task.detached) — observation
+    /// tests must wait for the published state to land rather than assert
+    /// synchronously.
+    @MainActor
+    private func waitUntil(timeout: TimeInterval = 2,
+                           _ message: String,
+                           _ condition: @escaping () -> Bool) async throws {
+        let start = Date()
+        while !condition() {
+            if Date().timeIntervalSince(start) > timeout {
+                XCTFail("Timed out waiting for: \(message)")
+                return
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+    }
+
     // 7.1 — AppState.briefs populates after a full pipeline cycle.
     func testAppStateBriefsPopulatesAfterFullPipelineCycle() async throws {
         let db = try makeDB()
@@ -761,6 +778,7 @@ final class BackendWorkflowE2ETests: XCTestCase {
 
         let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
         appState.refreshBriefs()
+        try await waitUntil("briefs to populate") { appState.briefs.count == 1 }
 
         XCTAssertEqual(appState.briefs.count, 1, "AppState.briefs must contain the generated brief")
         XCTAssertEqual(appState.unreadCount, 1, "unreadCount must be 1 for one unread (ready) brief")
@@ -785,12 +803,14 @@ final class BackendWorkflowE2ETests: XCTestCase {
 
         let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
         appState.refreshBriefs()
+        try await waitUntil("one unread brief after pipeline cycle") { appState.unreadCount == 1 }
 
         XCTAssertEqual(appState.unreadCount, 1, "Precondition: one unread brief after pipeline cycle")
 
         let briefID = try XCTUnwrap(appState.briefs.first?.id)
         appState.markAsOpen(briefID: briefID)
-        // markAsOpen calls refreshBriefs() internally — no explicit refresh needed.
+        // markAsOpen calls refreshBriefs() internally — wait for the reload to land.
+        try await waitUntil("unreadCount to reach 0 after markAsOpen") { appState.unreadCount == 0 }
 
         XCTAssertEqual(appState.unreadCount, 0, "unreadCount must be 0 after marking the brief as open")
 

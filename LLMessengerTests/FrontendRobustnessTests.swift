@@ -93,7 +93,7 @@ final class FrontendRobustnessTests: XCTestCase {
         }
 
         let appState = makeAppState(db: db)
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
         let brief = try XCTUnwrap(appState.briefs.first, "Precondition: must have a brief after refresh")
         let vm = ChatViewModel(appState: appState)
 
@@ -149,7 +149,7 @@ final class FrontendRobustnessTests: XCTestCase {
         let db = try makeDB()
         let briefId = try await insertBrief(db: db)
         let appState = makeAppState(db: db)
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
         appState.selectedBriefID = briefId
         XCTAssertNotNil(appState.selectedBrief, "Precondition: selectedBrief must resolve before deletion")
 
@@ -157,7 +157,7 @@ final class FrontendRobustnessTests: XCTestCase {
         try await db.dbQueue.write { d in
             try d.execute(sql: "DELETE FROM briefs WHERE id = ?", arguments: [briefId])
         }
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
 
         XCTAssertNil(appState.selectedBrief,
                      "selectedBrief must return nil after the targeted brief is deleted and briefs are refreshed — " +
@@ -186,12 +186,12 @@ final class FrontendRobustnessTests: XCTestCase {
         let db = try makeDB()
         let briefId = try await insertBrief(db: db, status: "ready")
         let appState = makeAppState(db: db)
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
         XCTAssertEqual(appState.briefs.first?.briefStatus, .ready, "Precondition: status must be ready")
 
         // Call twice — must not crash, must not corrupt state
-        appState.markAsOpen(briefID: briefId)
-        appState.markAsOpen(briefID: briefId)
+        await appState.markAsOpen(briefID: briefId).value
+        await appState.markAsOpen(briefID: briefId).value
 
         XCTAssertEqual(appState.briefs.first?.briefStatus, .open,
                        "markAsOpen must be idempotent — calling twice must produce the same result without crashing")
@@ -202,9 +202,9 @@ final class FrontendRobustnessTests: XCTestCase {
         let id1 = try await insertBrief(db: db, status: "ready")
         let id2 = try await insertBrief(db: db, status: "ready")
         let appState = makeAppState(db: db)
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
 
-        appState.markAsOpen(briefID: id1)
+        await appState.markAsOpen(briefID: id1).value
 
         let byID = Dictionary(uniqueKeysWithValues: appState.briefs.compactMap { b in
             b.id.map { ($0, b.briefStatus) }
@@ -259,7 +259,7 @@ final class FrontendRobustnessTests: XCTestCase {
         let appState = makeAppState(db: db)
 
         // Step 1: refreshBriefs must not crash with corrupt Brief fields
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
         XCTAssertEqual(appState.briefs.count, 1,
                        "refreshBriefs must load briefs even with corrupt JSON fields")
 
@@ -273,7 +273,7 @@ final class FrontendRobustnessTests: XCTestCase {
         try await vm.loadBrief(brief)
 
         // Step 4: markAsOpen must not crash
-        appState.markAsOpen(briefID: briefId)
+        await appState.markAsOpen(briefID: briefId).value
         XCTAssertEqual(appState.briefs.first?.briefStatus, .open,
                        "markAsOpen must succeed in the chaos scenario — corrupt JSON must not block status update")
 

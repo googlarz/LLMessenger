@@ -186,7 +186,7 @@ final class DatabaseIntegrityTests: XCTestCase {
         let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "B")
 
         // Must not crash — it reads all briefs including the corrupt one
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
 
         // The corrupt brief is still in the list (it loads as-is, services decode gracefully)
         XCTAssertGreaterThanOrEqual(appState.briefs.count, 1,
@@ -205,7 +205,7 @@ final class DatabaseIntegrityTests: XCTestCase {
 
         let mock = MockLLMClient()
         let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "B")
-        appState.refreshBriefs()
+        await appState.refreshBriefs().value
 
         XCTAssertEqual(appState.briefs.count, 1)
         XCTAssertNil(appState.briefs.first?.failedServices,
@@ -224,8 +224,8 @@ final class DatabaseIntegrityTests: XCTestCase {
         let migrationCount = try db1.dbQueue.read { d in
             try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM grdb_migrations") ?? 0
         }
-        XCTAssertEqual(migrationCount, 12,
-                       "All 12 migrations (v1..v12) must be recorded in grdb_migrations on fresh DB open")
+        XCTAssertEqual(migrationCount, 16,
+                       "All 16 migrations (v1..v16) must be recorded in grdb_migrations on fresh DB open")
     }
 
     func testReopeningDatabaseDoesNotReMigrate() throws {
