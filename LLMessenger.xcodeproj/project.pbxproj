@@ -96,6 +96,7 @@
 		AF6BE9979D35F02876AF59D8 /* AutoLaunchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 806576F921F0C0A99AB00DC3 /* AutoLaunchManager.swift */; };
 		B3CF5BF36060C33F25099D53 /* ChatViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B8A33ADE90F0EC79A61D4D /* ChatViewModelTests.swift */; };
 		B47F50B3DD0A86EE369C8549 /* BriefListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17E2FC6E580C483A5220F007 /* BriefListView.swift */; };
+		F8F29F65D4FC4DFE99965CD1 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA479D4E12C24933A63F990A /* TaskListView.swift */; };
 		B69FC59BC25181FC0389FB9D /* SlackWorkspacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 724CEB5405989BE4B7824CA8 /* SlackWorkspacesView.swift */; };
 		B77224C56B9AA03C7A925526 /* MainChromeBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E77DF565652B4D6763A2605 /* MainChromeBar.swift */; };
 		B93451BF2E596033EE00C54C /* BriefCardRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1551568E73E6646226FE66C3 /* BriefCardRecord.swift */; };
@@ -158,6 +159,7 @@
 		1551568E73E6646226FE66C3 /* BriefCardRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefCardRecord.swift; sourceTree = "<group>"; };
 		173C28CE4F72A153E9132291 /* TelegramSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelegramSignInView.swift; sourceTree = "<group>"; };
 		17E2FC6E580C483A5220F007 /* BriefListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefListView.swift; sourceTree = "<group>"; };
+		AA479D4E12C24933A63F990A /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepository.swift; sourceTree = "<group>"; };
 		1C1B7A7D24D3AF2FF2E6FC84 /* OnboardingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWindowController.swift; sourceTree = "<group>"; };
 		2001BAFBE6E8EB71D5EEDEAB /* AdversarialResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdversarialResponseTests.swift; sourceTree = "<group>"; };
@@ -529,6 +531,7 @@
 				3154370024E6D2FFA5B0FE62 /* AssistantResponseView.swift */,
 				758A1B093F09B6DE98D3613C /* BriefHeaderView.swift */,
 				17E2FC6E580C483A5220F007 /* BriefListView.swift */,
+				AA479D4E12C24933A63F990A /* TaskListView.swift */,
 				D2E743B88282AE993C10C526 /* BriefProseView.swift */,
 				BB2C3D4E5F6A7B8C9D0E1F2A /* ConversationTimelineView.swift */,
 				98C662F360723B5576ACCA35 /* ChatInputView.swift */,
@@ -747,6 +750,7 @@
 				B69FC59BC25181FC0389FB9D /* SlackWorkspacesView.swift in Sources */,
 				EAB0DE7548B574521670DA15 /* SubprocessAdapter.swift in Sources */,
 				7485667FD9BB75A498987D0F /* TelegramSignInView.swift in Sources */,
+				F8F29F65D4FC4DFE99965CD1 /* TaskListView.swift in Sources */,
 				40B16522FD6D885CF5BA5741 /* Theme.swift in Sources */,
 				A4AAEAA892F516B7F9D4B3B7 /* ThreadView.swift in Sources */,
 				F37C2D2EABCEB3FA7BF41E5D /* iMessageAdapter.swift in Sources */,

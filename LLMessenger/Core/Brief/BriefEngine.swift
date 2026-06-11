@@ -220,6 +220,7 @@ final class BriefEngine {
             let stampedSources = cardSources  // briefCardId is already the UUID; no re-stamp needed
             try BriefRepository.insertBriefCardsBatch(stampedCards, db: db)
             try BriefRepository.insertBriefCardSources(stampedSources, db: db)
+            try BriefRepository.insertTasksForCards(stampedCards, db: db)
             try BriefRepository.attach(messages: messagesToAttach, toBriefID: insertedID, db: db)
             return insertedID
         }
@@ -489,6 +490,7 @@ final class BriefEngine {
             }
             try BriefRepository.insertBriefCardsBatch(stampedCards, db: db)
             try BriefRepository.insertBriefCardSources(cardSources2, db: db)
+            try BriefRepository.insertTasksForCards(stampedCards, db: db)
             if !messagesToAttachSnapshot.isEmpty {
                 try BriefRepository.attach(messages: messagesToAttachSnapshot, toBriefID: insertedID, db: db)
             }
