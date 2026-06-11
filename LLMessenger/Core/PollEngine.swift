@@ -35,7 +35,7 @@ final class PollEngine {
         let wasEnabled = configs[serviceID]?.enabled ?? false
         configs[serviceID] = config
         if config.enabled {
-            scheduleTimer(serviceID: serviceID, intervalMinutes: config.pollIntervalMinutes)
+            scheduleTimer(serviceID: serviceID, intervalSeconds: config.pollIntervalSeconds)
             // If newly enabled, fire an immediate catch-up poll so messages aren't
             // delayed until the first scheduled timer fires.
             if !wasEnabled {
@@ -57,12 +57,12 @@ final class PollEngine {
         // (e.g. Telegram timing out) doesn't block iMessage or Signal from starting.
         await withTaskGroup(of: Void.self) { group in
             for (serviceID, config) in configs where config.enabled {
-                let intervalMinutes = config.pollIntervalMinutes
+                let intervalSeconds = config.pollIntervalSeconds
                 group.addTask { @MainActor [weak self] in
                     guard let self, let adapter = self.adapters[serviceID] else { return }
                     do {
                         try await adapter.start()
-                        self.scheduleTimer(serviceID: serviceID, intervalMinutes: intervalMinutes)
+                        self.scheduleTimer(serviceID: serviceID, intervalSeconds: intervalSeconds)
                         await self.checkCatchUp(serviceID: serviceID)
                     } catch {
                         self.writeHealth(service: serviceID, status: "error",
@@ -171,9 +171,9 @@ final class PollEngine {
         }
     }
 
-    private func scheduleTimer(serviceID: String, intervalMinutes: Int) {
+    private func scheduleTimer(serviceID: String, intervalSeconds: Int) {
         timers[serviceID]?.invalidate()
-        let interval = TimeInterval(intervalMinutes * 60)
+        let interval = TimeInterval(intervalSeconds > 0 ? intervalSeconds : 900)
         nextFireDates[serviceID] = Date().addingTimeInterval(interval)
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -215,7 +215,7 @@ final class PollEngine {
             return
         }
         let elapsed = Date().timeIntervalSince(lastCheck)
-        let interval = TimeInterval(config.pollIntervalMinutes * 60)
+        let interval = TimeInterval(config.pollIntervalSeconds > 0 ? config.pollIntervalSeconds : 900)
         if elapsed >= interval {
             do { try await pollNow(serviceID: serviceID) }
             catch { await onPollFailed?(serviceID, error) }

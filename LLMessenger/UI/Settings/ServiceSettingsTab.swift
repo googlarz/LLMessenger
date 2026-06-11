@@ -494,14 +494,28 @@ private struct ServiceCard: View {
 
     /// Compact identity line shown under the service name in the working state.
     private var workingIdentity: String {
+        let interval = intervalLabel(config.pollIntervalSeconds)
         switch service {
-        case "imessage": return "Reading ~/Library/Messages — every \(config.pollIntervalMinutes) min"
-        case "signal":   return "\(signalAccount) — every \(config.pollIntervalMinutes) min"
-        case "telegram": return "Signed in — every \(config.pollIntervalMinutes) min"
+        case "imessage": return "Reading ~/Library/Messages — every \(interval)"
+        case "signal":   return "\(signalAccount) — every \(interval)"
+        case "telegram": return "Signed in — every \(interval)"
         case "slack":
             let plural = slackWorkspaceCount == 1 ? "" : "s"
-            return "\(slackWorkspaceCount) workspace\(plural) — every \(config.pollIntervalMinutes) min"
-        default: return "Connected — every \(config.pollIntervalMinutes) min"
+            return "\(slackWorkspaceCount) workspace\(plural) — every \(interval)"
+        default: return "Connected — every \(interval)"
+        }
+    }
+
+    private func intervalLabel(_ seconds: Int) -> String {
+        switch seconds {
+        case 300:  return "5 min"
+        case 900:  return "15 min"
+        case 1800: return "30 min"
+        case 3600: return "1 hour"
+        case 7200: return "2 hours"
+        default:
+            let mins = seconds / 60
+            return mins == 1 ? "1 min" : "\(mins) min"
         }
     }
 
@@ -510,12 +524,18 @@ private struct ServiceCard: View {
     private var advancedBody: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Poll interval").font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
-                Stepper("\(config.pollIntervalMinutes) min",
-                        value: $config.pollIntervalMinutes,
-                        in: 5...120, step: 5)
-                    .fixedSize().controlSize(.small)
+                Text("Poll every")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                Picker("", selection: $config.pollIntervalSeconds) {
+                    Text("5 min").tag(300)
+                    Text("15 min").tag(900)
+                    Text("30 min").tag(1800)
+                    Text("1 hour").tag(3600)
+                    Text("2 hours").tag(7200)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 250)
             }
             switch service {
             case "signal":
@@ -688,7 +708,7 @@ private struct ServiceCard: View {
     /// interval. A successful poll from yesterday shouldn't keep claiming green today.
     private var isHealthStale: Bool {
         guard let lastCheck = health?.lastCheck else { return true }
-        let staleAfter = TimeInterval(max(config.pollIntervalMinutes * 2, 10) * 60)
+        let staleAfter = TimeInterval(max(config.pollIntervalSeconds * 2, 600))
         return Date().timeIntervalSince(lastCheck) > staleAfter
     }
 
