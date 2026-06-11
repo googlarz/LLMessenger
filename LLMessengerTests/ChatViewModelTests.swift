@@ -123,6 +123,7 @@ final class ChatViewModelTests: XCTestCase {
 }
 
 private final class SpyAdapter: MessengerAdapter {
+    func listContacts() async -> [Contact] { [] }
     let serviceID: String
     var healthStatus: AdapterHealthResult.Status = .ok
     var sentMessages: [(conversationID: String, text: String)] = []

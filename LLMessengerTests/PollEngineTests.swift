@@ -2,6 +2,7 @@ import XCTest
 @testable import LLMessenger
 
 final class MockAdapter: MessengerAdapter {
+    func listContacts() async -> [Contact] { [] }
     let serviceID = "mock"
     var healthStatus: AdapterHealthResult.Status = .ok
 
@@ -164,6 +165,7 @@ final class MockAdapter: MessengerAdapter {
 // MARK: - Additional mock adapters
 
 final class RetryStartMockAdapter: MessengerAdapter {
+    func listContacts() async -> [Contact] { [] }
     let serviceID = "retry"
     var healthStatus: AdapterHealthResult.Status = .ok
     var startCallCount = 0
@@ -190,6 +192,7 @@ final class RetryStartMockAdapter: MessengerAdapter {
 }
 
 final class CapturingFetchMockAdapter: MessengerAdapter {
+    func listContacts() async -> [Contact] { [] }
     let serviceID = "capturing"
     var healthStatus: AdapterHealthResult.Status = .ok
     var lastConfig: FetchConfig?

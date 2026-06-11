@@ -6,6 +6,7 @@ import GRDB
 // MARK: - Test-local adapter (SpyAdapter in ChatViewModelTests.swift is private)
 
 internal final class SendTestSpyAdapter: MessengerAdapter {
+    func listContacts() async -> [Contact] { [] }
     let serviceID: String
     var healthStatus: AdapterHealthResult.Status = .ok
     var sentMessages: [(conversationID: String, text: String)] = []
