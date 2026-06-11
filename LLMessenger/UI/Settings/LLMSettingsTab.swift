@@ -1,8 +1,11 @@
 // LLMessenger/UI/Settings/LLMSettingsTab.swift
 import SwiftUI
 import ServiceManagement
+import GRDB
 
 struct AISettingsTab: View {
+    var database: AppDatabase? = nil
+
     @State private var selectedProviderRaw: String = ""
     @State private var anthropicKey: String = ""
     @State private var openAIKey: String = ""
@@ -11,6 +14,7 @@ struct AISettingsTab: View {
     @State private var launchAtLogin: Bool = false
     @State private var saveStatus: String = ""
     @State private var testState: TestState = .idle
+    @State private var usageRows: [(provider: String, inputK: Int, outputK: Int, cost: Double)] = []
 
     private let repo = SettingsRepository()
 
@@ -113,6 +117,30 @@ struct AISettingsTab: View {
                     .foregroundStyle(.secondary)
             }
 
+            if !usageRows.isEmpty {
+                Section("Usage this month") {
+                    ForEach(usageRows, id: \.provider) { row in
+                        HStack {
+                            Text(row.provider)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text("\(row.inputK)k in / \(row.outputK)k out")
+                                .foregroundStyle(.secondary)
+                            Text("est. $\(String(format: "%.4f", row.cost))")
+                                .monospacedDigit()
+                        }
+                    }
+                    let total = usageRows.reduce(0) { $0 + $1.cost }
+                    HStack {
+                        Text("Total")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .bold()
+                        Text("est. $\(String(format: "%.4f", total))")
+                            .monospacedDigit()
+                            .bold()
+                    }
+                }
+            }
+
             HStack {
                 Spacer()
                 if !saveStatus.isEmpty {
@@ -125,6 +153,7 @@ struct AISettingsTab: View {
             }
         }
         .onAppear { load() }
+        .task { await loadUsage() }
     }
 
     // MARK: - Test
@@ -198,6 +227,45 @@ struct AISettingsTab: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }
         } catch {
             saveStatus = "Error: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Usage
+
+    private func loadUsage() async {
+        guard let db = database else { return }
+        let calendar = Calendar.current
+        let now = Date()
+        guard let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) else { return }
+
+        struct UsageRow: Decodable, FetchableRecord {
+            let backend: String
+            let totalInput: Int
+            let totalOutput: Int
+        }
+
+        let rows = (try? await db.dbQueue.read { dbConn in
+            try UsageRow.fetchAll(dbConn, sql: """
+                SELECT backend,
+                       COALESCE(SUM(inputTokenEstimate), 0)  AS totalInput,
+                       COALESCE(SUM(outputTokenEstimate), 0) AS totalOutput
+                FROM llmRuns
+                WHERE startedAt >= ?
+                GROUP BY backend
+                """, arguments: [monthStart])
+        }) ?? []
+
+        usageRows = rows.map { row in
+            let cost: Double
+            let b = row.backend.lowercased()
+            if b.contains("anthropic") {
+                cost = Double(row.totalInput) * 3.0 / 1_000_000 + Double(row.totalOutput) * 15.0 / 1_000_000
+            } else if b.contains("openai") {
+                cost = Double(row.totalInput) * 2.50 / 1_000_000 + Double(row.totalOutput) * 10.0 / 1_000_000
+            } else {
+                cost = 0
+            }
+            return (provider: row.backend, inputK: row.totalInput / 1000, outputK: row.totalOutput / 1000, cost: cost)
         }
     }
 

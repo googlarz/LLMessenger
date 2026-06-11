@@ -10,7 +10,7 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            AISettingsTab()
+            AISettingsTab(database: database)
                 .tabItem { Label("AI", systemImage: "cpu") }
                 .tag(0)
 
