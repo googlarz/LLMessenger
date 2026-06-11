@@ -5,6 +5,7 @@ struct ChatInputView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
     @EnvironmentObject var appState: AppState
     @FocusState private var isFocused: Bool
+    @State private var selectedTone: String? = nil
     @State private var showMentionPicker = false
     @State private var mentionQuery = ""
     // Range of "@<query>" inside inputText that the picker is currently completing.
@@ -25,6 +26,24 @@ struct ChatInputView: View {
             if let target = chatViewModel.pendingTarget {
                 MentionTargetChip(target: target) {
                     chatViewModel.clearMentionTarget()
+                }
+            }
+
+            HStack(spacing: 6) {
+                ForEach(["Formal", "Short", "Casual"], id: \.self) { tone in
+                    Button {
+                        selectedTone = selectedTone == tone ? nil : tone
+                    } label: {
+                        Text(tone)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(selectedTone == tone ? .white : Theme.textSecondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(selectedTone == tone ? Theme.accent : Theme.surfaceHigh)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.easeInOut(duration: 0.12), value: selectedTone)
                 }
             }
 
@@ -101,9 +120,26 @@ struct ChatInputView: View {
             && !chatViewModel.isLoading
     }
 
+    private var toneSuffix: String {
+        switch selectedTone {
+        case "Formal":  return " [Reply formally and professionally]"
+        case "Short":   return " [Keep reply under 2 sentences]"
+        case "Casual":  return " [Use a friendly, casual tone]"
+        default:        return ""
+        }
+    }
+
     private func sendIfPossible() {
         guard canSend else { return }
-        Task { await chatViewModel.send() }
+        if !toneSuffix.isEmpty {
+            chatViewModel.inputText += toneSuffix
+        }
+        let tone = selectedTone
+        selectedTone = nil
+        Task {
+            await chatViewModel.send()
+            _ = tone // tone already consumed above
+        }
     }
 
     /// Detects an active `@<query>` token at or before the end of the input and
