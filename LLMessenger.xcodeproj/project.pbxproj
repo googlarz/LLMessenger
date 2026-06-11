@@ -34,6 +34,7 @@
 		3441518A42C1C5815D1026B9 /* IntentRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865BE46F6C10FA7E2EE342A6 /* IntentRoute.swift */; };
 		34ACCAF6781DDF51A663A56F /* PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76E282A1175D7AE8E61BA9E1 /* PromptBuilder.swift */; };
 		34C2302B885F6FE20720220B /* SlackWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFE2E2C0171471D3DD23F19 /* SlackWorkspace.swift */; };
+		A1B2C3D4E5F60002A2B3C4D5 /* RulesSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60001A2B3C4D5 /* RulesSettingsTab.swift */; };
 		362A008262AA38403555B958 /* InstructionsSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD22DF77EE0F38928663192 /* InstructionsSettingsTab.swift */; };
 		333BBA5081724CE19BE60564 /* Task.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03EEC1BC89354D3686430D97 /* Task.swift */; };
 		396B16C71848A738B4564FBE /* BriefCardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7AAA3D7B964F21F64A8D29 /* BriefCardSource.swift */; };
@@ -257,6 +258,7 @@
 		E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerApp.swift; sourceTree = "<group>"; };
 		EABDD8EAF1C1562B49DD442C /* PipelineScenarioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineScenarioTests.swift; sourceTree = "<group>"; };
 		EBC9C795B6AF02F77D298ED7 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60001A2B3C4D5 /* RulesSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesSettingsTab.swift; sourceTree = "<group>"; };
 		EBD22DF77EE0F38928663192 /* InstructionsSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructionsSettingsTab.swift; sourceTree = "<group>"; };
 		EE76AF586A612F980FC97D19 /* PromptBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilderTests.swift; sourceTree = "<group>"; };
 		F0A44ACF0445A86BBF07D51E /* QuickReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReply.swift; sourceTree = "<group>"; };
@@ -554,6 +556,7 @@
 			children = (
 				792419D090E0BA27E26988ED /* AboutSettingsTab.swift */,
 				EBD22DF77EE0F38928663192 /* InstructionsSettingsTab.swift */,
+				A1B2C3D4E5F60001A2B3C4D5 /* RulesSettingsTab.swift */,
 				44D6788AD581D62FE11B99E8 /* LLMSettingsTab.swift */,
 				6BC6FDFCFADDCEE5A74B7FB0 /* OllamaModelPicker.swift */,
 				B70F5BB0EE53BF59D4BAC943 /* PrivacySettingsTab.swift */,
@@ -696,6 +699,7 @@
 				6C737DA07F6290527153876A /* ConversationContext.swift in Sources */,
 				D49BA4B9E524B043E9C52A22 /* ConversationState.swift in Sources */,
 				362A008262AA38403555B958 /* InstructionsSettingsTab.swift in Sources */,
+				A1B2C3D4E5F60002A2B3C4D5 /* RulesSettingsTab.swift in Sources */,
 				506E010AE6C91F8A4476F492 /* InstrumentationManager.swift in Sources */,
 				3441518A42C1C5815D1026B9 /* IntentRoute.swift in Sources */,
 				D3E2D898475FF1A5557529FB /* KeychainStore.swift in Sources */,

@@ -1,0 +1,182 @@
+// LLMessenger/UI/Settings/RulesSettingsTab.swift
+import SwiftUI
+import GRDB
+
+struct RulesSettingsTab: View {
+    @State private var rules: [PriorityRule] = []
+    @State private var showingAddRule = false
+    private let database: AppDatabase?
+
+    init(database: AppDatabase? = nil) {
+        self.database = database
+    }
+
+    var body: some View {
+        Form {
+            Section("Priority Rules") {
+                ForEach(rules) { rule in
+                    RuleRowView(rule: rule, onDelete: { deleteRule(rule) })
+                }
+                Button("Add Rule") { showingAddRule = true }
+            }
+            Section {
+                Text("Rules are applied after AI analysis. First matching rule wins.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .task { await loadRules() }
+        .sheet(isPresented: $showingAddRule) {
+            AddRuleView { rule in
+                saveRule(rule)
+                showingAddRule = false
+            }
+        }
+    }
+
+    private func loadRules() async {
+        guard let db = database else { return }
+        do {
+            rules = try await db.dbQueue.read { db in
+                try PriorityRule.order(Column("sortOrder"), Column("createdAt")).fetchAll(db)
+            }
+        } catch {
+            // non-fatal: table may not exist yet in older DB
+        }
+    }
+
+    private func saveRule(_ rule: PriorityRule) {
+        guard let db = database else { return }
+        Task {
+            do {
+                var r = rule
+                try await db.dbQueue.write { db in try r.insert(db) }
+                await loadRules()
+            } catch {}
+        }
+    }
+
+    private func deleteRule(_ rule: PriorityRule) {
+        guard let db = database, let id = rule.id else { return }
+        Task {
+            do {
+                try await db.dbQueue.write { db in
+                    try PriorityRule.deleteOne(db, key: id)
+                }
+                await loadRules()
+            } catch {}
+        }
+    }
+}
+
+// MARK: - Rule Row
+
+private struct RuleRowView: View {
+    let rule: PriorityRule
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack {
+            Text(ruleSummary)
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+            Spacer()
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "minus.circle")
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var ruleSummary: String {
+        var parts: [String] = ["IF"]
+        if let c = rule.contactPattern, !c.isEmpty { parts.append("contact contains \"\(c)\"") }
+        if let k = rule.keywordPattern, !k.isEmpty {
+            if parts.count > 1 { parts.append("AND") }
+            parts.append("keyword contains \"\(k)\"")
+        }
+        if let s = rule.service, !s.isEmpty, s != "any" {
+            if parts.count > 1 { parts.append("AND") }
+            parts.append("service = \(s)")
+        }
+        if parts.count == 1 { parts.append("(any message)") }
+        parts.append("→")
+        if let p = rule.setPriority, !p.isEmpty { parts.append("priority: \(p)") }
+        if rule.suppress { parts.append("suppress: yes") }
+        if rule.alwaysNotify { parts.append("always notify") }
+        return parts.joined(separator: " ")
+    }
+}
+
+// MARK: - Add Rule Sheet
+
+private struct AddRuleView: View {
+    let onSave: (PriorityRule) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var contactPattern = ""
+    @State private var keywordPattern = ""
+    @State private var service = "any"
+    @State private var setPriority = ""
+    @State private var suppress = false
+    @State private var alwaysNotify = false
+
+    private let serviceOptions = ["any", "signal", "telegram", "imessage", "slack"]
+    private let priorityOptions = [("", "No change"), ("high", "High"), ("med", "Med"), ("low", "Low")]
+
+    var body: some View {
+        Form {
+            Section("Conditions") {
+                TextField("Contact name contains (optional)", text: $contactPattern)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Message contains (optional)", text: $keywordPattern)
+                    .textFieldStyle(.roundedBorder)
+                Picker("Service", selection: $service) {
+                    Text("Any").tag("any")
+                    Text("Signal").tag("signal")
+                    Text("Telegram").tag("telegram")
+                    Text("iMessage").tag("imessage")
+                    Text("Slack").tag("slack")
+                }
+            }
+            Section("Action") {
+                Picker("Set priority", selection: $setPriority) {
+                    ForEach(priorityOptions, id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
+                }
+                Toggle("Suppress notification", isOn: $suppress)
+                Toggle("Always notify", isOn: $alwaysNotify)
+            }
+            Section {
+                HStack {
+                    Button("Cancel") { dismiss() }
+                    Spacer()
+                    Button("Save Rule") { save() }
+                        .disabled(contactPattern.isEmpty && keywordPattern.isEmpty && service == "any")
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+        .frame(width: 400)
+        .padding()
+    }
+
+    private func save() {
+        let rule = PriorityRule(
+            id: nil,
+            contactPattern: contactPattern.isEmpty ? nil : contactPattern,
+            keywordPattern: keywordPattern.isEmpty ? nil : keywordPattern,
+            service: service == "any" ? nil : service,
+            setPriority: setPriority.isEmpty ? nil : setPriority,
+            suppress: suppress,
+            alwaysNotify: alwaysNotify,
+            sortOrder: 0,
+            createdAt: Date()
+        )
+        onSave(rule)
+    }
+}

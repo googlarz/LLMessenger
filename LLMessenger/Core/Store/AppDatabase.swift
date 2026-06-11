@@ -293,6 +293,36 @@ final class AppDatabase: @unchecked Sendable {
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS llmRuns_on_startedAt ON llmRuns(startedAt DESC)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS llmRuns_on_status ON llmRuns(status)")
         }
+        migrator.registerMigration("v13_priority_rules") { db in
+            try db.create(table: "priorityRules") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("contactPattern", .text)
+                t.column("keywordPattern", .text)
+                t.column("service", .text)
+                t.column("setPriority", .text)
+                t.column("suppress", .boolean).notNull().defaults(to: false)
+                t.column("alwaysNotify", .boolean).notNull().defaults(to: false)
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+                t.column("createdAt", .datetime).notNull()
+            }
+        }
+        migrator.registerMigration("v14_tasks") { db in
+            try db.create(table: "tasks") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("briefCardId", .text).notNull().references("briefCards", onDelete: .cascade)
+                t.column("text", .text).notNull()
+                t.column("completedAt", .datetime)
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.create(index: "tasks_on_briefCardId", on: "tasks", columns: ["briefCardId"])
+            try db.create(index: "tasks_on_completedAt", on: "tasks", columns: ["completedAt"])
+        }
+        migrator.registerMigration("v15_archive_snooze") { db in
+            try db.alter(table: "briefs") { t in
+                t.add(column: "archivedAt", .datetime)
+                t.add(column: "snoozedUntil", .datetime)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

@@ -29,11 +29,15 @@ struct SettingsView: View {
                 .tabItem { Label("Instructions", systemImage: "text.bubble") }
                 .tag(3)
 
+            RulesSettingsTab(database: database)
+                .tabItem { Label("Rules", systemImage: "list.bullet.rectangle") }
+                .tag(4)
+
             AboutSettingsTab(onRunSetup: onRunSetup)
                 .tabItem { Label("About", systemImage: "info.circle") }
-                .tag(4)
+                .tag(5)
         }
-        // 720pt comfortably fits five tabbed segments at the top — at 540pt macOS
+        // 720pt comfortably fits six tabbed segments at the top — at 540pt macOS
         // collapses the tab bar into a "Navigation Tab Bar" chevron overlay and the
         // tab content gets cramped, especially on the AI tab with three provider blocks.
         .frame(width: 720, height: 560)
