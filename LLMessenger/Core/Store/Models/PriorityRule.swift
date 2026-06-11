@@ -1,7 +1,7 @@
 import GRDB
 import Foundation
 
-struct PriorityRule: Codable, FetchableRecord, PersistableRecord {
+struct PriorityRule: Codable, FetchableRecord, PersistableRecord, Identifiable {
     var id: Int64?
     var contactPattern: String?
     var keywordPattern: String?

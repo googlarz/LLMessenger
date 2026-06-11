@@ -6,6 +6,8 @@ import Foundation
 struct LLMessengerFocusFilter: SetFocusFilterIntent {
     static var title: LocalizedStringResource = "LLMessenger"
     static var description = IntentDescription("Filter which messages LLMessenger surfaces during this Focus.")
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "LLMessenger Focus Filter"
+    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "LLMessenger Focus Filter") }
 
     @Parameter(title: "Suppress Services", default: [])
     var suppressedServices: [String]   // e.g. ["slack", "telegram"]
