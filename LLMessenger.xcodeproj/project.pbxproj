@@ -35,7 +35,10 @@
 		34ACCAF6781DDF51A663A56F /* PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76E282A1175D7AE8E61BA9E1 /* PromptBuilder.swift */; };
 		34C2302B885F6FE20720220B /* SlackWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFE2E2C0171471D3DD23F19 /* SlackWorkspace.swift */; };
 		362A008262AA38403555B958 /* InstructionsSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD22DF77EE0F38928663192 /* InstructionsSettingsTab.swift */; };
+		333BBA5081724CE19BE60564 /* Task.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03EEC1BC89354D3686430D97 /* Task.swift */; };
 		396B16C71848A738B4564FBE /* BriefCardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7AAA3D7B964F21F64A8D29 /* BriefCardSource.swift */; };
+		93035D98EDF2411BB25A8E51 /* ContactProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F748332F8E5442E943E6F49 /* ContactProfile.swift */; };
+		DF7C69F4B8984548B785D2B8 /* PriorityRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA2229A30C1D484EBC1C989D /* PriorityRule.swift */; };
 		3CD5F5A70910F91189DA2D0B /* PollEngineCycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 749BBC4D526298A26ACEFABB /* PollEngineCycleTests.swift */; };
 		3E22F31FF9FE520E6770954B /* BriefJSONTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C581342159C8F31C26BDE07C /* BriefJSONTests.swift */; };
 		40B16522FD6D885CF5BA5741 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B676DE198355D9388A6399 /* Theme.swift */; };
@@ -174,7 +177,10 @@
 		3AEBED8918F1281655EE91D1 /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
 		3C06B210F56BF4ED8F4EDD76 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		3CEF84891E1C875158D7F4B4 /* SignalCLIAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalCLIAdapterTests.swift; sourceTree = "<group>"; };
+		03EEC1BC89354D3686430D97 /* Task.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Task.swift; sourceTree = "<group>"; };
 		3DB2F4FDD502C4B9477B9BCE /* ServiceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceConfig.swift; sourceTree = "<group>"; };
+		4F748332F8E5442E943E6F49 /* ContactProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactProfile.swift; sourceTree = "<group>"; };
+		BA2229A30C1D484EBC1C989D /* PriorityRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriorityRule.swift; sourceTree = "<group>"; };
 		41F5EAE37AE641612A5CE84C /* LLMProviderClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderClientTests.swift; sourceTree = "<group>"; };
 		44D6788AD581D62FE11B99E8 /* LLMSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMSettingsTab.swift; sourceTree = "<group>"; };
 		47B676DE198355D9388A6399 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -571,6 +577,9 @@
 				7C8397AA9C0E4BF6BE370EB9 /* LLMRunRecord.swift */,
 				4DF82DF450F3BE04F68ACE24 /* Message.swift */,
 				3083103C313177E5561AF1A6 /* MessageSearchResult.swift */,
+				03EEC1BC89354D3686430D97 /* Task.swift */,
+				4F748332F8E5442E943E6F49 /* ContactProfile.swift */,
+				BA2229A30C1D484EBC1C989D /* PriorityRule.swift */,
 				113724A6E99E26E8CD720DFE /* PriorityCorrection.swift */,
 				3DB2F4FDD502C4B9477B9BCE /* ServiceConfig.swift */,
 				0B01BD5888FD90D28050A644 /* ServiceHealth.swift */,
@@ -718,6 +727,9 @@
 				E0260C55BF88112D39490B73 /* QuickReply.swift in Sources */,
 				2FA9A9CE602BE2F90A1FC1A8 /* ReplyDraftView.swift in Sources */,
 				CDC3A3BE61AF399A26C898AD /* SearchResultsView.swift in Sources */,
+				333BBA5081724CE19BE60564 /* Task.swift in Sources */,
+				93035D98EDF2411BB25A8E51 /* ContactProfile.swift in Sources */,
+				DF7C69F4B8984548B785D2B8 /* PriorityRule.swift in Sources */,
 				F4A203E914BDB2F60BF276E4 /* ServiceConfig.swift in Sources */,
 				2A11383BA014D49F2D898CA7 /* ServiceHealth.swift in Sources */,
 				ACD272260C85A265D50055A1 /* ServiceSettingsTab.swift in Sources */,

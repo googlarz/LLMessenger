@@ -17,11 +17,24 @@ struct ServiceConfig: Codable, FetchableRecord, PersistableRecord {
     var fetchMode: String       // stored as raw string; use FetchMode enum for logic
     var fetchLimit: Int
     var privacyMode: String     // stored as raw string; use PrivacyMode enum for logic
+    var pollIntervalSeconds: Int
 
     static let databaseTableName = "serviceConfig"
 
     var resolvedPrivacyMode: PrivacyMode { PrivacyMode(rawValue: privacyMode) ?? .onDemand }
     var resolvedFetchMode: FetchMode { FetchMode(rawValue: fetchMode) ?? .count }
+
+    init(service: String, enabled: Bool, pollIntervalMinutes: Int,
+         fetchMode: String, fetchLimit: Int, privacyMode: String,
+         pollIntervalSeconds: Int = 900) {
+        self.service = service
+        self.enabled = enabled
+        self.pollIntervalMinutes = pollIntervalMinutes
+        self.fetchMode = fetchMode
+        self.fetchLimit = fetchLimit
+        self.privacyMode = privacyMode
+        self.pollIntervalSeconds = pollIntervalSeconds
+    }
 
     static func `default`(for service: String) -> ServiceConfig {
         return ServiceConfig(service: service, enabled: true,
