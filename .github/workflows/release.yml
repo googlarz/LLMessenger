@@ -1,7 +1,7 @@
 name: Release
 
 # Builds an unsigned .app from a tagged commit and uploads it as a workflow artifact.
-# Anyone can re-run this workflow on a clean macOS-14 runner to verify the binary
+# Anyone can re-run this workflow on a clean macOS-15 runner to verify the binary
 # matches the source. The artifact is intentionally unsigned — users who want a
 # notarised binary should sign locally with their own Developer ID.
 
@@ -21,7 +21,7 @@ permissions:
 jobs:
   build:
     name: Build LLMessenger.app
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - name: Checkout
