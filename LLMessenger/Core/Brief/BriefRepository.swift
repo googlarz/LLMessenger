@@ -473,8 +473,12 @@ struct BriefRepository {
                 LIMIT ?
             """, arguments: [limit])
             return rows.compactMap { row in
+                // `as Date?` uses GRDB's typed subscript (value conversion).
+                // A conditional `as?` cast on the untyped subscript always
+                // failed against SQLite's string-stored dates, so this list
+                // was permanently empty.
                 guard let card = try? BriefCardRecord(row: row),
-                      let briefCreatedAt = row["briefCreatedAt"] as? Date else { return nil }
+                      let briefCreatedAt = row["briefCreatedAt"] as Date? else { return nil }
                 return (card: card, briefCreatedAt: briefCreatedAt)
             }
         }
@@ -503,7 +507,7 @@ struct BriefRepository {
             """, arguments: [service, conversationID])
             return rows.compactMap { row in
                 guard let card = try? BriefCardRecord(row: row),
-                      let briefDate = row["briefCreatedAt"] as? Date else { return nil }
+                      let briefDate = row["briefCreatedAt"] as Date? else { return nil }
                 return (briefDate: briefDate, card: card)
             }
         }
