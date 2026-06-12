@@ -198,10 +198,8 @@ xcodebuild -scheme LLMessenger test    # 430 tests — keep them green
 
 ## Roadmap
 
+- [ ] Email adapter (IMAP read-only — Proton Bridge, Gmail, iCloud)
 - [ ] WhatsApp adapter (pending viable local API)
-- [ ] Per-conversation quiet hours
-- [ ] User-defined priority rules ("always interrupt for Mum")
-- [ ] Adapter plugin API for third-party services
 
 <details>
 <summary>Shipped (v1.4 – v1.7)</summary>
@@ -215,6 +213,10 @@ xcodebuild -scheme LLMessenger test    # 430 tests — keep them green
 - ✅ Security hardening (prompt-injection defenses, URL validation)
 - ✅ Search, pinning, date filters, Demo Mode, Wire Desk redesign
 - ✅ Reproducible release builds
+- ✅ Real-time notification firewall (FSEvents + 30s poll fallback)
+- ✅ Priority rules v2 — quiet hours, behavior-based suggestions
+- ✅ "The Desk" — Now / Today / Archive with light mode
+- ✅ Adapter plugin API v1 — PLUGIN-API.md + echo reference adapter
 
 </details>
 
