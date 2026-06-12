@@ -1,307 +1,223 @@
+<div align="center">
+
 # LLMessenger
 
-**Your Mac filters your messages so you don't have to. Free, open source, and private — your messages never need to leave your computer.**
+**Stop reading 200 messages. Read one brief.**
 
-LLMessenger is a notification firewall and AI briefing desk for iMessage, Signal, Telegram, and Slack. It silences the noise, interrupts you only when something needs your reply, and turns everything else into a structured brief you can read in seconds.
+LLMessenger is a notification firewall for your Mac. It reads iMessage, Signal, Telegram, and Slack so you don't have to — silences the noise, interrupts you only when someone actually needs you, and turns everything else into a brief you read in 30 seconds.
 
-- **60-second setup** — iMessage works with one permission. No accounts, no API keys required.
-- **On-device AI by default** — uses Apple Intelligence on macOS 26+ (or Ollama). Nothing leaves your Mac. Cloud models are opt-in.
-- **Notification firewall** — routine chatter is held back silently; only messages that need you break through. Everything held back appears in your next digest.
-- **Free forever** — Apache 2.0 licensed. No server, no telemetry, no subscription, no developer who can read your messages.
+Free. Open source. On-device AI. Your messages never have to leave your Mac.
+
+[![CI](https://github.com/googlarz/LLMessenger/actions/workflows/ci.yml/badge.svg)](https://github.com/googlarz/LLMessenger/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/googlarz/LLMessenger)](https://github.com/googlarz/LLMessenger/releases/latest)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](https://github.com/googlarz/LLMessenger/releases/latest)
+[![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)](project.yml)
+
+[**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
 
 ![LLMessenger screenshot](docs/screenshot.png)
 
----
-
-## What it does
-
-LLMessenger sits in your menu bar. Every hour (or on demand) it polls your connected messaging services, feeds the messages to a local or cloud LLM, and produces per-conversation cards — each with a headline, prose summary, key quotes, and action items:
-
-- **iMessage** — *Mum confirmed Sunday lunch — needs a reply* — REPLY NEEDED
-  > Mum sent six messages confirming she's bringing the casserole and asking if you can pick up wine on the way.
-  > **NEXT** Reply by 12:00 · Pick up wine
-
-- **Telegram** — *Lisbon trip group narrowed dates to May 22–26* — HEADS-UP
-  > The five of you converged on May 22–26 after Priya pushed back on the late-May option. Sam booked refundable flights.
-  > **NEXT** Confirm flights by tonight · Vote on Airbnb
-
-- **Slack** — *#eng-pricing settled on the new tier structure* — INFO
-  > The team converged on three tiers after a 90-message debate. Engineering scoped the work to two sprints.
-  > **NEXT** Acknowledge the proposal in #eng-pricing
-
-Click any brief in the sidebar to open it. Ask follow-up questions ("who confirmed attendance?"), draft a reply by typing `@John …`, or have the AI write a draft you can review and send.
+</div>
 
 ---
 
-## Features
+## Why
 
-### Briefs
-- **Unified inbox** — iMessage, Signal, Telegram, Slack (multi-workspace) in one place
-- **Structured briefs** — headline, prose summary, action items, key quotes, priority (`high` / `med` / `low`)
-- **Brief-card count first** — the header shows "1 brief across 1 app" so you see at a glance how much there is to read, not just raw message counts
-- **Source grounding** — every card cites exact message IDs; quotes are validated against real messages
-- **Sent-message context** — your replies (in iMessage, Signal, Slack) are captured and treated as conversation context, so the LLM knows when you've already responded
-- **Conversation continuity** — rolling per-conversation summaries and unresolved actions carry forward across brief cycles
-- **Episodic memory** — older briefs are compressed into context so the LLM references previous threads
-- **Parallel brief generation** — each service summarised concurrently; one failure doesn't drop the rest
-- **"Build 7-day summary" button** in Settings → Services → Data — bootstraps rolling per-conversation summaries when you first install, so the AI has memory of older threads
+You are in five group chats, two Slack workspaces, and a family iMessage thread. Most of those messages don't need you. A few really do — and they're buried.
 
-### Composing
-- **AI Q&A** — ask questions about any conversation in natural language
-- **Reply drafting** — request a draft, review it, send or discard
-- **`@` mention picker** — type `@` in the chat input to write to anyone in any service. Suggestions are deduplicated by name across services and remember which service you used last
-- **Quick-reply chips** — one-tap style-matched reply suggestions on brief cards
+Every messaging app solves this by sending you *more* notifications. LLMessenger does the opposite:
 
-### Attention protection
-- **Notification firewall** (on by default) — routine briefs generate silently; you're only notified when something needs your reply. Held-back counts surface in the next digest
-- **Morning Digest** — a scheduled daily brief at your chosen time, including everything the firewall held back
-- **Notification Center widget** — latest headline + priority counts at a glance (macOS 14+)
+> 🔕 **Routine chatter is held back silently.**
+> 🔔 **You get one notification — when someone needs your reply.**
+> ☕ **Everything else lands in your Morning Digest.**
 
-### LLM backends
-- **On-Device (Apple Intelligence)** — zero setup, zero cost, fully private; macOS 26+ on Apple Silicon
-- **Ollama (local, free)** — any local model, any macOS 13+
-- **Anthropic Claude** — best brief quality (opt-in cloud)
-- **OpenAI** GPT-4o / GPT-4o-mini (opt-in cloud)
+It looks like this:
 
-### Privacy (see [`PRIVACY.md`](PRIVACY.md))
-- **Local-only mode** — single toggle that forces Ollama and skips cloud adapters. With it on, no message content leaves your Mac
-- **Network audit log** — Settings → Privacy shows every cloud HTTPS call this session (provider, endpoint, status, bytes; never message content)
-- **Pre-send redaction** — opt-in regex pass that replaces credit cards / SSNs / IBANs / email addresses with `[REDACTED:…]` tokens before sending to a cloud LLM
-- **No telemetry, no analytics, no auto-update beacon**
+> **iMessage** — *Mum confirmed Sunday lunch — needs a reply* · `REPLY NEEDED`
+> Mum sent six messages confirming she's bringing the casserole and asking if you can pick up wine.
+> **NEXT** → Reply by 12:00 · Pick up wine
 
-### macOS integration
-- **Hourly auto-refresh** with countdown; "New Brief", "Last 48h", and "Last 7d" on demand from the menu bar
-- **macOS notifications** — tap to jump directly to the brief
-- **Auto-launch at login** via `SMAppService`
-- **Background poll errors surfaced** in the menu bar, not silently discarded
-- **First-launch onboarding** — wizard walks through LLM, Signal, iMessage, Telegram, Slack in one flow
-- **Anthropic-inspired dark UI** — floating, resizable panel, remembers position and size
+> **Slack** — *#eng-pricing settled on the new tier structure* · `INFO`
+> The team converged on three tiers after a 90-message debate. Engineering scoped it to two sprints.
+> **NEXT** → Acknowledge the proposal in #eng-pricing
 
----
-
-## How it works
-
-```
-Menu Bar Icon
-     │
-     ▼
-PollEngine ──► iMessage adapter   (~/Library/Messages/chat.db)
-             ├─► Signal adapter   (signal-mcp SQLite + HTTP JSON-RPC)
-             ├─► Telegram adapter (subprocess binary, NDJSON protocol)
-             └─► Slack adapter    (Slack Web API, multi-workspace, native Swift)
-                         │
-                         ▼
-                   AppDatabase (GRDB / SQLite)
-                         │
-                         ▼
-                   BriefEngine
-                   ├─ PromptBuilder      (source-grounded prompt with conversation state)
-                   ├─ LLMClient          (Ollama / Anthropic / OpenAI)
-                   ├─ MemoryCompressor   (compress old briefs → episodic summaries)
-                   └─ ConversationState  (rolling summaries, unresolved actions)
-                         │
-                         ▼
-                   Brief stored → UI notified → macOS notification sent
-```
-
----
-
-## Requirements
-
-- macOS 13 Ventura or later
-- Xcode 15+ (to build from source)
-- One or more messaging services (mix and match):
-  - **iMessage** — Full Disk Access granted to LLMessenger in System Settings → Privacy & Security
-  - **Signal** — [signal-mcp](https://github.com/googlarz/signal-mcp) running as a local daemon
-  - **Telegram** — `telegram-adapter` binary (bundled or in `~/.config/llmessenger/adapters/telegram/`)
-  - **Slack** — a Slack app you create at [api.slack.com/apps](https://api.slack.com/apps); paste the User OAuth Token (`xoxp-…`) into Settings → Services → Slack → Manage. Multi-workspace supported.
-- One LLM backend:
-  - **On-Device** (zero setup) — macOS 26+ with Apple Intelligence enabled
-  - **Ollama** — `brew install ollama && ollama pull llama3.1`
-  - **Anthropic API key** — best brief quality
-  - **OpenAI API key**
-
----
+Click any card to ask follow-up questions ("who confirmed attendance?"), tap a style-matched quick reply, or have the AI draft a response you review before sending.
 
 ## Quick start
 
-### Download (macOS)
+**60 seconds, one permission, no account, no API key.**
 
-Grab the latest DMG from the [Releases page](https://github.com/googlarz/LLMessenger/releases/latest).
+1. **[Download the latest release](https://github.com/googlarz/LLMessenger/releases/latest)**, unzip, move to Applications.
+   > The binary is unsigned — right-click → **Open** → **Open** on first launch (or System Settings → Privacy & Security → **Open Anyway**).
+2. **Grant Full Disk Access** when the wizard asks — this lets it read your iMessage history. The screen detects the grant live; no restart needed.
+3. **That's it.** On macOS 26 with Apple Intelligence, the AI runs on-device automatically — zero configuration. Click the envelope in your menu bar → **New Brief**.
 
-> **Gatekeeper note:** the DMG is currently unsigned. On first open, macOS will block it.
-> Right-click the app → **Open** → **Open**, or go to **System Settings → Privacy & Security → Open Anyway**.
+Signal, Telegram, and Slack are optional and can be added any time in Settings.
 
-A GitHub Actions workflow ([`.github/workflows/release.yml`](.github/workflows/release.yml)) builds an unsigned `.app` from any tagged commit on a clean `macos-14` runner and uploads it as an artifact with a SHA-256 of the binary, so anyone can re-run the workflow to verify the binary matches the source.
-
-### Build from source
+<details>
+<summary><strong>Build from source instead</strong></summary>
 
 ```bash
 git clone https://github.com/googlarz/LLMessenger
 cd LLMessenger
 brew install xcodegen
 xcodegen generate
-open LLMessenger.xcodeproj
+open LLMessenger.xcodeproj   # ⌘R in Xcode 15+
 ```
 
-Build and run in Xcode (`⌘R`). The app appears in the menu bar (envelope icon).
+CI builds and runs all 430 tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
 
-On first launch, the **onboarding wizard** guides you through:
-1. iMessage Full Disk Access — the screen detects the grant live; this is the only required step
-2. Choosing your AI backend — On-Device is pre-selected when available (no credentials needed)
-3. Signal, Telegram (optional — off by default, add any time later)
-4. Slack — add later via Settings → Services → Slack → Manage
+</details>
 
-### Settings tabs
+## Choose your AI
 
-All settings are also available under the menu bar icon → **Settings**:
+| Backend | Setup | Cost | Privacy |
+|---|---|---|---|
+| **On-Device** (Apple Intelligence) | None — auto-selected | Free | Nothing leaves your Mac · macOS 26+ |
+| **Ollama** | `brew install ollama && ollama pull llama3.1` | Free | Nothing leaves your Mac · macOS 13+ |
+| **Anthropic Claude** | API key | Pay per use | Opt-in cloud — best brief quality |
+| **OpenAI** | API key | Pay per use | Opt-in cloud |
 
-**AI tab** — pick Ollama / Anthropic / OpenAI; enter the API key for cloud providers; pick an Ollama model.
+Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) is a single toggle that guarantees no message content can leave your machine.
 
-**Services tab** — per-service config:
-- **iMessage** — toggle on; grant Full Disk Access when prompted
-- **Signal** — enter your phone number (`+491234567890`); requires a local Signal daemon
-- **Telegram** — click "Connect Telegram" to sign in interactively (phone → code → optional 2FA)
-- **Slack** — click "Manage…" to add one or more workspace tokens
+## What it does
 
-There's also a **Data** section at the bottom:
-- **Build 7-day summary** — runs a 7-day brief that also populates rolling per-conversation summaries so future briefs have memory
-- **Sync contacts** — refreshes the `@` mention picker
+**Attention protection**
+- **Notification firewall** (on by default) — routine briefs generate silently; only `REPLY NEEDED` breaks through. Held-back count surfaces in your next digest.
+- **Morning Digest** — one scheduled daily brief with everything the firewall held back.
+- **Notification Center widget** — latest headline + priority counts at a glance (macOS 14+).
 
-**Privacy tab** — Local-only mode toggle, redaction toggle, full data-flow explainer, and a live network audit log of every cloud HTTPS call this session.
+**Briefs**
+- Unified inbox: iMessage, Signal, Telegram, Slack (multi-workspace).
+- Structured cards: headline, prose summary, action items, key quotes, priority.
+- **Source-grounded** — every card cites exact message IDs; quotes are validated against real messages. No hallucinated summaries.
+- Conversation memory: rolling per-conversation summaries and unresolved actions carry across brief cycles, and older briefs compress into episodic context.
+- Your own replies are captured as context, so the AI knows when you've already responded.
 
-**Instructions tab** — base prompt + per-service guidance.
+**Composing**
+- Ask questions about any conversation in plain language.
+- Quick-reply chips matched to your writing style — they populate the composer, never auto-send.
+- `@` mention picker to message anyone on any service from one input.
+- AI reply drafts you review, edit, send, or discard.
 
-**About tab** — version, source link, Run Setup Wizard button.
-
-### Trigger your first brief
-
-Click the envelope icon → **New Brief**. Subsequent briefs run automatically every hour. If this is your first time, also click **Build 7-day summary** in Settings → Services → Data so the LLM has rolling memory of older threads.
-
----
-
-## Project structure
+## How it works
 
 ```
-LLMessenger/
-├── AppDelegate.swift                  # App bootstrap, service wiring, onboarding gate
-├── Core/
-│   ├── Adapters/
-│   │   ├── MessengerAdapter.swift      # Protocol: fetch / send / healthCheck / listContacts
-│   │   ├── iMessageAdapter.swift       # Reads ~/Library/Messages/chat.db
-│   │   ├── SignalCLIAdapter.swift      # Reads signal-mcp SQLite, sends via HTTP RPC
-│   │   ├── SubprocessAdapter.swift     # Generic NDJSON subprocess adapter (Telegram)
-│   │   └── Slack/
-│   │       ├── SlackAdapter.swift      # Multi-workspace Slack adapter
-│   │       ├── SlackAPIClient.swift    # Slack Web API HTTPS client with rate-limit pacing
-│   │       └── SlackWorkspace.swift    # Workspace model + Keychain storage
-│   ├── Brief/
-│   │   ├── BriefEngine.swift           # Orchestrates polling → LLM → storage
-│   │   ├── BriefJSON.swift             # Type-safe Codable structs for LLM output
-│   │   ├── BriefRepository.swift       # GRDB queries for briefs, cards, messages, contacts
-│   │   ├── MemoryCompressor.swift      # Compress old briefs into episodic summaries
-│   │   └── QuickReply.swift            # Style-matched quick-reply suggestions
-│   ├── Contacts/
-│   │   ├── Contact.swift               # Unified contact model
-│   │   └── ContactDirectory.swift      # Aggregates contacts across adapters; preferred-service tracking
-│   ├── Instrumentation/
-│   │   ├── InstrumentationManager.swift
-│   │   ├── NetworkAuditLog.swift       # In-memory record of every cloud HTTPS call
-│   │   └── MessageSanitizer.swift      # Opt-in CC/SSN/IBAN/email redaction
-│   ├── LLM/
-│   │   ├── LLMClient.swift             # Protocol + Ollama/Anthropic/OpenAI impls
-│   │   ├── LLMProvider.swift           # Provider enum + factory
-│   │   ├── IntentRoute.swift           # Structured intent routing for the chat input
-│   │   └── PromptBuilder.swift         # Prompt templates per LLM mode
-│   ├── PollEngine.swift                # Hourly scheduler, adapter registry
-│   ├── Settings/
-│   │   └── SettingsRepository.swift    # UserDefaults + Keychain config store
-│   └── Store/
-│       ├── AppDatabase.swift           # GRDB setup + migrations (v1..v10)
-│       └── Models/                     # Brief, BriefCard, Message, ConversationState, ConversationContext, PriorityCorrection, …
-├── MenuBar/
-│   └── MenuBarController.swift         # NSStatusItem, menu, brief list, unread badge
-└── UI/
-    ├── Theme.swift                      # Dark palette + service colors
-    ├── ChatInputView.swift              # Composer with @ mention picker
-    ├── MentionPickerView.swift          # Popover for the @ mention picker
-    ├── ChatPanelView.swift              # Main panel: prose + AI thread + composer
-    ├── ChatViewModel.swift              # Q&A + reply draft + mention target state
-    ├── BriefListView.swift              # Sidebar with grouped brief history
-    ├── BriefHeaderView.swift            # Brief-count headline + status pill
-    ├── BriefProseView.swift             # Flowing prose view, source filter chips
-    ├── ContentView.swift
-    ├── Onboarding/
-    │   └── OnboardingWindowController.swift  # First-launch wizard
-    └── Settings/
-        ├── SettingsView.swift
-        ├── LLMSettingsTab.swift
-        ├── ServiceSettingsTab.swift      # Per-service config + Data Maintenance
-        ├── PrivacySettingsTab.swift      # Local-only / redaction / network audit log
-        ├── InstructionsSettingsTab.swift
-        ├── AboutSettingsTab.swift
-        ├── SlackWorkspacesView.swift     # Slack workspace list + Add sheet
-        └── TelegramSignInView.swift      # Interactive Telegram auth flow
+                         ┌──────────────────────────────────────────┐
+ Menu bar ──► PollEngine ├─► iMessage   ~/Library/Messages/chat.db  │
+  (hourly /              ├─► Signal     local signal-mcp daemon     │
+   on demand)            ├─► Telegram   bundled adapter binary      │
+                         └─► Slack      Web API, multi-workspace    │
+                                        │
+                                        ▼
+                          SQLite (GRDB) — everything stays local
+                                        │
+                                        ▼
+                          BriefEngine ──► your chosen LLM
+                          · source-grounded prompts
+                          · rolling conversation state
+                          · episodic memory compression
+                                        │
+                                        ▼
+                  Brief stored ─► firewall decides: notify or hold
 ```
 
----
+Each service is summarized in parallel — one adapter failing never drops the rest. The full adapter contract is a 6-method protocol ([`MessengerAdapter.swift`](LLMessenger/Core/Adapters/MessengerAdapter.swift)); new services are a contribution away.
 
-## Privacy & Safety
+## Privacy
 
-See [`PRIVACY.md`](PRIVACY.md) for the full data-flow story. TL;DR:
+This is the entire trust model — see [`PRIVACY.md`](PRIVACY.md) for the full data-flow story:
 
-- **There is no LLMessenger server.** The developer cannot see your messages.
-- **Your data lives only on your Mac** in `~/Library/Application Support/LLMessenger/`.
-- **Cloud egress only happens if you configure it.** With Ollama + no Anthropic/OpenAI/Slack: zero message content leaves your machine.
-- **Local-only mode** is one toggle in Settings → Privacy. Forces Ollama and skips the Slack adapter.
-- **Network audit log** in Settings → Privacy lets you verify outbound calls live — metadata only, never message content.
-- **API keys and Slack tokens** are in the macOS Keychain, never in plain files.
-- **No telemetry, no analytics, no auto-update beacon.**
+- **There is no LLMessenger server.** Nothing to breach, no developer who can read your messages, no account to create.
+- **All data lives in** `~/Library/Application Support/LLMessenger/`. Delete the folder, and it's gone.
+- **On-Device or Ollama = zero egress.** With a local backend and no Slack, no message content ever leaves your machine.
+- **Network audit log** (Settings → Privacy) shows every cloud HTTPS call live — provider, endpoint, status, bytes. Never message content.
+- **Pre-send redaction** (opt-in) strips credit cards, SSNs, IBANs, and emails before anything reaches a cloud LLM.
+- **Keys in the Keychain.** API keys and Slack tokens are never written to plain files.
+- **No telemetry. No analytics. No auto-update beacon.**
 
----
+Don't trust the README? The [reproducible release workflow](.github/workflows/release.yml) lets anyone rebuild the binary from source on a clean GitHub runner and compare SHA-256 hashes.
 
-## Distribution & notarization
+## FAQ
 
-See [`docs/NOTARIZATION.md`](docs/NOTARIZATION.md) for instructions on building a signed, notarized `.app` for distribution. A `Makefile` provides `build`, `archive`, `export`, `notarize`, and `dmg` targets.
+<details>
+<summary><strong>Does this send my messages to OpenAI / Anthropic?</strong></summary>
 
-For reproducible verification, the [`release.yml`](.github/workflows/release.yml) GitHub Actions workflow builds the `.app` on a clean `macos-14` runner from any tag and uploads it with a SHA-256 of the binary.
+Only if you explicitly choose a cloud backend. The default path (On-Device on macOS 26, Ollama otherwise) processes everything locally. Local-only mode makes cloud egress impossible with one toggle, and the network audit log lets you verify it live.
+</details>
 
----
+<details>
+<summary><strong>Why does it need Full Disk Access?</strong></summary>
 
-## Roadmap
+iMessage history lives in `~/Library/Messages/chat.db`, which macOS protects behind Full Disk Access. LLMessenger reads that database directly — there is no iMessage API. It's the only permission required, and you can see exactly what's done with it in [`iMessageAdapter.swift`](LLMessenger/Core/Adapters/iMessageAdapter.swift).
+</details>
 
-### Shipped (v1.4)
-- ✅ Search across messages and briefs
-- ✅ Brief history date filter
-- ✅ Pin important briefs
-- ✅ Slack adapter (multi-workspace)
-- ✅ `@` mention picker
-- ✅ Sent-message capture (replies appear as context)
-- ✅ Local-only mode + network audit + redaction
-- ✅ Reproducible release workflow
+<details>
+<summary><strong>Will it ever auto-send a message?</strong></summary>
 
-### Shipped (v1.5–v1.7)
-- ✅ Wire Desk redesign + Demo Mode
-- ✅ Security audit + hardening (prompt-injection defenses, URL validation)
-- ✅ Morning Digest at a scheduled time
-- ✅ Notification Center widget
-- ✅ Quick Reply — style-matched suggestions that populate (never auto-send)
-- ✅ On-Device AI via Apple Intelligence (macOS 26+)
-- ✅ Notification firewall
-- ✅ iMessage-first 60-second onboarding
+No. Quick replies and AI drafts only populate the composer. Every send is a click you make.
+</details>
 
-### Next
-- [ ] WhatsApp adapter (pending viable local API)
-- [ ] Per-conversation quiet hours
-- [ ] User-defined priority rules
-- [ ] Adapter plugin API for third-party services
+<details>
+<summary><strong>What about WhatsApp?</strong></summary>
 
----
+On the roadmap, pending a viable local API. The adapter protocol is designed for it — if you know a reliable local WhatsApp bridge, open an issue.
+</details>
+
+<details>
+<summary><strong>How accurate are the summaries?</strong></summary>
+
+Every card must cite real message IDs and quotes are validated against the actual messages — fabricated quotes are rejected before a brief is stored. Quality depends on the backend; Claude produces the strongest briefs, on-device models the most private ones.
+</details>
+
+<details>
+<summary><strong>Why is the app unsigned?</strong></summary>
+
+Code signing requires a paid Apple Developer account, and this is a free community project. The reproducible-build workflow is the alternative trust path: verify the binary against the source yourself. Want a notarized build? `make notarize` with your own Developer ID — see [`docs/NOTARIZATION.md`](docs/NOTARIZATION.md).
+</details>
+
+## Requirements
+
+- macOS 13 Ventura or later (widget needs 14+, On-Device AI needs 26+ with Apple Intelligence)
+- **iMessage** — works out of the box with Full Disk Access
+- **Signal** *(optional)* — [signal-mcp](https://github.com/googlarz/signal-mcp) running locally
+- **Telegram** *(optional)* — bundled adapter, interactive sign-in from Settings
+- **Slack** *(optional)* — your own Slack app's user token, multi-workspace supported
 
 ## Contributing
 
-LLMessenger is free and open source, and stays that way. Issues and PRs welcome — adapter implementations for new services are especially appreciated (see `Core/Adapters/MessengerAdapter.swift` for the 6-method protocol).
+PRs and issues welcome — this project is free and stays free.
+
+The highest-impact contribution is a **new service adapter**: implement the 6-method [`MessengerAdapter`](LLMessenger/Core/Adapters/MessengerAdapter.swift) protocol and your service plugs into polling, briefs, the firewall, and the composer automatically. [`SignalCLIAdapter.swift`](LLMessenger/Core/Adapters/SignalCLIAdapter.swift) is a good reference implementation.
+
+```bash
+xcodegen generate                      # project.yml is the source of truth
+xcodebuild -scheme LLMessenger test    # 430 tests — keep them green
+```
+
+## Roadmap
+
+- [ ] WhatsApp adapter (pending viable local API)
+- [ ] Per-conversation quiet hours
+- [ ] User-defined priority rules ("always interrupt for Mum")
+- [ ] Adapter plugin API for third-party services
+
+<details>
+<summary>Shipped (v1.4 – v1.7)</summary>
+
+- ✅ Notification firewall · Morning Digest · Notification Center widget
+- ✅ On-Device AI via Apple Intelligence (macOS 26+)
+- ✅ iMessage-first 60-second onboarding
+- ✅ Quick Reply — style-matched suggestions (never auto-send)
+- ✅ Slack adapter (multi-workspace) · `@` mention picker
+- ✅ Local-only mode · network audit log · pre-send redaction
+- ✅ Security hardening (prompt-injection defenses, URL validation)
+- ✅ Search, pinning, date filters, Demo Mode, Wire Desk redesign
+- ✅ Reproducible release builds
+
+</details>
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+[Apache 2.0](LICENSE) — free for everyone, forever.
