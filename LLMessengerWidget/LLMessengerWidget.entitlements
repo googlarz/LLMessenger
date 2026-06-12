@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- com.apple.security.application-groups is added here when code-signing with a team ID;
+         it allows the widget to read brief data from App Group UserDefaults.
+         Until then, the widget reads from ~/Library/Application Support/LLMessenger/widget-snapshot.json.
+         Uncomment after setting DEVELOPMENT_TEAM in Xcode Signing & Capabilities.
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.llmessenger.app</string>
+    </array>
+    -->
+</dict>
+</plist>

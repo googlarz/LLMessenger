@@ -9,5 +9,8 @@
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
     <!-- Signal JSON-RPC daemon (localhost) is covered by network.client above -->
+    <!-- App Groups entitlement is added here when code-signing with a team ID;
+         it enables the Notification Center widget to read the brief snapshot.
+         Uncomment after setting DEVELOPMENT_TEAM in Xcode Signing & Capabilities. -->
 </dict>
 </plist>
