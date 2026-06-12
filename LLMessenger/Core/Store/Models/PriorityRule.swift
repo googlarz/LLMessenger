@@ -11,6 +11,9 @@ struct PriorityRule: Codable, FetchableRecord, PersistableRecord, Identifiable {
     var alwaysNotify: Bool
     var sortOrder: Int
     var createdAt: Date
+    /// "HH:mm" — nil means no quiet window for this rule.
+    var quietStart: String?
+    var quietEnd: String?
 
     static let databaseTableName = "priorityRules"
 

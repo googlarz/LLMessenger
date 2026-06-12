@@ -13,28 +13,67 @@
 
 import SwiftUI
 
+// MARK: - Appearance-adaptive color helper
+
+extension Color {
+    /// Creates a color that resolves to `light` in the light appearance and `dark` in dark.
+    init(light: Color, dark: Color) {
+        self.init(NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? NSColor(dark) : NSColor(light)
+        })
+    }
+}
+
 enum Theme {
 
-    // MARK: - Ink (ground) — cool, deep, layered
+    // MARK: - Ink (ground) — semantic, appearance-adaptive
 
-    /// Window ground. Cool ink, not gray.
-    static let bg          = Color(red: 0.055, green: 0.067, blue: 0.082)   // #0E1115
+    /// Window ground.
+    static let bg = Color(
+        light: Color(red: 0.976, green: 0.973, blue: 0.965),   // #F9F8F6 warm paper
+        dark:  Color(red: 0.055, green: 0.067, blue: 0.082)    // #0E1115
+    )
     /// Sidebar / chrome ground, one step below the page.
-    static let sidebar     = Color(red: 0.043, green: 0.053, blue: 0.065)   // #0B0D11
-    /// Raised ink: cards' hover wash, fields, popovers.
-    static let surface     = Color(red: 0.082, green: 0.098, blue: 0.118)   // #15191E
-    /// Highest ink step: active chips, pressed states.
-    static let surfaceHigh = Color(red: 0.114, green: 0.133, blue: 0.157)   // #1D2228
-    /// Hairline rule colour (use with `hairline` width).
-    static let border      = Color(red: 0.227, green: 0.247, blue: 0.271).opacity(0.55)
+    static let sidebar = Color(
+        light: Color(red: 0.941, green: 0.937, blue: 0.925),   // #F0EFEC
+        dark:  Color(red: 0.043, green: 0.053, blue: 0.065)    // #0B0D11
+    )
+    /// Raised surface: cards' hover wash, fields, popovers.
+    static let surface = Color(
+        light: Color(red: 0.957, green: 0.953, blue: 0.945),   // #F4F3F1
+        dark:  Color(red: 0.082, green: 0.098, blue: 0.118)    // #15191E
+    )
+    /// Highest surface step: active chips, pressed states.
+    static let surfaceHigh = Color(
+        light: Color(red: 0.914, green: 0.910, blue: 0.898),   // #E9E8E5
+        dark:  Color(red: 0.114, green: 0.133, blue: 0.157)    // #1D2228
+    )
+    /// Hairline rule colour.
+    static let border = Color(
+        light: Color(red: 0.780, green: 0.769, blue: 0.745).opacity(0.7),
+        dark:  Color(red: 0.227, green: 0.247, blue: 0.271).opacity(0.55)
+    )
     /// Row selection wash.
-    static let selection   = Color(red: 0.114, green: 0.133, blue: 0.157)
+    static let selection = Color(
+        light: Color(red: 0.914, green: 0.910, blue: 0.898),
+        dark:  Color(red: 0.114, green: 0.133, blue: 0.157)
+    )
 
-    // MARK: - Paper (text) — warm against the cool ink
+    // MARK: - Text — warm against the ground
 
-    static let textPrimary   = Color(red: 0.929, green: 0.910, blue: 0.871) // #EDE8DE warm paper
-    static let textSecondary = Color(red: 0.608, green: 0.596, blue: 0.561) // #9B988F faded ink
-    static let textTertiary  = Color(red: 0.412, green: 0.404, blue: 0.376) // #696760 margin notes
+    static let textPrimary = Color(
+        light: Color(red: 0.133, green: 0.122, blue: 0.098),   // #221F19 deep ink
+        dark:  Color(red: 0.929, green: 0.910, blue: 0.871)    // #EDE8DE warm paper
+    )
+    static let textSecondary = Color(
+        light: Color(red: 0.404, green: 0.388, blue: 0.353),   // #676358
+        dark:  Color(red: 0.608, green: 0.596, blue: 0.561)    // #9B988F
+    )
+    static let textTertiary = Color(
+        light: Color(red: 0.584, green: 0.569, blue: 0.533),   // #959188
+        dark:  Color(red: 0.412, green: 0.404, blue: 0.376)    // #696760
+    )
 
     // MARK: - Signal — the only colour that means anything
 
@@ -220,8 +259,9 @@ struct WireActionStyle: ButtonStyle {
     }
 }
 
-// MARK: - NSAppearance helper
+// MARK: - NSAppearance helpers
 
 extension NSAppearance {
-    static let dark = NSAppearance(named: .darkAqua)!
+    static let dark  = NSAppearance(named: .darkAqua)!
+    static let light = NSAppearance(named: .aqua)!
 }

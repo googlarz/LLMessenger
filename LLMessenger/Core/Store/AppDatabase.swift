@@ -368,6 +368,32 @@ final class AppDatabase: @unchecked Sendable {
             try db.create(index: "briefCards_on_priority_createdAt",
                           on: "briefCards", columns: ["priority", "createdAt"])
         }
+        migrator.registerMigration("v18_realtime_and_rules_v2") { db in
+            // Real-time triage decisions: every triage event is persisted so the
+            // Desk can explain why you were or weren't interrupted.
+            try db.create(table: "triageEvents") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("service", .text).notNull()
+                t.column("conversationId", .text).notNull()
+                t.column("priority", .text).notNull()          // "high" | "medium" | "low"
+                t.column("needsReply", .boolean).notNull()
+                t.column("reason", .text).notNull()            // LLM-produced explanation
+                t.column("triggeredBy", .text).notNull()       // "rule" | "llm"
+                t.column("notified", .boolean).notNull().defaults(to: false)
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.create(index: "triageEvents_on_service_conversation",
+                          on: "triageEvents", columns: ["service", "conversationId"])
+            try db.create(index: "triageEvents_on_createdAt",
+                          on: "triageEvents", columns: ["createdAt"])
+
+            // Priority rules v2: quiet hours per rule.
+            // NULL means no quiet window. Stored as "HH:mm" strings (e.g. "22:00").
+            try db.alter(table: "priorityRules") { t in
+                t.add(column: "quietStart", .text)
+                t.add(column: "quietEnd", .text)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

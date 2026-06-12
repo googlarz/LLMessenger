@@ -47,6 +47,18 @@ jobs:
             test 2>&1 | tee test.log | grep -E "Test Suite|Executed|error:" || true
           grep -q "TEST SUCCEEDED" test.log
 
+      - name: Lint — no hard-coded colors outside Theme.swift
+        run: |
+          # Color(red:green:blue:) literals are only allowed in Theme.swift.
+          # All other UI files must use Theme.* semantic tokens.
+          hits=$(grep -rn 'Color(red:' LLMessenger/ --include="*.swift" \
+                   | grep -v 'LLMessenger/UI/Theme.swift' || true)
+          if [ -n "$hits" ]; then
+            echo "Hard-coded Color(red:) found outside Theme.swift:"
+            echo "$hits"
+            exit 1
+          fi
+
       - name: Upload test log on failure
         if: failure()
         uses: actions/upload-artifact@v4
