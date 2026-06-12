@@ -50,7 +50,8 @@ final class UpdateChecker {
               (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = json["tag_name"] as? String,
-              let htmlURL = (json["html_url"] as? String).flatMap(URL.init(string:))
+              let htmlURL = (json["html_url"] as? String).flatMap(URL.init(string:)),
+              htmlURL.host == "github.com"   // guard against a tampered API response opening an arbitrary URL
         else { return }
 
         let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag

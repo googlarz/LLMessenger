@@ -739,10 +739,18 @@ final class BriefEngine {
         var lines: [String] = ["=== [\(service)] \(safeConvID) | \(safeTitle) ==="]
 
         // Inject user-defined relationship context (label + priority hint).
+        // Sanitize both fields: a crafted label like "=== [signal] … ===" would inject
+        // a fake conversation block header into the structured prompt.
         if let ctx = try? repository.fetchConversationContext(service: service, conversationId: conversationID) {
             var ctxParts: [String] = []
-            if !ctx.label.isEmpty { ctxParts.append(ctx.label) }
-            if ctx.priorityHint != "auto" { ctxParts.append("priority override: \(ctx.priorityHint)") }
+            if !ctx.label.isEmpty {
+                let safeLabel = ctx.label.replacingOccurrences(of: "===", with: "—")
+                ctxParts.append(safeLabel)
+            }
+            if ctx.priorityHint != "auto" {
+                let safePriority = ctx.priorityHint.replacingOccurrences(of: "===", with: "—")
+                ctxParts.append("priority override: \(safePriority)")
+            }
             if !ctxParts.isEmpty {
                 lines.append("Context: \(ctxParts.joined(separator: " · "))")
             }
