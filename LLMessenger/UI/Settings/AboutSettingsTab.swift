@@ -2,6 +2,7 @@
 import SwiftUI
 
 struct AboutSettingsTab: View {
+    var database: AppDatabase? = nil
     var onRunSetup: (() -> Void)? = nil
 
     var body: some View {
@@ -40,9 +41,18 @@ struct AboutSettingsTab: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
 
-                if let onRunSetup {
-                    Button("Run Setup Wizard", action: onRunSetup)
+                HStack(spacing: 10) {
+                    if let onRunSetup {
+                        Button("Run Setup Wizard", action: onRunSetup)
+                            .buttonStyle(PaperButtonStyle())
+                    }
+                    if let database {
+                        Button("Export Diagnostics") {
+                            DiagnosticsReporter.export(database: database)
+                        }
                         .buttonStyle(PaperButtonStyle())
+                        .help("Versions, store integrity, service health, crash reports — never message content")
+                    }
                 }
             }
 

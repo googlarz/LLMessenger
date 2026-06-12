@@ -23,13 +23,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var notificationManager: NotificationManager?
     var startTask: Task<Void, Never>?
     var onboardingWindowController: OnboardingWindowController?
+    var updateChecker: UpdateChecker?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
             return
         }
+        CrashGuard.install()
         do {
-            let db = try AppDatabase()
+            let db = try AppDatabase.production()
             database = db
 
             let llm = resolvedProvider()
@@ -371,9 +373,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            state.refreshBriefs()
-            state.briefGenerationState = state.briefs.isEmpty ? .noNewMessages : .cached
-            menuBar.setBriefs(state.briefs)
+            // refreshBriefs loads off the main actor — await it before reading
+            // state.briefs, which was previously always empty at this point.
+            Task { @MainActor [weak self] in
+                guard let self, let state = self.appState else { return }
+                await state.refreshBriefs().value
+                state.briefGenerationState = state.briefs.isEmpty ? .noNewMessages : .cached
+                self.menuBarController?.setBriefs(state.briefs)
+                self.menuBarController?.setUnreadCount(state.unreadCount)
+            }
+
+            let checker = UpdateChecker()
+            checker.onUpdateAvailable = { [weak self] update in
+                self?.menuBarController?.setAvailableUpdate(update)
+            }
+            updateChecker = checker
+            checker.checkIfDue()
 
             // Show onboarding on first launch
             if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {

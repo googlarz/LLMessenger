@@ -53,7 +53,7 @@ struct SettingsView: View {
         case 4:
             RulesSettingsTab(database: database)
         default:
-            AboutSettingsTab(onRunSetup: onRunSetup)
+            AboutSettingsTab(database: database, onRunSetup: onRunSetup)
         }
     }
 

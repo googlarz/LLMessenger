@@ -5,8 +5,12 @@ import Foundation
 final class AppDatabase: @unchecked Sendable {
     let dbQueue: DatabaseQueue
 
-    /// Production init — stores DB in ~/Library/Application Support/LLMessenger/
-    convenience init() throws {
+    /// Production store in ~/Library/Application Support/LLMessenger/.
+    /// If the store fails to open or fails PRAGMA quick_check, it is moved
+    /// aside (preserved for forensics) and a fresh store is created — the app
+    /// must never crash-loop on a corrupt database. Messages re-fetch from
+    /// their source services; only brief history is lost.
+    static func production() throws -> AppDatabase {
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("LLMessenger")
@@ -14,7 +18,33 @@ final class AppDatabase: @unchecked Sendable {
                                                 withIntermediateDirectories: true,
                                                 attributes: [FileAttributeKey.posixPermissions: 0o700])
         let dbPath = appSupport.appendingPathComponent("llmessenger.db").path
-        try self.init(path: dbPath)
+
+        do {
+            let db = try AppDatabase(path: dbPath)
+            try db.integrityCheck()
+            return db
+        } catch {
+            let stamp = Int(Date().timeIntervalSince1970)
+            for suffix in ["", "-wal", "-shm"] {
+                try? FileManager.default.moveItem(
+                    atPath: dbPath + suffix,
+                    toPath: dbPath + ".corrupt-\(stamp)" + suffix)
+            }
+            NSLog("[AppDatabase] store unusable (%@) — moved aside as .corrupt-%d, recreating",
+                  String(describing: error), stamp)
+            return try AppDatabase(path: dbPath)
+        }
+    }
+
+    /// Throws if SQLite's quick_check reports anything but "ok".
+    func integrityCheck() throws {
+        try dbQueue.read { db in
+            let result = try String.fetchOne(db, sql: "PRAGMA quick_check") ?? "no result"
+            guard result == "ok" else {
+                throw DatabaseError(resultCode: .SQLITE_CORRUPT,
+                                    message: "quick_check failed: \(result)")
+            }
+        }
     }
 
     /// In-memory init for tests.
@@ -331,6 +361,12 @@ final class AppDatabase: @unchecked Sendable {
             try db.alter(table: "serviceConfig") { t in
                 t.add(column: "pollIntervalSeconds", .integer).notNull().defaults(to: 900)
             }
+        }
+        // The needs-reply query (WHERE priority='high' ORDER BY createdAt DESC)
+        // full-scanned an unboundedly growing table on every sidebar refresh.
+        migrator.registerMigration("v17_briefcards_priority_index") { db in
+            try db.create(index: "briefCards_on_priority_createdAt",
+                          on: "briefCards", columns: ["priority", "createdAt"])
         }
         try migrator.migrate(dbQueue)
     }
