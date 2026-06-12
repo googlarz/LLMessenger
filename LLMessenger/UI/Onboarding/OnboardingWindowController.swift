@@ -1,6 +1,7 @@
 // LLMessenger/UI/Onboarding/OnboardingWindowController.swift
 import AppKit
 import SwiftUI
+import Combine
 
 // MARK: - Window Controller
 
@@ -52,21 +53,22 @@ private struct OnboardingView: View {
     let onComplete: () -> Void
 
     private enum Step: CaseIterable {
-        case welcome, llmSetup, signalSetup, imessageSetup, telegramSetup, done
+        case welcome, imessageSetup, llmSetup, signalSetup, telegramSetup, done
 
         // Steps shown as dots (excluding welcome and done)
-        static var dotSteps: [Step] { [.llmSetup, .signalSetup, .imessageSetup, .telegramSetup, .done] }
+        static var dotSteps: [Step] { [.imessageSetup, .llmSetup, .signalSetup, .telegramSetup, .done] }
     }
 
     @State private var currentStep: Step = .welcome
-    @State private var selectedProvider: LLMProvider = .anthropic
+    @State private var selectedProvider: LLMProvider = AppleFM.isAvailable ? .appleIntelligence : .anthropic
     @State private var anthropicKey: String = ""
     @State private var openAIKey: String = ""
     @State private var ollamaModel: String = ""
-    @State private var signalEnabled: Bool = true
+    @State private var signalEnabled: Bool = false
     @State private var signalNumber: String = ""
     @State private var imessageEnabled: Bool = true
-    @State private var telegramEnabled: Bool = true
+    @State private var imessageAccessGranted: Bool = false
+    @State private var telegramEnabled: Bool = false
     @State private var telegramAdapter: SubprocessAdapter? = nil
 
     private var repo: SettingsRepository { SettingsRepository(database: database) }
@@ -130,10 +132,10 @@ private struct OnboardingView: View {
 
     private func goBack() {
         switch currentStep {
-        case .llmSetup:     currentStep = .welcome
-        case .signalSetup:  currentStep = .llmSetup
-        case .imessageSetup: currentStep = .signalSetup
-        case .telegramSetup: currentStep = .imessageSetup
+        case .imessageSetup: currentStep = .welcome
+        case .llmSetup:      currentStep = .imessageSetup
+        case .signalSetup:   currentStep = .llmSetup
+        case .telegramSetup: currentStep = .signalSetup
         case .done:          currentStep = .telegramSetup
         default: break
         }
@@ -141,12 +143,12 @@ private struct OnboardingView: View {
 
     private func advance() {
         switch currentStep {
-        case .welcome:      currentStep = .llmSetup
-        case .llmSetup:     currentStep = .signalSetup
-        case .signalSetup:  currentStep = .imessageSetup
-        case .imessageSetup: currentStep = .telegramSetup
+        case .welcome:       currentStep = .imessageSetup
+        case .imessageSetup: currentStep = .llmSetup
+        case .llmSetup:      currentStep = .signalSetup
+        case .signalSetup:   currentStep = .telegramSetup
         case .telegramSetup: currentStep = .done
-        case .done:         break
+        case .done:          break
         }
     }
 
@@ -163,7 +165,7 @@ private struct OnboardingView: View {
                 Text("Welcome to LLMessenger")
                     .font(Theme.display(26))
                     .foregroundStyle(Theme.textPrimary)
-                Text("Your private AI inbox assistant.\nSet up in 3 minutes.")
+                Text("Free, open source, private.\nYour first brief in under a minute.")
                     .font(Theme.bodyFont)
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -205,7 +207,7 @@ private struct OnboardingView: View {
 
                 // Provider picker
                 HStack(spacing: 0) {
-                    ForEach(LLMProvider.allCases, id: \.self) { provider in
+                    ForEach(LLMProvider.availableCases, id: \.self) { provider in
                         Button(provider.displayName) {
                             selectedProvider = provider
                         }
@@ -222,6 +224,18 @@ private struct OnboardingView: View {
                 // Key / model field
                 VStack(alignment: .leading, spacing: 8) {
                     switch selectedProvider {
+                    case .appleIntelligence:
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.laptopcomputer")
+                                .foregroundStyle(Theme.ok)
+                            Text("Runs entirely on this Mac. No account, no API key — your messages never leave your computer.")
+                                .font(Theme.sans(12))
+                                .foregroundStyle(Theme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(12)
+                        .background(Theme.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
                     case .anthropic:
                         SecureField("API Key (sk-ant-…)", text: $anthropicKey)
                             .textFieldStyle(DarkTextFieldStyle())
@@ -259,13 +273,15 @@ private struct OnboardingView: View {
         switch selectedProvider {
         case .anthropic: return !anthropicKey.trimmingCharacters(in: .whitespaces).isEmpty
         case .openai:    return !openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
-        case .ollama:    return true
+        case .ollama, .appleIntelligence: return true
         }
     }
 
     private func saveLLMSettings() {
         repo.saveSelectedLLMProvider(selectedProvider)
         switch selectedProvider {
+        case .appleIntelligence:
+            break // nothing to configure — that's the point
         case .anthropic:
             try? repo.saveLLMKey(provider: .anthropic, key: anthropicKey)
         case .openai:
@@ -328,24 +344,47 @@ private struct OnboardingView: View {
                 )
 
                 if imessageEnabled {
-                    VStack(alignment: .leading, spacing: 10) {
-                        instructionRow(number: "1", text: "Open System Settings → Privacy & Security → Full Disk Access")
-                        instructionRow(number: "2", text: "Click the + button and add LLMessenger")
-                        instructionRow(number: "3", text: "Restart LLMessenger after granting access")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .background(Theme.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.radius)
-                            .strokeBorder(Theme.border, lineWidth: Theme.hairline)
-                    )
+                    Text("Your existing Messages history powers your first brief — no accounts, no QR codes. One permission and you're done.")
+                        .font(Theme.sans(12.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .multilineTextAlignment(.center)
 
-                    Button("Open Privacy Settings") {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+                    if imessageAccessGranted {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Theme.ok)
+                            Text("Full Disk Access granted")
+                                .font(Theme.sans(12.5, weight: .semibold))
+                                .foregroundStyle(Theme.ok)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity)
+                        .background(Theme.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.radius)
+                                .strokeBorder(Theme.ok.opacity(0.4), lineWidth: Theme.hairline)
+                        )
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            instructionRow(number: "1", text: "Open System Settings → Privacy & Security → Full Disk Access")
+                            instructionRow(number: "2", text: "Click the + button and add LLMessenger")
+                            instructionRow(number: "3", text: "This screen updates automatically once access is granted")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(Theme.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.radius)
+                                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+                        )
+
+                        Button("Open Privacy Settings") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
                     }
-                    .buttonStyle(SecondaryButtonStyle())
                 }
 
                 Button("Continue") {
@@ -357,6 +396,18 @@ private struct OnboardingView: View {
             .padding(.horizontal, 48)
             .padding(.vertical, 16)
         }
+        .onAppear { imessageAccessGranted = Self.checkFullDiskAccess() }
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+            guard currentStep == .imessageSetup, !imessageAccessGranted else { return }
+            imessageAccessGranted = Self.checkFullDiskAccess()
+        }
+    }
+
+    /// Full Disk Access is provable by attempting to read chat.db directly —
+    /// the file always exists once Messages has run; only FDA gates reading it.
+    private static func checkFullDiskAccess() -> Bool {
+        let path = NSHomeDirectory() + "/Library/Messages/chat.db"
+        return FileManager.default.isReadableFile(atPath: path)
     }
 
     private func instructionRow(number: String, text: String) -> some View {
