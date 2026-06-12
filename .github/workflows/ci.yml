@@ -44,8 +44,8 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             OTHER_LDFLAGS="" \
-            test | tee test.log | grep -E "Test Suite|Executed|error:" || true
-          grep -q "** TEST SUCCEEDED **" test.log
+            test 2>&1 | tee test.log | grep -E "Test Suite|Executed|error:" || true
+          grep -q "TEST SUCCEEDED" test.log
 
       - name: Upload test log on failure
         if: failure()
