@@ -187,6 +187,9 @@ final class PollEngine {
                 }
             }
         }
+        // Polls don't need to-the-second precision — tolerance lets the OS
+        // coalesce wakeups and saves energy on battery.
+        timer.tolerance = interval * 0.1
         RunLoop.main.add(timer, forMode: .common)
         timers[serviceID] = timer
     }

@@ -281,6 +281,9 @@ struct BriefListView: View {
         }
         isSearching = true
         searchTask = Task {
+            // Debounce: FTS5 ran synchronously on every keystroke.
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            guard !Task.isCancelled else { return }
             do {
                 let msgResults = try appState.repository.searchMessages(query: query)
                 let briefResults = try appState.repository.searchBriefs(query: query)

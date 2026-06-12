@@ -22,6 +22,13 @@ struct BriefProseView: View {
     @State private var filter: String = "all"
     @State private var showingTimeline: TimelineTarget? = nil
     @State private var appeared = false
+    /// Decoded once per brief — six computed properties chain into this, and
+    /// decoding the full brief JSON on every body evaluation cost ~8-10
+    /// decodes per render (PERF-2026-06-12 #2).
+    @State private var parsedCache: (briefID: Int64?, json: BriefJSON?) = (nil, nil)
+    /// Conversation labels batch-fetched per brief — the per-card synchronous
+    /// DB read in the stamp row ran on every hover (PERF-2026-06-12 #1).
+    @State private var contextCache: [String: ConversationContext] = [:]
 
     struct TimelineTarget: Identifiable {
         let service: String
@@ -32,7 +39,16 @@ struct BriefProseView: View {
 
     // MARK: - Parsing
 
+    /// Cached decode — returns the stored result when it matches this brief,
+    /// otherwise decodes fresh (covers first render before onAppear fires).
     private var parsedJSON: BriefJSON? {
+        if parsedCache.briefID == brief.id, parsedCache.briefID != nil {
+            return parsedCache.json
+        }
+        return Self.decodeBriefJSON(brief)
+    }
+
+    private static func decodeBriefJSON(_ brief: Brief) -> BriefJSON? {
         guard var summary = brief.openingSummary else { return nil }
         let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("```") {
@@ -42,6 +58,20 @@ struct BriefProseView: View {
         }
         guard let data = summary.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(BriefJSON.self, from: data)
+    }
+
+    private func refreshCaches() {
+        let json = Self.decodeBriefJSON(brief)
+        parsedCache = (brief.id, json)
+        var contexts: [String: ConversationContext] = [:]
+        for card in json?.cards ?? [] {
+            let key = "\(card.service)|\(card.conversationId)"
+            if contexts[key] == nil,
+               let ctx = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId) {
+                contexts[key] = ctx
+            }
+        }
+        contextCache = contexts
     }
 
     private var services: [String] {
@@ -124,8 +154,12 @@ struct BriefProseView: View {
                 repository: appState.repository
             )
         }
-        .onAppear { withAnimation { appeared = true } }
+        .onAppear {
+            refreshCaches()
+            withAnimation { appeared = true }
+        }
         .onChange(of: brief.id) { _ in
+            refreshCaches()
             appeared = false
             withAnimation { appeared = true }
         }
@@ -163,6 +197,7 @@ struct BriefProseView: View {
                     number: numbered.number,
                     card: numbered.card,
                     briefID: brief.id,
+                    conversationContext: contextCache["\(numbered.card.service)|\(numbered.card.conversationId)"],
                     onShowTimeline: { service, convId, name in
                         showingTimeline = TimelineTarget(service: service, conversationId: convId, displayName: name)
                     }

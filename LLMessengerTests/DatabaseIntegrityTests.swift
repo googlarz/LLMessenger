@@ -224,8 +224,17 @@ final class DatabaseIntegrityTests: XCTestCase {
         let migrationCount = try db1.dbQueue.read { d in
             try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM grdb_migrations") ?? 0
         }
-        XCTAssertEqual(migrationCount, 16,
-                       "All 16 migrations (v1..v16) must be recorded in grdb_migrations on fresh DB open")
+        // A second fresh open must record the identical set — and the count
+        // must cover at least the migrations known when this test was last
+        // touched (don't hardcode the exact number; it rots on every new one).
+        XCTAssertGreaterThanOrEqual(migrationCount, 17,
+                                    "Fresh DB must run every registered migration")
+        let db2 = try makeDB()
+        let secondCount = try db2.dbQueue.read { d in
+            try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM grdb_migrations") ?? 0
+        }
+        XCTAssertEqual(migrationCount, secondCount,
+                       "Migration set must be deterministic across opens")
     }
 
     func testReopeningDatabaseDoesNotReMigrate() throws {

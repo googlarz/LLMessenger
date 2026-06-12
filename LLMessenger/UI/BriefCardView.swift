@@ -60,6 +60,9 @@ struct BriefCardView: View {
     let number: Int
     let card: BriefCard
     let briefID: Int64?
+    /// Batch-fetched by the parent — a per-card DB read here ran on every
+    /// hover transition (PERF-2026-06-12 #1).
+    let conversationContext: ConversationContext?
     let onShowTimeline: (String, String, String) -> Void
 
     @State private var bodyExpanded = false
@@ -68,6 +71,13 @@ struct BriefCardView: View {
     @State private var labelEditText = ""
     @State private var labelEditHint = "auto"
     @State private var hovering = false
+    /// Set on save so the stamp updates immediately; the parent's batch
+    /// cache refreshes on the next brief change.
+    @State private var savedContextOverride: ConversationContext?
+
+    private var effectiveContext: ConversationContext? {
+        savedContextOverride ?? conversationContext
+    }
 
     private var isHigh: Bool { card.priority == "high" }
     private var isBodyExpanded: Bool { isHigh || bodyExpanded }
@@ -114,9 +124,8 @@ struct BriefCardView: View {
             ServiceStamp(service: card.service, size: 18)
 
             Button {
-                let ctx = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
-                labelEditText = ctx?.label ?? ""
-                labelEditHint = ctx?.priorityHint ?? "auto"
+                labelEditText = effectiveContext?.label ?? ""
+                labelEditHint = effectiveContext?.priorityHint ?? "auto"
                 showLabelEditor = true
             } label: {
                 HStack(spacing: 6) {
@@ -125,8 +134,7 @@ struct BriefCardView: View {
                         .tracking(1.0)
                         .foregroundStyle(isHandled ? Theme.textTertiary : Theme.textSecondary)
                         .lineLimit(1)
-                    if let lbl = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)?.label,
-                       !lbl.isEmpty {
+                    if let lbl = effectiveContext?.label, !lbl.isEmpty {
                         Text(lbl.uppercased())
                             .font(Theme.mono(9, weight: .medium))
                             .tracking(0.8)
@@ -142,12 +150,16 @@ struct BriefCardView: View {
                     label: $labelEditText,
                     priorityHint: $labelEditHint,
                     onSave: {
+                        let label = labelEditText.trimmingCharacters(in: .whitespaces)
                         appState.saveConversationContext(
                             service: card.service,
                             conversationId: card.conversationId,
-                            label: labelEditText.trimmingCharacters(in: .whitespaces),
+                            label: label,
                             priorityHint: labelEditHint
                         )
+                        savedContextOverride = ConversationContext(
+                            service: card.service, conversationId: card.conversationId,
+                            label: label, priorityHint: labelEditHint, updatedAt: Date())
                         showLabelEditor = false
                     },
                     onCancel: { showLabelEditor = false }
