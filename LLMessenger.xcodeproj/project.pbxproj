@@ -39,6 +39,7 @@
 		34ACCAF6781DDF51A663A56F /* PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76E282A1175D7AE8E61BA9E1 /* PromptBuilder.swift */; };
 		34C2302B885F6FE20720220B /* SlackWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFE2E2C0171471D3DD23F19 /* SlackWorkspace.swift */; };
 		362A008262AA38403555B958 /* InstructionsSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD22DF77EE0F38928663192 /* InstructionsSettingsTab.swift */; };
+		370811FCC5CABF84C3279D93 /* DiagnosticsReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2355EB0CABB60EE291A0AC3 /* DiagnosticsReporter.swift */; };
 		38F78779903A2A13366A51AF /* LLMessengerFocusFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE52D0D8A3301486D6FFA45 /* LLMessengerFocusFilter.swift */; };
 		396B16C71848A738B4564FBE /* BriefCardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7AAA3D7B964F21F64A8D29 /* BriefCardSource.swift */; };
 		3CD5F5A70910F91189DA2D0B /* PollEngineCycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 749BBC4D526298A26ACEFABB /* PollEngineCycleTests.swift */; };
@@ -61,6 +62,7 @@
 		5F54EE7EAB1F99DEE6B0AC0E /* NotificationManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 330592143EFDC8AF2BC51E83 /* NotificationManagerTests.swift */; };
 		6515871374A6975B0B2432DF /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 874EAADE41BC00D431B7655A /* SettingsWindowController.swift */; };
 		6590441FCAED6F40B1C1E6A9 /* SystemInvariantTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F27CBD218CE0D49903AC0ECE /* SystemInvariantTests.swift */; };
+		6697FB8260477417E96C5758 /* UpdateCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D725694A67BD078C05B411 /* UpdateCheckerTests.swift */; };
 		671F4C04C5BC9ABC8ED70514 /* LLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2480065C366A43445195D28 /* LLMClient.swift */; };
 		67386F8A47445E7309A2F95E /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AEBED8918F1281655EE91D1 /* Contact.swift */; };
 		68558FFF6748D2321631327B /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D2A719FBD90D2E75C687F20F /* GRDB */; };
@@ -70,6 +72,7 @@
 		6FD560709B01F26879B0C14C /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D44892CD851C4994CEA012 /* LLMProvider.swift */; };
 		7018B661B2B5790A7AE8A447 /* DemoSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E099EAF35997459A5054481 /* DemoSeeder.swift */; };
 		7177450F9E2D6DC65A094DA5 /* LLMRunRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C8397AA9C0E4BF6BE370EB9 /* LLMRunRecord.swift */; };
+		727E4B6AAE11B2A26938F3A5 /* CrashGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5FCC0B1F74F2C90ED11E68D /* CrashGuard.swift */; };
 		732196ED36CB2969112FCCB1 /* BriefEngineHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B748E0A7F24D6131687A769E /* BriefEngineHistoryTests.swift */; };
 		7485667FD9BB75A498987D0F /* TelegramSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173C28CE4F72A153E9132291 /* TelegramSignInView.swift */; };
 		74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */; };
@@ -110,6 +113,7 @@
 		C64A51B8478050E8D749A2D1 /* PromptRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D585C9E79CE6C3373CBFD739 /* PromptRegressionTests.swift */; };
 		C6E78A674132D16A32E143B9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96FD9BD1839DC30E92065C7E /* ContentView.swift */; };
 		C88C4CE66FA9F37B15DD2D1B /* MessageSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A205B592C8CBF382F66BB303 /* MessageSanitizer.swift */; };
+		CB9D755E7B7E768433DAC010 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3877E1BA09F4EB5A00C72294 /* UpdateChecker.swift */; };
 		CDC3A3BE61AF399A26C898AD /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BAACF8C7BC99014F710229 /* SearchResultsView.swift */; };
 		D09A7CAA48767CB5A4547E12 /* ChatViewModelSendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0761450986849BBC1F441151 /* ChatViewModelSendTests.swift */; };
 		D2852F4EE31BED9FFE4F2EDF /* ContactProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748D805868C6F537868D8D7E /* ContactProfile.swift */; };
@@ -120,6 +124,7 @@
 		D7440257CB16E1F273051C37 /* ContactDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D78D8C5FBB6C644B1FC0188C /* ContactDirectory.swift */; };
 		DE0C17AEBEECDE55B14BD784 /* LLMessengerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */; };
 		E0260C55BF88112D39490B73 /* QuickReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A44ACF0445A86BBF07D51E /* QuickReply.swift */; };
+		E133E59EAF1F7A035FA58C8E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E57E89D590DFB17E9E8E1AB3 /* Assets.xcassets */; };
 		E1FD0D71E3234B0DD4210B14 /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700C9AE93DA56553E631CE85 /* MessageBubbleView.swift */; };
 		E2C8F8B6CA8E66B74B528FB1 /* LLMClientTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E83C3D7F5BA8B73D9EF54F /* LLMClientTypesTests.swift */; };
 		E76EA4B470CC880F2800F3F3 /* LLMProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F98163F2B0DC06E29DF2EB /* LLMProviderTests.swift */; };
@@ -180,6 +185,7 @@
 		330592143EFDC8AF2BC51E83 /* NotificationManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManagerTests.swift; sourceTree = "<group>"; };
 		34BAACF8C7BC99014F710229 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		37E8FE3B928D05E300F53453 /* SettingsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepository.swift; sourceTree = "<group>"; };
+		3877E1BA09F4EB5A00C72294 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		3982B388A984024FBEEA9C82 /* Brief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brief.swift; sourceTree = "<group>"; };
 		39B862ED2D01355C54C9F7F9 /* ChatViewModelStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModelStateTests.swift; sourceTree = "<group>"; };
 		3AEBED8918F1281655EE91D1 /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
@@ -219,6 +225,7 @@
 		76800B61B4615653CD1A1140 /* ComponentContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentContractTests.swift; sourceTree = "<group>"; };
 		76E282A1175D7AE8E61BA9E1 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
 		792419D090E0BA27E26988ED /* AboutSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsTab.swift; sourceTree = "<group>"; };
+		79D725694A67BD078C05B411 /* UpdateCheckerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCheckerTests.swift; sourceTree = "<group>"; };
 		7A76DCD8E2690E5C02F66389 /* PollEngineReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollEngineReloadTests.swift; sourceTree = "<group>"; };
 		7A84FBD8AB6BB99A59067D62 /* BriefCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefCardView.swift; sourceTree = "<group>"; };
 		7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -255,6 +262,7 @@
 		CC762565E52A3E618204CC24 /* BriefEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefEngine.swift; sourceTree = "<group>"; };
 		CEB475651CD2CEBBB7A66D36 /* SlackAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAPIClient.swift; sourceTree = "<group>"; };
 		D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubprocessAdapterTests.swift; sourceTree = "<group>"; };
+		D2355EB0CABB60EE291A0AC3 /* DiagnosticsReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsReporter.swift; sourceTree = "<group>"; };
 		D2E743B88282AE993C10C526 /* BriefProseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefProseView.swift; sourceTree = "<group>"; };
 		D375CCA30EA1A7BE26C8F209 /* SearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchTests.swift; sourceTree = "<group>"; };
 		D585C9E79CE6C3373CBFD739 /* PromptRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptRegressionTests.swift; sourceTree = "<group>"; };
@@ -266,6 +274,7 @@
 		E0E83C3D7F5BA8B73D9EF54F /* LLMClientTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMClientTypesTests.swift; sourceTree = "<group>"; };
 		E310D3698200C661D0937036 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerApp.swift; sourceTree = "<group>"; };
+		E57E89D590DFB17E9E8E1AB3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E82D9B6A89CA7BF31CBF04C4 /* DesignSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSnapshotTests.swift; sourceTree = "<group>"; };
 		EABDD8EAF1C1562B49DD442C /* PipelineScenarioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineScenarioTests.swift; sourceTree = "<group>"; };
 		EBC9C795B6AF02F77D298ED7 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
@@ -277,6 +286,7 @@
 		F1DB7019BFFC94553454E332 /* PriorityRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriorityRule.swift; sourceTree = "<group>"; };
 		F2480065C366A43445195D28 /* LLMClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMClient.swift; sourceTree = "<group>"; };
 		F27CBD218CE0D49903AC0ECE /* SystemInvariantTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemInvariantTests.swift; sourceTree = "<group>"; };
+		F5FCC0B1F74F2C90ED11E68D /* CrashGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashGuard.swift; sourceTree = "<group>"; };
 		FB4B8C1E7C4BDF5C7E5490F0 /* SignalCLIAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalCLIAdapter.swift; sourceTree = "<group>"; };
 		FD6470BF1FD4618456E18C6D /* AutoLaunchManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoLaunchManagerTests.swift; sourceTree = "<group>"; };
 		FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessengerAdapterTypesTests.swift; sourceTree = "<group>"; };
@@ -314,6 +324,7 @@
 			isa = PBXGroup;
 			children = (
 				7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */,
+				E57E89D590DFB17E9E8E1AB3 /* Assets.xcassets */,
 				BCE1A2AD60D1E42D7AAB4F4A /* Info.plist */,
 				595169617BDF071C68E4B357 /* LLMessenger.entitlements */,
 				E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */,
@@ -346,8 +357,11 @@
 		1958C796DA475A22D89DE79A /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				F5FCC0B1F74F2C90ED11E68D /* CrashGuard.swift */,
 				1E099EAF35997459A5054481 /* DemoSeeder.swift */,
+				D2355EB0CABB60EE291A0AC3 /* DiagnosticsReporter.swift */,
 				91DCC83C90E2B73383588FD1 /* PollEngine.swift */,
+				3877E1BA09F4EB5A00C72294 /* UpdateChecker.swift */,
 				CBD7C66B317B27709DA2E883 /* Adapters */,
 				90644E787A2033F97CE5767D /* AutoLaunch */,
 				7F888C79963C323AB6E6BBD4 /* Brief */,
@@ -448,6 +462,7 @@
 				09F863A1D7C0B0D2C9C06967 /* SlackAdapterTests.swift */,
 				D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */,
 				F27CBD218CE0D49903AC0ECE /* SystemInvariantTests.swift */,
+				79D725694A67BD078C05B411 /* UpdateCheckerTests.swift */,
 			);
 			path = LLMessengerTests;
 			sourceTree = "<group>";
@@ -635,6 +650,7 @@
 			buildConfigurationList = 00D8C7C96EC5F2820B4C6050 /* Build configuration list for PBXNativeTarget "LLMessenger" */;
 			buildPhases = (
 				6F6C055064F81B38E9D098B0 /* Sources */,
+				2536F9C119FCF60AD88B2FF9 /* Resources */,
 				2AEBE98DE79213A1144AF7CD /* Frameworks */,
 			);
 			buildRules = (
@@ -683,6 +699,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		2536F9C119FCF60AD88B2FF9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E133E59EAF1F7A035FA58C8E /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		6F6C055064F81B38E9D098B0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -718,7 +745,9 @@
 				6C737DA07F6290527153876A /* ConversationContext.swift in Sources */,
 				D49BA4B9E524B043E9C52A22 /* ConversationState.swift in Sources */,
 				F9A11038518AC16146B9B71F /* ConversationTimelineView.swift in Sources */,
+				727E4B6AAE11B2A26938F3A5 /* CrashGuard.swift in Sources */,
 				7018B661B2B5790A7AE8A447 /* DemoSeeder.swift in Sources */,
+				370811FCC5CABF84C3279D93 /* DiagnosticsReporter.swift in Sources */,
 				362A008262AA38403555B958 /* InstructionsSettingsTab.swift in Sources */,
 				506E010AE6C91F8A4476F492 /* InstrumentationManager.swift in Sources */,
 				3441518A42C1C5815D1026B9 /* IntentRoute.swift in Sources */,
@@ -771,6 +800,7 @@
 				7485667FD9BB75A498987D0F /* TelegramSignInView.swift in Sources */,
 				40B16522FD6D885CF5BA5741 /* Theme.swift in Sources */,
 				A4AAEAA892F516B7F9D4B3B7 /* ThreadView.swift in Sources */,
+				CB9D755E7B7E768433DAC010 /* UpdateChecker.swift in Sources */,
 				F37C2D2EABCEB3FA7BF41E5D /* iMessageAdapter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -822,6 +852,7 @@
 				0B6747556DAC812373FD0745 /* SlackAdapterTests.swift in Sources */,
 				0AA8FC1D3F625AABF5777C9F /* SubprocessAdapterTests.swift in Sources */,
 				6590441FCAED6F40B1C1E6A9 /* SystemInvariantTests.swift in Sources */,
+				6697FB8260477417E96C5758 /* UpdateCheckerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
