@@ -200,7 +200,7 @@ final class AppState: ObservableObject {
     /// Returns the reload task so callers that need deterministic sequencing
     /// (tests, chained UI updates) can await it; UI call sites discard it.
     @discardableResult
-    func markAsOpen(briefID: Int64) -> Swift.Task<Void, Never> {
+    func markAsOpen(briefID: Int64) -> Task<Void, Never> {
         lastError = nil
         do {
             try repository.markAsOpen(briefID: briefID)
@@ -208,14 +208,14 @@ final class AppState: ObservableObject {
             return refreshBriefs()
         } catch {
             lastError = error.localizedDescription
-            return Swift.Task {}
+            return Task {}
         }
     }
 
     @discardableResult
-    func refreshBriefs() -> Swift.Task<Void, Never> {
+    func refreshBriefs() -> Task<Void, Never> {
         let settingsRepo = makeSettingsRepository()
-        return Swift.Task.detached(priority: .userInitiated) { [weak self] in
+        return Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             do {
                 let fetched = try self.repository.fetchAllBriefs()
@@ -232,7 +232,7 @@ final class AppState: ObservableObject {
     }
 
     func refreshTasks() {
-        Swift.Task.detached(priority: .userInitiated) { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let fetched = (try? self.repository.fetchPendingTasks()) ?? []
             await MainActor.run { self.tasks = fetched }
