@@ -1,6 +1,13 @@
 # LLMessenger
 
-**A macOS menu bar app that reads your iMessage, Signal, Telegram, and Slack conversations and turns them into structured, AI-generated briefs — so you can catch up in seconds instead of scrolling for minutes.**
+**Your Mac filters your messages so you don't have to. Free, open source, and private — your messages never need to leave your computer.**
+
+LLMessenger is a notification firewall and AI briefing desk for iMessage, Signal, Telegram, and Slack. It silences the noise, interrupts you only when something needs your reply, and turns everything else into a structured brief you can read in seconds.
+
+- **60-second setup** — iMessage works with one permission. No accounts, no API keys required.
+- **On-device AI by default** — uses Apple Intelligence on macOS 26+ (or Ollama). Nothing leaves your Mac. Cloud models are opt-in.
+- **Notification firewall** — routine chatter is held back silently; only messages that need you break through. Everything held back appears in your next digest.
+- **Free forever** — Apache 2.0 licensed. No server, no telemetry, no subscription, no developer who can read your messages.
 
 ![LLMessenger screenshot](docs/screenshot.png)
 
@@ -45,10 +52,16 @@ Click any brief in the sidebar to open it. Ask follow-up questions ("who confirm
 - **`@` mention picker** — type `@` in the chat input to write to anyone in any service. Suggestions are deduplicated by name across services and remember which service you used last
 - **Quick-reply chips** — one-tap style-matched reply suggestions on brief cards
 
+### Attention protection
+- **Notification firewall** (on by default) — routine briefs generate silently; you're only notified when something needs your reply. Held-back counts surface in the next digest
+- **Morning Digest** — a scheduled daily brief at your chosen time, including everything the firewall held back
+- **Notification Center widget** — latest headline + priority counts at a glance (macOS 14+)
+
 ### LLM backends
-- **Ollama (local, free)** — recommended for full privacy
-- **Anthropic Claude** — best brief quality
-- **OpenAI** GPT-4o / GPT-4o-mini
+- **On-Device (Apple Intelligence)** — zero setup, zero cost, fully private; macOS 26+ on Apple Silicon
+- **Ollama (local, free)** — any local model, any macOS 13+
+- **Anthropic Claude** — best brief quality (opt-in cloud)
+- **OpenAI** GPT-4o / GPT-4o-mini (opt-in cloud)
 
 ### Privacy (see [`PRIVACY.md`](PRIVACY.md))
 - **Local-only mode** — single toggle that forces Ollama and skips cloud adapters. With it on, no message content leaves your Mac
@@ -103,7 +116,8 @@ PollEngine ──► iMessage adapter   (~/Library/Messages/chat.db)
   - **Telegram** — `telegram-adapter` binary (bundled or in `~/.config/llmessenger/adapters/telegram/`)
   - **Slack** — a Slack app you create at [api.slack.com/apps](https://api.slack.com/apps); paste the User OAuth Token (`xoxp-…`) into Settings → Services → Slack → Manage. Multi-workspace supported.
 - One LLM backend:
-  - **Ollama** (recommended for local use) — `brew install ollama && ollama pull llama3.1`
+  - **On-Device** (zero setup) — macOS 26+ with Apple Intelligence enabled
+  - **Ollama** — `brew install ollama && ollama pull llama3.1`
   - **Anthropic API key** — best brief quality
   - **OpenAI API key**
 
@@ -133,11 +147,10 @@ open LLMessenger.xcodeproj
 Build and run in Xcode (`⌘R`). The app appears in the menu bar (envelope icon).
 
 On first launch, the **onboarding wizard** guides you through:
-1. Choosing your AI backend and entering credentials
-2. iMessage Full Disk Access
-3. Signal phone number
-4. Telegram sign-in (if you have the adapter binary)
-5. Slack — add later via Settings → Services → Slack → Manage
+1. iMessage Full Disk Access — the screen detects the grant live; this is the only required step
+2. Choosing your AI backend — On-Device is pre-selected when available (no credentials needed)
+3. Signal, Telegram (optional — off by default, add any time later)
+4. Slack — add later via Settings → Services → Slack → Manage
 
 ### Settings tabs
 
@@ -267,7 +280,17 @@ For reproducible verification, the [`release.yml`](.github/workflows/release.yml
 - ✅ Local-only mode + network audit + redaction
 - ✅ Reproducible release workflow
 
-### v1.5
+### Shipped (v1.5–v1.7)
+- ✅ Wire Desk redesign + Demo Mode
+- ✅ Security audit + hardening (prompt-injection defenses, URL validation)
+- ✅ Morning Digest at a scheduled time
+- ✅ Notification Center widget
+- ✅ Quick Reply — style-matched suggestions that populate (never auto-send)
+- ✅ On-Device AI via Apple Intelligence (macOS 26+)
+- ✅ Notification firewall
+- ✅ iMessage-first 60-second onboarding
+
+### Next
 - [ ] WhatsApp adapter (pending viable local API)
 - [ ] Per-conversation quiet hours
 - [ ] User-defined priority rules
@@ -275,6 +298,10 @@ For reproducible verification, the [`release.yml`](.github/workflows/release.yml
 
 ---
 
+## Contributing
+
+LLMessenger is free and open source, and stays that way. Issues and PRs welcome — adapter implementations for new services are especially appreciated (see `Core/Adapters/MessengerAdapter.swift` for the 6-method protocol).
+
 ## License
 
-MIT
+Apache 2.0 — see [LICENSE](LICENSE).
