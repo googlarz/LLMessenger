@@ -7,10 +7,11 @@ struct SettingsView: View {
     var onBuild7DaySummaries: (() async -> Void)? = nil
     var onSyncContacts: (() async -> Void)? = nil
     var onRetryService: ((String) async -> Void)? = nil
+    var onScheduleChanged: (() -> Void)? = nil
 
     @State private var selectedTab = 0
 
-    private static let tabTitles = ["AI", "Services", "Privacy", "Instructions", "Rules", "About"]
+    private static let tabTitles = ["AI", "Services", "Privacy", "Instructions", "Rules", "Digest", "About"]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,6 +53,8 @@ struct SettingsView: View {
             InstructionsSettingsTab()
         case 4:
             RulesSettingsTab(database: database)
+        case 5:
+            DigestSettingsTab(onScheduleChanged: onScheduleChanged)
         default:
             AboutSettingsTab(database: database, onRunSetup: onRunSetup)
         }

@@ -25,6 +25,23 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - package: GRDB
+      - target: LLMessengerWidget
+        embed: true
+  LLMessengerWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: LLMessengerWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.llmessenger.app.widget
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        INFOPLIST_FILE: LLMessengerWidget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: LLMessengerWidget/LLMessengerWidget.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: "-"
   LLMessengerTests:
     type: bundle.unit-test
     platform: macOS
@@ -43,6 +60,7 @@ schemes:
     build:
       targets:
         LLMessenger: all
+        LLMessengerWidget: all
         LLMessengerTests: [testing]
     test:
       targets:

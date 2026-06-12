@@ -214,4 +214,19 @@ struct SettingsRepository {
         }
         return Dictionary(uniqueKeysWithValues: rows.map { ($0.service, $0) })
     }
+
+    // MARK: - Morning Digest
+
+    func saveDigestSettings(_ settings: DigestScheduler.Settings) {
+        if let data = try? JSONEncoder().encode(settings) {
+            userDefaults.set(data, forKey: "digestSettings")
+        }
+    }
+
+    func loadDigestSettings() -> DigestScheduler.Settings {
+        guard let data = userDefaults.data(forKey: "digestSettings"),
+              let s = try? JSONDecoder().decode(DigestScheduler.Settings.self, from: data)
+        else { return DigestScheduler.Settings() }
+        return s
+    }
 }

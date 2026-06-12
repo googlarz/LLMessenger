@@ -1,5 +1,6 @@
 // LLMessenger/AppDelegate.swift
 import AppKit
+import GRDB
 
 extension Notification.Name {
     static let serviceConfigDidChange = Notification.Name("com.llmessenger.serviceConfigDidChange")
@@ -24,6 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var startTask: Task<Void, Never>?
     var onboardingWindowController: OnboardingWindowController?
     var updateChecker: UpdateChecker?
+    var digestScheduler: DigestScheduler?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
@@ -99,6 +101,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             let brief = try? self.appState?.repository.fetchBrief(id: id)
                             let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
                             self.notificationManager?.post(briefID: id, title: title, body: body)
+                            let cards: [BriefCardRecord]
+                            if let dbQueue = self.database?.dbQueue {
+                                cards = (try? await dbQueue.read { db in
+                                    try BriefCardRecord.filter(Column("briefId") == id).fetchAll(db)
+                                }) ?? []
+                            } else {
+                                cards = []
+                            }
+                            WidgetDataProvider.write(briefID: id, cards: cards, openingSummary: brief?.openingSummary)
                         }
                         self.appState?.briefGenerationState = newID == nil ? .noNewMessages : .complete
                     } catch {
@@ -239,6 +250,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsController.onRetryService = { [weak self] serviceID in
                 guard let self else { return }
                 await self.retryService(serviceID)
+            }
+            settingsController.onScheduleChanged = { [weak self] in
+                guard let self else { return }
+                let settings = SettingsRepository().loadDigestSettings()
+                self.digestScheduler?.reschedule(settings: settings)
             }
             let openSettings: () -> Void = { [weak settingsController] in settingsController?.show() }
             menuBar.onOpenSettings = openSettings
@@ -389,6 +405,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             updateChecker = checker
             checker.checkIfDue()
+
+            // Morning Digest — fire brief generation + notification at scheduled time
+            let digest = DigestScheduler()
+            digest.onFire = { [weak self] in
+                guard let self, let engine = self.briefEngine, let state = self.appState else { return }
+                state.briefGenerationState = .summarizing
+                do {
+                    let newID = try await engine.processNewMessages(adapters: state.adapters)
+                    state.briefGenerationState = newID == nil ? .noNewMessages : .complete
+                    state.refreshBriefs()
+                    if let id = newID {
+                        let brief = try? state.repository.fetchBrief(id: id)
+                        let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "Morning Brief")
+                        self.notificationManager?.post(briefID: id, title: title, body: body)
+                    }
+                } catch {
+                    state.briefGenerationState = .failed
+                }
+            }
+            digestScheduler = digest
+            digest.start(settings: SettingsRepository().loadDigestSettings())
 
             // Show onboarding on first launch
             if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {

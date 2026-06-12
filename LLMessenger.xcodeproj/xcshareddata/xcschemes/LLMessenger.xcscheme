@@ -35,6 +35,20 @@
                ReferencedContainer = "container:LLMessenger.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "9267C21D1157058AB10D6BE0"
+               BuildableName = "LLMessengerWidget.appex"
+               BlueprintName = "LLMessengerWidget"
+               ReferencedContainer = "container:LLMessenger.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
