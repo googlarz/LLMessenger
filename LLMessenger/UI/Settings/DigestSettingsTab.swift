@@ -7,6 +7,8 @@ struct DigestSettingsTab: View {
     @State private var settings: DigestScheduler.Settings = {
         SettingsRepository().loadDigestSettings()
     }()
+    @State private var firewallEnabled: Bool = SettingsRepository().loadFirewallEnabled()
+    @State private var heldBackCount: Int = SettingsRepository().loadFirewallHeldBack()
 
     private let settingsRepo = SettingsRepository()
 
@@ -84,6 +86,42 @@ struct DigestSettingsTab: View {
                                     .font(Theme.mono(11))
                                     .foregroundStyle(Theme.textSecondary)
                             }
+                        }
+                    }
+                }
+                .padding(20)
+
+                Rule()
+
+                // MARK: - Notification Firewall section
+                VStack(alignment: .leading, spacing: 14) {
+                    WireLabel("Notification Firewall")
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Only interrupt for what matters")
+                                .font(Theme.sans(13, weight: .medium))
+                                .foregroundStyle(Theme.textPrimary)
+                            Text("Routine briefs are generated silently — you're only notified when something needs your reply. Everything held back appears in the next digest.")
+                                .font(Theme.sans(11))
+                                .foregroundStyle(Theme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $firewallEnabled)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .onChange(of: firewallEnabled) { enabled in
+                                settingsRepo.saveFirewallEnabled(enabled)
+                            }
+                    }
+
+                    if firewallEnabled, heldBackCount > 0 {
+                        HStack(spacing: 6) {
+                            WireLabel("Held back:")
+                            Text("\(heldBackCount) routine update\(heldBackCount == 1 ? "" : "s") since the last digest")
+                                .font(Theme.mono(11))
+                                .foregroundStyle(Theme.textSecondary)
                         }
                     }
                 }

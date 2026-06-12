@@ -229,4 +229,31 @@ struct SettingsRepository {
         else { return DigestScheduler.Settings() }
         return s
     }
+
+    // MARK: - Notification Firewall
+
+    /// When on, routine briefs are generated silently — only briefs containing
+    /// high-priority items post a notification. Held-back items surface in the
+    /// next digest. Defaults to on: protecting attention is the product.
+    func saveFirewallEnabled(_ enabled: Bool) {
+        userDefaults.set(enabled, forKey: "firewallEnabled")
+    }
+
+    func loadFirewallEnabled() -> Bool {
+        userDefaults.object(forKey: "firewallEnabled") as? Bool ?? true
+    }
+
+    /// Count of briefs silenced by the firewall since the last digest.
+    func incrementFirewallHeldBack(by count: Int) {
+        let current = userDefaults.integer(forKey: "firewallHeldBackCount")
+        userDefaults.set(current + count, forKey: "firewallHeldBackCount")
+    }
+
+    func loadFirewallHeldBack() -> Int {
+        userDefaults.integer(forKey: "firewallHeldBackCount")
+    }
+
+    func resetFirewallHeldBack() {
+        userDefaults.set(0, forKey: "firewallHeldBackCount")
+    }
 }
