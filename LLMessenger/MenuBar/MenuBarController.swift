@@ -9,12 +9,14 @@ private final class MenuActionProxy: NSObject {
     var onSelectBrief: ((Int64) -> Void)?
     var onOpenSettings: (() -> Void)?
     var onRestartSignalWatch: (() -> Void)?
+    var onOpenUpdate: (() -> Void)?
 
     @objc func newBrief() { onNewBrief?() }
     @objc func last24h() { onLast24h?() }
     @objc func last7d() { onLast7d?() }
     @objc func openSettings() { onOpenSettings?() }
     @objc func restartSignalWatch() { onRestartSignalWatch?() }
+    @objc func openUpdate() { onOpenUpdate?() }
     @objc func briefSelected(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? Int64 else { return }
         onSelectBrief?(id)
@@ -52,6 +54,13 @@ final class MenuBarController {
         didSet { proxy.onRestartSignalWatch = onRestartSignalWatch }
     }
     private var signalHealthWarning: String?
+    private var availableUpdate: UpdateChecker.Update?
+
+    func setAvailableUpdate(_ update: UpdateChecker.Update) {
+        availableUpdate = update
+        proxy.onOpenUpdate = { NSWorkspace.shared.open(update.url) }
+        rebuildMenu()
+    }
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -181,6 +190,14 @@ final class MenuBarController {
 
     private func rebuildMenu() {
         let menu = NSMenu()
+
+        if let update = availableUpdate {
+            let item = NSMenuItem(title: "Update available — v\(update.version)…",
+                                  action: #selector(MenuActionProxy.openUpdate), keyEquivalent: "")
+            item.target = proxy
+            menu.addItem(item)
+            menu.addItem(.separator())
+        }
 
         let newTitle = isLoading ? "Refreshing…" : "New Brief"
         let newItem = NSMenuItem(title: newTitle, action: isLoading ? nil : #selector(MenuActionProxy.newBrief), keyEquivalent: isLoading ? "" : "n")
