@@ -101,6 +101,7 @@
 		A4AAEAA892F516B7F9D4B3B7 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A14FF85C448907397AC9412 /* ThreadView.swift */; };
 		A7678C24739CB1709B5418C1 /* DatabaseIntegrityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DEDA8ED7C4E649DCBD9BEE7 /* DatabaseIntegrityTests.swift */; };
 		AA6E78AED377D90FC3EBAA02 /* AutoLaunchManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD6470BF1FD4618456E18C6D /* AutoLaunchManagerTests.swift */; };
+		AC7FD22B2570AE6867BDCE19 /* AppleFMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32280F9EFCDE9528BFCE1CFE /* AppleFMClient.swift */; };
 		ACD272260C85A265D50055A1 /* ServiceSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6366D0E1F8A72B71A9F530 /* ServiceSettingsTab.swift */; };
 		ADE6785F10D5F0FB2A55C6C6 /* BriefRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */; };
 		AE1F3B8A38C350D22D81407E /* OnboardingWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C1B7A7D24D3AF2FF2E6FC84 /* OnboardingWindowController.swift */; };
@@ -209,6 +210,7 @@
 		309F6600675F13496583B3AA /* SettingsRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRepositoryTests.swift; sourceTree = "<group>"; };
 		31422A7C01764570369907E7 /* ChatInteractionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInteractionContext.swift; sourceTree = "<group>"; };
 		3154370024E6D2FFA5B0FE62 /* AssistantResponseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantResponseView.swift; sourceTree = "<group>"; };
+		32280F9EFCDE9528BFCE1CFE /* AppleFMClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleFMClient.swift; sourceTree = "<group>"; };
 		32E3B6AB2372E5C7EED2D751 /* LLMessengerWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerWidget.swift; sourceTree = "<group>"; };
 		330592143EFDC8AF2BC51E83 /* NotificationManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManagerTests.swift; sourceTree = "<group>"; };
 		34BAACF8C7BC99014F710229 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
@@ -432,6 +434,7 @@
 			isa = PBXGroup;
 			children = (
 				5505C31BEA21DA121B801309 /* AnthropicClient.swift */,
+				32280F9EFCDE9528BFCE1CFE /* AppleFMClient.swift */,
 				865BE46F6C10FA7E2EE342A6 /* IntentRoute.swift */,
 				F2480065C366A43445195D28 /* LLMClient.swift */,
 				09D44892CD851C4994CEA012 /* LLMProvider.swift */,
@@ -788,6 +791,7 @@
 				5D6362E0E7358191E879A9FC /* AppDatabase.swift in Sources */,
 				44401121145FDD4E5FDFB90A /* AppDelegate.swift in Sources */,
 				C347F8AD719ED5819B0D3D09 /* AppState.swift in Sources */,
+				AC7FD22B2570AE6867BDCE19 /* AppleFMClient.swift in Sources */,
 				1B0047A6CC4EC78192C7D255 /* AssistantResponseView.swift in Sources */,
 				AF6BE9979D35F02876AF59D8 /* AutoLaunchManager.swift in Sources */,
 				ED58A99EF4403B466D24E7FF /* Brief.swift in Sources */,
@@ -964,6 +968,10 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_LDFLAGS = (
+					"-weak_framework",
+					FoundationModels,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.llmessenger.app;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;
@@ -1046,6 +1054,10 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_LDFLAGS = (
+					"-weak_framework",
+					FoundationModels,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.llmessenger.app;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;

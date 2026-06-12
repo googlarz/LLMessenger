@@ -99,8 +99,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         if let id = newID {
                             self.appState?.lastError = nil
                             let brief = try? self.appState?.repository.fetchBrief(id: id)
-                            let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
-                            self.notificationManager?.post(briefID: id, title: title, body: body)
+                            // Notification firewall: routine briefs stay silent;
+                            // only high-priority items earn an interruption.
+                            let settingsRepo = SettingsRepository()
+                            if settingsRepo.loadFirewallEnabled() && self.highPriorityCardCount(brief: brief) == 0 {
+                                settingsRepo.incrementFirewallHeldBack(by: 1)
+                            } else {
+                                let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
+                                self.notificationManager?.post(briefID: id, title: title, body: body)
+                            }
                             let cards: [BriefCardRecord]
                             if let dbQueue = self.database?.dbQueue {
                                 cards = (try? await dbQueue.read { db in
@@ -418,7 +425,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if let id = newID {
                         let brief = try? state.repository.fetchBrief(id: id)
                         let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "Morning Brief")
-                        self.notificationManager?.post(briefID: id, title: title, body: body)
+                        // Surface what the firewall silenced since the last digest.
+                        let settingsRepo = SettingsRepository()
+                        let heldBack = settingsRepo.loadFirewallHeldBack()
+                        let digestBody = heldBack > 0
+                            ? "\(body) · \(heldBack) routine update\(heldBack == 1 ? "" : "s") held back"
+                            : body
+                        settingsRepo.resetFirewallHeldBack()
+                        self.notificationManager?.post(briefID: id, title: title, body: digestBody)
                     }
                 } catch {
                     state.briefGenerationState = .failed
@@ -553,6 +567,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 model: model,
                 isConfigured: true
             )
+        case .appleIntelligence:
+            return ResolvedProvider(
+                provider: provider,
+                client: provider.makeClient(apiKey: nil),
+                model: provider.defaultModel,
+                isConfigured: AppleFM.isAvailable
+            )
         }
     }
 
@@ -678,6 +699,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// When the brief contains at least one high-priority card, the title names
     /// the count and the body is the top high-priority headline.
     /// Falls back to the generic "New messages" / notificationText pair.
+    private func highPriorityCardCount(brief: Brief?) -> Int {
+        guard let summary = brief?.openingSummary,
+              let data = summary.data(using: .utf8),
+              let parsed = try? JSONDecoder().decode(BriefJSON.self, from: data)
+        else { return 0 }
+        return parsed.cards.filter { $0.priority == "high" }.count
+    }
+
     private func highPriorityNotification(brief: Brief?, defaultTitle: String) -> (title: String, body: String) {
         let defaultBody = brief?.notificationText ?? "You have new messages"
         guard let summary = brief?.openingSummary,

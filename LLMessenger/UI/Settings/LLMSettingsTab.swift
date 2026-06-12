@@ -32,7 +32,7 @@ struct AISettingsTab: View {
                     section("AI Backend") {
                         Picker("Provider", selection: $selectedProviderRaw) {
                             Text("Choose...").tag("")
-                            ForEach(LLMProvider.allCases, id: \.rawValue) { provider in
+                            ForEach(LLMProvider.availableCases, id: \.rawValue) { provider in
                                 Text(provider.displayName).tag(provider.rawValue)
                             }
                         }
@@ -218,6 +218,10 @@ struct AISettingsTab: View {
     private var currentClientSpec: ClientSpec? {
         guard let provider = LLMProvider(rawValue: selectedProviderRaw) else { return nil }
         switch provider {
+        case .appleIntelligence:
+            return ClientSpec(client: provider.makeClient(apiKey: nil),
+                              model: provider.defaultModel,
+                              label: "On-Device / Apple Intelligence")
         case .anthropic:
             let key = anthropicKey.trimmingCharacters(in: .whitespaces)
             guard !key.isEmpty else { return nil }
