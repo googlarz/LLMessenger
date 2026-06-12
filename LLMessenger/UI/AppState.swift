@@ -137,6 +137,8 @@ final class AppState: ObservableObject {
     /// Triggers the full poll → summarize cycle (wired by AppDelegate).
     /// Used by the brief header's Refresh button.
     var onRequestRefresh: (() -> Void)?
+    /// Wipes demo data and relaunches the setup wizard (wired by AppDelegate).
+    var onExitDemo: (() -> Void)?
     /// Fires whenever `briefs` is reloaded. Used by AppDelegate to keep the menu bar
     /// unread badge in sync after the user opens a brief (which flips it to "open").
     var onBriefsChanged: (() -> Void)?

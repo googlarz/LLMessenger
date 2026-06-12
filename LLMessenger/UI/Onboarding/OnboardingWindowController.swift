@@ -172,9 +172,28 @@ private struct OnboardingView: View {
             Button("Get Started") { advance() }
                 .buttonStyle(PrimaryButtonStyle())
 
+            // Demo mode is only offered on a fresh database, so seeding into
+            // the live store is safe; exiting the demo wipes everything.
+            if databaseIsEmpty {
+                VStack(spacing: 6) {
+                    Button("EXPLORE THE DEMO DESK") {
+                        try? DemoSeeder.seed(into: database)
+                        onComplete()
+                    }
+                    .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
+                    Text("A finished brief with sample data — nothing to connect.")
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+            }
+
             Spacer()
         }
         .padding(.horizontal, 48)
+    }
+
+    private var databaseIsEmpty: Bool {
+        ((try? BriefRepository(database: database).latestBriefID()) ?? nil) == nil
     }
 
     // MARK: - Step 2: LLM Setup

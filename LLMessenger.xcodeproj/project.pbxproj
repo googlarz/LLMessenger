@@ -46,6 +46,7 @@
 		40B16522FD6D885CF5BA5741 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B676DE198355D9388A6399 /* Theme.swift */; };
 		42A2A32E450140617994E17E /* OllamaModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BC6FDFCFADDCEE5A74B7FB0 /* OllamaModelPicker.swift */; };
 		44401121145FDD4E5FDFB90A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */; };
+		459AB2A9F7BF53BA569C6C52 /* DemoSeederTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F00D8EE5FC549230BFB281E /* DemoSeederTests.swift */; };
 		478DEBF976DFFFF26DB08556 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E310D3698200C661D0937036 /* SettingsView.swift */; };
 		4C99D6243BB753BAB14DE7E1 /* PriorityCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113724A6E99E26E8CD720DFE /* PriorityCorrection.swift */; };
 		502774F71461059F83BA8C05 /* SettingsRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309F6600675F13496583B3AA /* SettingsRepositoryTests.swift */; };
@@ -67,6 +68,7 @@
 		6ABF8B622AD8D7FA95B68F4A /* ContactProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6780A88A868BFC2F3FBB1A56 /* ContactProfileView.swift */; };
 		6C737DA07F6290527153876A /* ConversationContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D15D68069F866198719ECA /* ConversationContext.swift */; };
 		6FD560709B01F26879B0C14C /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D44892CD851C4994CEA012 /* LLMProvider.swift */; };
+		7018B661B2B5790A7AE8A447 /* DemoSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E099EAF35997459A5054481 /* DemoSeeder.swift */; };
 		7177450F9E2D6DC65A094DA5 /* LLMRunRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C8397AA9C0E4BF6BE370EB9 /* LLMRunRecord.swift */; };
 		732196ED36CB2969112FCCB1 /* BriefEngineHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B748E0A7F24D6131687A769E /* BriefEngineHistoryTests.swift */; };
 		7485667FD9BB75A498987D0F /* TelegramSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173C28CE4F72A153E9132291 /* TelegramSignInView.swift */; };
@@ -164,6 +166,7 @@
 		17E2FC6E580C483A5220F007 /* BriefListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefListView.swift; sourceTree = "<group>"; };
 		1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepository.swift; sourceTree = "<group>"; };
 		1C1B7A7D24D3AF2FF2E6FC84 /* OnboardingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWindowController.swift; sourceTree = "<group>"; };
+		1E099EAF35997459A5054481 /* DemoSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoSeeder.swift; sourceTree = "<group>"; };
 		2001BAFBE6E8EB71D5EEDEAB /* AdversarialResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdversarialResponseTests.swift; sourceTree = "<group>"; };
 		2415F8132629B43CC77A08F8 /* ChatWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWindowController.swift; sourceTree = "<group>"; };
 		26D15D68069F866198719ECA /* ConversationContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContext.swift; sourceTree = "<group>"; };
@@ -205,6 +208,7 @@
 		6BC6FDFCFADDCEE5A74B7FB0 /* OllamaModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaModelPicker.swift; sourceTree = "<group>"; };
 		6BC84610C1FBB1A47EE9B2A4 /* SlackAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAdapter.swift; sourceTree = "<group>"; };
 		6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepositoryExtendedTests.swift; sourceTree = "<group>"; };
+		6F00D8EE5FC549230BFB281E /* DemoSeederTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoSeederTests.swift; sourceTree = "<group>"; };
 		700C9AE93DA56553E631CE85 /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
 		724CEB5405989BE4B7824CA8 /* SlackWorkspacesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackWorkspacesView.swift; sourceTree = "<group>"; };
 		748D805868C6F537868D8D7E /* ContactProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactProfile.swift; sourceTree = "<group>"; };
@@ -342,6 +346,7 @@
 		1958C796DA475A22D89DE79A /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				1E099EAF35997459A5054481 /* DemoSeeder.swift */,
 				91DCC83C90E2B73383588FD1 /* PollEngine.swift */,
 				CBD7C66B317B27709DA2E883 /* Adapters */,
 				90644E787A2033F97CE5767D /* AutoLaunch */,
@@ -418,6 +423,7 @@
 				4DEDA8ED7C4E649DCBD9BEE7 /* DatabaseIntegrityTests.swift */,
 				276519F649E84201C4C1D365 /* DeepIntegrationTests.swift */,
 				D8C2EEA87E1CE3CFC017BF0B /* DeepValidationTests.swift */,
+				6F00D8EE5FC549230BFB281E /* DemoSeederTests.swift */,
 				E82D9B6A89CA7BF31CBF04C4 /* DesignSnapshotTests.swift */,
 				66D9CFBB9722856E912EABC7 /* FrontendRobustnessTests.swift */,
 				97C7886911F46E51E0EE1B2B /* KeychainStoreTests.swift */,
@@ -712,6 +718,7 @@
 				6C737DA07F6290527153876A /* ConversationContext.swift in Sources */,
 				D49BA4B9E524B043E9C52A22 /* ConversationState.swift in Sources */,
 				F9A11038518AC16146B9B71F /* ConversationTimelineView.swift in Sources */,
+				7018B661B2B5790A7AE8A447 /* DemoSeeder.swift in Sources */,
 				362A008262AA38403555B958 /* InstructionsSettingsTab.swift in Sources */,
 				506E010AE6C91F8A4476F492 /* InstrumentationManager.swift in Sources */,
 				3441518A42C1C5815D1026B9 /* IntentRoute.swift in Sources */,
@@ -790,6 +797,7 @@
 				A7678C24739CB1709B5418C1 /* DatabaseIntegrityTests.swift in Sources */,
 				051BE19FFE796E11D9312A4E /* DeepIntegrationTests.swift in Sources */,
 				55D5BEFF888909CDB585F8F2 /* DeepValidationTests.swift in Sources */,
+				459AB2A9F7BF53BA569C6C52 /* DemoSeederTests.swift in Sources */,
 				263ED076DF242164549F4679 /* DesignSnapshotTests.swift in Sources */,
 				D2E04218C7BB48081762903B /* FrontendRobustnessTests.swift in Sources */,
 				2528022DB189F9F99041972C /* KeychainStoreTests.swift in Sources */,

@@ -197,17 +197,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let settingsController = SettingsWindowController(database: db)
             settingsWindowController = settingsController
-            settingsController.onRunSetup = { [weak self] in
+            let runSetupWizard: () -> Void = { [weak self] in
                 guard let self else { return }
                 UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
                 let controller = OnboardingWindowController(database: db)
                 controller.onComplete = { [weak self] in
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                     self?.onboardingWindowController = nil
-                    self?.chatWindowController?.show()
+                    self?.didFinishOnboarding()
                 }
                 self.onboardingWindowController = controller
                 controller.show()
+            }
+            settingsController.onRunSetup = runSetupWizard
+            state.onExitDemo = { [weak state] in
+                guard let state else { return }
+                try? DemoSeeder.wipe(from: state.database)
+                state.selectedBriefID = nil
+                state.refreshBriefs()
+                runSetupWizard()
             }
             settingsController.onBuild7DaySummaries = { [weak self] in
                 guard let self else { return }
@@ -373,7 +381,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 onboardingController.onComplete = { [weak self] in
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                     self?.onboardingWindowController = nil
-                    self?.chatWindowController?.show()
+                    self?.didFinishOnboarding()
                 }
                 self.onboardingWindowController = onboardingController
                 onboardingController.show()
@@ -385,6 +393,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.informativeText = error.localizedDescription
             alert.runModal()
             NSApp.terminate(nil)
+        }
+    }
+
+    /// Routes onboarding completion: demo mode lands directly on the seeded
+    /// morning brief with every service quiet; the normal path just shows
+    /// the panel.
+    private func didFinishOnboarding() {
+        if DemoSeeder.isActive {
+            for service in ["imessage", "signal", "telegram", "slack"] {
+                var config = ServiceConfig.default(for: service)
+                config.enabled = false
+                pollEngine?.reload(config: config)
+            }
+            appState?.refreshBriefs()
+            let latest = (try? appState?.repository.latestBriefID()) ?? nil
+            chatWindowController?.show(selectingBriefID: latest)
+        } else {
+            chatWindowController?.show()
         }
     }
 

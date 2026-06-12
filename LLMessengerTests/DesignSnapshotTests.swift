@@ -194,6 +194,36 @@ final class DesignSnapshotTests: XCTestCase {
         try render(view, size: NSSize(width: 260, height: 700), name: "sidebar")
     }
 
+    /// End-to-end: renders the window from a DemoSeeder-seeded database via
+    /// the real read path (fetchAllBriefs → JSON decode → needs-reply join),
+    /// exactly what a first-time user sees after "Explore the demo desk".
+    func testSnapshotDemoMode() async throws {
+        defer { UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey) }
+        let db = try AppDatabase(inMemory: true)
+        try DemoSeeder.seed(into: db)
+
+        let state = AppState(database: db, llmClient: UnconfiguredLLMClient(),
+                             llmModel: "demo", isLLMConfigured: false, basePrompt: "")
+        await state.refreshBriefs().value
+        state.selectedBriefID = try BriefRepository(database: db).latestBriefID()
+        state.serviceHealth = [:]
+
+        let chat = state.makeChatViewModel()
+        let main = ContentView()
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: 1180, height: 780)
+            .background(Theme.bg)
+        try render(main, size: NSSize(width: 1180, height: 780), name: "demo-mode")
+
+        let sidebar = BriefListView()
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: 260, height: 700)
+            .background(Theme.sidebar)
+        try render(sidebar, size: NSSize(width: 260, height: 700), name: "demo-sidebar")
+    }
+
     func testSnapshotEmptyState() throws {
         let state = try makeFixtureState()
         state.selectedBriefID = nil

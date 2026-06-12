@@ -55,6 +55,25 @@ struct MainChromeBar: View {
 
                 briefPickerCluster
 
+                if DemoSeeder.isActive {
+                    HStack(spacing: 6) {
+                        Text("DEMO")
+                            .font(Theme.mono(9, weight: .bold))
+                            .tracking(1.1)
+                            .foregroundStyle(Theme.standby)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2.5)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .strokeBorder(Theme.standby.opacity(0.55), lineWidth: 1)
+                            )
+                        Button("SET UP MY ACCOUNTS") { appState.onExitDemo?() }
+                            .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
+                            .help("Clear the sample data and connect your real services")
+                    }
+                    .padding(.leading, 6)
+                }
+
                 Spacer()
 
                 chromeIcon("magnifyingglass", active: showSearch, help: "Search messages and briefs (⌘F)") {

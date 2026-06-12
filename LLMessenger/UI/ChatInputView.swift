@@ -12,7 +12,20 @@ struct ChatInputView: View {
     @State private var mentionRange: Range<String.Index>?
 
     var body: some View {
-        if !appState.isLLMConfigured {
+        if DemoSeeder.isActive {
+            HStack(spacing: 10) {
+                Theme.standby.frame(width: 2, height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 1))
+                Text("You're reading sample data. Connect your accounts to brief your real messages.")
+                    .font(Theme.sans(12.5))
+                    .foregroundStyle(Theme.textSecondary)
+                Button("SET UP MY ACCOUNTS") { appState.onExitDemo?() }
+                    .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 12)
+            .background(Theme.sidebar)
+        } else if !appState.isLLMConfigured {
             HStack(spacing: 10) {
                 Theme.standby.frame(width: 2, height: 24)
                     .clipShape(RoundedRectangle(cornerRadius: 1))
