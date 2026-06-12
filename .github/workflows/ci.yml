@@ -1,0 +1,55 @@
+# Builds and runs the full test suite on every push and PR to main.
+# The release workflow (release.yml) only fires on tags — without this,
+# broken commits ride silently until release time.
+#
+# Security note: no untrusted event data (titles, bodies, branch names) is
+# interpolated into run: blocks anywhere in this workflow.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Regenerate project from project.yml
+        run: xcodegen generate
+
+      - name: Build & test
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -scheme LLMessenger \
+            -configuration Debug \
+            -project LLMessenger.xcodeproj \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            test | tee test.log | grep -E "Test Suite|Executed|error:" || true
+          grep -q "** TEST SUCCEEDED **" test.log
+
+      - name: Upload test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: test.log
+          retention-days: 14

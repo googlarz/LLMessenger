@@ -7,10 +7,19 @@ DMG_PATH      := build/LLMessenger.dmg
 DERIVED_DEBUG := $(shell xcodebuild -scheme $(SCHEME) -configuration Debug -project LLMessenger.xcodeproj -showBuildSettings 2>/dev/null | grep 'TARGET_BUILD_DIR' | head -1 | awk '{print $$3}')
 DEBUG_APP     := $(DERIVED_DEBUG)/LLMessenger.app
 
-.PHONY: build test install archive export notarize dmg clean
+.PHONY: build test verify icon install archive export notarize dmg clean
 
 build:
 	xcodebuild -scheme $(SCHEME) -configuration Debug build -project LLMessenger.xcodeproj
+
+# Full pre-ship gate: regenerate project, build, run the entire suite.
+verify:
+	xcodegen generate
+	xcodebuild -scheme $(SCHEME) -configuration Debug test -project LLMessenger.xcodeproj
+
+# Regenerate the AppIcon asset catalog from the design-system script.
+icon:
+	swift scripts/generate-appicon.swift
 
 install: build
 	rm -rf /Applications/LLMessenger.app
