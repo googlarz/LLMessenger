@@ -64,6 +64,9 @@ struct BriefCardView: View {
     /// hover transition (PERF-2026-06-12 #1).
     let conversationContext: ConversationContext?
     let onShowTimeline: (String, String, String) -> Void
+    /// When true, the card renders expanded by default even if not high priority.
+    /// Used to promote the lead med card when no high cards exist in the brief.
+    var promoted: Bool = false
 
     @State private var bodyExpanded = false
     @State private var evidenceExpanded = false
@@ -80,7 +83,7 @@ struct BriefCardView: View {
     }
 
     private var isHigh: Bool { card.priority == "high" }
-    private var isBodyExpanded: Bool { isHigh || bodyExpanded }
+    private var isBodyExpanded: Bool { isHigh || promoted || bodyExpanded }
     private var isHandled: Bool {
         guard let briefID else { return false }
         return appState.isCardHandled(briefID: briefID, cardID: card.id)

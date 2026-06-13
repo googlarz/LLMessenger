@@ -136,7 +136,13 @@ struct BriefProseView: View {
                     .padding(.bottom, 14)
             }
 
-            if parsedJSON != nil {
+            if let json = parsedJSON {
+                WeekAtGlanceView(
+                    messages: messages,
+                    cards: json.cards,
+                    activeCount: highPriorityCards.count + otherCards.count
+                )
+
                 stillBrokenNotice
 
                 if !highPriorityCards.isEmpty {
@@ -152,7 +158,9 @@ struct BriefProseView: View {
                     let otherLabel = highPriorityCards.isEmpty ? "This round" : "The rest"
                     sectionLabel(otherLabel, color: Theme.textTertiary)
                         .padding(.top, highPriorityCards.isEmpty ? 0 : 18)
-                    entries(otherCards, startIndex: highPriorityCards.count)
+                    // Promote the lead card to lede weight when there are no high-priority cards.
+                    entries(otherCards, startIndex: highPriorityCards.count,
+                            promotedCount: highPriorityCards.isEmpty ? 1 : 0)
                 }
 
                 if !noiseCards.isEmpty {
@@ -211,7 +219,8 @@ struct BriefProseView: View {
     }
 
     /// Entries with hairline rules between them and a staggered fade-up on load.
-    private func entries(_ cards: [NumberedBriefCard], startIndex: Int) -> some View {
+    /// Pass `promotedCount > 0` to render the first N cards expanded (lede weight).
+    private func entries(_ cards: [NumberedBriefCard], startIndex: Int, promotedCount: Int = 0) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(cards.enumerated()), id: \.element.id) { idx, numbered in
                 BriefCardView(
@@ -221,7 +230,8 @@ struct BriefProseView: View {
                     conversationContext: contextCache["\(numbered.card.service)|\(numbered.card.conversationId)"],
                     onShowTimeline: { service, convId, name in
                         showingTimeline = TimelineTarget(service: service, conversationId: convId, displayName: name)
-                    }
+                    },
+                    promoted: idx < promotedCount
                 )
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 10)
@@ -499,5 +509,104 @@ private struct NoiseStripView: View {
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 7)
+    }
+}
+
+// MARK: - Week-at-a-glance pulse header
+
+/// Seven-day volume histogram with a count readout. Shown at the top of every
+/// parsed brief. Bar colour: vermilion for days carrying a high-priority card,
+/// textPrimary for today, textSecondary for other active days.
+private struct WeekAtGlanceView: View {
+    let messages: [Message]
+    let cards: [BriefCard]
+    let activeCount: Int
+
+    private struct DayData: Identifiable {
+        let id: Int            // days ago (0 = today)
+        let label: String
+        let count: Int
+        let isToday: Bool
+        let hasHighCard: Bool
+    }
+
+    private var dayData: [DayData] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let highKeys = Set(
+            cards.filter { $0.priority == "high" }
+                .map { "\($0.service)|\($0.conversationId)" }
+        )
+        let weekdayLabels = ["S","M","T","W","T","F","S"]
+        return (0..<7).reversed().map { daysAgo -> DayData in
+            let day = cal.date(byAdding: .day, value: -daysAgo, to: today)!
+            let nextDay = cal.date(byAdding: .day, value: 1, to: day)!
+            let dayMsgs = messages.filter { $0.timestamp >= day && $0.timestamp < nextDay }
+            let hasHigh = dayMsgs.contains {
+                highKeys.contains("\($0.service)|\($0.conversationId)")
+            }
+            let weekday = cal.component(.weekday, from: day)
+            return DayData(
+                id: daysAgo,
+                label: weekdayLabels[weekday - 1],
+                count: dayMsgs.count,
+                isToday: daysAgo == 0,
+                hasHighCard: hasHigh
+            )
+        }
+    }
+
+    var body: some View {
+        let data = dayData
+        let maxCount = max(1, data.map(\.count).max() ?? 1)
+        let barMaxH: CGFloat = 20
+        let totalCards = cards.count
+        let hasHigh = cards.contains { $0.priority == "high" }
+
+        HStack(alignment: .bottom, spacing: 0) {
+            HStack(alignment: .bottom, spacing: 5) {
+                ForEach(data) { day in
+                    VStack(spacing: 3) {
+                        let barH: CGFloat = day.count == 0
+                            ? 1.5
+                            : max(3, CGFloat(day.count) / CGFloat(maxCount) * barMaxH)
+                        let barColor: Color = day.hasHighCard ? Theme.signal
+                            : day.isToday     ? Theme.textPrimary
+                            : day.count > 0   ? Theme.textSecondary.opacity(0.5)
+                            :                   Theme.border
+                        Rectangle()
+                            .fill(barColor)
+                            .frame(width: 10, height: barH)
+                        Text(day.label)
+                            .font(Theme.mono(8))
+                            .foregroundStyle(
+                                day.isToday ? Theme.textSecondary : Theme.textTertiary.opacity(0.5)
+                            )
+                    }
+                }
+            }
+
+            Spacer(minLength: 16)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("\(activeCount)")
+                        .font(Theme.display(20, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("OF \(totalCards)")
+                        .font(Theme.mono(9))
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.bottom, 1)
+                }
+                Text(activeCount == 0 ? "ALL QUIET"
+                     : hasHigh         ? "NEEDS YOU"
+                     :                   "THIS WEEK")
+                    .font(Theme.mono(9))
+                    .tracking(0.8)
+                    .foregroundStyle(hasHigh ? Theme.signal : Theme.textTertiary)
+            }
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.bottom, 12)
     }
 }
