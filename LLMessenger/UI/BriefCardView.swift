@@ -99,8 +99,11 @@ struct BriefCardView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            // Margin rule — the galley-proof redline. Only urgency gets colour.
-            (isHigh && !isHandled ? Theme.signal : Color.clear)
+            // Margin rule — the galley-proof redline.
+            // Vermilion: high priority. Muted ink: promoted lede. Clear: everything else.
+            (isHigh && !isHandled    ? Theme.signal :
+             promoted && !isHandled  ? Theme.textTertiary.opacity(0.35) :
+             Color.clear)
                 .frame(width: 2)
                 .clipShape(RoundedRectangle(cornerRadius: 1))
                 .padding(.trailing, Theme.gutter - 12)

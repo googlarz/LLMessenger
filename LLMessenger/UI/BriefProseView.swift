@@ -4,6 +4,7 @@
 // hairline rules, grouped under "NEEDS YOU" / "THE REST" section labels, with
 // a mono filter line for sources. Card rendering lives in BriefCardView.
 
+import Charts
 import SwiftUI
 
 struct NumberedBriefCard: Identifiable {
@@ -451,7 +452,7 @@ private struct NoiseStripView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(Theme.spring) { expanded.toggle() }
+                expanded.toggle()
             } label: {
                 HStack(spacing: 10) {
                     WireLabel("FYI · \(cards.count) quiet item\(cards.count == 1 ? "" : "s")",
@@ -461,6 +462,7 @@ private struct NoiseStripView: View {
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
                         .rotationEffect(.degrees(expanded ? 180 : 0))
+                        .animation(Theme.spring, value: expanded)
                 }
                 .padding(.horizontal, Theme.gutter)
                 .padding(.vertical, 10)
@@ -480,6 +482,7 @@ private struct NoiseStripView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(Theme.spring, value: expanded)
     }
 
     private func noiseRow(_ numbered: NumberedBriefCard) -> some View {
@@ -514,80 +517,113 @@ private struct NoiseStripView: View {
 
 // MARK: - Week-at-a-glance pulse header
 
-/// Seven-day volume histogram with a count readout. Shown at the top of every
-/// parsed brief. Bar colour: vermilion for days carrying a high-priority card,
-/// textPrimary for today, textSecondary for other active days.
+/// Seven-day message-volume histogram followed by an active-thread count.
+/// Uses Swift Charts for proper accessibility, hit testing, and animation.
+///
+/// Two axes, intentionally distinct:
+///   Left  — bar chart: message volume by day (answers "when was the week busy?")
+///   Right — count readout: active card count  (answers "what needs attention?")
+/// A hairline column rule separates them so readers don't conflate the two.
 private struct WeekAtGlanceView: View {
     let messages: [Message]
     let cards: [BriefCard]
     let activeCount: Int
 
+    @State private var appeared = false
+
+    // MARK: Data
+
     private struct DayData: Identifiable {
-        let id: Int            // days ago (0 = today)
-        let label: String
+        let id: Int            // 0 = today, 6 = oldest — used as ForEach key only
+        let label: String      // "Mon", "Tue", … — unambiguous 3-letter abbreviations
         let count: Int
         let isToday: Bool
         let hasHighCard: Bool
-    }
 
-    private var dayData: [DayData] {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
-        let highKeys = Set(
-            cards.filter { $0.priority == "high" }
-                .map { "\($0.service)|\($0.conversationId)" }
-        )
-        let weekdayLabels = ["S","M","T","W","T","F","S"]
-        return (0..<7).reversed().map { daysAgo -> DayData in
-            let day = cal.date(byAdding: .day, value: -daysAgo, to: today)!
-            let nextDay = cal.date(byAdding: .day, value: 1, to: day)!
-            let dayMsgs = messages.filter { $0.timestamp >= day && $0.timestamp < nextDay }
-            let hasHigh = dayMsgs.contains {
-                highKeys.contains("\($0.service)|\($0.conversationId)")
-            }
-            let weekday = cal.component(.weekday, from: day)
-            return DayData(
-                id: daysAgo,
-                label: weekdayLabels[weekday - 1],
-                count: dayMsgs.count,
-                isToday: daysAgo == 0,
-                hasHighCard: hasHigh
-            )
+        var barColor: Color {
+            if hasHighCard { return Theme.signal }
+            if isToday     { return Theme.textPrimary }
+            if count > 0   { return Theme.textSecondary.opacity(0.5) }
+            return Theme.border.opacity(0.6)
         }
     }
 
-    var body: some View {
-        let data = dayData
-        let maxCount = max(1, data.map(\.count).max() ?? 1)
-        let barMaxH: CGFloat = 20
-        let totalCards = cards.count
+    private var dayData: [DayData] {
+        let cal      = Calendar.current
+        let today    = cal.startOfDay(for: Date())
+        let highKeys = Set(
+            cards.filter { $0.priority == "high" }
+                 .map { "\($0.service)|\($0.conversationId)" }
+        )
+        let labels   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
+        // Oldest day first → chart reads left-to-right in chronological order.
+        return (0..<7).reversed().map { daysAgo -> DayData in
+            let day     = cal.date(byAdding: .day, value: -daysAgo, to: today)!
+            let nextDay = cal.date(byAdding: .day, value:  1,       to: day)!
+            let dayMsgs = messages.filter { $0.timestamp >= day && $0.timestamp < nextDay }
+            let hasHigh = dayMsgs.contains { highKeys.contains("\($0.service)|\($0.conversationId)") }
+            let weekday = cal.component(.weekday, from: day)
+            return DayData(id: daysAgo, label: labels[weekday - 1],
+                           count: dayMsgs.count, isToday: daysAgo == 0, hasHighCard: hasHigh)
+        }
+    }
+
+    /// Varies with actual message volume so the label carries information.
+    private var weekCharacter: (text: String, color: Color) {
         let hasHigh = cards.contains { $0.priority == "high" }
+        if activeCount == 0 { return ("ALL QUIET",  Theme.textTertiary) }
+        if hasHigh          { return ("NEEDS YOU",  Theme.signal) }
+        let total = messages.count
+        if total > 100      { return ("HEAVY WEEK", Theme.standby) }
+        if total > 40       { return ("BUSY WEEK",  Theme.textSecondary) }
+        return                       ("LIGHT WEEK", Theme.textTertiary)
+    }
+
+    // MARK: Body
+
+    var body: some View {
+        let data       = dayData
+        let character  = weekCharacter
+        let totalCards = cards.count
 
         HStack(alignment: .bottom, spacing: 0) {
-            HStack(alignment: .bottom, spacing: 5) {
-                ForEach(data) { day in
-                    VStack(spacing: 3) {
-                        let barH: CGFloat = day.count == 0
-                            ? 1.5
-                            : max(3, CGFloat(day.count) / CGFloat(maxCount) * barMaxH)
-                        let barColor: Color = day.hasHighCard ? Theme.signal
-                            : day.isToday     ? Theme.textPrimary
-                            : day.count > 0   ? Theme.textSecondary.opacity(0.5)
-                            :                   Theme.border
-                        Rectangle()
-                            .fill(barColor)
-                            .frame(width: 10, height: barH)
-                        Text(day.label)
-                            .font(Theme.mono(8))
-                            .foregroundStyle(
-                                day.isToday ? Theme.textSecondary : Theme.textTertiary.opacity(0.5)
-                            )
+
+            // Left: volume histogram
+            Chart(data) { day in
+                BarMark(
+                    x: .value("Day", day.label),
+                    y: .value("Messages", appeared ? day.count : 0)
+                )
+                .foregroundStyle(day.barColor)
+                .cornerRadius(2, style: .continuous)
+                .accessibilityLabel(Text(day.label))
+                .accessibilityValue(
+                    Text("\(day.count) message\(day.count == 1 ? "" : "s")"
+                         + (day.hasHighCard ? ", high priority" : ""))
+                )
+            }
+            .chartXAxis {
+                AxisMarks { value in
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label)
+                                .font(Theme.mono(8))
+                                .foregroundStyle(Theme.textTertiary.opacity(0.55))
+                        }
                     }
                 }
             }
+            .chartYAxis(.hidden)
+            .frame(height: 52)
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: appeared)
 
-            Spacer(minLength: 16)
+            // Hairline column rule — visually separates volume from count
+            Rectangle()
+                .fill(Theme.border)
+                .frame(width: Theme.hairline, height: 40)
+                .padding(.horizontal, 16)
 
+            // Right: active-thread count
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text("\(activeCount)")
@@ -598,15 +634,18 @@ private struct WeekAtGlanceView: View {
                         .foregroundStyle(Theme.textTertiary)
                         .padding(.bottom, 1)
                 }
-                Text(activeCount == 0 ? "ALL QUIET"
-                     : hasHigh         ? "NEEDS YOU"
-                     :                   "THIS WEEK")
+                Text(character.text)
                     .font(Theme.mono(9))
                     .tracking(0.8)
-                    .foregroundStyle(hasHigh ? Theme.signal : Theme.textTertiary)
+                    .foregroundStyle(character.color)
             }
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.bottom, 12)
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.82).delay(0.1)) {
+                appeared = true
+            }
+        }
     }
 }
