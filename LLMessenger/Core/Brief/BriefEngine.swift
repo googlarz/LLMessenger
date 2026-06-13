@@ -87,14 +87,18 @@ final class BriefEngine {
 
                 group.addTask {
                     do {
+                        let byConversation: [String: [Message]] = Dictionary(grouping: serviceMessages, by: { $0.conversationId })
+                        let contexts = byConversation.keys.compactMap {
+                            try? self.repository.fetchConversationContext(service: service, conversationId: $0)
+                        }
                         let systemPrompt = PromptBuilder.build(
                             mode: .summarizer,
                             basePrompt: basePrompt,
                             services: [service],
                             episodicSummaries: recent,
-                            now: Date()
+                            now: Date(),
+                            conversationContexts: contexts
                         )
-                        let byConversation: [String: [Message]] = Dictionary(grouping: serviceMessages, by: { $0.conversationId })
                         let maxConversations = 30
                         let rankedConvIds = byConversation.keys
                             .sorted { (byConversation[$0]?.count ?? 0) > (byConversation[$1]?.count ?? 0) }
@@ -355,13 +359,17 @@ final class BriefEngine {
                         let correctionTuples = corrections.map {
                             (headline: $0.cardHeadline, llmPriority: $0.llmPriority, userPriority: $0.userPriority)
                         }
+                        let contexts = Set(conversations.map { $0.id }).compactMap {
+                            try? self.repository.fetchConversationContext(service: serviceID, conversationId: $0)
+                        }
                         let systemPrompt = PromptBuilder.build(
                             mode: .summarizer,
                             basePrompt: basePrompt2,
                             services: [serviceID],
                             episodicSummaries: recent,
                             now: Date(),
-                            priorityCorrections: correctionTuples
+                            priorityCorrections: correctionTuples,
+                            conversationContexts: contexts
                         )
 
                         var conversationBlocks: [String] = []

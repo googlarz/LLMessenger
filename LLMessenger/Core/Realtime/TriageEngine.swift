@@ -67,13 +67,38 @@ actor TriageEngine {
             }
         }
 
+        // Load conversation context (v2 "Understand" fields) for deterministic biasing.
+        let context = try? await db.dbQueue.read { db in
+            try ConversationContext.fetchOne(db, key: ["service": service, "conversationId": conversationId])
+        }
+
+        // Strong context signal: newest sender is a key sender → short-circuit before the LLM.
+        if let context,
+           let keySender = ContextBias.matchingKeySender(sender: newest.sender, context: context) {
+            var event = TriageEvent(
+                id: nil,
+                service: service,
+                conversationId: conversationId,
+                priority: "high",
+                needsReply: true,
+                reason: "Key sender: \(keySender)",
+                triggeredBy: "context",
+                notified: true,
+                createdAt: Date()
+            )
+            try await db.dbQueue.write { db in try event.insert(db) }
+            await fireNotification(title: conversationName, body: "Key sender: \(keySender)")
+            return
+        }
+
         // LLM path
         let last5 = messages.sorted { $0.timestamp < $1.timestamp }.suffix(5)
         let msgLines = last5.map { "\($0.sender): \($0.text)" }.joined(separator: "\n")
+        let contextBlock = context.map { ContextBias.promptBlock(for: $0) } ?? ""
         let prompt = """
 You are a message triage assistant. Analyze these messages and respond with JSON only: \
 {"priority":"high"|"medium"|"low","needsReply":true|false,"reason":"one sentence"}
-
+\(contextBlock)
 Conversation:
 \(msgLines)
 """
@@ -85,20 +110,21 @@ Conversation:
                 maxTokens: 200
             )
             let parsed = try parseTriageJSON(response.text)
+            let biased = ContextBias.applyTopicBias(to: parsed, newestText: newest.text, context: context)
             var event = TriageEvent(
                 id: nil,
                 service: service,
                 conversationId: conversationId,
-                priority: parsed.priority,
-                needsReply: parsed.needsReply,
-                reason: parsed.reason,
-                triggeredBy: "llm",
-                notified: parsed.needsReply,
+                priority: biased.priority,
+                needsReply: biased.needsReply,
+                reason: biased.reason,
+                triggeredBy: biased.priority == parsed.priority ? "llm" : "context",
+                notified: biased.needsReply,
                 createdAt: Date()
             )
             try await db.dbQueue.write { db in try event.insert(db) }
-            if parsed.needsReply {
-                await fireNotification(title: conversationName, body: parsed.reason)
+            if biased.needsReply {
+                await fireNotification(title: conversationName, body: biased.reason)
             }
         } catch {
             var event = TriageEvent(
@@ -114,12 +140,6 @@ Conversation:
             )
             try await db.dbQueue.write { db in try event.insert(db) }
         }
-    }
-
-    private struct TriageResult {
-        let priority: String
-        let needsReply: Bool
-        let reason: String
     }
 
     private func parseTriageJSON(_ text: String) throws -> TriageResult {

@@ -80,7 +80,8 @@ struct PromptBuilder {
         services: [String],
         episodicSummaries: [(summary: String, createdAt: Date)],
         now: Date,
-        priorityCorrections: [(headline: String, llmPriority: String, userPriority: String)] = []
+        priorityCorrections: [(headline: String, llmPriority: String, userPriority: String)] = [],
+        conversationContexts: [ConversationContext] = []
     ) -> String {
         var parts: [String] = [basePrompt]
 
@@ -107,8 +108,28 @@ struct PromptBuilder {
             }
         }
 
+        let contextLines = conversationContexts.compactMap(conversationContextLine)
+        if !contextLines.isEmpty {
+            parts.append("Conversation-specific context (honor these):")
+            parts.append(contentsOf: contextLines)
+        }
+
         parts.append(suffix(for: mode))
         return parts.joined(separator: "\n")
+    }
+
+    /// Renders one context as a compact line, or nil if it has no non-empty v2 field.
+    private static func conversationContextLine(_ ctx: ConversationContext) -> String? {
+        var fields: [String] = []
+        if let r = ctx.relationship, !r.isEmpty { fields.append("relationship=\(r)") }
+        let important = ctx.importantTopicsList
+        if !important.isEmpty { fields.append("important: \(important.joined(separator: ", "))") }
+        let noise = ctx.noiseTopicsList
+        if !noise.isEmpty { fields.append("ignore: \(noise.joined(separator: ", "))") }
+        if let note = ctx.contextNote, !note.isEmpty { fields.append("note: \(note)") }
+        guard !fields.isEmpty else { return nil }
+        let label = ctx.label.isEmpty ? ctx.conversationId : ctx.label
+        return "- [\(label)] " + fields.joined(separator: "; ")
     }
 
     private static func relativeAge(from date: Date, to now: Date) -> String {
