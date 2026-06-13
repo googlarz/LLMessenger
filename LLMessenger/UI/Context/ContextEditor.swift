@@ -24,6 +24,8 @@ struct ContextEditor: View {
     @State private var tone = ""
     @State private var responseExpectation = "none"
     @State private var privacyOverride = "none"
+    @State private var autoAck = false
+    @State private var autoRSVP = false
 
     private var repository: BriefRepository { BriefRepository(database: database) }
 
@@ -115,6 +117,23 @@ struct ContextEditor: View {
 
                 Rule()
 
+                VStack(alignment: .leading, spacing: 10) {
+                    WireLabel("Delegation")
+                    Text("LLMessenger will send these without asking — only for this conversation.")
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Toggle("Auto-acknowledge (\u{201C}got it\u{201D} / \u{201C}thanks\u{201D})", isOn: $autoAck)
+                        .font(Theme.sans(13))
+                        .foregroundStyle(Theme.textPrimary)
+                    Toggle("Auto-RSVP (yes / no to invites)", isOn: $autoRSVP)
+                        .font(Theme.sans(13))
+                        .foregroundStyle(Theme.textPrimary)
+                }
+                .padding(.vertical, 14)
+
+                Rule()
+
                 HStack {
                     Button("Cancel") { dismiss() }
                         .buttonStyle(PaperButtonStyle())
@@ -145,6 +164,9 @@ struct ContextEditor: View {
         tone = ctx.tone ?? ""
         responseExpectation = ctx.responseExpectation ?? "none"
         privacyOverride = ctx.privacyOverride ?? "none"
+        let delegated = ctx.delegationKinds
+        autoAck = delegated.contains(AgentActionKind.ack.rawValue)
+        autoRSVP = delegated.contains(AgentActionKind.rsvp.rawValue)
     }
 
     private func save() {
@@ -165,6 +187,10 @@ struct ContextEditor: View {
         ctx.noiseTopicsList = splitCSV(noiseTopics)
         ctx.keySendersList = splitCSV(keySenders)
         ctx.aliasesList = splitCSV(aliases)
+        var delegated: [String] = []
+        if autoAck { delegated.append(AgentActionKind.ack.rawValue) }
+        if autoRSVP { delegated.append(AgentActionKind.rsvp.rawValue) }
+        ctx.delegationKinds = delegated
 
         do {
             try repository.upsertConversationContext(ctx)

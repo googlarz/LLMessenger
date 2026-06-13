@@ -458,6 +458,12 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "delegation", .text)          // JSON array of auto-approved kinds; nil = none (P2 uses it)
             }
         }
+        migrator.registerMigration("v23_delegation_scheduled") { db in
+            // P2: armed delegated auto-sends. status "scheduled" + fire time.
+            try db.alter(table: "agentActions") { t in
+                t.add(column: "scheduledAt", .datetime)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

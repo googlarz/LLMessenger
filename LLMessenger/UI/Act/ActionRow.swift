@@ -63,7 +63,9 @@ struct ActionRow: View {
             }
 
             HStack(spacing: 8) {
-                if isEditing {
+                if action.statusEnum == .scheduled {
+                    armedBar
+                } else if isEditing {
                     actionButton("Save") {
                         appState.editAction(action, newText: editText)
                         isEditing = false
@@ -83,6 +85,25 @@ struct ActionRow: View {
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 12)
+    }
+
+    @State private var now = Date()
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var armedBar: some View {
+        HStack(spacing: 8) {
+            Text("SENDING IN \(secondsRemaining)s")
+                .font(Theme.mono(9.5, weight: .semibold))
+                .tracking(0.9)
+                .foregroundStyle(Theme.signal)
+            actionButton("Undo") { appState.undoAutoSend(action) }
+        }
+        .onReceive(ticker) { now = $0 }
+    }
+
+    private var secondsRemaining: Int {
+        guard let fireAt = action.scheduledAt else { return 0 }
+        return max(0, Int(fireAt.timeIntervalSince(now).rounded(.up)))
     }
 
     private var kindBadge: some View {

@@ -283,7 +283,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menuBarController?.setNowNeedsAttention(self.appState?.nowNeedsAttention ?? false)
                 self.menuBarController?.setOwedCount(self.appState?.owedCount ?? 0)
                 self.menuBarController?.setActionsReady(self.appState?.actionsReadyCount ?? 0)
+                self.menuBarController?.setArmedAutoSendCount(self.appState?.armedAutoSendCount ?? 0)
             }
+            menuBar.onUndoAutoSends = { [weak self] in self?.appState?.undoAllAutoSends() }
 
             menuBar.onRestartSignalWatch = { [weak self] in
                 guard let self else { return }

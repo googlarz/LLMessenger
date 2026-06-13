@@ -91,6 +91,15 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
         set { aliases = Self.encodeArray(newValue) }
     }
 
+    /// Action kinds the user has explicitly auto-approved (delegated) for THIS
+    /// conversation. Backed by the `delegation` JSON-array column. Empty = nothing
+    /// delegated. This is the ONLY user-set source of per-conversation delegation;
+    /// it is never derived from message content (see AgentDelegation).
+    var delegationKinds: [String] {
+        get { Self.decodeArray(delegation) }
+        set { delegation = Self.encodeArray(newValue) }
+    }
+
     private static func decodeArray(_ json: String?) -> [String] {
         guard let json, let data = json.data(using: .utf8),
               let array = try? JSONDecoder().decode([String].self, from: data) else { return [] }

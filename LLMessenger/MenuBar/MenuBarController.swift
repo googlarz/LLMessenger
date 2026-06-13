@@ -10,7 +10,11 @@ private final class MenuActionProxy: NSObject {
     var onOpenSettings: (() -> Void)?
     var onRestartSignalWatch: (() -> Void)?
     var onOpenUpdate: (() -> Void)?
+    var onUndoAutoSends: (() -> Void)?
+    var onToggleDelegation: (() -> Void)?
 
+    @objc func undoAutoSends() { onUndoAutoSends?() }
+    @objc func toggleDelegation() { onToggleDelegation?() }
     @objc func newBrief() { onNewBrief?() }
     @objc func last24h() { onLast24h?() }
     @objc func last7d() { onLast7d?() }
@@ -56,6 +60,10 @@ final class MenuBarController {
     var onRestartSignalWatch: (() -> Void)? {
         didSet { proxy.onRestartSignalWatch = onRestartSignalWatch }
     }
+    var onUndoAutoSends: (() -> Void)? {
+        didSet { proxy.onUndoAutoSends = onUndoAutoSends }
+    }
+    private var armedAutoSendCount: Int = 0
     private var signalHealthWarning: String?
     private var availableUpdate: UpdateChecker.Update?
 
@@ -85,6 +93,11 @@ final class MenuBarController {
 
     func setActionsReady(_ count: Int) {
         actionsReady = count
+    }
+
+    func setArmedAutoSendCount(_ count: Int) {
+        armedAutoSendCount = count
+        rebuildMenu()
     }
 
     func setBriefs(_ briefs: [Brief]) {
@@ -265,6 +278,28 @@ final class MenuBarController {
             restartItem.target = proxy
             menu.addItem(restartItem)
         }
+
+        // P2: armed delegated auto-sends + kill switch.
+        menu.addItem(.separator())
+        if armedAutoSendCount > 0 {
+            let armedItem = NSMenuItem(
+                title: "Sending \(armedAutoSendCount) message\(armedAutoSendCount == 1 ? "" : "s") soon — Undo all",
+                action: #selector(MenuActionProxy.undoAutoSends), keyEquivalent: "")
+            armedItem.target = proxy
+            menu.addItem(armedItem)
+        }
+        proxy.onToggleDelegation = { [weak self] in
+            let key = AgentDelegation.killSwitchKey
+            let now = UserDefaults.standard.bool(forKey: key)
+            UserDefaults.standard.set(!now, forKey: key)
+            self?.rebuildMenu()
+        }
+        let disabled = UserDefaults.standard.bool(forKey: AgentDelegation.killSwitchKey)
+        let toggleItem = NSMenuItem(
+            title: disabled ? "Resume auto-send" : "Pause auto-send",
+            action: #selector(MenuActionProxy.toggleDelegation), keyEquivalent: "")
+        toggleItem.target = proxy
+        menu.addItem(toggleItem)
 
         menu.addItem(.separator())
 

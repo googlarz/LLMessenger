@@ -616,12 +616,47 @@ struct BriefRepository {
 
     // MARK: - Agent Actions
 
+    /// The Act queue: pending proposals plus armed (scheduled) delegated auto-sends.
     func fetchPendingAgentActions() throws -> [AgentAction] {
-        try database.dbQueue.read { db in
+        let active = [AgentActionStatus.pending.rawValue, AgentActionStatus.scheduled.rawValue]
+        return try database.dbQueue.read { db in
             try AgentAction
-                .filter(Column("status") == AgentActionStatus.pending.rawValue)
+                .filter(active.contains(Column("status")))
                 .order(Column("createdAt").desc)
                 .fetchAll(db)
+        }
+    }
+
+    /// Arms an action for delegated auto-send: status "scheduled" + fire time.
+    func armAgentActionForAutoSend(id: Int64, scheduledAt: Date) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE agentActions SET status = ?, scheduledAt = ? WHERE id = ?",
+                arguments: [AgentActionStatus.scheduled.rawValue, scheduledAt, id])
+        }
+    }
+
+    /// Cancels an armed auto-send (user tapped Undo): back to pending, no fire time.
+    func disarmAgentAction(id: Int64) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE agentActions SET status = ?, scheduledAt = NULL WHERE id = ?",
+                arguments: [AgentActionStatus.pending.rawValue, id])
+        }
+    }
+
+    func fetchAgentAction(id: Int64) throws -> AgentAction? {
+        try database.dbQueue.read { db in
+            try AgentAction.fetchOne(db, key: id)
+        }
+    }
+
+    /// True if any message exists for this conversation (known recipient check).
+    func conversationHasMessages(service: String, conversationId: String) throws -> Bool {
+        try database.dbQueue.read { db in
+            try Message
+                .filter(Column("service") == service && Column("conversationId") == conversationId)
+                .fetchCount(db) > 0
         }
     }
 

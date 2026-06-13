@@ -275,8 +275,115 @@ final class AppState: ObservableObject {
                 self.agentActions = actions
                 self.actionsReadyCount = actions.count
                 self.onBriefsChanged?()
+                self.evaluateDelegation()
             }
         }
+    }
+
+    // MARK: - P2 Scoped delegation (gated auto-send)
+
+    /// Seconds a delegated auto-send stays armed before firing — the Undo window.
+    static let autoSendUndoWindow: TimeInterval = 30
+
+    /// Cancellable per-action timers for armed auto-sends. The timer IS the undo
+    /// window: cancelling the task before it fires aborts the send. Keyed by action id.
+    private var armedTimers: [Int64: Task<Void, Never>] = [:]
+
+    /// Number of currently armed (scheduled) auto-sends — surfaced in the menu bar.
+    @Published var armedAutoSendCount: Int = 0
+
+    /// For every pending action, ask AgentDelegation whether it may auto-send. If so,
+    /// arm it with a 30s Undo window instead of sending immediately. This is the ONLY
+    /// path that arms an auto-send; the decision reads only structured action fields
+    /// and user-set context — never message content.
+    func evaluateDelegation() {
+        for action in agentActions where action.statusEnum == .pending {
+            guard let id = action.id, armedTimers[id] == nil else { continue }
+            let ctx = fetchConversationContext(service: action.service, conversationId: action.conversationId)
+            let known = isKnownRecipient(service: action.service, conversationId: action.conversationId)
+            let decision = AgentDelegation.decide(
+                action: action,
+                context: ctx,
+                isKnownRecipient: known,
+                clientIsLocal: llmClient.isLocal)
+            guard decision.autoSend else { continue }
+            armAutoSend(action)
+        }
+        refreshArmedCount()
+    }
+
+    private func armAutoSend(_ action: AgentAction) {
+        guard let id = action.id else { return }
+        let fireAt = Date().addingTimeInterval(Self.autoSendUndoWindow)
+        do {
+            try repository.armAgentActionForAutoSend(id: id, scheduledAt: fireAt)
+        } catch {
+            lastError = error.localizedDescription
+            return
+        }
+        armedTimers[id] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.autoSendUndoWindow))
+            guard !Task.isCancelled else { return }
+            await self?.fireDelegatedSend(actionID: id)
+        }
+        reloadAgentActions()
+    }
+
+    /// User tapped Undo within the window: cancel the timer and revert to pending
+    /// (manual approval required). No send happens; no "delegated" audit row is written.
+    func undoAutoSend(_ action: AgentAction) {
+        guard let id = action.id else { return }
+        armedTimers[id]?.cancel()
+        armedTimers[id] = nil
+        try? repository.disarmAgentAction(id: id)
+        reloadAgentActions()
+    }
+
+    /// Fires after the Undo window elapses. Re-reads the row and re-checks it is still
+    /// scheduled before sending (defends against a race with Undo). Sends via the SAME
+    /// adapter.send path as approveAction and writes a "delegated" audit row.
+    private func fireDelegatedSend(actionID: Int64) async {
+        armedTimers[actionID] = nil
+        guard let action = try? repository.fetchAgentAction(id: actionID),
+              action.statusEnum == .scheduled,
+              let adapter = adapters[action.service] else {
+            refreshArmedCount()
+            return
+        }
+        let draftText = action.replyPayload?.draftText ?? action.payload
+        do {
+            try await adapter.send(conversationID: action.conversationId, text: draftText)
+            try ActionAuditLog.record(
+                db: database,
+                kind: action.kind,
+                service: action.service,
+                conversationId: action.conversationId,
+                detail: draftText,
+                trigger: .delegated)
+            try repository.updateAgentActionStatus(id: actionID, status: .done, resolvedAt: Date())
+            markCardHandledForConversation(service: action.service, conversationId: action.conversationId)
+        } catch {
+            try? repository.updateAgentActionStatus(id: actionID, status: .failed, resolvedAt: Date())
+            lastError = error.localizedDescription
+        }
+        reloadAgentActions()
+    }
+
+    private func refreshArmedCount() {
+        armedAutoSendCount = agentActions.filter { $0.statusEnum == .scheduled }.count
+    }
+
+    /// Cancels every armed auto-send (menu bar "Undo all").
+    func undoAllAutoSends() {
+        for action in agentActions where action.statusEnum == .scheduled {
+            undoAutoSend(action)
+        }
+    }
+
+    /// A recipient is "known" if the conversation already has at least one prior
+    /// message (sent or received) — never a brand-new contact.
+    private func isKnownRecipient(service: String, conversationId: String) -> Bool {
+        ((try? repository.conversationHasMessages(service: service, conversationId: conversationId)) ?? false)
     }
 
     /// Approves a proposed action. For "reply" this routes through the SAME

@@ -27,6 +27,9 @@ enum AgentActionStatus: String, Codable {
     case done
     case failed
     case skipped
+    /// P2: armed for delegated auto-send. Has a non-nil `scheduledAt` fire time;
+    /// the user can Undo (revert to pending) before the timer fires.
+    case scheduled
 }
 
 struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
@@ -43,6 +46,8 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
     var status: String
     var createdAt: Date
     var resolvedAt: Date?
+    /// P2: when status == "scheduled", the instant the delegated auto-send fires.
+    var scheduledAt: Date? = nil
 
     static let databaseTableName = "agentActions"
 
