@@ -606,9 +606,14 @@ private struct WeekAtGlanceView: View {
                 AxisMarks { value in
                     AxisValueLabel {
                         if let label = value.as(String.self) {
+                            // data is captured from the outer body scope.
+                            // 7 consecutive days → each 3-letter label is unique.
+                            let isToday = data.first(where: { $0.label == label })?.isToday ?? false
                             Text(label)
-                                .font(Theme.mono(8))
-                                .foregroundStyle(Theme.textTertiary.opacity(0.55))
+                                .font(Theme.mono(8, weight: isToday ? .semibold : .medium))
+                                .foregroundStyle(isToday
+                                    ? Theme.textSecondary
+                                    : Theme.textTertiary.opacity(0.55))
                         }
                     }
                 }
