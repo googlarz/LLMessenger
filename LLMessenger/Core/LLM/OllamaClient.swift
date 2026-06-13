@@ -9,7 +9,7 @@ final class OllamaClient: LLMClient {
     init(baseURL: URL = URL(string: "http://127.0.0.1:11434")!,
          session: URLSession = {
              let config = URLSessionConfiguration.default
-             config.timeoutIntervalForRequest = 30
+             config.timeoutIntervalForRequest = 300
              return URLSession(configuration: config)
          }()) {
         self.baseURL = baseURL
