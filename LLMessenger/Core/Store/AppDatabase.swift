@@ -411,6 +411,11 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "aliases", .text)   // JSON array string
             }
         }
+        migrator.registerMigration("v21_conversation_tone") { db in
+            try db.alter(table: "conversationContexts") { t in
+                t.add(column: "tone", .text)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

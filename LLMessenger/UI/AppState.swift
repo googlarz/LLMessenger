@@ -284,6 +284,8 @@ final class AppState: ObservableObject {
                 senders.append(suggestion.subject)
                 ctx.keySendersList = senders
             }
+        } else if suggestion.kind == "tone" {
+            ctx.tone = "casual, emoji-friendly"
         } else {
             ctx.priorityHint = "high"
         }

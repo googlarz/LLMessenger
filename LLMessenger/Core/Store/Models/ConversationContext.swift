@@ -32,6 +32,8 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
     var privacyOverride: String?
     /// JSON array string of glossary aliases, e.g. "The Hall = home venue".
     var aliases: String?
+    /// Free-text preferred tone for drafting, e.g. "casual, lots of emoji".
+    var tone: String?
 
     init(service: String,
          conversationId: String,
@@ -45,7 +47,8 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
          contextNote: String? = nil,
          responseExpectation: String? = nil,
          privacyOverride: String? = nil,
-         aliases: String? = nil) {
+         aliases: String? = nil,
+         tone: String? = nil) {
         self.service = service
         self.conversationId = conversationId
         self.label = label
@@ -59,6 +62,7 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
         self.responseExpectation = responseExpectation
         self.privacyOverride = privacyOverride
         self.aliases = aliases
+        self.tone = tone
     }
 
     static let databaseTableName = "conversationContexts"

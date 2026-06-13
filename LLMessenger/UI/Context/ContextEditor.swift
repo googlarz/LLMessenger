@@ -21,6 +21,7 @@ struct ContextEditor: View {
     @State private var keySenders = ""
     @State private var aliases = ""
     @State private var contextNote = ""
+    @State private var tone = ""
     @State private var responseExpectation = "none"
     @State private var privacyOverride = "none"
 
@@ -88,6 +89,16 @@ struct ContextEditor: View {
                 Rule()
 
                 VStack(alignment: .leading, spacing: 10) {
+                    WireLabel("Tone")
+                    TextField("e.g. casual, lots of emoji", text: $tone)
+                        .textFieldStyle(.roundedBorder)
+                        .font(Theme.sans(13))
+                }
+                .padding(.vertical, 14)
+
+                Rule()
+
+                VStack(alignment: .leading, spacing: 10) {
                     WireLabel("Response expectation")
                     Picker("Response", selection: $responseExpectation) {
                         ForEach(responseOptions, id: \.0) { value, label in Text(label).tag(value) }
@@ -131,6 +142,7 @@ struct ContextEditor: View {
         keySenders = ctx.keySendersList.joined(separator: ", ")
         aliases = ctx.aliasesList.joined(separator: ", ")
         contextNote = ctx.contextNote ?? ""
+        tone = ctx.tone ?? ""
         responseExpectation = ctx.responseExpectation ?? "none"
         privacyOverride = ctx.privacyOverride ?? "none"
     }
@@ -146,7 +158,8 @@ struct ContextEditor: View {
             relationship: relationship.isEmpty ? nil : relationship,
             contextNote: contextNote.isEmpty ? nil : contextNote,
             responseExpectation: responseExpectation == "none" ? nil : responseExpectation,
-            privacyOverride: privacyOverride == "none" ? nil : privacyOverride
+            privacyOverride: privacyOverride == "none" ? nil : privacyOverride,
+            tone: tone.isEmpty ? nil : tone
         )
         ctx.importantTopicsList = splitCSV(importantTopics)
         ctx.noiseTopicsList = splitCSV(noiseTopics)

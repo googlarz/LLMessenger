@@ -101,6 +101,16 @@ actor RuleSuggestionEngine {
 
     private static let contextDefaultsKey = "dismissedContextSuggestions"
     private static let dailyBudget = 3
+    private static let minToneMessages = 5
+    private static let emojiToneThreshold = 0.4
+
+    /// True if the text contains at least one emoji scalar.
+    static func containsEmoji(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            scalar.properties.isEmojiPresentation ||
+            (scalar.properties.isEmoji && scalar.value > 0x238C)
+        }
+    }
 
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -166,8 +176,62 @@ actor RuleSuggestionEngine {
             return out
         }
 
+        // Emoji density per conversation, for the tone suggestion. Also fetch existing
+        // tone per conversation so we only suggest where none is set.
+        struct ToneStat { var convName: String; var sentTotal: Int; var sentWithEmoji: Int; var hasTone: Bool }
+        let toneStats = try await db.dbQueue.read { grdb -> [String: ToneStat] in
+            let sent = try Row.fetchAll(grdb, sql: """
+                SELECT service, conversationId, conversationName, text
+                FROM messages
+                WHERE isSent = 1
+            """)
+            var existingTone: [String: Bool] = [:]
+            let ctxRows = try Row.fetchAll(grdb, sql: """
+                SELECT service, conversationId, tone FROM conversationContexts
+            """)
+            for row in ctxRows {
+                let key = "\(row["service"] as String)|\(row["conversationId"] as String)"
+                let tone = row["tone"] as String?
+                existingTone[key] = (tone?.isEmpty == false)
+            }
+            var out: [String: ToneStat] = [:]
+            for row in sent {
+                let service: String = row["service"]
+                let convId: String = row["conversationId"]
+                let convName = (row["conversationName"] as String?) ?? convId
+                let text: String = row["text"]
+                let key = "\(service)|\(convId)"
+                var s = out[key] ?? ToneStat(convName: convName, sentTotal: 0, sentWithEmoji: 0, hasTone: existingTone[key] ?? false)
+                s.convName = convName
+                s.sentTotal += 1
+                if Self.containsEmoji(text) { s.sentWithEmoji += 1 }
+                out[key] = s
+            }
+            return out
+        }
+
         let dismissed = Self.loadDismissedContext()
         var suggestions: [ContextSuggestion] = []
+        for (key, stat) in toneStats {
+            guard !stat.hasTone else { continue }
+            guard stat.sentTotal >= Self.minToneMessages else { continue }
+            let density = Double(stat.sentWithEmoji) / Double(stat.sentTotal)
+            guard density >= Self.emojiToneThreshold else { continue }
+            let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else { continue }
+            let service = parts[0], convId = parts[1]
+            let id = "\(service)|\(convId)|tone"
+            guard !dismissed.contains(id) else { continue }
+            suggestions.append(ContextSuggestion(
+                id: id,
+                service: service,
+                conversationId: convId,
+                conversationName: stat.convName,
+                kind: "tone",
+                subject: "emoji-friendly",
+                rationale: "You use a lot of emoji with \(stat.convName) — match that tone when drafting replies?"
+            ))
+        }
         for (key, stat) in stats {
             let parts = key.split(separator: "|", maxSplits: 2).map(String.init)
             guard parts.count == 3 else { continue }

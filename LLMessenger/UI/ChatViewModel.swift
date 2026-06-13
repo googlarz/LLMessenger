@@ -739,17 +739,34 @@ final class ChatViewModel: ObservableObject {
         )
         let briefText = contextMessages.map(contextLine).joined(separator: "\n")
 
+        // Auto-learn the user's voice in this thread: fetch the persistent context
+        // and a sample of recent sent messages (same window/filter as quick replies).
+        let ctx = (try? appState.repository.fetchConversationContext(service: service, conversationId: convId)) ?? nil
+        let styleSince = Date().addingTimeInterval(-14 * 24 * 3600)
+        let recentAll = (try? appState.repository.fetchMessages(service: service, since: styleSince)) ?? []
+        let sentTexts = recentAll
+            .filter { $0.conversationId == convId && $0.isSent }
+            .sorted { $0.timestamp < $1.timestamp }
+            .suffix(15)
+            .map { $0.text }
+        let styleBlock = ChatViewModel.styleReferenceBlock(sentTexts: Array(sentTexts), tone: ctx?.tone)
+
         let systemPrompt = PromptBuilder.build(
             mode: .chat(conversations: ["\(Theme.serviceName(service)) — \(convName)"]),
             basePrompt: appState.basePrompt,
             services: [service],
             episodicSummaries: recentEpisodicContext(for: [service], limitPerService: 3),
-            now: Date()
+            now: Date(),
+            conversationContexts: [ctx].compactMap { $0 }
         )
+
+        let userBrief = styleBlock.isEmpty
+            ? (briefText.isEmpty ? "(no prior messages)" : briefText)
+            : ((briefText.isEmpty ? "(no prior messages)" : briefText) + "\n\n" + styleBlock)
 
         let llmMessages: [LLMMessage] = [
             LLMMessage(role: .system, content: systemPrompt),
-            LLMMessage(role: .user, content: briefText.isEmpty ? "(no prior messages)" : briefText),
+            LLMMessage(role: .user, content: userBrief),
             LLMMessage(role: .assistant, content: "I've read the conversation. What would you like to say?"),
             LLMMessage(role: .user, content: originalRequest)
         ]
@@ -773,6 +790,21 @@ final class ChatViewModel: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    /// Builds the style-reference block appended to the draft user-content.
+    /// Returns "" when there is no sample and no explicit tone (graceful fallback).
+    nonisolated static func styleReferenceBlock(sentTexts: [String], tone: String?) -> String {
+        let texts = sentTexts.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let hasTone = (tone?.isEmpty == false)
+        guard !texts.isEmpty || hasTone else { return "" }
+        var lines: [String] = []
+        if let tone, !tone.isEmpty {
+            lines.append("Preferred tone for this conversation: \(tone)")
+        }
+        lines.append("User's sent messages in this thread (style reference — match this voice, including emoji/casual register):")
+        lines.append(texts.isEmpty ? "(no sent messages — use a neutral, casual register)" : texts.joined(separator: "\n"))
+        return lines.joined(separator: "\n")
+    }
 
     private func buildLLMMessages(systemPrompt: String,
                                   currentMsgID: UUID,
