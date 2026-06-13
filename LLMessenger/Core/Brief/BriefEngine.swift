@@ -204,7 +204,7 @@ final class BriefEngine {
         let cardContexts = allCards.compactMap {
             try? repository.fetchConversationContext(service: $0.service, conversationId: $0.conversationId)
         }
-        allCards = DigestOrdering.order(cards: allCards, contexts: cardContexts).map { $0.card }
+        allCards = DigestOrdering.order(cards: allCards, contexts: cardContexts).map { $0.card.withCollapsed($0.collapsed) }
 
         let merged = BriefJSON(
             totalMessages: totalMessages,

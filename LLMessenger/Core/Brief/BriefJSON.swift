@@ -31,6 +31,9 @@ struct BriefCard: Codable, Identifiable {
     let actionItems: [String]
     let quotes: [BriefQuote]
     let sourceMessageIds: [String]
+    /// Set at brief creation time by DigestOrdering — low-priority/noise cards are folded
+    /// into the noise strip in the UI rather than rendered as full cards.
+    let collapsed: Bool
 
     var conversation: String? { conversationTitle }
     var actions: [String] { actionItems }
@@ -50,6 +53,7 @@ struct BriefCard: Codable, Identifiable {
         case legacyActions = "actions"
         case quotes
         case sourceMessageIds
+        case collapsed
     }
 
     init(
@@ -64,7 +68,8 @@ struct BriefCard: Codable, Identifiable {
         callback: String?,
         actionItems: [String],
         quotes: [BriefQuote],
-        sourceMessageIds: [String]
+        sourceMessageIds: [String],
+        collapsed: Bool = false
     ) {
         self.id = id
         self.service = service
@@ -78,6 +83,15 @@ struct BriefCard: Codable, Identifiable {
         self.actionItems = actionItems
         self.quotes = quotes
         self.sourceMessageIds = sourceMessageIds
+        self.collapsed = collapsed
+    }
+
+    func withCollapsed(_ value: Bool) -> BriefCard {
+        BriefCard(id: id, service: service, conversationId: conversationId,
+                  conversationTitle: conversationTitle, headline: headline,
+                  priority: priority, counts: counts, summary: summary,
+                  callback: callback, actionItems: actionItems, quotes: quotes,
+                  sourceMessageIds: sourceMessageIds, collapsed: value)
     }
 
     init(from decoder: Decoder) throws {
@@ -105,6 +119,7 @@ struct BriefCard: Codable, Identifiable {
         // validation, persistence, and evidence lookup all receive bare message IDs.
         sourceMessageIds = (try container.decodeIfPresent([String].self, forKey: .sourceMessageIds) ?? [])
             .map { $0.hasPrefix("id=") ? String($0.dropFirst(3)) : $0 }
+        collapsed = try container.decodeIfPresent(Bool.self, forKey: .collapsed) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -121,6 +136,7 @@ struct BriefCard: Codable, Identifiable {
         try container.encode(actionItems, forKey: .actionItems)
         try container.encode(quotes, forKey: .quotes)
         try container.encode(sourceMessageIds, forKey: .sourceMessageIds)
+        try container.encode(collapsed, forKey: .collapsed)
     }
 }
 

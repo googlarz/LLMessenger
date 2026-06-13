@@ -106,7 +106,11 @@ struct BriefProseView: View {
     }
 
     private var otherCards: [NumberedBriefCard] {
-        numberedVisibleCards.filter { $0.card.priority != "high" }
+        numberedVisibleCards.filter { $0.card.priority != "high" && !$0.card.collapsed }
+    }
+
+    private var noiseCards: [NumberedBriefCard] {
+        numberedVisibleCards.filter { $0.card.collapsed }
     }
 
     private var visibleMessages: [Message] {
@@ -128,15 +132,24 @@ struct BriefProseView: View {
                 stillBrokenNotice
 
                 if !highPriorityCards.isEmpty {
-                    sectionLabel("Priority", color: Theme.signal)
+                    let total = numberedVisibleCards.count
+                    let labelText = noiseCards.isEmpty
+                        ? "Needs you"
+                        : "Needs you · \(highPriorityCards.count) of \(total)"
+                    sectionLabel(labelText, color: Theme.signal)
                     entries(highPriorityCards, startIndex: 0)
                 }
 
                 if !otherCards.isEmpty {
-                    sectionLabel(highPriorityCards.isEmpty ? "This round" : "The rest",
-                                 color: Theme.textTertiary)
+                    let otherLabel = highPriorityCards.isEmpty ? "This round" : "The rest"
+                    sectionLabel(otherLabel, color: Theme.textTertiary)
                         .padding(.top, highPriorityCards.isEmpty ? 0 : 18)
                     entries(otherCards, startIndex: highPriorityCards.count)
+                }
+
+                if !noiseCards.isEmpty {
+                    NoiseStripView(cards: noiseCards)
+                        .padding(.top, (highPriorityCards.isEmpty && otherCards.isEmpty) ? 4 : 10)
                 }
 
                 markAllRow
@@ -406,5 +419,77 @@ struct BriefProseView: View {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f.string(from: date)
+    }
+}
+
+// MARK: - Noise strip
+
+/// Folded FYI section: a single tappable line that expands to compact serif
+/// one-liners. Cards with DigestOrdering.collapsed == true land here.
+private struct NoiseStripView: View {
+    let cards: [NumberedBriefCard]
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(Theme.spring) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 10) {
+                    WireLabel("FYI · \(cards.count) quiet item\(cards.count == 1 ? "" : "s")",
+                              color: Theme.textTertiary)
+                    Rule()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                }
+                .padding(.horizontal, Theme.gutter)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(cards, id: \.id) { numbered in
+                        noiseRow(numbered)
+                        if numbered.id != cards.last?.id {
+                            Rule().padding(.leading, Theme.gutter + 40)
+                        }
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func noiseRow(_ numbered: NumberedBriefCard) -> some View {
+        let card = numbered.card
+        let headline: String = {
+            let h = card.headline
+            return (h.isEmpty || h.lowercased().hasPrefix("none"))
+                ? String(card.summary.prefix(80))
+                : h
+        }()
+        return HStack(spacing: 8) {
+            Text(String(format: "%02d", numbered.number))
+                .font(Theme.mono(9.5, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: 20, alignment: .leading)
+            ServiceStamp(service: card.service, size: 14)
+            Text(headline)
+                .font(.system(size: 13, design: .serif))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if card.counts.messages > 1 {
+                Text("\(card.counts.messages)M")
+                    .font(Theme.mono(9))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 7)
     }
 }

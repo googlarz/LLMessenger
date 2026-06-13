@@ -87,6 +87,13 @@ struct BriefCardView: View {
     }
     private var convName: String { card.conversation ?? Theme.serviceName(card.service) }
 
+    private var displayHeadline: String {
+        let h = card.headline
+        return (h.isEmpty || h.lowercased().hasPrefix("none"))
+            ? String(card.summary.prefix(80))
+            : h
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             // Margin rule — the galley-proof redline. Only urgency gets colour.
@@ -106,7 +113,7 @@ struct BriefCardView: View {
             .padding(.trailing, Theme.gutter)
         }
         .padding(.leading, 10)
-        .padding(.vertical, 14)
+        .padding(.vertical, isHigh || isBodyExpanded ? 14 : 8)
         .background(hovering && !isBodyExpanded ? Theme.surface.opacity(0.5) : Color.clear)
         .opacity(isHandled ? 0.45 : 1)
         .onHover { hovering = $0 }
@@ -178,6 +185,12 @@ struct BriefCardView: View {
 
             Spacer(minLength: 8)
 
+            if card.counts.messages > 1 {
+                Text("\(card.counts.messages)M · \(card.counts.people)P")
+                    .font(Theme.mono(9))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
             if isHandled {
                 WireLabel("Filed", color: Theme.ok)
             } else {
@@ -214,7 +227,7 @@ struct BriefCardView: View {
     }
 
     private var headline: some View {
-        Text(card.headline)
+        Text(displayHeadline)
             .font(Theme.display(isBodyExpanded ? 17 : 14.5))
             .foregroundStyle(isHandled ? Theme.textTertiary : Theme.textPrimary)
             .lineSpacing(2)
