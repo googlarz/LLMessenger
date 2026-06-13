@@ -2,6 +2,12 @@
 import AppKit
 import GRDB
 
+extension UserDefaults {
+    @objc dynamic var realtimeFirewallDisabled: Bool {
+        return bool(forKey: "realtimeFirewallDisabled")
+    }
+}
+
 extension Notification.Name {
     static let serviceConfigDidChange = Notification.Name("com.llmessenger.serviceConfigDidChange")
     /// Posted by LLMSettingsTab when provider, API key, or cloud consent changes.
@@ -26,6 +32,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingWindowController: OnboardingWindowController?
     var updateChecker: UpdateChecker?
     var digestScheduler: DigestScheduler?
+    var realtimeMonitor: RealtimeMonitor?
+    var realtimeKillSwitchObserver: NSKeyValueObservation?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
@@ -271,6 +279,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 self.menuBarController?.setUnreadCount(self.appState?.unreadCount ?? 0)
                 self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
+                self.menuBarController?.setNowNeedsAttention(self.appState?.nowNeedsAttention ?? false)
             }
 
             menuBar.onRestartSignalWatch = { [weak self] in
@@ -440,6 +449,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             digestScheduler = digest
             digest.start(settings: SettingsRepository().loadDigestSettings())
+
+            // Real-Time Firewall (P3)
+            let monitor = RealtimeMonitor(
+                adapters: state.adapters,
+                db: db,
+                notificationManager: notifications,
+                llmClient: llm.client,
+                rulesProvider: {
+                    (try? await db.dbQueue.read { db in try PriorityRule.fetchAll(db) }) ?? []
+                }
+            )
+            realtimeMonitor = monitor
+            Task { await monitor.start() }
+
+            realtimeKillSwitchObserver = UserDefaults.standard.observe(
+                \.realtimeFirewallDisabled, options: [.new]
+            ) { [weak self] _, change in
+                guard let self else { return }
+                Task { @MainActor [weak self] in
+                    guard let self, let monitor = self.realtimeMonitor else { return }
+                    if change.newValue == true {
+                        await monitor.stop()
+                    } else {
+                        await monitor.start()
+                    }
+                }
+            }
 
             // Show onboarding on first launch
             if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {

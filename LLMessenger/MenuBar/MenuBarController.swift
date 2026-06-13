@@ -28,6 +28,7 @@ final class MenuBarController {
     private let statusItem: NSStatusItem
     private let proxy = MenuActionProxy()
     private var unreadCount: Int = 0 { didSet { updateButton() } }
+    private var nowNeedsAttention: Bool = false { didSet { updateButton() } }
     private var recentBriefs: [Brief] = []
     private var briefPreviews: [Int64: String] = [:]
     private var isLoading = false
@@ -70,6 +71,10 @@ final class MenuBarController {
 
     func setUnreadCount(_ count: Int) {
         unreadCount = count
+    }
+
+    func setNowNeedsAttention(_ needs: Bool) {
+        nowNeedsAttention = needs
     }
 
     func setBriefs(_ briefs: [Brief]) {
@@ -161,7 +166,11 @@ final class MenuBarController {
 
     private func updateButton() {
         guard let button = statusItem.button else { return }
-        button.image = Self.briefGlyph
+        if nowNeedsAttention {
+            button.image = NSImage(systemSymbolName: "envelope.fill", accessibilityDescription: "Needs attention")
+        } else {
+            button.image = Self.briefGlyph
+        }
         button.action = nil
         button.target = self
         button.title = unreadCount > 0 ? " \(unreadCount)" : ""

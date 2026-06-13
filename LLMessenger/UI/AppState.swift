@@ -120,6 +120,11 @@ final class AppState: ObservableObject {
     @Published var briefGenerationState: BriefGenerationState = .cached
     /// Keys of cards the user has marked as handled. Format: "\(briefID):\(cardID)".
     /// Persisted to UserDefaults so state survives app restarts.
+    /// Number of messages/threads held back (not surfaced in the brief) this round.
+    @Published var heldBackCount: Int = 0
+    /// True when any high-priority card from today is unhandled.
+    @Published var nowNeedsAttention: Bool = false
+
     @Published private(set) var handledCardKeys: Set<String> = {
         let saved = UserDefaults.standard.stringArray(forKey: "handledCardKeys") ?? []
         return Set(saved)
@@ -223,6 +228,7 @@ final class AppState: ObservableObject {
                 await MainActor.run {
                     self.briefs = fetched
                     self.serviceHealthMap = healthMap
+                    self.recomputeNowState()
                     self.onBriefsChanged?()
                 }
             } catch {
@@ -326,6 +332,23 @@ final class AppState: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    func recomputeNowState() {
+        let cal = Calendar.current
+        let todayHighUnhandled = briefs
+            .filter { cal.isDateInToday($0.createdAt) && $0.archivedAt == nil }
+            .contains { brief in
+                guard let summary = brief.openingSummary,
+                      let data = summary.data(using: .utf8),
+                      let json = try? JSONDecoder().decode(BriefJSON.self, from: data)
+                else { return false }
+                return json.cards.contains { card in
+                    card.priority == "high" &&
+                    !isCardHandled(briefID: brief.id ?? -1, cardID: card.id)
+                }
+            }
+        nowNeedsAttention = todayHighUnhandled
     }
 
     func fetchNeedsReplyCards() -> [(card: BriefCardRecord, briefCreatedAt: Date)] {

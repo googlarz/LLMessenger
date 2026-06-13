@@ -37,7 +37,7 @@ struct ContentView: View {
                     ChatPanelView()
                         .background(Theme.bg)
                 } else {
-                    EmptyStateView()
+                    DeskView()
                         .background(Theme.bg)
                 }
 

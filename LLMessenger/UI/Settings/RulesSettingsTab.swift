@@ -119,6 +119,9 @@ private struct RuleRowView: View {
         if let p = rule.setPriority, !p.isEmpty { parts.append("priority: \(p)") }
         if rule.suppress { parts.append("suppress: yes") }
         if rule.alwaysNotify { parts.append("always notify") }
+        if let qs = rule.quietStart, let qe = rule.quietEnd, !qs.isEmpty, !qe.isEmpty {
+            parts.append("· quiet \(qs)–\(qe)")
+        }
         return parts.joined(separator: " ")
     }
 }
@@ -136,6 +139,8 @@ private struct AddRuleView: View {
     @State private var setPriority = ""
     @State private var suppress = false
     @State private var alwaysNotify = false
+    @State private var quietStart = ""
+    @State private var quietEnd = ""
 
     private let serviceOptions = ["any", "signal", "telegram", "imessage", "slack"]
     private let priorityOptions = [("", "No change"), ("high", "High"), ("med", "Med"), ("low", "Low")]
@@ -180,6 +185,29 @@ private struct AddRuleView: View {
 
             Rule()
 
+            VStack(alignment: .leading, spacing: 10) {
+                WireLabel("Quiet Hours (HH:mm, optional)")
+                HStack(spacing: 8) {
+                    TextField("From (e.g. 22:00)", text: $quietStart)
+                        .textFieldStyle(.roundedBorder)
+                        .font(Theme.sans(13))
+                        .frame(maxWidth: .infinity)
+                    Text("–")
+                        .font(Theme.sans(13))
+                        .foregroundStyle(Theme.textSecondary)
+                    TextField("Until (e.g. 06:00)", text: $quietEnd)
+                        .textFieldStyle(.roundedBorder)
+                        .font(Theme.sans(13))
+                        .frame(maxWidth: .infinity)
+                }
+                Text("During this window, \"Always notify\" is suppressed. \"Suppress\" rules remain active.")
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.vertical, 14)
+
+            Rule()
+
             HStack {
                 Button("Cancel") { dismiss() }
                     .buttonStyle(PaperButtonStyle())
@@ -205,7 +233,9 @@ private struct AddRuleView: View {
             suppress: suppress,
             alwaysNotify: alwaysNotify,
             sortOrder: 0,
-            createdAt: Date()
+            createdAt: Date(),
+            quietStart: quietStart.isEmpty ? nil : quietStart,
+            quietEnd: quietEnd.isEmpty ? nil : quietEnd
         )
         onSave(rule)
     }

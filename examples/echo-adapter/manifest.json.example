@@ -1,0 +1,1 @@
+{"name":"echo","binary":"/path/to/echo_adapter.py","protocolVersion":1,"services":["echo"]}

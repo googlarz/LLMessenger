@@ -841,32 +841,36 @@ final class BriefEngine {
     private func applyPriorityRules(to cards: [BriefCard]) {
         let rules = (try? database.dbQueue.read { db in try PriorityRule.fetchAll(db) }) ?? []
         guard !rules.isEmpty else { return }
-        let sorted = rules.sorted { $0.sortOrder < $1.sortOrder }
         for card in cards {
-            for rule in sorted where ruleMatches(rule, card: card) {
-                // Priority override and suppress are informational at this stage —
-                // the card values are value types so mutations here are local.
-                // Callers that need to act on rules should query priorityRules directly.
-                if rule.suppress {
-                    print("[BriefEngine] priority rule suppresses card \(card.id) (\(card.headline))")
-                }
-                if let p = rule.setPriority {
-                    print("[BriefEngine] priority rule sets \(card.id) to \(p)")
-                }
-                break  // first matching rule wins
+            let contactName = card.conversationTitle ?? card.conversationId
+            let messageText = card.headline + " " + card.summary
+            guard let match = RuleEvaluator.evaluate(
+                contactName: contactName,
+                service: card.service,
+                messageText: messageText,
+                rules: rules
+            ) else { continue }
+
+            let newPriority: String
+            switch match.action {
+            case .alwaysNotify:
+                newPriority = "high"
+                print("[BriefEngine] rule overrides card \(card.id) → high (alwaysNotify)")
+            case .suppress:
+                newPriority = "low"
+                print("[BriefEngine] rule overrides card \(card.id) → low (suppress)")
+            case .setPriority(let p):
+                newPriority = p
+                print("[BriefEngine] rule sets card \(card.id) → \(p)")
+            }
+
+            try? database.dbQueue.write { db in
+                try db.execute(
+                    sql: "UPDATE briefCards SET priority = ? WHERE id = ?",
+                    arguments: [newPriority, card.id]
+                )
             }
         }
-    }
-
-    private nonisolated func ruleMatches(_ rule: PriorityRule, card: BriefCard) -> Bool {
-        if let service = rule.service, service != card.service { return false }
-        let displayName = card.conversationTitle ?? card.conversationId
-        if let contactPattern = rule.contactPattern,
-           !displayName.localizedCaseInsensitiveContains(contactPattern) { return false }
-        if let keywordPattern = rule.keywordPattern,
-           !card.headline.localizedCaseInsensitiveContains(keywordPattern) &&
-           !(card.summary.localizedCaseInsensitiveContains(keywordPattern)) { return false }
-        return true
     }
 
     // MARK: - Contact Profile Updates
