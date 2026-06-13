@@ -150,6 +150,32 @@ final class DesignSnapshotTests: XCTestCase {
                       triggeredAt: ago(2), reason: "needs reply", priorityRank: 1),
         ]
         state.owedCount = state.owedReplies.count
+
+        // v2.1 "Act" fixture — the agent's prepared action queue.
+        func reply(_ name: String, _ svc: String, _ conv: String, _ title: String,
+                   _ draft: String, _ why: String, risk: String, conf: Double) -> AgentAction {
+            AgentAction(
+                id: nil, kind: AgentActionKind.reply.rawValue, service: svc,
+                conversationId: conv, conversationName: name, title: title,
+                payload: #"{"draftText":"\#(draft)"}"#,
+                reasoning: why, confidence: conf, riskLevel: risk,
+                status: AgentActionStatus.pending.rawValue, createdAt: now, resolvedAt: nil)
+        }
+        state.agentActions = [
+            reply("Mum", "imessage", "fam-mum", "Reply — confirm Sunday + wine",
+                  "yeah 1pm works! i'll grab the wine on the way 🙂", "You owe a reply; her question is unanswered.",
+                  risk: "normal", conf: 0.74),
+            reply("Basketball Parents", "telegram", "bball-parents", "Reply Coach — Thursday training",
+                  "Thanks coach — he'll be there Thursday 6pm 👍", "Key sender (Coach); needs a yes/no.",
+                  risk: "low", conf: 0.83),
+            reply("#launch-room", "slack", "ops-1", "Acknowledge Priya's postmortem",
+                  "Got it — reviewing now, will sign off shortly.", "Low-risk acknowledgement; you usually ack these fast.",
+                  risk: "low", conf: 0.81),
+            reply("Anna — Meridian", "signal", "ts-1", "Reply — cap table by Wed",
+                  "On it — sending the updated cap table by Wednesday EOD.", "Owed reply; commitment due Wed.",
+                  risk: "normal", conf: 0.69),
+        ]
+        state.actionsReadyCount = state.agentActions.count
         return state
     }
 
@@ -259,6 +285,18 @@ final class DesignSnapshotTests: XCTestCase {
             .frame(width: 1180, height: 780)
             .background(Theme.bg)
         try render(view, size: NSSize(width: 1180, height: 780), name: "empty-state")
+    }
+
+    /// v2.1 headline: the Act surface — the agent's prepared action queue.
+    func testSnapshotAct() throws {
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        let view = DeskView(initialTab: .act)
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: 760, height: 300)
+            .background(Theme.bg)
+        try render(view, size: NSSize(width: 760, height: 300), name: "act")
     }
 
     /// v2.0 headline: the Owed Replies surface inside the real Desk chrome —

@@ -2,11 +2,11 @@
 
 # LLMessenger
 
-**Stop reading 200 messages. Read one brief — and never drop someone who matters.**
+**Stop reading 200 messages. Read one brief — and let an agent handle the rest.**
 
-LLMessenger is a notification firewall for your Mac. It reads iMessage, Signal, Telegram, and Slack so you don't have to — silences the noise, interrupts you only when someone actually needs you, turns everything else into a brief you read in 30 seconds, and keeps a running list of the people still waiting on your reply.
+LLMessenger is a notification firewall *and a communications agent* for your Mac. It reads iMessage, Signal, Telegram, and Slack so you don't have to — silences the noise, interrupts you only when someone actually needs you, turns everything else into a 30-second brief, tracks who's still waiting on you, and **drafts the replies, follow-ups, and RSVPs you'd send — in your voice — and lines them up for one tap.**
 
-Free. Open source. On-device AI. Your messages never have to leave your Mac.
+Free. Open source. On-device AI. Your messages never have to leave your Mac, and it never sends anything without your say-so.
 
 [![CI](https://github.com/googlarz/LLMessenger/actions/workflows/ci.yml/badge.svg)](https://github.com/googlarz/LLMessenger/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/googlarz/LLMessenger)](https://github.com/googlarz/LLMessenger/releases/latest)
@@ -14,7 +14,7 @@ Free. Open source. On-device AI. Your messages never have to leave your Mac.
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](https://github.com/googlarz/LLMessenger/releases/latest)
 [![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)](project.yml)
 
-[**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [Quick start](#quick-start) · [Owed Replies](#never-drop-someone-who-matters) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
+[**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [Quick start](#quick-start) · [The agent](#it-doesnt-just-tell-you--it-acts) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
 
 ![LLMessenger screenshot](docs/screenshot.png)
 
@@ -43,6 +43,16 @@ It looks like this:
 > **NEXT** → Acknowledge the proposal in #eng-pricing
 
 Click any card to ask follow-up questions ("who confirmed attendance?"), tap a style-matched quick reply, or have the AI draft a response you review before sending.
+
+## It doesn't just tell you — it acts
+
+Older versions *told you* what needed doing. Now an agent runs quietly in the background and **prepares the doing** — it drafts each reply in your voice for that conversation, lines up follow-ups and RSVPs, and presents them as a queue you clear with one tap. **Approve**, **Edit**, or **Skip** — nothing is ever sent without you.
+
+![The Act queue — the agent's prepared actions, one tap each](docs/act.png)
+
+- **Talk to it.** Type or say *"handle the easy ones"*, *"what do I owe people?"*, *"catch me up"* — speech is recognized on-device.
+- **Delegate the boring lanes (optional).** Turn on auto-send for a specific conversation and a specific low-risk action — "auto-acknowledge from my team", "auto-RSVP". It's **off by default**, restricted to safe templated replies, never a new recipient or anything with a link or money, and every auto-send waits 30 seconds with an **Undo** and lands in an audit log. A crafted message *can't* trigger or grant it — delegation is something only you set.
+- **Commitments.** It tracks promises both ways — yours (*"I'll send the photos"*) and theirs (*"review by Friday"*) — and chases them when they're due.
 
 ## Never drop someone who matters
 
@@ -81,7 +91,7 @@ xcodegen generate
 open LLMessenger.xcodeproj   # ⌘R in Xcode 16+
 ```
 
-CI builds and runs all 487 tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
+CI builds and runs all 553 tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
 
 </details>
 
@@ -103,6 +113,13 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) i
 - **Owed Replies** — a running, ranked list of people still waiting on your reply, so nothing important slips. Reply in place, snooze, or dismiss.
 - **Morning Digest** — one scheduled daily brief with everything the firewall held back, ordered by who matters to you.
 - **Notification Center widget** — latest headline + priority counts at a glance (macOS 14+).
+
+**Acts for you**
+- **Action queue** — the agent drafts replies (in your per-conversation voice), follow-ups, and RSVPs and ranks them for one-tap Approve / Edit / Skip. Batch-approve the low-risk ones.
+- **Scoped delegation** — opt a single conversation into auto-sending a single low-risk action type. Off by default, 30-second Undo, audit log, global kill switch; never triggerable by message content.
+- **Conversational command** — drive it in natural language, typed or spoken (on-device speech): "handle the easy ones", "what do I owe people?"
+- **Commitments ledger** — promises tracked both ways and chased when due.
+- **Calendar holds** — proposes local calendar events and RSVPs from scheduling threads (EventKit, on your Mac).
 
 **Understands who matters**
 - **Per-conversation context** — tell it (or let it learn) who's a key sender, what's important, and what's noise; it sharpens every triage and brief. Teach it in plain language or accept its suggestions.
@@ -144,11 +161,20 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) i
                   │                                            │
                   └──────────────┬─────────────────────────────┘
                                  ▼
-                    Owed Replies — unanswered + needs-you,
-                    ranked by who matters (your context)
+                    Owed Replies + Commitments
+                                 │
+                                 ▼
+                      AgentEngine — drafts actions in your voice
+                                 │
+                  ┌──────────────┴───────────────────┐
+                  ▼                                   ▼
+        Action Queue → you Approve            AgentDelegation.decide()
+        (Edit / Skip / one tap)               the ONLY gate that may auto-send:
+                                              user-delegated · low-risk · known
+                                              recipient · no links/money → 30s Undo
 ```
 
-Per-conversation **context** (who's a key sender, what's important, what's noise) feeds both the real-time TriageEngine and the summarizer — and a conversation marked local-only never reaches a cloud model. Each service is summarized in parallel; one adapter failing never drops the rest. The adapter contract is a 6-method protocol ([`MessengerAdapter.swift`](LLMessenger/Core/Adapters/MessengerAdapter.swift)) — also frozen as a [subprocess plugin API](docs/PLUGIN-API.md), so new services are a contribution (or a plugin) away.
+Per-conversation **context** (who's a key sender, what's important, what's noise) feeds the TriageEngine, the summarizer, and the agent's drafting — and a conversation marked local-only never reaches a cloud model. **`AgentDelegation.decide()` is the single chokepoint for any automatic send**; it reads only structured action fields and your settings — never message content — so a crafted message can't make the app send anything. Each service is summarized in parallel; one adapter failing never drops the rest. The adapter contract is a 6-method protocol ([`MessengerAdapter.swift`](LLMessenger/Core/Adapters/MessengerAdapter.swift)) — also frozen as a [subprocess plugin API](docs/PLUGIN-API.md), so new services are a contribution (or a plugin) away.
 
 ## Privacy
 
@@ -167,9 +193,15 @@ Don't trust the README? The [reproducible release workflow](.github/workflows/re
 ## FAQ
 
 <details>
+<summary><strong>Does the agent send messages on its own?</strong></summary>
+
+By default, **no** — it only *prepares* actions; you tap Approve to send. The one exception is opt-in: you can delegate a single low-risk action type (acknowledgements, RSVPs) for a single conversation, and then it auto-sends those — but with a 30-second Undo, an audit log, and a global kill switch. It is off until you turn it on, never applies to a brand-new recipient or anything containing a link or money, and **cannot be enabled or triggered by the content of a message** — delegation is something only you set, and the decision that authorizes a send reads only your settings, never message text. Everything else always waits for your tap.
+</details>
+
+<details>
 <summary><strong>Does this send my messages to OpenAI / Anthropic?</strong></summary>
 
-Only if you explicitly choose a cloud backend. The default path (On-Device on macOS 26, Ollama otherwise) processes everything locally. Local-only mode makes cloud egress impossible with one toggle, and the network audit log lets you verify it live.
+Only if you explicitly choose a cloud backend. The default path (On-Device on macOS 26, Ollama otherwise) processes everything locally. Local-only mode makes cloud egress impossible with one toggle, and the network audit log lets you verify it live. A conversation marked local-only is never sent to a cloud model — including for the agent's reasoning.
 </details>
 
 <details>
@@ -230,7 +262,7 @@ The highest-impact contribution is a **new service adapter**: implement the 6-me
 
 ```bash
 xcodegen generate                      # project.yml is the source of truth
-xcodebuild -scheme LLMessenger test    # 487 tests — keep them green
+xcodebuild -scheme LLMessenger test    # 553 tests — keep them green
 ```
 
 ## Roadmap
@@ -240,7 +272,14 @@ xcodebuild -scheme LLMessenger test    # 487 tests — keep them green
 - [ ] WhatsApp adapter (pending viable local API)
 
 <details>
-<summary>Shipped (v1.4 – v2.0)</summary>
+<summary>Shipped (v1.4 – v2.1)</summary>
+
+**v2.1 "Act"** — the app stops being a reader and becomes an agent:
+- ✅ **Action queue** — the agent drafts replies/follow-ups/RSVPs in your voice for one-tap Approve / Edit / Skip
+- ✅ **Scoped delegation** — opt-in per-conversation auto-send for low-risk actions, with 30s Undo + audit log + kill switch (never triggerable by message content)
+- ✅ **Conversational command** — drive it by typing or on-device speech ("handle the easy ones")
+- ✅ **Commitments ledger** — two-way promise tracking, chased when due
+- ✅ **Calendar holds + RSVPs** from scheduling threads (local EventKit)
 
 **v2.0 "Understand"** — the app learns who matters and protects your relationships:
 - ✅ **Owed Replies** — the people waiting on you, ranked by who counts (attention-debt surface)

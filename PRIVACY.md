@@ -60,6 +60,18 @@ LLMessenger v2.0 learns who matters to you — per-conversation context (who's a
 * There is **no cross-conversation identity graph** — context is scoped to one conversation; the app does not link "who's who" across chats.
 * A conversation you mark **local-only** (per-conversation privacy) is never sent to a cloud model for triage, even if your global backend is a cloud provider; one marked **never-draft** is never used to generate a reply.
 
+## The agent, and the one place it can send for you
+
+LLMessenger v2.1 adds an agent that prepares actions — drafted replies, follow-ups, RSVPs — for you to approve. By default **nothing is ever sent without an explicit tap from you.** The agent only writes proposals to the local `agentActions` table; you Approve, Edit, or Skip.
+
+There is exactly one way the app can send without a per-message tap, and it is entirely under your control:
+
+* **Scoped delegation is opt-in and off by default.** You enable it per conversation, for a specific low-risk action type only (acknowledgements, RSVPs) — in that conversation's Context editor.
+* **The decision to auto-send reads only your settings and structured action fields — never message content.** A single function (`AgentDelegation.decide`) is the only thing that can authorize an automatic send, and it requires *all* of: you delegated that action type for that conversation; the action is low-risk and high-confidence; the recipient is someone you already have a conversation with (never brand-new); and the draft contains no links, monetary amounts, or credential-like text. This means **a crafted or "prompt-injection" message cannot make the app send anything, or enable or widen delegation** — message text is treated as data, never as instruction.
+* **Every auto-send has a 30-second Undo** (cancellable from the menu bar) and is recorded in a local **action audit log** (what, where, why, when). Nothing about it is transmitted anywhere.
+* **A global kill switch** (and the per-conversation toggle) instantly reverts the app to prepare-only — propose, never send.
+* **Voice commands are recognized on-device** (`requiresOnDeviceRecognition`); audio is not uploaded. **Calendar events** are written to your local calendar via EventKit; no calendar data leaves your Mac.
+
 ## Local-only mode
 
 Settings → About → **Local-only mode** disables every cloud egress path that carries message content:
