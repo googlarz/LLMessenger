@@ -128,6 +128,28 @@ final class DesignSnapshotTests: XCTestCase {
         state.selectedBriefID = 1
         state.serviceHealth = ["imessage": .ok, "signal": .ok, "telegram": .ok, "slack": .ok]
         state.nextPollDate = now.addingTimeInterval(23 * 60 + 14)
+
+        // v2.0 Owed Replies fixture — people waiting on you, ranked by who matters.
+        func ago(_ days: Int) -> Date { cal.date(byAdding: .day, value: -days, to: now)! }
+        state.owedReplies = [
+            OwedReply(service: "imessage", conversationId: "fam-mum", conversationName: "Mum",
+                      triggerMessageId: "o1",
+                      triggerText: "Can you pick up wine on the way Sunday? And is 1pm still good for you?",
+                      triggeredAt: ago(3), reason: "unanswered question", priorityRank: 3),
+            OwedReply(service: "telegram", conversationId: "bball-parents", conversationName: "Basketball Parents",
+                      triggerMessageId: "o2",
+                      triggerText: "Coach: training moved to Thursday 6pm this week — can your son make it?",
+                      triggeredAt: ago(1), reason: "needs reply", priorityRank: 3),
+            OwedReply(service: "signal", conversationId: "ts-1", conversationName: "Anna — Meridian",
+                      triggerMessageId: "o3",
+                      triggerText: "Partner meeting moved to Thu 10:00 — can you get me the updated cap table by Wed EOD?",
+                      triggeredAt: ago(1), reason: "unanswered question", priorityRank: 2),
+            OwedReply(service: "slack", conversationId: "ops-1", conversationName: "#launch-room",
+                      triggerMessageId: "o4",
+                      triggerText: "Priya: postmortem is up — want you to sign off before we send to the team.",
+                      triggeredAt: ago(2), reason: "needs reply", priorityRank: 1),
+        ]
+        state.owedCount = state.owedReplies.count
         return state
     }
 
@@ -140,7 +162,8 @@ final class DesignSnapshotTests: XCTestCase {
             .appendingPathComponent("docs/design/snapshots/\(tag)", isDirectory: true)
     }
 
-    private func render<V: View>(_ view: V, size: NSSize, name: String) throws {
+    private func render<V: View>(_ view: V, size: NSSize, name: String,
+                                 appearance: NSAppearance.Name = .darkAqua) throws {
         let hosting = NSHostingView(rootView: view)
         hosting.frame = NSRect(origin: .zero, size: size)
 
@@ -148,7 +171,8 @@ final class DesignSnapshotTests: XCTestCase {
                               styleMask: [.borderless],
                               backing: .buffered,
                               defer: false)
-        window.appearance = NSAppearance(named: .darkAqua)
+        window.appearance = NSAppearance(named: appearance)
+        hosting.appearance = NSAppearance(named: appearance)
         window.colorSpace = .sRGB
         window.contentView = hosting
 
@@ -235,5 +259,31 @@ final class DesignSnapshotTests: XCTestCase {
             .frame(width: 1180, height: 780)
             .background(Theme.bg)
         try render(view, size: NSSize(width: 1180, height: 780), name: "empty-state")
+    }
+
+    /// v2.0 headline: the Owed Replies surface inside the real Desk chrome —
+    /// "who's waiting on you?", ranked by who matters.
+    func testSnapshotOwed() throws {
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        let view = DeskView(initialTab: .owed)
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: 760, height: 560)
+            .background(Theme.bg)
+        try render(view, size: NSSize(width: 760, height: 560), name: "owed")
+    }
+
+    /// Light mode (new since the last screenshots) — same reading surface.
+    func testSnapshotLightMode() throws {
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        let view = ContentView()
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: 1180, height: 780)
+            .background(Theme.bg)
+        try render(view, size: NSSize(width: 1180, height: 780),
+                   name: "light-mode", appearance: .aqua)
     }
 }

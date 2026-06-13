@@ -2,9 +2,9 @@
 
 # LLMessenger
 
-**Stop reading 200 messages. Read one brief.**
+**Stop reading 200 messages. Read one brief — and never drop someone who matters.**
 
-LLMessenger is a notification firewall for your Mac. It reads iMessage, Signal, Telegram, and Slack so you don't have to — silences the noise, interrupts you only when someone actually needs you, and turns everything else into a brief you read in 30 seconds.
+LLMessenger is a notification firewall for your Mac. It reads iMessage, Signal, Telegram, and Slack so you don't have to — silences the noise, interrupts you only when someone actually needs you, turns everything else into a brief you read in 30 seconds, and keeps a running list of the people still waiting on your reply.
 
 Free. Open source. On-device AI. Your messages never have to leave your Mac.
 
@@ -14,7 +14,7 @@ Free. Open source. On-device AI. Your messages never have to leave your Mac.
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](https://github.com/googlarz/LLMessenger/releases/latest)
 [![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)](project.yml)
 
-[**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
+[**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [Quick start](#quick-start) · [Owed Replies](#never-drop-someone-who-matters) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
 
 ![LLMessenger screenshot](docs/screenshot.png)
 
@@ -43,6 +43,21 @@ It looks like this:
 > **NEXT** → Acknowledge the proposal in #eng-pricing
 
 Click any card to ask follow-up questions ("who confirmed attendance?"), tap a style-matched quick reply, or have the AI draft a response you review before sending.
+
+## Never drop someone who matters
+
+The firewall protects you from what's coming *in*. **Owed Replies** protects the relationships going *out* — it surfaces the people still waiting on you, ranked by who counts, so a question from Mum or your kid's coach never gets buried under work chatter.
+
+![Owed Replies — who's waiting on you, ranked by who matters](docs/owed.png)
+
+It learns who matters from your own behavior, or you can just tell it: *"this is my son's basketball team — the coach posts about training and games, flag those, ignore the rest."* That per-conversation **context** then sharpens every triage decision and every brief. Conversations you mark private are never sent to a cloud model.
+
+<details>
+<summary>Light mode, too (follows your system, or set it manually)</summary>
+
+![LLMessenger in light mode](docs/light-mode.png)
+
+</details>
 
 ## Quick start
 
@@ -85,8 +100,14 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) i
 
 **Attention protection**
 - **Notification firewall** (on by default) — routine briefs generate silently; only `REPLY NEEDED` breaks through. Held-back count surfaces in your next digest.
-- **Morning Digest** — one scheduled daily brief with everything the firewall held back.
+- **Owed Replies** — a running, ranked list of people still waiting on your reply, so nothing important slips. Reply in place, snooze, or dismiss.
+- **Morning Digest** — one scheduled daily brief with everything the firewall held back, ordered by who matters to you.
 - **Notification Center widget** — latest headline + priority counts at a glance (macOS 14+).
+
+**Understands who matters**
+- **Per-conversation context** — tell it (or let it learn) who's a key sender, what's important, and what's noise; it sharpens every triage and brief. Teach it in plain language or accept its suggestions.
+- **Learned suggestions** — "you always reply to Coach fast — prioritize him here?" from your own behavior, never nagging.
+- **Per-conversation privacy** — mark a conversation local-only (never touches the cloud) or never-draft. The relationship model stays entirely on your Mac.
 
 **Briefs**
 - Unified inbox: iMessage, Signal, Telegram, Slack (multi-workspace).

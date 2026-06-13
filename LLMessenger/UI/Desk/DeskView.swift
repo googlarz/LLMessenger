@@ -7,7 +7,11 @@ import SwiftUI
 struct DeskView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
-    @State private var selectedTab: DeskTab = .now
+    @State private var selectedTab: DeskTab
+
+    init(initialTab: DeskTab = .now) {
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     enum DeskTab: String, CaseIterable {
         case now     = "Now"
