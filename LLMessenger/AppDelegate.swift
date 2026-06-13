@@ -280,6 +280,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menuBarController?.setUnreadCount(self.appState?.unreadCount ?? 0)
                 self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
                 self.menuBarController?.setNowNeedsAttention(self.appState?.nowNeedsAttention ?? false)
+                self.menuBarController?.setOwedCount(self.appState?.owedCount ?? 0)
             }
 
             menuBar.onRestartSignalWatch = { [weak self] in

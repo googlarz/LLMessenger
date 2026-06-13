@@ -608,6 +608,12 @@ struct BriefRepository {
         }
     }
 
+    func fetchAllConversationContexts() throws -> [ConversationContext] {
+        try database.dbQueue.read { db in
+            try ConversationContext.fetchAll(db)
+        }
+    }
+
     // MARK: - Priority Corrections
 
     func insertPriorityCorrection(_ correction: PriorityCorrection) throws {

@@ -124,6 +124,9 @@ final class AppState: ObservableObject {
     @Published var heldBackCount: Int = 0
     /// True when any high-priority card from today is unhandled.
     @Published var nowNeedsAttention: Bool = false
+    /// Conversations where the user owes a reply (derived, not stored).
+    @Published var owedReplies: [OwedReply] = []
+    @Published var owedCount: Int = 0
 
     @Published private(set) var handledCardKeys: Set<String> = {
         let saved = UserDefaults.standard.stringArray(forKey: "handledCardKeys") ?? []
@@ -229,6 +232,24 @@ final class AppState: ObservableObject {
                     self.briefs = fetched
                     self.serviceHealthMap = healthMap
                     self.recomputeNowState()
+                    self.onBriefsChanged?()
+                    self.reloadOwedReplies()
+                }
+            } catch {
+                await MainActor.run { self.lastError = error.localizedDescription }
+            }
+        }
+    }
+
+    func reloadOwedReplies() {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                let contexts = try self.repository.fetchAllConversationContexts()
+                let owed = try OwedReplyDeriver().derive(db: self.database, contexts: contexts)
+                await MainActor.run {
+                    self.owedReplies = owed
+                    self.owedCount = owed.count
                     self.onBriefsChanged?()
                 }
             } catch {

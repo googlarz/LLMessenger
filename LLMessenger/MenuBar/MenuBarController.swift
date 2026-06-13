@@ -29,6 +29,7 @@ final class MenuBarController {
     private let proxy = MenuActionProxy()
     private var unreadCount: Int = 0 { didSet { updateButton() } }
     private var nowNeedsAttention: Bool = false { didSet { updateButton() } }
+    private var owedCount: Int = 0 { didSet { updateButton() } }
     private var recentBriefs: [Brief] = []
     private var briefPreviews: [Int64: String] = [:]
     private var isLoading = false
@@ -75,6 +76,10 @@ final class MenuBarController {
 
     func setNowNeedsAttention(_ needs: Bool) {
         nowNeedsAttention = needs
+    }
+
+    func setOwedCount(_ count: Int) {
+        owedCount = count
     }
 
     func setBriefs(_ briefs: [Brief]) {
@@ -173,8 +178,18 @@ final class MenuBarController {
         }
         button.action = nil
         button.target = self
-        button.title = unreadCount > 0 ? " \(unreadCount)" : ""
-        button.imagePosition = unreadCount > 0 ? .imageLeft : .imageOnly
+        let showOwed = !nowNeedsAttention && unreadCount == 0 && owedCount > 0
+            && UserDefaults.standard.bool(forKey: "showOwedCountInMenuBar")
+        if unreadCount > 0 {
+            button.title = " \(unreadCount)"
+            button.imagePosition = .imageLeft
+        } else if showOwed {
+            button.title = " \(owedCount)"
+            button.imagePosition = .imageLeft
+        } else {
+            button.title = ""
+            button.imagePosition = .imageOnly
+        }
     }
 
     /// Three typeset lines — "the brief". Template image so it adapts to the

@@ -394,6 +394,18 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "quietEnd", .text)
             }
         }
+
+        migrator.registerMigration("v19_context_v2") { db in
+            try db.alter(table: "conversationContexts") { t in
+                t.add(column: "relationship", .text)
+                t.add(column: "importantTopics", .text)   // JSON array string
+                t.add(column: "noiseTopics", .text)        // JSON array string
+                t.add(column: "keySenders", .text)         // JSON array string
+                t.add(column: "contextNote", .text)
+                t.add(column: "responseExpectation", .text)
+                t.add(column: "privacyOverride", .text)    // "local_only" | "never_draft" | nil
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

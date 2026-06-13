@@ -11,6 +11,7 @@ struct DeskView: View {
 
     enum DeskTab: String, CaseIterable {
         case now     = "Now"
+        case owed    = "Owed"
         case today   = "Today"
         case archive = "Archive"
     }
@@ -23,6 +24,8 @@ struct DeskView: View {
             switch selectedTab {
             case .now:
                 NowView()
+            case .owed:
+                OwedView()
             case .today:
                 TodayView()
             case .archive:
@@ -49,7 +52,8 @@ struct DeskView: View {
             withAnimation(Theme.quick) { selectedTab = tab }
         } label: {
             HStack(spacing: 5) {
-                if tab == .now && appState.nowNeedsAttention {
+                if (tab == .now && appState.nowNeedsAttention) ||
+                   (tab == .owed && appState.owedCount > 0) {
                     Circle()
                         .fill(Theme.signal)
                         .frame(width: 5, height: 5)
