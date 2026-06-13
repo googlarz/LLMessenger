@@ -379,16 +379,10 @@ final class iMessageAdapter: MessengerAdapter {
     // MARK: - attributed_body extraction
 
     static func extractTextFromAttributedBody(_ data: Data) -> String? {
-        // chat.db stores attributed_body as a serialized NSAttributedString.
-        // Only use NSKeyedUnarchiver — the binary scan fallback picks up
-        // internal metadata (class names, archiver keys) as fake message text.
-        guard let attrStr = try? NSKeyedUnarchiver.unarchivedObject(
-            ofClasses: [NSAttributedString.self, NSMutableAttributedString.self,
-                        NSString.self, NSMutableString.self,
-                        NSDictionary.self, NSMutableDictionary.self,
-                        NSArray.self, NSMutableArray.self, NSNumber.self],
-            from: data
-        ) as? NSAttributedString else { return nil }
+        // chat.db stores attributedBody as a legacy typedstream (NSArchiver/NSUnarchiver),
+        // NOT NSKeyedArchiver. NSKeyedUnarchiver always throws on this format.
+        guard let obj = NSUnarchiver.unarchiveObject(with: data),
+              let attrStr = obj as? NSAttributedString else { return nil }
         let text = attrStr.string.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text
     }
