@@ -51,6 +51,7 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            OTHER_LDFLAGS="" \
             build | tee build.log
 
       - name: Locate built app
