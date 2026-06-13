@@ -358,28 +358,40 @@ final class BriefEngine {
                             let totalMsgs = result.conversations.reduce(0) { $0 + $1.messages.count }
                             print("[BriefEngine] \(serviceID): adapter returned \(result.conversations.count) conversations, \(totalMsgs) messages")
                             newlyStored = try self.repository.storeMessages(from: result, service: serviceID)
-                            conversations = result.conversations
                             // Fetch ALL messages in the window PLUS the 24h context window that
                             // buildConversationBlock prepends before the first new message.
                             // Without this, the LLM can reference context message IDs that are
                             // outside 'since' and decodeAndValidateBrief rejects the whole service.
                             let sourceSince = since.addingTimeInterval(-self.recentContextWindow)
                             sourceMessages = try self.repository.fetchMessages(service: serviceID, since: sourceSince)
+                            // Only show the LLM messages that haven't been briefed yet.
+                            // Already-briefed messages become recentContext via buildConversationBlock;
+                            // showing them as "new" causes the LLM to re-create the same cards.
+                            let briefedIDs = Set(sourceMessages.filter { $0.briefId != nil }.map(\.messageId))
+                            let filteredConvs = result.conversations.compactMap { conv -> AdapterConversation? in
+                                let fresh = conv.messages.filter { !briefedIDs.contains($0.id) }
+                                guard !fresh.isEmpty else { return nil }
+                                return AdapterConversation(id: conv.id, name: conv.name, type: conv.type, messages: fresh)
+                            }
+                            guard !filteredConvs.isEmpty else { return nil }
+                            conversations = filteredConvs
                         } else {
                             // Adapter unavailable or empty — use messages already stored by the poll loop.
                             let sourceSince = since.addingTimeInterval(-self.recentContextWindow)
                             let dbMessages = try self.repository.fetchMessages(service: serviceID, since: sourceSince)
-                            let dbCount = dbMessages.filter { $0.timestamp > since }.count
-                            print("[BriefEngine] \(serviceID): using DB fallback, \(dbCount) messages in window (adapter: \(adapterResult == nil ? "nil" : "empty"))")
-                            guard !dbMessages.isEmpty else { return nil }
                             // Only attach unattached messages; already-briefed ones are included
                             // in sourceMessages for validation but must not have their briefId
                             // reassigned to this new brief.
-                            newlyStored = dbMessages.filter { $0.timestamp > since && $0.briefId == nil }
+                            let unattached = dbMessages.filter { $0.timestamp > since && $0.briefId == nil }
+                            let dbCount = unattached.count
+                            print("[BriefEngine] \(serviceID): using DB fallback, \(dbCount) unattached messages in window (adapter: \(adapterResult == nil ? "nil" : "empty"))")
+                            guard !unattached.isEmpty else { return nil }
+                            newlyStored = unattached
                             sourceMessages = dbMessages
-                            // Reconstruct AdapterConversation-like grouping from stored messages.
+                            // Build conversations from unattached messages only so the LLM sees
+                            // only what hasn't been briefed yet.
                             var byConv: [String: [Message]] = [:]
-                            for m in dbMessages { byConv[m.conversationId, default: []].append(m) }
+                            for m in unattached { byConv[m.conversationId, default: []].append(m) }
                             conversations = byConv.map { convId, msgs in
                                 // Use stored conversationName if available; fall back to raw ID.
                                 let convName = msgs.first?.conversationName ?? convId
