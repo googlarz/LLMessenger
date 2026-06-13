@@ -128,6 +128,10 @@ final class AppState: ObservableObject {
     @Published var owedReplies: [OwedReply] = []
     @Published var owedCount: Int = 0
 
+    /// Pending agent-proposed actions (the Act queue) and their count.
+    @Published var agentActions: [AgentAction] = []
+    @Published var actionsReadyCount: Int = 0
+
     @Published var contextSuggestions: [ContextSuggestion] = []
     private let contextSuggestionEngine = RuleSuggestionEngine()
 
@@ -237,6 +241,7 @@ final class AppState: ObservableObject {
                     self.recomputeNowState()
                     self.onBriefsChanged?()
                     self.reloadOwedReplies()
+                    self.reloadAgentActions()
                     self.reloadContextSuggestions()
                 }
             } catch {
@@ -258,6 +263,92 @@ final class AppState: ObservableObject {
                 }
             } catch {
                 await MainActor.run { self.lastError = error.localizedDescription }
+            }
+        }
+    }
+
+    func reloadAgentActions() {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let actions = (try? self.repository.fetchPendingAgentActions()) ?? []
+            await MainActor.run {
+                self.agentActions = actions
+                self.actionsReadyCount = actions.count
+                self.onBriefsChanged?()
+            }
+        }
+    }
+
+    /// Approves a proposed action. For "reply" this routes through the SAME
+    /// confirmed-send path the chat window uses — but it is user-initiated here
+    /// (the user tapped Approve), so this is NOT auto-send.
+    func approveAction(_ action: AgentAction) {
+        guard let id = action.id else { return }
+        if action.kindEnum == .reply {
+            guard let draftText = action.replyPayload?.draftText,
+                  let adapter = adapters[action.service] else {
+                lastError = "\(Theme.serviceName(action.service)) is not connected."
+                return
+            }
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await adapter.send(conversationID: action.conversationId, text: draftText)
+                    try ActionAuditLog.record(
+                        db: self.database,
+                        kind: action.kind,
+                        service: action.service,
+                        conversationId: action.conversationId,
+                        detail: draftText,
+                        trigger: .approved)
+                    try self.repository.updateAgentActionStatus(id: id, status: .done, resolvedAt: Date())
+                    self.markCardHandledForConversation(service: action.service, conversationId: action.conversationId)
+                    self.reloadAgentActions()
+                } catch {
+                    try? self.repository.updateAgentActionStatus(id: id, status: .failed, resolvedAt: Date())
+                    self.lastError = error.localizedDescription
+                    self.reloadAgentActions()
+                }
+            }
+        }
+    }
+
+    func editAction(_ action: AgentAction, newText: String) {
+        guard let id = action.id else { return }
+        do {
+            try repository.updateAgentActionPayload(id: id, payload: AgentAction.encodeReplyPayload(newText))
+            reloadAgentActions()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func skipAction(_ action: AgentAction) {
+        guard let id = action.id else { return }
+        do {
+            try repository.updateAgentActionStatus(id: id, status: .skipped, resolvedAt: Date())
+            reloadAgentActions()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// Batch-approves every pending low-risk action. Only touches "low" risk rows.
+    func batchApproveLowRisk() {
+        for action in agentActions where action.riskEnum == .low {
+            approveAction(action)
+        }
+    }
+
+    /// Marks the matching brief card handled if a pending brief surfaces this conversation.
+    private func markCardHandledForConversation(service: String, conversationId: String) {
+        for brief in briefs {
+            guard let briefID = brief.id,
+                  let summary = brief.openingSummary,
+                  let data = summary.data(using: .utf8),
+                  let json = try? JSONDecoder().decode(BriefJSON.self, from: data) else { continue }
+            if let card = json.cards.first(where: { $0.service == service && $0.conversationId == conversationId }) {
+                markCardHandled(briefID: briefID, cardID: card.id)
             }
         }
     }

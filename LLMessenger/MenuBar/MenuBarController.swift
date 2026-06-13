@@ -30,6 +30,7 @@ final class MenuBarController {
     private var unreadCount: Int = 0 { didSet { updateButton() } }
     private var nowNeedsAttention: Bool = false { didSet { updateButton() } }
     private var owedCount: Int = 0 { didSet { updateButton() } }
+    private var actionsReady: Int = 0 { didSet { updateButton() } }
     private var recentBriefs: [Brief] = []
     private var briefPreviews: [Int64: String] = [:]
     private var isLoading = false
@@ -80,6 +81,10 @@ final class MenuBarController {
 
     func setOwedCount(_ count: Int) {
         owedCount = count
+    }
+
+    func setActionsReady(_ count: Int) {
+        actionsReady = count
     }
 
     func setBriefs(_ briefs: [Brief]) {
@@ -178,10 +183,15 @@ final class MenuBarController {
         }
         button.action = nil
         button.target = self
-        let showOwed = !nowNeedsAttention && unreadCount == 0 && owedCount > 0
+        let showActions = !nowNeedsAttention && unreadCount == 0 && actionsReady > 0
+            && UserDefaults.standard.bool(forKey: "showActionsReadyInMenuBar")
+        let showOwed = !nowNeedsAttention && unreadCount == 0 && !showActions && owedCount > 0
             && UserDefaults.standard.bool(forKey: "showOwedCountInMenuBar")
         if unreadCount > 0 {
             button.title = " \(unreadCount)"
+            button.imagePosition = .imageLeft
+        } else if showActions {
+            button.title = " \(actionsReady)"
             button.imagePosition = .imageLeft
         } else if showOwed {
             button.title = " \(owedCount)"

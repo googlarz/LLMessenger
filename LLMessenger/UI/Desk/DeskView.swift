@@ -9,11 +9,12 @@ struct DeskView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
     @State private var selectedTab: DeskTab
 
-    init(initialTab: DeskTab = .now) {
+    init(initialTab: DeskTab = .act) {
         _selectedTab = State(initialValue: initialTab)
     }
 
     enum DeskTab: String, CaseIterable {
+        case act     = "Act"
         case now     = "Now"
         case owed    = "Owed"
         case today   = "Today"
@@ -26,6 +27,8 @@ struct DeskView: View {
             Rule()
 
             switch selectedTab {
+            case .act:
+                ActView()
             case .now:
                 NowView()
             case .owed:
@@ -56,7 +59,8 @@ struct DeskView: View {
             withAnimation(Theme.quick) { selectedTab = tab }
         } label: {
             HStack(spacing: 5) {
-                if (tab == .now && appState.nowNeedsAttention) ||
+                if (tab == .act && appState.actionsReadyCount > 0) ||
+                   (tab == .now && appState.nowNeedsAttention) ||
                    (tab == .owed && appState.owedCount > 0) {
                     Circle()
                         .fill(Theme.signal)

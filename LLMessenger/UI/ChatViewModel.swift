@@ -638,18 +638,14 @@ final class ChatViewModel: ObservableObject {
                                                 conversationID: convId)
 
         // Fetch recent sent messages in this conversation for style calibration.
-        let styleSince = Date().addingTimeInterval(-14 * 24 * 3600)
+        let styleSince = Date().addingTimeInterval(-ReplyVoiceSampler.styleWindowDays * 24 * 3600)
         let recentAll = (try? appState.repository.fetchMessages(service: service, since: styleSince)) ?? []
-        let sentMessages = recentAll
-            .filter { $0.conversationId == convId && $0.isSent }
-            .sorted { $0.timestamp < $1.timestamp }
-            .suffix(15)
+        let sentTexts = ReplyVoiceSampler.sampleSentTexts(messages: recentAll, conversationId: convId)
 
         let conversationText = convMessages.suffix(20)
             .map { contextLine($0) }
             .joined(separator: "\n")
-        let sentStyleText = sentMessages
-            .map { $0.text }
+        let sentStyleText = sentTexts
             .joined(separator: "\n")
 
         let userContent = """
@@ -742,14 +738,10 @@ final class ChatViewModel: ObservableObject {
         // Auto-learn the user's voice in this thread: fetch the persistent context
         // and a sample of recent sent messages (same window/filter as quick replies).
         let ctx = (try? appState.repository.fetchConversationContext(service: service, conversationId: convId)) ?? nil
-        let styleSince = Date().addingTimeInterval(-14 * 24 * 3600)
+        let styleSince = Date().addingTimeInterval(-ReplyVoiceSampler.styleWindowDays * 24 * 3600)
         let recentAll = (try? appState.repository.fetchMessages(service: service, since: styleSince)) ?? []
-        let sentTexts = recentAll
-            .filter { $0.conversationId == convId && $0.isSent }
-            .sorted { $0.timestamp < $1.timestamp }
-            .suffix(15)
-            .map { $0.text }
-        let styleBlock = ChatViewModel.styleReferenceBlock(sentTexts: Array(sentTexts), tone: ctx?.tone)
+        let sentTexts = ReplyVoiceSampler.sampleSentTexts(messages: recentAll, conversationId: convId)
+        let styleBlock = ReplyVoiceSampler.styleBlock(sentTexts: sentTexts, tone: ctx?.tone)
 
         let systemPrompt = PromptBuilder.build(
             mode: .chat(conversations: ["\(Theme.serviceName(service)) — \(convName)"]),

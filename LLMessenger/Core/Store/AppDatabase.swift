@@ -416,6 +416,48 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "tone", .text)
             }
         }
+        migrator.registerMigration("v22_agent") { db in
+            try db.create(table: "agentActions") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("kind", .text).notNull()          // "reply" | "follow_up" | "calendar_hold" | "rsvp" | "ack"
+                t.column("service", .text).notNull()
+                t.column("conversationId", .text).notNull()
+                t.column("conversationName", .text).notNull()
+                t.column("title", .text).notNull()          // short label for the queue row
+                t.column("payload", .text).notNull()        // JSON: drafted text / event details
+                t.column("reasoning", .text).notNull()      // why the agent proposed this
+                t.column("confidence", .double).notNull().defaults(to: 0.5)
+                t.column("riskLevel", .text).notNull().defaults(to: "normal")  // "low" | "normal" | "high"
+                t.column("status", .text).notNull().defaults(to: "pending")    // pending|approved|executing|done|failed|skipped
+                t.column("createdAt", .datetime).notNull()
+                t.column("resolvedAt", .datetime)
+            }
+            try db.create(index: "agentActions_on_status_created", on: "agentActions", columns: ["status", "createdAt"])
+            try db.create(table: "commitments") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("direction", .text).notNull()      // "i_owe" | "they_owe"
+                t.column("service", .text).notNull()
+                t.column("conversationId", .text).notNull()
+                t.column("conversationName", .text).notNull()
+                t.column("what", .text).notNull()
+                t.column("dueAt", .datetime)
+                t.column("evidenceMessageId", .text)
+                t.column("status", .text).notNull().defaults(to: "open")  // open|fulfilled|dropped
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.create(table: "actionAudit") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("actionKind", .text).notNull()
+                t.column("service", .text).notNull()
+                t.column("conversationId", .text).notNull()
+                t.column("detail", .text).notNull()         // what was sent/done
+                t.column("trigger", .text).notNull()        // "approved" | "delegated"
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.alter(table: "conversationContexts") { t in
+                t.add(column: "delegation", .text)          // JSON array of auto-approved kinds; nil = none (P2 uses it)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

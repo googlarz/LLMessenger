@@ -34,6 +34,8 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
     var aliases: String?
     /// Free-text preferred tone for drafting, e.g. "casual, lots of emoji".
     var tone: String?
+    /// JSON array string of auto-approved action kinds; nil = none (P2 uses it).
+    var delegation: String?
 
     init(service: String,
          conversationId: String,
@@ -48,7 +50,8 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
          responseExpectation: String? = nil,
          privacyOverride: String? = nil,
          aliases: String? = nil,
-         tone: String? = nil) {
+         tone: String? = nil,
+         delegation: String? = nil) {
         self.service = service
         self.conversationId = conversationId
         self.label = label
@@ -63,6 +66,7 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
         self.privacyOverride = privacyOverride
         self.aliases = aliases
         self.tone = tone
+        self.delegation = delegation
     }
 
     static let databaseTableName = "conversationContexts"

@@ -34,6 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var digestScheduler: DigestScheduler?
     var realtimeMonitor: RealtimeMonitor?
     var realtimeKillSwitchObserver: NSKeyValueObservation?
+    var agentEngine: AgentEngine?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
@@ -281,6 +282,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
                 self.menuBarController?.setNowNeedsAttention(self.appState?.nowNeedsAttention ?? false)
                 self.menuBarController?.setOwedCount(self.appState?.owedCount ?? 0)
+                self.menuBarController?.setActionsReady(self.appState?.actionsReadyCount ?? 0)
             }
 
             menuBar.onRestartSignalWatch = { [weak self] in
@@ -476,6 +478,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         await monitor.start()
                     }
                 }
+            }
+
+            // Agent (P1) — proposes actions you approve. Mirrors realtimeMonitor wiring.
+            let agent = AgentEngine(
+                db: db,
+                llmClient: llm.client,
+                llmModel: llm.model,
+                repository: state.repository,
+                rulesProvider: {
+                    (try? await db.dbQueue.read { db in try PriorityRule.fetchAll(db) }) ?? []
+                }
+            )
+            agentEngine = agent
+            Task { [weak self] in
+                await agent.setOnActionsChanged {
+                    await MainActor.run {
+                        self?.appState?.reloadAgentActions()
+                    }
+                }
+                await agent.start()
             }
 
             // Show onboarding on first launch

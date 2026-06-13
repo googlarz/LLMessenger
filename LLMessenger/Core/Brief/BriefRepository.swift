@@ -614,6 +614,33 @@ struct BriefRepository {
         }
     }
 
+    // MARK: - Agent Actions
+
+    func fetchPendingAgentActions() throws -> [AgentAction] {
+        try database.dbQueue.read { db in
+            try AgentAction
+                .filter(Column("status") == AgentActionStatus.pending.rawValue)
+                .order(Column("createdAt").desc)
+                .fetchAll(db)
+        }
+    }
+
+    func updateAgentActionStatus(id: Int64, status: AgentActionStatus, resolvedAt: Date?) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE agentActions SET status = ?, resolvedAt = ? WHERE id = ?",
+                arguments: [status.rawValue, resolvedAt, id])
+        }
+    }
+
+    func updateAgentActionPayload(id: Int64, payload: String) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE agentActions SET payload = ? WHERE id = ?",
+                arguments: [payload, id])
+        }
+    }
+
     // MARK: - Priority Corrections
 
     func insertPriorityCorrection(_ correction: PriorityCorrection) throws {
