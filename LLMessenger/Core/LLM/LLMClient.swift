@@ -35,6 +35,15 @@ enum LLMError: Error, LocalizedError {
 
 protocol LLMClient {
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse
+    /// True when the client runs entirely on-device (Ollama, Apple Foundation Models).
+    /// Cloud clients (OpenAI, Anthropic) return false. Used to enforce per-conversation
+    /// `local_only` privacy overrides at the dispatch boundary.
+    var isLocal: Bool { get }
+}
+
+extension LLMClient {
+    var isLocal: Bool { false }
+    var isCloud: Bool { !isLocal }
 }
 
 struct UnconfiguredLLMClient: LLMClient {

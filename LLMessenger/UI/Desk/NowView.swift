@@ -25,10 +25,18 @@ struct NowView: View {
 
     var body: some View {
         if urgentItems.isEmpty {
-            emptyState
+            VStack(spacing: 0) {
+                if let suggestion = appState.contextSuggestions.first {
+                    suggestionCard(suggestion)
+                }
+                emptyState
+            }
         } else {
             ScrollView {
                 LazyVStack(spacing: 0) {
+                    if let suggestion = appState.contextSuggestions.first {
+                        suggestionCard(suggestion)
+                    }
                     ForEach(urgentItems, id: \.brief.id) { item in
                         briefSection(item.brief, cards: item.cards)
                     }
@@ -36,6 +44,54 @@ struct NowView: View {
                 .padding(.bottom, 24)
             }
         }
+    }
+
+    // MARK: - Context suggestion card
+
+    private func suggestionCard(_ suggestion: ContextSuggestion) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ServiceStamp(service: suggestion.service, size: 18)
+                Text(suggestion.conversationName.uppercased())
+                    .font(Theme.mono(10, weight: .semibold))
+                    .tracking(0.9)
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+                Spacer()
+                WireLabel("Learned", color: Theme.standby)
+            }
+
+            Text(suggestion.rationale)
+                .font(Theme.bodyFont)
+                .foregroundStyle(Theme.textPrimary.opacity(0.88))
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                actionButton("Accept") { appState.acceptContextSuggestion(suggestion) }
+                actionButton("Dismiss") { appState.dismissContextSuggestion(suggestion) }
+                Spacer()
+            }
+            .padding(.top, 2)
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 12)
+        .background(Theme.surfaceHigh)
+    }
+
+    private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title.uppercased())
+                .font(Theme.mono(9.5, weight: .semibold))
+                .tracking(0.9)
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.controlRadius)
+                        .fill(Theme.surfaceHigh)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Empty state

@@ -72,6 +72,24 @@ actor TriageEngine {
             try ConversationContext.fetchOne(db, key: ["service": service, "conversationId": conversationId])
         }
 
+        // Per-conversation privacy: local_only conversations must never reach a cloud LLM.
+        // If the active client is cloud, skip LLM triage entirely and persist a safe event.
+        if context?.privacyOverride == "local_only", llmClient.isCloud {
+            var event = TriageEvent(
+                id: nil,
+                service: service,
+                conversationId: conversationId,
+                priority: "medium",
+                needsReply: false,
+                reason: "Held local — cloud triage disabled for this conversation",
+                triggeredBy: "privacy",
+                notified: false,
+                createdAt: Date()
+            )
+            try await db.dbQueue.write { db in try event.insert(db) }
+            return
+        }
+
         // Strong context signal: newest sender is a key sender → short-circuit before the LLM.
         if let context,
            let keySender = ContextBias.matchingKeySender(sender: newest.sender, context: context) {

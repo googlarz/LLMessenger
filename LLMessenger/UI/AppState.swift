@@ -128,6 +128,9 @@ final class AppState: ObservableObject {
     @Published var owedReplies: [OwedReply] = []
     @Published var owedCount: Int = 0
 
+    @Published var contextSuggestions: [ContextSuggestion] = []
+    private let contextSuggestionEngine = RuleSuggestionEngine()
+
     @Published private(set) var handledCardKeys: Set<String> = {
         let saved = UserDefaults.standard.stringArray(forKey: "handledCardKeys") ?? []
         return Set(saved)
@@ -234,6 +237,7 @@ final class AppState: ObservableObject {
                     self.recomputeNowState()
                     self.onBriefsChanged?()
                     self.reloadOwedReplies()
+                    self.reloadContextSuggestions()
                 }
             } catch {
                 await MainActor.run { self.lastError = error.localizedDescription }
@@ -256,6 +260,47 @@ final class AppState: ObservableObject {
                 await MainActor.run { self.lastError = error.localizedDescription }
             }
         }
+    }
+
+    func reloadContextSuggestions() {
+        let engine = contextSuggestionEngine
+        let db = database
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            let suggestions = (try? await engine.computeContextSuggestions(db: db)) ?? []
+            await MainActor.run { self.contextSuggestions = suggestions }
+        }
+    }
+
+    func acceptContextSuggestion(_ suggestion: ContextSuggestion) {
+        let service = suggestion.service
+        let conversationId = suggestion.conversationId
+        var ctx = (try? repository.fetchConversationContext(service: service, conversationId: conversationId))
+            ?? ConversationContext(service: service, conversationId: conversationId,
+                                   label: "", priorityHint: "auto", updatedAt: Date())
+        if suggestion.kind == "keySender" {
+            var senders = ctx.keySendersList
+            if !senders.contains(where: { $0.caseInsensitiveCompare(suggestion.subject) == .orderedSame }) {
+                senders.append(suggestion.subject)
+                ctx.keySendersList = senders
+            }
+        } else {
+            ctx.priorityHint = "high"
+        }
+        ctx.updatedAt = Date()
+        do {
+            try repository.upsertConversationContext(ctx)
+        } catch {
+            lastError = error.localizedDescription
+        }
+        contextSuggestions.removeAll { $0.id == suggestion.id }
+        Task { await contextSuggestionEngine.dismissContext(suggestion: suggestion) }
+        reloadOwedReplies()
+    }
+
+    func dismissContextSuggestion(_ suggestion: ContextSuggestion) {
+        contextSuggestions.removeAll { $0.id == suggestion.id }
+        Task { await contextSuggestionEngine.dismissContext(suggestion: suggestion) }
     }
 
     func refreshTasks() {
@@ -419,6 +464,14 @@ final class AppState: ObservableObject {
         )
         do {
             try repository.insertPriorityCorrection(correction)
+            ContextLearning.applyCorrection(
+                db: repository,
+                service: service,
+                conversationId: conversationId,
+                from: llmPriority,
+                to: userPriority,
+                cardHeadline: headline
+            )
         } catch {
             lastError = error.localizedDescription
         }

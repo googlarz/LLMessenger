@@ -72,12 +72,14 @@ struct OwedView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
-                actionButton("Reply") {
-                    chatViewModel.prepareReply(
-                        service: reply.service,
-                        conversationID: reply.conversationId,
-                        displayName: reply.conversationName
-                    )
+                if !isDraftingDisabled(reply) {
+                    actionButton("Reply") {
+                        chatViewModel.prepareReply(
+                            service: reply.service,
+                            conversationID: reply.conversationId,
+                            displayName: reply.conversationName
+                        )
+                    }
                 }
                 actionButton("Snooze") {
                     OwedReplyStore.snooze(reply.id, until: Date().addingTimeInterval(86400))
@@ -93,6 +95,12 @@ struct OwedView: View {
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 12)
+    }
+
+    /// never_draft privacy override hides the reply-draft affordance for this conversation.
+    private func isDraftingDisabled(_ reply: OwedReply) -> Bool {
+        appState.fetchConversationContext(service: reply.service, conversationId: reply.conversationId)?
+            .privacyOverride == "never_draft"
     }
 
     private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {

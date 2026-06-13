@@ -42,6 +42,7 @@ enum AppleFM {
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
 struct AppleFMClient: LLMClient {
+    var isLocal: Bool { true }
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
         guard SystemLanguageModel.default.availability == .available else {
             throw LLMError.providerError(AppleFM.unavailabilityReason ?? "Apple Intelligence is unavailable")

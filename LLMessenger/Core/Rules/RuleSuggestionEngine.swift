@@ -10,6 +10,16 @@ struct RuleSuggestion: Identifiable {
     var dismissed: Bool
 }
 
+struct ContextSuggestion: Identifiable {
+    let id: String              // "service|conversationId|kind"
+    let service: String
+    let conversationId: String
+    let conversationName: String
+    let kind: String            // "keySender" | "prioritize"
+    let subject: String         // e.g. the sender name
+    let rationale: String       // human sentence
+}
+
 actor RuleSuggestionEngine {
     private static let defaultsKey = "dismissedRuleSuggestions"
     private static let fastReplyThreshold: TimeInterval = 5 * 60   // 5 minutes
@@ -85,6 +95,128 @@ actor RuleSuggestionEngine {
                 )
             }
             .sorted { $0.evidenceCount > $1.evidenceCount }
+    }
+
+    // MARK: - Context suggestions
+
+    private static let contextDefaultsKey = "dismissedContextSuggestions"
+    private static let dailyBudget = 3
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    /// From backfilled history, detect a sender the user replies to fast (<5 min) across
+    /// ≥5 instances, OR a clearly-dominant sender in a group → suggest a keySender / prioritize
+    /// context. Capped by the remaining per-day budget. `now` is injectable for tests.
+    func computeContextSuggestions(db: AppDatabase, now: Date = Date()) async throws -> [ContextSuggestion] {
+        let remaining = Self.remainingBudget(now: now)
+        guard remaining > 0 else { return [] }
+
+        // (service, conversationId, sender) → (conversationName, fast-reply count, total received from sender)
+        struct Stat { var convName: String; var fastReplies: Int; var received: Int }
+
+        let stats = try await db.dbQueue.read { grdb -> [String: Stat] in
+            let received = try Row.fetchAll(grdb, sql: """
+                SELECT service, conversationId, conversationName, sender, timestamp
+                FROM messages
+                WHERE isSent = 0
+                ORDER BY timestamp ASC
+            """)
+            let sent = try Row.fetchAll(grdb, sql: """
+                SELECT service, conversationId, timestamp
+                FROM messages
+                WHERE isSent = 1
+                ORDER BY timestamp ASC
+            """)
+
+            // Sent timestamps grouped per conversation, for fast-reply lookup.
+            var sentByConv: [String: [Date]] = [:]
+            for row in sent {
+                let key = "\(row["service"] as String)|\(row["conversationId"] as String)"
+                let ts: Date = row["timestamp"]
+                sentByConv[key, default: []].append(ts)
+            }
+
+            var out: [String: Stat] = [:]
+            for row in received {
+                let service: String = row["service"]
+                let convId: String = row["conversationId"]
+                let convName = (row["conversationName"] as String?) ?? convId
+                let sender: String = row["sender"]
+                let ts: Date = row["timestamp"]
+                let statKey = "\(service)|\(convId)|\(sender)"
+
+                let convKey = "\(service)|\(convId)"
+                let repliedFast = sentByConv[convKey]?.contains { reply in
+                    let dt = reply.timeIntervalSince(ts)
+                    return dt >= 0 && dt < Self.fastReplyThreshold
+                } ?? false
+
+                var s = out[statKey] ?? Stat(convName: convName, fastReplies: 0, received: 0)
+                s.convName = convName
+                s.received += 1
+                if repliedFast { s.fastReplies += 1 }
+                out[statKey] = s
+            }
+            return out
+        }
+
+        let dismissed = Self.loadDismissedContext()
+        var suggestions: [ContextSuggestion] = []
+        for (key, stat) in stats {
+            let parts = key.split(separator: "|", maxSplits: 2).map(String.init)
+            guard parts.count == 3 else { continue }
+            let service = parts[0], convId = parts[1], sender = parts[2]
+            guard stat.fastReplies >= Self.minConversations else { continue }
+            let id = "\(service)|\(convId)|keySender"
+            guard !dismissed.contains(id) else { continue }
+            suggestions.append(ContextSuggestion(
+                id: id,
+                service: service,
+                conversationId: convId,
+                conversationName: stat.convName,
+                kind: "keySender",
+                subject: sender,
+                rationale: "You reply to \(sender) within minutes — \(stat.fastReplies) times. Mark them a key sender?"
+            ))
+        }
+
+        suggestions.sort { $0.subject < $1.subject }
+        let capped = Array(suggestions.prefix(remaining))
+        if !capped.isEmpty {
+            Self.recordShown(capped.count, now: now)
+        }
+        return capped
+    }
+
+    func dismissContext(suggestion: ContextSuggestion) {
+        var set = Self.loadDismissedContext()
+        set.insert(suggestion.id)
+        UserDefaults.standard.set(Array(set), forKey: Self.contextDefaultsKey)
+    }
+
+    private static func loadDismissedContext() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: contextDefaultsKey) ?? [])
+    }
+
+    private static func budgetKey(now: Date) -> String {
+        "contextSuggestionsShown_\(dayFormatter.string(from: now))"
+    }
+
+    private static func remainingBudget(now: Date) -> Int {
+        let shown = UserDefaults.standard.integer(forKey: budgetKey(now: now))
+        return max(0, dailyBudget - shown)
+    }
+
+    private static func recordShown(_ count: Int, now: Date) {
+        let key = budgetKey(now: now)
+        let shown = UserDefaults.standard.integer(forKey: key)
+        UserDefaults.standard.set(shown + count, forKey: key)
     }
 
     func dismiss(suggestion: RuleSuggestion) {

@@ -2,6 +2,7 @@
 import Foundation
 
 final class OllamaClient: LLMClient {
+    var isLocal: Bool { true }
     private let baseURL: URL
     private let session: URLSession
 
