@@ -20,6 +20,9 @@ final class BriefEngine {
     private let basePrompt: String
     private let repository: BriefRepository
     private var briefingInFlight = false
+    // Separate flag for manual summarizeLast requests — prevents duplicate briefs from
+    // double-taps while still allowing summarizeLast to wait for and follow an auto-poll.
+    private var summarizeLastInFlight = false
 
     init(database: AppDatabase, client: LLMClient, model: String, basePrompt: String) {
         self.database = database
@@ -247,6 +250,17 @@ final class BriefEngine {
     // Fetch from adapters for the last N hours, store any new messages, and create a brief.
     @discardableResult
     func summarizeLast(hours: Int, adapters: [String: any MessengerAdapter]) async throws -> Int64? {
+        // Dedup concurrent manual requests (e.g. double-tap).
+        guard !summarizeLastInFlight else { return nil }
+        summarizeLastInFlight = true
+        defer { summarizeLastInFlight = false }
+
+        // Wait up to 60s for an in-flight auto-poll brief to finish before running.
+        var waited = 0
+        while briefingInFlight && waited < 60 {
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            waited += 1
+        }
         guard !briefingInFlight else { return nil }
         briefingInFlight = true
         defer { briefingInFlight = false }

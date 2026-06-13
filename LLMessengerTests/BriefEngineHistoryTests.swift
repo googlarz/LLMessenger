@@ -274,8 +274,9 @@ final class BriefEngineHistoryTests: XCTestCase {
                        "In-flight guard on summarizeLast must prevent duplicate brief creation")
     }
 
-    func testSummarizeLastAndProcessNewMessagesShareInFlightGuard() async throws {
-        // briefingInFlight is shared — a running processNewMessages blocks summarizeLast and vice versa
+    func testSummarizeLastWaitsForProcessNewMessagesAndRuns() async throws {
+        // summarizeLast waits for an in-flight processNewMessages to finish, then runs.
+        // Both should ultimately succeed — the manual 7d/48h brief is not silently dropped.
         let db = try makeDB()
         try await db.dbQueue.write { d in
             var m = Message(briefId: nil, service: "signal",
@@ -305,15 +306,15 @@ final class BriefEngineHistoryTests: XCTestCase {
 
         mock.specs["signal"] = .init(convId: "c1", messageIds: ["m2"])
 
-        // Now run both concurrently — only one should succeed
+        // Run both concurrently — summarizeLast waits for processNewMessages, then runs.
         async let r1 = engine.processNewMessages()
         async let r2 = engine.summarizeLast(hours: 24, adapters: ["signal": adapter])
         let (b1, b2) = try await (r1, r2)
 
         let successCount = [b1, b2].compactMap { $0 }.count
-        // At most 1 should succeed — they share the briefingInFlight guard
-        XCTAssertLessThanOrEqual(successCount, 1,
-                                 "processNewMessages and summarizeLast must share the briefingInFlight guard")
+        // summarizeLast waits and then runs — both should produce a brief (not silently drop).
+        XCTAssertGreaterThanOrEqual(successCount, 1,
+                                    "summarizeLast must not be silently dropped when processNewMessages runs concurrently")
     }
 
     // MARK: - Multi-service
