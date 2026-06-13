@@ -22,5 +22,9 @@
     <string>LLMessenger creates calendar events when you approve a scheduling action from a conversation.</string>
     <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
     <string>LLMessenger adds events to your calendar when you approve a scheduling action from a conversation.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>LLMessenger transcribes your spoken commands on-device so you can tell the agent what to do.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>LLMessenger uses the microphone only while you dictate a command to the agent.</string>
 </dict>
 </plist>

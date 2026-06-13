@@ -11,6 +11,12 @@ enum IntentActionType: String, Codable, Equatable {
     case summarizeChanges = "summarize_changes"
     case extractTasks = "extract_tasks"
     case compareConversations = "compare_conversations"
+    // Agent-queue commands (P5): map a natural-language command to an operation
+    // against the agent queue, not just a Q&A answer.
+    case catchMeUp = "catch_me_up"
+    case handleEasy = "handle_easy"
+    case whatDoIOwe = "what_do_i_owe"
+    case draftAllWaiting = "draft_all_waiting"
     case clarify
     case unknown
 }
@@ -93,6 +99,14 @@ struct IntentAction: Codable, Equatable {
             return IntentActionType.extractTasks.rawValue
         case "compare":
             return IntentActionType.compareConversations.rawValue
+        case "catchup", "catch_up", "brief_me", "what_is_pending":
+            return IntentActionType.catchMeUp.rawValue
+        case "handle_low_risk", "approve_easy", "do_the_easy_ones", "handle_the_easy_ones":
+            return IntentActionType.handleEasy.rawValue
+        case "what_i_owe", "who_do_i_owe", "owed", "my_commitments":
+            return IntentActionType.whatDoIOwe.rawValue
+        case "draft_all", "draft_waiting", "reply_to_everyone", "draft_everyone":
+            return IntentActionType.draftAllWaiting.rawValue
         default:
             return type
         }

@@ -493,6 +493,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             )
             agentEngine = agent
+            // P5: let the command bar run a planning cycle on demand.
+            state.onTriggerAgentCycle = { [weak agent] in
+                await agent?.trigger()
+            }
             Task { [weak self] in
                 await agent.setOnActionsChanged {
                     await MainActor.run {

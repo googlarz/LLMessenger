@@ -161,6 +161,9 @@ final class AppState: ObservableObject {
     /// Fires whenever `briefs` is reloaded. Used by AppDelegate to keep the menu bar
     /// unread badge in sync after the user opens a brief (which flips it to "open").
     var onBriefsChanged: (() -> Void)?
+    /// Runs one agent planning cycle now (wired by AppDelegate to AgentEngine.trigger).
+    /// Used by the command bar's "catch me up" / "draft all waiting" commands.
+    var onTriggerAgentCycle: (() async -> Void)?
 
     /// Shared contact directory — one instance app-wide. Lazily built so callers can
     /// always read it via @EnvironmentObject from the chat window or invoke `refresh()`
@@ -599,6 +602,46 @@ final class AppState: ObservableObject {
     func batchApproveLowRisk() {
         for action in agentActions where action.riskEnum == .low {
             approveAction(action)
+        }
+    }
+
+    // MARK: - P5 Command execution
+
+    /// Performs an already-classified command against the agent queue and returns a
+    /// short, user-facing result line. The classification (free text → CommandIntent)
+    /// happens in CommandRouter; this method only maps a known intent to an operation.
+    @discardableResult
+    func runCommand(_ command: ParsedCommand) async -> String {
+        switch command.intent {
+        case .catchMeUp:
+            await onTriggerAgentCycle?()
+            reloadAgentActions()
+            reloadCommitments()
+            reloadOwedReplies()
+            let pending = actionsReadyCount
+            let owed = owedCount
+            return "Caught up — \(pending) pending action\(pending == 1 ? "" : "s"), \(owed) reply\(owed == 1 ? "" : "ies") owed."
+
+        case .handleEasy:
+            let n = agentActions.filter { $0.riskEnum == .low }.count
+            batchApproveLowRisk()
+            if n == 0 { return "No low-risk actions to approve." }
+            return "Approved \(n) low-risk action\(n == 1 ? "" : "s")."
+
+        case .whatDoIOwe:
+            let iOwe = commitments.filter { $0.directionEnum == .iOwe }.count
+            let owed = owedCount
+            if iOwe == 0 && owed == 0 { return "You're clear — nothing owed." }
+            return "You owe \(owed) reply\(owed == 1 ? "" : "ies") and have \(iOwe) open commitment\(iOwe == 1 ? "" : "s")."
+
+        case .draftAllWaiting:
+            await onTriggerAgentCycle?()
+            reloadAgentActions()
+            let replies = agentActions.filter { $0.kindEnum == .reply }.count
+            return "Drafted \(replies) repl\(replies == 1 ? "y" : "ies") for review."
+
+        case .unknown:
+            return "Sorry — I didn't understand that command."
         }
     }
 

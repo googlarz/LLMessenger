@@ -14,24 +14,37 @@ struct ActView: View {
     }
 
     var body: some View {
-        if appState.agentActions.isEmpty {
-            emptyState
-        } else {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    if hasLowRisk {
-                        batchBar
-                    }
-                    Rule()
-                    ForEach(appState.agentActions) { action in
-                        ActionRow(action: action)
+        VStack(spacing: 0) {
+            commandBar
+            Rule()
+            if appState.agentActions.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if hasLowRisk {
+                            batchBar
+                        }
                         Rule()
+                        ForEach(appState.agentActions) { action in
+                            ActionRow(action: action)
+                            Rule()
+                        }
                     }
+                    .padding(.bottom, 24)
                 }
-                .padding(.bottom, 24)
             }
-            .background(Theme.bg)
         }
+        .background(Theme.bg)
+    }
+
+    // MARK: - Command bar (P5)
+
+    @ViewBuilder
+    private var commandBar: some View {
+        #if canImport(Speech)
+        CommandBar(speech: SpeechInput())
+        #endif
     }
 
     // MARK: - Batch bar

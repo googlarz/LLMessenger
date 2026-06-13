@@ -237,7 +237,11 @@ final class ChatViewModel: ObservableObject {
                 requestSendConfirmation(action, context: context)
             case .showSources:
                 showSources(action, context: context)
-            case .listActions, .findWaitingReplies, .summarizeChanges, .extractTasks, .compareConversations:
+            case .listActions, .findWaitingReplies, .summarizeChanges, .extractTasks, .compareConversations,
+                 .catchMeUp, .handleEasy, .whatDoIOwe, .draftAllWaiting:
+                // The agent-queue commands (catchMeUp etc.) are executed from the Act
+                // surface's CommandBar, not the chat composer. Here in chat we just
+                // answer conversationally, never approving or sending.
                 let question = actionFocusedQuestion(for: action, originalText: originalText)
                 await answerQuestion(brief: brief, rawInput: question, echoUserMessage: false)
             case .clarify:

@@ -270,7 +270,7 @@ struct PromptBuilder {
             {
               "actions": [
                 {
-                  "type": "answer" | "draft_reply" | "revise_draft" | "send_draft_request" | "show_sources" | "list_actions" | "find_waiting_replies" | "summarize_changes" | "extract_tasks" | "compare_conversations" | "clarify",
+                  "type": "answer" | "draft_reply" | "revise_draft" | "send_draft_request" | "show_sources" | "list_actions" | "find_waiting_replies" | "summarize_changes" | "extract_tasks" | "compare_conversations" | "catch_me_up" | "handle_easy" | "what_do_i_owe" | "draft_all_waiting" | "clarify",
                   "conversationNumber": <1-based number from Available conversations, or null>,
                   "cardNumber": <1-based number from Visible brief cards, or null>,
                   "draftNumber": <1-based number from Active drafts, or null>,
@@ -294,6 +294,11 @@ struct PromptBuilder {
             - For "what changed since last brief", use "summarize_changes".
             - For "any tasks/deadlines/promises", use "extract_tasks".
             - For "is this related to..." or "compare...", use "compare_conversations".
+            - For "catch me up", "brief me", or "what's pending", use "catch_me_up".
+            - For "handle the easy ones" or "approve the low-risk ones", use "handle_easy".
+            - For "what do I owe" or "who am I behind on", use "what_do_i_owe".
+            - For "draft replies to everyone waiting" or "draft all my owed replies", use "draft_all_waiting"
+              (put any requested tone, e.g. "casual", in "instruction").
             - For asks such as "give me more details", "what happened", "summarize", "why", or "tell me more",
               use type "answer".
             - If the user says: reply to Asia "ok" and give me details about mu11,
