@@ -198,12 +198,21 @@ xcodebuild -scheme LLMessenger test    # 430 tests — keep them green
 
 ## Roadmap
 
+- [ ] Cross-conversation people memory (link who's who across chats)
 - [ ] Email adapter (IMAP read-only — Proton Bridge, Gmail, iCloud)
 - [ ] WhatsApp adapter (pending viable local API)
 
 <details>
-<summary>Shipped (v1.4 – v1.7)</summary>
+<summary>Shipped (v1.4 – v2.0)</summary>
 
+**v2.0 "Understand"** — the app learns who matters and protects your relationships:
+- ✅ **Owed Replies** — the people waiting on you, ranked by who counts (attention-debt surface)
+- ✅ Per-conversation **Context** — tell it (or it learns) what's important and who's signal; drives triage + summaries
+- ✅ Learned context suggestions — "prioritize Coach Mike here?" from your own reply behavior
+- ✅ Learning loop + per-conversation privacy (`local_only` never touches the cloud; `never_draft`)
+- ✅ Per-conversation glossary · context-aware digest ordering
+
+**v1.4 – v1.7:**
 - ✅ Notification firewall · Morning Digest · Notification Center widget
 - ✅ On-Device AI via Apple Intelligence (macOS 26+)
 - ✅ iMessage-first 60-second onboarding

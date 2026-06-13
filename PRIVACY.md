@@ -51,6 +51,15 @@ If you don't want any of that, see "Local-only mode" below.
 * No sharing of one user's data with another user's instance.
 * No use of message content for model training (this is governed by your contract with Anthropic / OpenAI / Slack, not by LLMessenger).
 
+## The relationship model stays on your Mac
+
+LLMessenger v2.0 learns who matters to you — per-conversation context (who's a key sender, what's important, what's noise), reply-owed state, and behavior-based suggestions. **This model never leaves your machine.**
+
+* It lives entirely in the local SQLite store (`conversationContexts`, `triageEvents`, `priorityCorrections`) — there is no server copy and no sync.
+* It is fully visible (Settings → the conversation's Context editor) and deletable: clear a conversation's context, or delete the store folder, and it's gone.
+* There is **no cross-conversation identity graph** — context is scoped to one conversation; the app does not link "who's who" across chats.
+* A conversation you mark **local-only** (per-conversation privacy) is never sent to a cloud model for triage, even if your global backend is a cloud provider; one marked **never-draft** is never used to generate a reply.
+
 ## Local-only mode
 
 Settings → About → **Local-only mode** disables every cloud egress path that carries message content:
