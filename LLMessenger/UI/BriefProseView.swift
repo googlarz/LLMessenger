@@ -106,11 +106,19 @@ struct BriefProseView: View {
     }
 
     private var otherCards: [NumberedBriefCard] {
-        numberedVisibleCards.filter { $0.card.priority != "high" && !$0.card.collapsed }
+        numberedVisibleCards.filter { $0.card.priority != "high" && !isNoise($0.card) }
     }
 
     private var noiseCards: [NumberedBriefCard] {
-        numberedVisibleCards.filter { $0.card.collapsed }
+        numberedVisibleCards.filter { isNoise($0.card) }
+    }
+
+    /// A card folds into the noise strip if a saved context marked it low/noise
+    /// (DigestOrdering.collapsed) OR the LLM itself rated it low priority. The
+    /// latter is what folds automated senders (codes, receipts, tariff notices)
+    /// that have no saved context — the common case.
+    private func isNoise(_ card: BriefCard) -> Bool {
+        card.collapsed || card.priority == "low"
     }
 
     private var visibleMessages: [Message] {
