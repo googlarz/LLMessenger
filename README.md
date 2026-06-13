@@ -78,10 +78,10 @@ git clone https://github.com/googlarz/LLMessenger
 cd LLMessenger
 brew install xcodegen
 xcodegen generate
-open LLMessenger.xcodeproj   # ⌘R in Xcode 15+
+open LLMessenger.xcodeproj   # ⌘R in Xcode 16+
 ```
 
-CI builds and runs all 430 tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
+CI builds and runs all 487 tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
 
 </details>
 
@@ -125,26 +125,30 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) i
 ## How it works
 
 ```
-                         ┌──────────────────────────────────────────┐
- Menu bar ──► PollEngine ├─► iMessage   ~/Library/Messages/chat.db  │
-  (hourly /              ├─► Signal     local signal-mcp daemon     │
-   on demand)            ├─► Telegram   bundled adapter binary      │
-                         └─► Slack      Web API, multi-workspace    │
-                                        │
-                                        ▼
+  Adapters ──► iMessage   ~/Library/Messages/chat.db (FSEvents, real-time)
+               Signal     local signal-mcp daemon         │
+               Telegram   bundled adapter binary          │  poll (30s)
+               Slack      Web API, multi-workspace        │
+                                        │                 │
+                                        ▼                 ▼
                           SQLite (GRDB) — everything stays local
                                         │
-                                        ▼
-                          BriefEngine ──► your chosen LLM
-                          · source-grounded prompts
-                          · rolling conversation state
-                          · episodic memory compression
-                                        │
-                                        ▼
-                  Brief stored ─► firewall decides: notify or hold
+                  ┌─────────────────────┴─────────────────────┐
+                  ▼                                            ▼
+        TriageEngine (real-time)                    BriefEngine (summary)
+        rules + your context decide                 source-grounded prompts,
+        notify · hold · stay-local                  rolling + episodic memory
+                  │                                            │
+                  ▼                                            ▼
+        🔔 notify only if needed                      Brief stored → digest
+                  │                                            │
+                  └──────────────┬─────────────────────────────┘
+                                 ▼
+                    Owed Replies — unanswered + needs-you,
+                    ranked by who matters (your context)
 ```
 
-Each service is summarized in parallel — one adapter failing never drops the rest. The full adapter contract is a 6-method protocol ([`MessengerAdapter.swift`](LLMessenger/Core/Adapters/MessengerAdapter.swift)); new services are a contribution away.
+Per-conversation **context** (who's a key sender, what's important, what's noise) feeds both the real-time TriageEngine and the summarizer — and a conversation marked local-only never reaches a cloud model. Each service is summarized in parallel; one adapter failing never drops the rest. The adapter contract is a 6-method protocol ([`MessengerAdapter.swift`](LLMessenger/Core/Adapters/MessengerAdapter.swift)) — also frozen as a [subprocess plugin API](docs/PLUGIN-API.md), so new services are a contribution (or a plugin) away.
 
 ## Privacy
 
@@ -166,6 +170,18 @@ Don't trust the README? The [reproducible release workflow](.github/workflows/re
 <summary><strong>Does this send my messages to OpenAI / Anthropic?</strong></summary>
 
 Only if you explicitly choose a cloud backend. The default path (On-Device on macOS 26, Ollama otherwise) processes everything locally. Local-only mode makes cloud egress impossible with one toggle, and the network audit log lets you verify it live.
+</details>
+
+<details>
+<summary><strong>Does it build a profile of my relationships?</strong></summary>
+
+It builds a *local* model of what matters to you — per-conversation context and who you owe replies to — and it never leaves your Mac. There's no server copy and no sync. It's scoped to one conversation at a time (no cross-chat identity graph), fully visible in the context editor, and deletable: clear a conversation's context, or delete the data folder, and it's gone. You can also mark any conversation local-only so it's never sent to a cloud model. See [`PRIVACY.md`](PRIVACY.md).
+</details>
+
+<details>
+<summary><strong>How does Owed Replies decide I owe someone?</strong></summary>
+
+A conversation shows up when its latest inbound message was a question or got flagged as needing a reply, and you haven't sent anything since — looking back about two weeks. It's deliberately conservative (it would rather miss one than nag you about a thread you already handled on your phone), and a reply sent on *any* device clears it. Ranking is by your context priority, so Mum outranks a muted group.
 </details>
 
 <details>
@@ -214,7 +230,7 @@ The highest-impact contribution is a **new service adapter**: implement the 6-me
 
 ```bash
 xcodegen generate                      # project.yml is the source of truth
-xcodebuild -scheme LLMessenger test    # 430 tests — keep them green
+xcodebuild -scheme LLMessenger test    # 487 tests — keep them green
 ```
 
 ## Roadmap
