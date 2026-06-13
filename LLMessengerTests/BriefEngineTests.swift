@@ -471,6 +471,61 @@ final class BriefEngineTests: XCTestCase {
 
         XCTAssertNotNil(id, "BriefEngine must strip markdown fences and still produce a brief")
     }
+
+    /// Regression: if the LLM cites a context message ID (from a previously-briefed message
+    /// shown as recent context), the card was incorrectly rejected because the context message
+    /// was not in the `sourceMessages` allowlist (which only contained unattached messages).
+    func testProcessNewMessagesAcceptsContextMessageIdInSourceMessageIds() async throws {
+        let db = try setupDB()
+        // Insert a previously-briefed context message (briefId set → not unattached).
+        var contextMsgBriefId: Int64 = 0
+        try await db.dbQueue.write { db in
+            var brief = Brief(createdAt: Date(timeIntervalSinceNow: -7200),
+                              status: "ready", services: "[\"telegram\"]",
+                              openingSummary: nil, notificationText: "old",
+                              episodicSummary: nil)
+            try brief.insert(db)
+            contextMsgBriefId = brief.id!
+            var ctxMsg = Message(briefId: contextMsgBriefId, service: "telegram",
+                                 conversationId: "c1", messageId: "ctx_msg_id",
+                                 sender: "Alice", text: "Earlier message (context)",
+                                 timestamp: Date(timeIntervalSinceNow: -3600), isSent: false)
+            try ctxMsg.insert(db)
+        }
+        // Insert the new unattached message in the same conversation.
+        try await db.dbQueue.write { db in
+            var newMsg = Message(briefId: nil, service: "telegram",
+                                 conversationId: "c1", messageId: "new_msg_id",
+                                 sender: "Alice", text: "Reply to earlier",
+                                 timestamp: Date(), isSent: false)
+            try newMsg.insert(db)
+        }
+        // LLM response cites the context message ID in sourceMessageIds — this was the bug.
+        let briefCitingContext = """
+        {
+          "total_messages": 2, "total_threads": 1, "total_people": 1,
+          "cards": [{
+            "id": "telegram-c1-1", "service": "telegram",
+            "conversationId": "c1", "conversationTitle": "c1",
+            "headline": "Alice sent a follow-up",
+            "priority": "med",
+            "counts": {"messages": 2, "threads": 1, "people": 1},
+            "summary": "Alice replied to her earlier message.",
+            "callback": null, "actionItems": [],
+            "quotes": [],
+            "sourceMessageIds": ["ctx_msg_id", "new_msg_id"]
+          }]
+        }
+        """
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: briefCitingContext, inputTokens: 5, outputTokens: 10)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let id = try await engine.processNewMessages()
+
+        XCTAssertNotNil(id,
+            "Brief must be created even when LLM cites a context (already-briefed) message ID in sourceMessageIds")
+    }
 }
 
 // Service-aware mock: returns service-specific JSON based on which service appears in the system prompt.

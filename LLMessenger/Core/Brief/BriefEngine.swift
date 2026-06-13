@@ -108,9 +108,24 @@ final class BriefEngine {
                             .prefix(maxConversations)
 
                         var conversationBlocks: [String] = []
+                        // Collect context messages so their IDs are valid in decodeAndValidateBrief.
+                        // buildConversationBlock prepends recentContext messages to the prompt —
+                        // if the LLM cites one of those IDs in sourceMessageIds, it must be in
+                        // the allowlist, otherwise every card in an active conversation gets rejected.
+                        var allPromptMessages: [Message] = serviceMessages
                         for convId in rankedConvIds {
                             let convMessages = byConversation[convId]!.sorted { $0.timestamp < $1.timestamp }
                             let capped = convMessages.count > 100 ? Array(convMessages.suffix(100)) : convMessages
+                            let firstDate = capped.first?.timestamp ?? Date()
+                            let contextMessages = (try? self.repository.fetchRecentContextMessages(
+                                service: service,
+                                conversationID: convId,
+                                before: firstDate,
+                                since: firstDate.addingTimeInterval(-self.recentContextWindow),
+                                limit: self.maxRecentContextMessages
+                            )) ?? []
+                            allPromptMessages.append(contentsOf: contextMessages)
+
                             let convHeader = convMessages.first?.conversationName
                                 ?? signalAdapter?.groupName(for: convId)
                                 ?? signalAdapter?.contactName(for: convId)
@@ -141,7 +156,7 @@ final class BriefEngine {
                             maxTokens: 4000
                         )
 
-                        if let parsed = try? self.decodeAndValidateBrief(response.text, service: service, sourceMessages: serviceMessages) {
+                        if let parsed = try? self.decodeAndValidateBrief(response.text, service: service, sourceMessages: allPromptMessages) {
                             return ServiceResult(
                                 service: service,
                                 cards: parsed.cards,
