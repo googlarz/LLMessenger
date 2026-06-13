@@ -48,6 +48,9 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
     var resolvedAt: Date?
     /// P2: when status == "scheduled", the instant the delegated auto-send fires.
     var scheduledAt: Date? = nil
+    /// P3: the commitment this follow_up was generated for. Used to dedupe one pending
+    /// follow-up per commitment. nil for non-follow_up actions.
+    var commitmentId: Int64? = nil
 
     static let databaseTableName = "agentActions"
 
@@ -73,6 +76,35 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
 
     static func encodeReplyPayload(_ draftText: String) -> String {
         let payload = ReplyPayload(draftText: draftText)
+        guard let data = try? JSONEncoder().encode(payload),
+              let json = String(data: data, encoding: .utf8) else { return "{}" }
+        return json
+    }
+
+    // MARK: - Calendar payload (calendar_hold / rsvp)
+
+    /// Typed payload for "calendar_hold" and the event side of "rsvp".
+    /// Dates are ISO8601 strings so the JSON column stays human-readable.
+    struct CalendarPayload: Codable {
+        var title: String
+        var startISO: String
+        var endISO: String
+        var notes: String?
+        /// For rsvp: the reply text to send alongside the optional event.
+        var replyText: String?
+
+        private static let formatter = ISO8601DateFormatter()
+
+        var start: Date? { Self.formatter.date(from: startISO) }
+        var end: Date? { Self.formatter.date(from: endISO) }
+    }
+
+    var calendarPayload: CalendarPayload? {
+        guard let data = payload.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(CalendarPayload.self, from: data)
+    }
+
+    static func encodeCalendarPayload(_ payload: CalendarPayload) -> String {
         guard let data = try? JSONEncoder().encode(payload),
               let json = String(data: data, encoding: .utf8) else { return "{}" }
         return json

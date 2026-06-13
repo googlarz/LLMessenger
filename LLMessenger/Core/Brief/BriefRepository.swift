@@ -645,6 +645,14 @@ struct BriefRepository {
         }
     }
 
+    /// Inserts a proposed action (e.g. an on-demand follow-up from the Commitments surface).
+    func insertAgentAction(_ action: AgentAction) throws {
+        try database.dbQueue.write { db in
+            var a = action
+            try a.insert(db)
+        }
+    }
+
     func fetchAgentAction(id: Int64) throws -> AgentAction? {
         try database.dbQueue.read { db in
             try AgentAction.fetchOne(db, key: id)
@@ -673,6 +681,46 @@ struct BriefRepository {
             try db.execute(
                 sql: "UPDATE agentActions SET payload = ? WHERE id = ?",
                 arguments: [payload, id])
+        }
+    }
+
+    // MARK: - Commitments
+
+    /// All open commitments, newest first. Drives the Commitments ledger surface.
+    func fetchOpenCommitments() throws -> [Commitment] {
+        try database.dbQueue.read { db in
+            try Commitment
+                .filter(Column("status") == CommitmentStatus.open.rawValue)
+                .order(Column("createdAt").desc)
+                .fetchAll(db)
+        }
+    }
+
+    /// Open commitments for one conversation — used by the deriver to dedupe.
+    func fetchOpenCommitments(service: String, conversationId: String) throws -> [Commitment] {
+        try database.dbQueue.read { db in
+            try Commitment
+                .filter(Column("status") == CommitmentStatus.open.rawValue)
+                .filter(Column("service") == service && Column("conversationId") == conversationId)
+                .fetchAll(db)
+        }
+    }
+
+    @discardableResult
+    func insertCommitment(_ commitment: Commitment) throws -> Int64 {
+        try database.dbQueue.write { db in
+            var c = commitment
+            try c.insert(db)
+            guard let id = c.id else { throw DatabaseError(message: "insertCommitment: no rowid after insert") }
+            return id
+        }
+    }
+
+    func updateCommitmentStatus(id: Int64, status: CommitmentStatus) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE commitments SET status = ? WHERE id = ?",
+                arguments: [status.rawValue, id])
         }
     }
 

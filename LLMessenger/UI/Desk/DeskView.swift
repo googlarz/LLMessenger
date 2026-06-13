@@ -14,11 +14,12 @@ struct DeskView: View {
     }
 
     enum DeskTab: String, CaseIterable {
-        case act     = "Act"
-        case now     = "Now"
-        case owed    = "Owed"
-        case today   = "Today"
-        case archive = "Archive"
+        case act         = "Act"
+        case now         = "Now"
+        case owed        = "Owed"
+        case commitments = "Commitments"
+        case today       = "Today"
+        case archive     = "Archive"
     }
 
     var body: some View {
@@ -33,6 +34,8 @@ struct DeskView: View {
                 NowView()
             case .owed:
                 OwedView()
+            case .commitments:
+                CommitmentsView()
             case .today:
                 TodayView()
             case .archive:
@@ -61,7 +64,8 @@ struct DeskView: View {
             HStack(spacing: 5) {
                 if (tab == .act && appState.actionsReadyCount > 0) ||
                    (tab == .now && appState.nowNeedsAttention) ||
-                   (tab == .owed && appState.owedCount > 0) {
+                   (tab == .owed && appState.owedCount > 0) ||
+                   (tab == .commitments && appState.commitmentsCount > 0) {
                     Circle()
                         .fill(Theme.signal)
                         .frame(width: 5, height: 5)

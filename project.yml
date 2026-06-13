@@ -30,6 +30,7 @@ targets:
       - package: GRDB
       - target: LLMessengerWidget
         embed: true
+      - sdk: EventKit.framework
   LLMessengerWidget:
     type: app-extension
     platform: macOS

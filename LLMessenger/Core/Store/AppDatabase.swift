@@ -464,6 +464,13 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "scheduledAt", .datetime)
             }
         }
+        migrator.registerMigration("v24_commitment_link") { db in
+            // P3: link a follow_up action to the commitment that produced it, so the
+            // engine proposes at most one pending follow-up per commitment.
+            try db.alter(table: "agentActions") { t in
+                t.add(column: "commitmentId", .integer)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

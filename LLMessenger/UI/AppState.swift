@@ -132,6 +132,10 @@ final class AppState: ObservableObject {
     @Published var agentActions: [AgentAction] = []
     @Published var actionsReadyCount: Int = 0
 
+    /// Open commitments (the ledger) and their count.
+    @Published var commitments: [Commitment] = []
+    @Published var commitmentsCount: Int = 0
+
     @Published var contextSuggestions: [ContextSuggestion] = []
     private let contextSuggestionEngine = RuleSuggestionEngine()
 
@@ -242,6 +246,7 @@ final class AppState: ObservableObject {
                     self.onBriefsChanged?()
                     self.reloadOwedReplies()
                     self.reloadAgentActions()
+                    self.reloadCommitments()
                     self.reloadContextSuggestions()
                 }
             } catch {
@@ -277,6 +282,52 @@ final class AppState: ObservableObject {
                 self.onBriefsChanged?()
                 self.evaluateDelegation()
             }
+        }
+    }
+
+    // MARK: - P3 Commitments
+
+    func reloadCommitments() {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let open = (try? self.repository.fetchOpenCommitments()) ?? []
+            await MainActor.run {
+                self.commitments = open
+                self.commitmentsCount = open.count
+                self.onBriefsChanged?()
+            }
+        }
+    }
+
+    func markCommitmentFulfilled(_ commitment: Commitment) {
+        guard let id = commitment.id else { return }
+        do {
+            try repository.updateCommitmentStatus(id: id, status: .fulfilled)
+            reloadCommitments()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func dropCommitment(_ commitment: Commitment) {
+        guard let id = commitment.id else { return }
+        do {
+            try repository.updateCommitmentStatus(id: id, status: .dropped)
+            reloadCommitments()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// Proposes a follow_up for a due commitment on demand (the "Draft follow-up"
+    /// button) and surfaces it in the Act queue. Reuses the engine's pure builder.
+    func draftFollowUp(for commitment: Commitment) {
+        guard let action = AgentEngine.followUpAction(for: commitment) else { return }
+        do {
+            try repository.insertAgentAction(action)
+            reloadAgentActions()
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 
@@ -391,33 +442,137 @@ final class AppState: ObservableObject {
     /// (the user tapped Approve), so this is NOT auto-send.
     func approveAction(_ action: AgentAction) {
         guard let id = action.id else { return }
-        if action.kindEnum == .reply {
-            guard let draftText = action.replyPayload?.draftText,
-                  let adapter = adapters[action.service] else {
-                lastError = "\(Theme.serviceName(action.service)) is not connected."
-                return
-            }
-            Task { [weak self] in
-                guard let self else { return }
-                do {
-                    try await adapter.send(conversationID: action.conversationId, text: draftText)
-                    try ActionAuditLog.record(
-                        db: self.database,
-                        kind: action.kind,
-                        service: action.service,
-                        conversationId: action.conversationId,
-                        detail: draftText,
-                        trigger: .approved)
-                    try self.repository.updateAgentActionStatus(id: id, status: .done, resolvedAt: Date())
-                    self.markCardHandledForConversation(service: action.service, conversationId: action.conversationId)
-                    self.reloadAgentActions()
-                } catch {
-                    try? self.repository.updateAgentActionStatus(id: id, status: .failed, resolvedAt: Date())
-                    self.lastError = error.localizedDescription
-                    self.reloadAgentActions()
-                }
+        switch action.kindEnum {
+        case .reply, .followUp:
+            approveReplyAction(action, id: id)
+        case .calendarHold:
+            approveCalendarHold(action, id: id)
+        case .rsvp:
+            approveRSVP(action, id: id)
+        case .ack, .none:
+            approveReplyAction(action, id: id)
+        }
+    }
+
+    private func approveReplyAction(_ action: AgentAction, id: Int64) {
+        guard let draftText = action.replyPayload?.draftText,
+              let adapter = adapters[action.service] else {
+            lastError = "\(Theme.serviceName(action.service)) is not connected."
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await adapter.send(conversationID: action.conversationId, text: draftText)
+                try ActionAuditLog.record(
+                    db: self.database,
+                    kind: action.kind,
+                    service: action.service,
+                    conversationId: action.conversationId,
+                    detail: draftText,
+                    trigger: .approved)
+                try self.repository.updateAgentActionStatus(id: id, status: .done, resolvedAt: Date())
+                self.markCardHandledForConversation(service: action.service, conversationId: action.conversationId)
+                self.reloadAgentActions()
+            } catch {
+                try? self.repository.updateAgentActionStatus(id: id, status: .failed, resolvedAt: Date())
+                self.lastError = error.localizedDescription
+                self.reloadAgentActions()
             }
         }
+    }
+
+    /// Lazily-created calendar writer. EventKit access is requested on first approve.
+    private lazy var calendarActor = CalendarActor()
+
+    private func approveCalendarHold(_ action: AgentAction, id: Int64) {
+        guard let payload = action.calendarPayload,
+              let start = payload.start, let end = payload.end else {
+            lastError = "Calendar event details are missing or invalid."
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            let granted = await self.ensureCalendarAccess()
+            guard granted else {
+                // Leave the action pending so the user can retry after granting access.
+                self.lastError = "Calendar access is required to create this event."
+                return
+            }
+            do {
+                try await self.calendarActor.createEvent(
+                    title: payload.title, start: start, end: end, notes: payload.notes)
+                try ActionAuditLog.record(
+                    db: self.database,
+                    kind: action.kind,
+                    service: action.service,
+                    conversationId: action.conversationId,
+                    detail: "Created event: \(payload.title) @ \(payload.startISO)",
+                    trigger: .approved)
+                try self.repository.updateAgentActionStatus(id: id, status: .done, resolvedAt: Date())
+                self.reloadAgentActions()
+            } catch {
+                self.lastError = error.localizedDescription
+                // Leave pending; do not mark failed for an access/save issue the user can fix.
+            }
+        }
+    }
+
+    private func approveRSVP(_ action: AgentAction, id: Int64) {
+        guard let payload = action.calendarPayload else {
+            lastError = "RSVP details are missing."
+            return
+        }
+        guard let adapter = adapters[action.service] else {
+            lastError = "\(Theme.serviceName(action.service)) is not connected."
+            return
+        }
+        let replyText = payload.replyText ?? "Yes, that works for me."
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await adapter.send(conversationID: action.conversationId, text: replyText)
+                // Best-effort: also hold the slot if access is already granted.
+                if let start = payload.start, let end = payload.end,
+                   await self.ensureCalendarAccess() {
+                    try? await self.calendarActor.createEvent(
+                        title: payload.title, start: start, end: end, notes: payload.notes)
+                }
+                try ActionAuditLog.record(
+                    db: self.database,
+                    kind: action.kind,
+                    service: action.service,
+                    conversationId: action.conversationId,
+                    detail: replyText,
+                    trigger: .approved)
+                try self.repository.updateAgentActionStatus(id: id, status: .done, resolvedAt: Date())
+                self.markCardHandledForConversation(service: action.service, conversationId: action.conversationId)
+                self.reloadAgentActions()
+            } catch {
+                try? self.repository.updateAgentActionStatus(id: id, status: .failed, resolvedAt: Date())
+                self.lastError = error.localizedDescription
+                self.reloadAgentActions()
+            }
+        }
+    }
+
+    /// Test hook: when set, bypasses real EventKit and forces the access result
+    /// so calendar-approve tests are deterministic regardless of the host's grant state.
+    var calendarAccessOverrideForTesting: Bool?
+
+    /// Returns true if calendar write access is granted, requesting it if undetermined.
+    private func ensureCalendarAccess() async -> Bool {
+        if let override = calendarAccessOverrideForTesting { return override }
+        let status = calendarActor.authorizationStatus()
+        if #available(macOS 14.0, *) {
+            if status == .fullAccess || status == .writeOnly { return true }
+        } else {
+            if status == .authorized { return true }
+        }
+        if status == .notDetermined {
+            return await calendarActor.requestAccess()
+        }
+        return false
     }
 
     func editAction(_ action: AgentAction, newText: String) {

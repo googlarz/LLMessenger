@@ -18,5 +18,9 @@
     <string>NSApplication</string>
     <key>NSContactsUsageDescription</key>
     <string>LLMessenger uses your contacts to display names instead of phone numbers in message briefs.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>LLMessenger creates calendar events when you approve a scheduling action from a conversation.</string>
+    <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+    <string>LLMessenger adds events to your calendar when you approve a scheduling action from a conversation.</string>
 </dict>
 </plist>
