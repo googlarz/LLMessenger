@@ -127,6 +127,8 @@ struct PromptBuilder {
         let noise = ctx.noiseTopicsList
         if !noise.isEmpty { fields.append("ignore: \(noise.joined(separator: ", "))") }
         if let note = ctx.contextNote, !note.isEmpty { fields.append("note: \(note)") }
+        let aliases = ctx.aliasesList
+        if !aliases.isEmpty { fields.append("glossary: \(aliases.joined(separator: "; "))") }
         guard !fields.isEmpty else { return nil }
         let label = ctx.label.isEmpty ? ctx.conversationId : ctx.label
         return "- [\(label)] " + fields.joined(separator: "; ")

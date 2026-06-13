@@ -19,6 +19,7 @@ struct ContextEditor: View {
     @State private var importantTopics = ""
     @State private var noiseTopics = ""
     @State private var keySenders = ""
+    @State private var aliases = ""
     @State private var contextNote = ""
     @State private var responseExpectation = "none"
     @State private var privacyOverride = "none"
@@ -65,6 +66,9 @@ struct ContextEditor: View {
                         .textFieldStyle(.roundedBorder)
                         .font(Theme.sans(13))
                     TextField("Key senders: Coach Lasse", text: $keySenders)
+                        .textFieldStyle(.roundedBorder)
+                        .font(Theme.sans(13))
+                    TextField("Glossary: The Hall = home venue", text: $aliases)
                         .textFieldStyle(.roundedBorder)
                         .font(Theme.sans(13))
                 }
@@ -125,6 +129,7 @@ struct ContextEditor: View {
         importantTopics = ctx.importantTopicsList.joined(separator: ", ")
         noiseTopics = ctx.noiseTopicsList.joined(separator: ", ")
         keySenders = ctx.keySendersList.joined(separator: ", ")
+        aliases = ctx.aliasesList.joined(separator: ", ")
         contextNote = ctx.contextNote ?? ""
         responseExpectation = ctx.responseExpectation ?? "none"
         privacyOverride = ctx.privacyOverride ?? "none"
@@ -146,6 +151,7 @@ struct ContextEditor: View {
         ctx.importantTopicsList = splitCSV(importantTopics)
         ctx.noiseTopicsList = splitCSV(noiseTopics)
         ctx.keySendersList = splitCSV(keySenders)
+        ctx.aliasesList = splitCSV(aliases)
 
         do {
             try repository.upsertConversationContext(ctx)

@@ -406,6 +406,11 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "privacyOverride", .text)    // "local_only" | "never_draft" | nil
             }
         }
+        migrator.registerMigration("v20_context_aliases") { db in
+            try db.alter(table: "conversationContexts") { t in
+                t.add(column: "aliases", .text)   // JSON array string
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

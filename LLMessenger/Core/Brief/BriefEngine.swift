@@ -180,6 +180,14 @@ final class BriefEngine {
         // Step 4: Guard against blank briefs — messages stay unattached if LLM returned nothing.
         guard !allCards.isEmpty else { return nil }
 
+        // Context-aware ordering: surface high-priority-context conversations first and push
+        // low/noise-dominated ones to the end. Pure helper; falls back to LLM priority when no
+        // context overrides exist.
+        let cardContexts = allCards.compactMap {
+            try? repository.fetchConversationContext(service: $0.service, conversationId: $0.conversationId)
+        }
+        allCards = DigestOrdering.order(cards: allCards, contexts: cardContexts).map { $0.card }
+
         let merged = BriefJSON(
             totalMessages: totalMessages,
             totalThreads: totalThreads,

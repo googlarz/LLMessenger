@@ -30,6 +30,8 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
     var responseExpectation: String?
     /// "local_only" | "never_draft" | nil.
     var privacyOverride: String?
+    /// JSON array string of glossary aliases, e.g. "The Hall = home venue".
+    var aliases: String?
 
     init(service: String,
          conversationId: String,
@@ -42,7 +44,8 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
          keySenders: String? = nil,
          contextNote: String? = nil,
          responseExpectation: String? = nil,
-         privacyOverride: String? = nil) {
+         privacyOverride: String? = nil,
+         aliases: String? = nil) {
         self.service = service
         self.conversationId = conversationId
         self.label = label
@@ -55,6 +58,7 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
         self.contextNote = contextNote
         self.responseExpectation = responseExpectation
         self.privacyOverride = privacyOverride
+        self.aliases = aliases
     }
 
     static let databaseTableName = "conversationContexts"
@@ -72,6 +76,11 @@ struct ConversationContext: Codable, FetchableRecord, PersistableRecord {
     var keySendersList: [String] {
         get { Self.decodeArray(keySenders) }
         set { keySenders = Self.encodeArray(newValue) }
+    }
+
+    var aliasesList: [String] {
+        get { Self.decodeArray(aliases) }
+        set { aliases = Self.encodeArray(newValue) }
     }
 
     private static func decodeArray(_ json: String?) -> [String] {
