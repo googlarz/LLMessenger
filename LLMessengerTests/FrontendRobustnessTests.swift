@@ -6,6 +6,7 @@
 // These tests verify that the backend upholds each contract so those paths are always safe.
 import XCTest
 import GRDB
+import AppKit
 @testable import LLMessenger
 
 @MainActor
@@ -15,6 +16,25 @@ final class FrontendRobustnessTests: XCTestCase {
 
     private func makeAppState(db: AppDatabase) -> AppState {
         AppState(database: db, llmClient: MockLLMClient(), llmModel: "test", basePrompt: "BASE")
+    }
+
+    // MARK: - Windows must open over another app's fullscreen Space without crashing
+
+    /// Opening Settings while another app owns the active fullscreen Space hangs/crashes
+    /// the app unless the window can join all Spaces as a fullscreen auxiliary — a managed
+    /// window (the default collectionBehavior) can't be placed on a fullscreen Space.
+    func testSettingsWindowCanOpenOverFullscreenSpace() throws {
+        let controller = SettingsWindowController(database: try makeDB())
+        let behavior = controller.window?.collectionBehavior ?? []
+        XCTAssertTrue(behavior.contains(.canJoinAllSpaces), "Settings window must join all Spaces")
+        XCTAssertTrue(behavior.contains(.fullScreenAuxiliary), "Settings window must be a fullscreen auxiliary")
+    }
+
+    func testOnboardingWindowCanOpenOverFullscreenSpace() throws {
+        let controller = OnboardingWindowController(database: try makeDB())
+        let behavior = controller.window?.collectionBehavior ?? []
+        XCTAssertTrue(behavior.contains(.canJoinAllSpaces), "Onboarding window must join all Spaces")
+        XCTAssertTrue(behavior.contains(.fullScreenAuxiliary), "Onboarding window must be a fullscreen auxiliary")
     }
 
     /// Inserts a Brief using only the fields accepted by the existing memberwise init.

@@ -29,6 +29,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         // tab + wider layout) doesn't shrink the new larger window on first open.
         window.setFrameAutosaveName("LLMessengerSettings.v2")
         window.isReleasedWhenClosed = false
+        // Must be able to appear over another app's fullscreen Space. A managed window
+        // (the default) can't be placed on a fullscreen Space, so ordering it front from
+        // there forces a broken Space transition that hangs/crashes the app. Matches
+        // ChatWindowController.
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         super.init(window: window)
         window.delegate = self

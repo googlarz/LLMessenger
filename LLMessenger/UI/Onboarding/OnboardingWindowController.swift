@@ -25,6 +25,9 @@ final class OnboardingWindowController: NSWindowController {
         window.backgroundColor = NSColor(Theme.bg)
         window.isReleasedWhenClosed = false
         window.level = .floating
+        // Same fullscreen-Space fix as SettingsWindowController: a managed window can't
+        // open over another app's fullscreen Space without hanging/crashing the app.
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         super.init(window: window)
 
