@@ -2,29 +2,29 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>LLMessenger</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.llmessenger.app</string>
-    <key>CFBundleVersion</key>
-    <string>2.1.0</string>
-    <key>CFBundleShortVersionString</key>
-    <string>2.1.0</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSPrincipalClass</key>
-    <string>NSApplication</string>
-    <key>NSContactsUsageDescription</key>
-    <string>LLMessenger uses your contacts to display names instead of phone numbers in message briefs.</string>
-    <key>NSCalendarsUsageDescription</key>
-    <string>LLMessenger creates calendar events when you approve a scheduling action from a conversation.</string>
-    <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-    <string>LLMessenger adds events to your calendar when you approve a scheduling action from a conversation.</string>
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>LLMessenger transcribes your spoken commands on-device so you can tell the agent what to do.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>LLMessenger uses the microphone only while you dictate a command to the agent.</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.llmessenger.app</string>
+	<key>CFBundleName</key>
+	<string>LLMessenger</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.1.1</string>
+	<key>CFBundleVersion</key>
+	<string>2.1.1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSCalendarsUsageDescription</key>
+	<string>LLMessenger creates calendar events when you approve a scheduling action from a conversation.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>LLMessenger adds events to your calendar when you approve a scheduling action from a conversation.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>LLMessenger uses your contacts to display names instead of phone numbers in message briefs.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LLMessenger uses the microphone only while you dictate a command to the agent.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>LLMessenger transcribes your spoken commands on-device so you can tell the agent what to do.</string>
 </dict>
 </plist>
