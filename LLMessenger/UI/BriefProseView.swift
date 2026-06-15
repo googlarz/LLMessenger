@@ -113,7 +113,9 @@ struct BriefProseView: View {
     /// latter is what folds automated senders (codes, receipts, tariff notices)
     /// that have no saved context — the common case.
     private func isNoise(_ card: BriefCard) -> Bool {
-        card.collapsed || card.priority == "low"
+        // A high-priority card is never folded into the noise strip — otherwise it
+        // would render in both "Needs you" and the FYI strip and be double-counted.
+        card.priority != "high" && (card.collapsed || card.priority == "low")
     }
 
     private var visibleMessages: [Message] {
@@ -133,9 +135,10 @@ struct BriefProseView: View {
 
             if let json = parsedJSON {
                 WeekAtGlanceView(
-                    messages: messages,
-                    cards: json.cards,
-                    activeCount: highPriorityCards.count + otherCards.count
+                    messages: visibleMessages,
+                    cards: numberedVisibleCards.map(\.card),
+                    activeCount: highPriorityCards.count + otherCards.count,
+                    needsYouCount: highPriorityCards.count
                 )
 
                 stillBrokenNotice
@@ -159,7 +162,8 @@ struct BriefProseView: View {
                 }
 
                 if !noiseCards.isEmpty {
-                    NoiseStripView(cards: noiseCards)
+                    NoiseStripView(cards: noiseCards,
+                                   startNumber: highPriorityCards.count + otherCards.count)
                         .padding(.top, (highPriorityCards.isEmpty && otherCards.isEmpty) ? 4 : 10)
                 }
 
@@ -219,7 +223,7 @@ struct BriefProseView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(cards.enumerated()), id: \.element.id) { idx, numbered in
                 BriefCardView(
-                    number: numbered.number,
+                    number: startIndex + idx + 1,
                     card: numbered.card,
                     briefID: brief.id,
                     conversationContext: contextCache["\(numbered.card.service)|\(numbered.card.conversationId)"],
@@ -444,6 +448,7 @@ struct BriefProseView: View {
 /// one-liners. Cards with DigestOrdering.collapsed == true land here.
 private struct NoiseStripView: View {
     let cards: [NumberedBriefCard]
+    let startNumber: Int
     @State private var expanded = false
 
     var body: some View {
@@ -466,11 +471,14 @@ private struct NoiseStripView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("FYI, \(cards.count) quiet item\(cards.count == 1 ? "" : "s")")
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(expanded ? "Hides quiet items" : "Shows quiet items")
 
             if expanded {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(cards, id: \.id) { numbered in
-                        noiseRow(numbered)
+                    ForEach(Array(cards.enumerated()), id: \.element.id) { idx, numbered in
+                        noiseRow(numbered, number: startNumber + idx + 1)
                         if numbered.id != cards.last?.id {
                             Rule().padding(.leading, Theme.gutter + 40)
                         }
@@ -482,16 +490,17 @@ private struct NoiseStripView: View {
         .animation(Theme.spring, value: expanded)
     }
 
-    private func noiseRow(_ numbered: NumberedBriefCard) -> some View {
+    private func noiseRow(_ numbered: NumberedBriefCard, number: Int) -> some View {
         let card = numbered.card
         let headline: String = {
             let h = card.headline
-            return (h.isEmpty || h.lowercased().hasPrefix("none"))
-                ? String(card.summary.prefix(80))
-                : h
+            let norm = h.trimmingCharacters(in: .whitespaces).lowercased()
+            guard h.isEmpty || norm == "none" || norm == "none." else { return h }
+            let s = String(card.summary.prefix(80))
+            return s.isEmpty ? (card.conversation ?? Theme.serviceName(card.service)) : s
         }()
         return HStack(spacing: 8) {
-            Text(String(format: "%02d", numbered.number))
+            Text(String(format: "%02d", number))
                 .font(Theme.mono(9.5, weight: .semibold))
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: 20, alignment: .leading)
@@ -525,6 +534,7 @@ private struct WeekAtGlanceView: View {
     let messages: [Message]
     let cards: [BriefCard]
     let activeCount: Int
+    let needsYouCount: Int
 
     @State private var appeared = false
 
@@ -567,10 +577,11 @@ private struct WeekAtGlanceView: View {
 
     /// Varies with actual message volume so the label carries information.
     private var weekCharacter: (text: String, color: Color) {
-        let hasHigh = cards.contains { $0.priority == "high" }
+        let hasHigh = needsYouCount > 0
         if activeCount == 0 { return ("ALL QUIET",  Theme.textTertiary) }
         if hasHigh          { return ("NEEDS YOU",  Theme.signal) }
-        let total = messages.count
+        // Count only the window the histogram actually shows, not lifetime messages.
+        let total = dayData.reduce(0) { $0 + $1.count }
         if total > 100      { return ("HEAVY WEEK", Theme.standby) }
         if total > 40       { return ("BUSY WEEK",  Theme.textSecondary) }
         return                       ("LIGHT WEEK", Theme.textTertiary)
@@ -582,6 +593,10 @@ private struct WeekAtGlanceView: View {
         let data       = dayData
         let character  = weekCharacter
         let totalCards = cards.count
+        // The lead number must quantify what the character label names, or the pulse
+        // contradicts the headline/section (e.g. "2 … NEEDS YOU" vs "1 needs you").
+        let hasHigh    = needsYouCount > 0
+        let leadCount  = hasHigh ? needsYouCount : activeCount
 
         HStack(alignment: .bottom, spacing: 0) {
 
@@ -628,7 +643,7 @@ private struct WeekAtGlanceView: View {
             // Right: active-thread count
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text("\(activeCount)")
+                    Text("\(leadCount)")
                         .font(Theme.display(20, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
                     Text("OF \(totalCards)")
@@ -641,6 +656,8 @@ private struct WeekAtGlanceView: View {
                     .tracking(0.8)
                     .foregroundStyle(character.color)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(leadCount) of \(totalCards) threads, \(character.text)")
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.bottom, 12)

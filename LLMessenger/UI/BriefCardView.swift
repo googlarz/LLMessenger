@@ -92,9 +92,12 @@ struct BriefCardView: View {
 
     private var displayHeadline: String {
         let h = card.headline
-        return (h.isEmpty || h.lowercased().hasPrefix("none"))
-            ? String(card.summary.prefix(80))
-            : h
+        // Match the LLM's empty/placeholder sentinel exactly — a hasPrefix("none")
+        // check would swallow real headlines like "None of us can make Friday".
+        let norm = h.trimmingCharacters(in: .whitespaces).lowercased()
+        guard h.isEmpty || norm == "none" || norm == "none." else { return h }
+        let s = String(card.summary.prefix(80))
+        return s.isEmpty ? convName : s
     }
 
     var body: some View {
@@ -218,16 +221,23 @@ struct BriefCardView: View {
                 .help("Tap to correct this priority")
             }
 
-            if !isHigh {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(Theme.textTertiary)
-                    .rotationEffect(.degrees(isBodyExpanded ? 180 : 0))
+            // High and promoted cards are always-expanded ledes — no collapse affordance.
+            if !isHigh && !promoted {
+                Button {
+                    withAnimation(Theme.spring) { bodyExpanded.toggle() }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .rotationEffect(.degrees(isBodyExpanded ? 180 : 0))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isBodyExpanded ? "Collapse details" : "Expand details")
             }
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            guard !isHigh else { return }
+            guard !isHigh && !promoted else { return }
             withAnimation(Theme.spring) { bodyExpanded.toggle() }
         }
     }
@@ -240,7 +250,7 @@ struct BriefCardView: View {
             .fixedSize(horizontal: false, vertical: true)
             .contentShape(Rectangle())
             .onTapGesture {
-                guard !isHigh else { return }
+                guard !isHigh && !promoted else { return }
                 withAnimation(Theme.spring) { bodyExpanded.toggle() }
             }
     }
