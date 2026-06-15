@@ -176,6 +176,87 @@ final class BriefJSONTests: XCTestCase {
         let convId = try decode(json).cards.first!.conversationId
         XCTAssertFalse(convId.contains("|"), "conversationId '\(convId)' must not include pipe or display name suffix")
     }
+
+    // MARK: - Lenient extraction from raw LLM output (OpusPlus audit 2026-06-15)
+    // Regression guards for the brief-pipeline findings: fence-with-trailing-prose was
+    // dropped by the old end-anchored regex, and the view fallback leaked raw JSON.
+
+    func testDecodeLenientAcceptsPlainJSON() {
+        XCTAssertNotNil(BriefJSON.decodeLenient(from: #"{"cards":[]}"#))
+    }
+
+    func testDecodeLenientAcceptsFencedJSON() {
+        XCTAssertNotNil(BriefJSON.decodeLenient(from: "```json\n{\"cards\":[]}\n```"))
+    }
+
+    func testDecodeLenientAcceptsFencedJSONWithTrailingProse() {
+        // The old end-anchored `\n?```$` left the closing fence in place -> decode failed.
+        XCTAssertNotNil(BriefJSON.decodeLenient(from: "```json\n{\"cards\":[]}\n```\nHope this helps!"))
+    }
+
+    func testDecodeLenientAcceptsLeadingProse() {
+        XCTAssertNotNil(BriefJSON.decodeLenient(from: "Here is your brief: {\"cards\":[]}"))
+    }
+
+    func testDecodeLenientAcceptsTrailingProse() {
+        XCTAssertNotNil(BriefJSON.decodeLenient(from: "{\"cards\":[]}\nLet me know if you need more."))
+    }
+
+    func testEmptyArrayMissingCloseBraceIsBalanced() {
+        // The one truncation safely recovered: empty cards, only the outer brace missing.
+        XCTAssertNotNil(BriefJSON.decodeLenient(from: #"{"cards":[]"#))
+    }
+
+    func testTruncatedBriefWithCardSafelyDecodesToNil() {
+        // Realistic truncation (outer brace cut after a card). The engine's contract is to
+        // DROP unrecoverable briefs, not half-render them, so this safely decodes to nil —
+        // NOT a recovered partial brief. (OpusPlus caught a prior over-claim here.)
+        XCTAssertNil(BriefJSON.decodeLenient(from: #"{"cards":[{"id":"a","headline":"H"}]"#))
+    }
+
+    func testTruncatedBriefStillFlaggedAsJSONSoFallbackSuppresses() {
+        // Even when it can't decode, it must still read as JSON so the view fallback suppresses
+        // it (never shows raw braces to the user) — the safe-degradation guarantee.
+        XCTAssertTrue(BriefJSON.looksLikeJSON(#"{"cards":[{"id":"a","headline":"H"}]"#))
+    }
+
+    func testDecodeLenientRejectsPureProse() {
+        XCTAssertNil(BriefJSON.decodeLenient(from: "Sorry, I can't help with that request."))
+    }
+
+    func testDecodeLenientNilOnEmptyOrNil() {
+        XCTAssertNil(BriefJSON.decodeLenient(from: ""))
+        XCTAssertNil(BriefJSON.decodeLenient(from: "   \n  "))
+        XCTAssertNil(BriefJSON.decodeLenient(from: nil))
+    }
+
+    func testLooksLikeJSONFlagsRawFencedAndProseWrapped() {
+        XCTAssertTrue(BriefJSON.looksLikeJSON(#"{"cards":[]}"#))
+        XCTAssertTrue(BriefJSON.looksLikeJSON("```json\n{}\n```"))
+        XCTAssertTrue(BriefJSON.looksLikeJSON("Here is your brief: {\"cards\":[]}"))
+        XCTAssertTrue(BriefJSON.looksLikeJSON("{\"x\": 1}"))
+    }
+
+    func testLooksLikeJSONIgnoresPlainProse() {
+        XCTAssertFalse(BriefJSON.looksLikeJSON("Just a plain prose summary, nothing structured."))
+        XCTAssertFalse(BriefJSON.looksLikeJSON("Meet me at 5 {ish}"))
+    }
+
+    func testDecodeLenientHandlesStrayBraceInHeadline() {
+        // Stray `{` inside a string value must not cause a spurious `}` to be appended.
+        let json = #"{"cards":[{"id":"a","headline":"cost is {high","counts":{"messages":1,"threads":1,"people":1}}]}"#
+        let brief = BriefJSON.decodeLenient(from: json)
+        XCTAssertNotNil(brief, "Valid brief with stray { in headline should decode successfully")
+        XCTAssertEqual(brief?.cards.first?.headline, "cost is {high")
+    }
+
+    func testDecodeLenientHandlesStrayBracketInHeadline() {
+        // Stray `[` inside a string value must not cause a spurious `]` to be appended.
+        let json = #"{"cards":[{"id":"b","headline":"see list [item","counts":{"messages":1,"threads":1,"people":1}}]}"#
+        let brief = BriefJSON.decodeLenient(from: json)
+        XCTAssertNotNil(brief, "Valid brief with stray [ in headline should decode successfully")
+        XCTAssertEqual(brief?.cards.first?.headline, "see list [item")
+    }
 }
 
 // Make BriefQuote Equatable for XCTAssertEqual

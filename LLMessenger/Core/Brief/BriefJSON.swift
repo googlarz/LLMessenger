@@ -170,3 +170,86 @@ struct BriefQuote: Codable {
         text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
     }
 }
+
+// MARK: - Lenient extraction from raw LLM output (OpusPlus audit 2026-06-15)
+//
+// LLMs routinely violate "JSON only": markdown fences, preamble ("Here is your brief:"),
+// trailing prose, trailing commas, truncated output. ONE shared lenient path is used by
+// both the engine (BriefEngine.decodeAndValidateBrief) and the render fallback
+// (BriefProseView) so the two decoders never diverge.
+extension BriefJSON {
+    /// Best-effort extraction of a JSON payload from raw model output: strips a fenced code
+    /// block anywhere (not just a leading one), drops prose around the JSON by taking the
+    /// first `{`/`[` to the last `}`/`]`, and removes trailing commas. It attempts to balance
+    /// trailing-truncated brackets, but a brief truncated MID-STRUCTURE stays invalid by design
+    /// — the caller decodes with `try?` and an unrecoverable brief is safely dropped, not
+    /// half-rendered.
+    static func extractJSONPayload(from raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let fenced = firstFencedBlock(in: s) { s = fenced }
+        if let span = outermostJSONSpan(in: s) { s = span }
+        s = s.replacingOccurrences(of: #",\s*\]"#, with: "]", options: .regularExpression)
+        s = s.replacingOccurrences(of: #",\s*\}"#, with: "}", options: .regularExpression)
+        // Count only brackets that are outside JSON string literals, so a stray `{` or `[`
+        // inside a headline/summary value doesn't trigger a spurious append that breaks decode.
+        var openBraces = 0, closeBraces = 0, openBrackets = 0, closeBrackets = 0
+        var inString = false
+        var idx = s.startIndex
+        while idx < s.endIndex {
+            let c = s[idx]
+            if inString {
+                if c == "\\" {
+                    idx = s.index(after: idx) // skip the escaped character
+                    if idx < s.endIndex { idx = s.index(after: idx) }
+                    continue
+                }
+                if c == "\"" { inString = false }
+            } else {
+                switch c {
+                case "\"": inString = true
+                case "{": openBraces += 1
+                case "}": closeBraces += 1
+                case "[": openBrackets += 1
+                case "]": closeBrackets += 1
+                default: break
+                }
+            }
+            idx = s.index(after: idx)
+        }
+        if closeBraces < openBraces { s += String(repeating: "}", count: openBraces - closeBraces) }
+        if closeBrackets < openBrackets { s += String(repeating: "]", count: openBrackets - closeBrackets) }
+        return s
+    }
+
+    /// Decode raw model output into a BriefJSON, tolerating fences/prose/minor defects.
+    /// Returns nil for empty input or output with no recoverable JSON.
+    static func decodeLenient(from raw: String?) -> BriefJSON? {
+        guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        guard let data = extractJSONPayload(from: raw).data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(BriefJSON.self, from: data)
+    }
+
+    /// True when a string still looks like (possibly malformed) JSON — used by the render
+    /// fallback to avoid showing raw JSON to the user after decoding has already failed.
+    static func looksLikeJSON(_ raw: String) -> Bool {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.hasPrefix("```") || t.contains("\"cards\"") { return true }
+        return t.range(of: #"\{\s*"[^"]+"\s*:"#, options: .regularExpression) != nil
+    }
+
+    private static func firstFencedBlock(in s: String) -> String? {
+        guard let open = s.range(of: #"```[a-zA-Z]*\n?"#, options: .regularExpression) else { return nil }
+        let rest = s[open.upperBound...]
+        if let close = rest.range(of: "```") {
+            return String(rest[..<close.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return String(rest).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func outermostJSONSpan(in s: String) -> String? {
+        guard let firstOpen = s.firstIndex(where: { $0 == "{" || $0 == "[" }) else { return nil }
+        let closer: Character = s[firstOpen] == "{" ? "}" : "]"
+        guard let lastClose = s.lastIndex(of: closer), lastClose > firstOpen else { return nil }
+        return String(s[firstOpen...lastClose])
+    }
+}

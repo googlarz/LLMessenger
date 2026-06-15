@@ -562,7 +562,7 @@ final class BriefEngine {
     }
 
     private nonisolated func decodeAndValidateBrief(_ text: String, service: String, sourceMessages: [Message]) throws -> BriefJSON {
-        let cleanText = repairJSON(stripMarkdownFences(text))
+        let cleanText = BriefJSON.extractJSONPayload(from: text)
         guard let data = cleanText.data(using: .utf8) else {
             throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid UTF-8"))
         }
@@ -855,30 +855,6 @@ final class BriefEngine {
             return lhs.messageId < rhs.messageId
         }
         return (lhs.id ?? 0) < (rhs.id ?? 0)
-    }
-
-    private nonisolated func repairJSON(_ text: String) -> String {
-        var s = text
-        // Remove trailing commas before ] or }
-        s = s.replacingOccurrences(of: #",\s*\]"#, with: "]", options: .regularExpression)
-        s = s.replacingOccurrences(of: #",\s*\}"#, with: "}", options: .regularExpression)
-        // Balance brackets if the LLM truncated the output
-        let openBraces = s.filter { $0 == "{" }.count
-        let closeBraces = s.filter { $0 == "}" }.count
-        let openBrackets = s.filter { $0 == "[" }.count
-        let closeBrackets = s.filter { $0 == "]" }.count
-        if closeBraces < openBraces { s += String(repeating: "}", count: openBraces - closeBraces) }
-        if closeBrackets < openBrackets { s += String(repeating: "]", count: openBrackets - closeBrackets) }
-        return s
-    }
-
-    private nonisolated func stripMarkdownFences(_ text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix("```") else { return trimmed }
-        return trimmed
-            .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private nonisolated func encodeBriefJSON(_ briefJSON: BriefJSON) throws -> String {

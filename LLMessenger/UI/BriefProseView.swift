@@ -50,15 +50,9 @@ struct BriefProseView: View {
     }
 
     private static func decodeBriefJSON(_ brief: Brief) -> BriefJSON? {
-        guard var summary = brief.openingSummary else { return nil }
-        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("```") {
-            summary = trimmed
-                .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
-                .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
-        }
-        guard let data = summary.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(BriefJSON.self, from: data)
+        // Shared lenient path with the engine (BriefJSON.decodeLenient) — tolerates fences,
+        // prose, trailing commas, and truncation, and never diverges from the engine decoder.
+        BriefJSON.decodeLenient(from: brief.openingSummary)
     }
 
     private func refreshCaches() {
@@ -342,7 +336,10 @@ struct BriefProseView: View {
     @ViewBuilder
     private var fallbackView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let summary = brief.openingSummary, !summary.isEmpty {
+            // Only render the summary as prose when it is NOT (malformed) JSON — otherwise the
+            // user would see raw {"cards":…} braces. If JSON reached here it failed to decode,
+            // so suppress it and fall through to the grouped messages below. (OpusPlus 2026-06-15)
+            if let summary = brief.openingSummary, !summary.isEmpty, !BriefJSON.looksLikeJSON(summary) {
                 summaryBlock(summary)
                     .padding(.horizontal, Theme.gutter)
                     .padding(.bottom, 22)
