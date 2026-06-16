@@ -242,9 +242,11 @@ final class AppState: ObservableObject {
             do {
                 let fetched = try self.repository.fetchAllBriefs()
                 let healthMap = (try? settingsRepo.loadAllServiceHealth()) ?? [:]
+                let heldBack = settingsRepo.loadFirewallHeldBack()
                 await MainActor.run {
                     self.briefs = fetched
                     self.serviceHealthMap = healthMap
+                    self.heldBackCount = heldBack
                     self.recomputeNowState()
                     self.onBriefsChanged?()
                     self.reloadOwedReplies()
