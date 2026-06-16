@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icon.png" width="96" alt="LLMessenger icon">
+
 # LLMessenger
 
 **Stop reading 200 messages. Read one brief — and let an agent handle the rest.**
