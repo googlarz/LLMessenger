@@ -573,9 +573,7 @@ final class ChatViewModel: ObservableObject {
 
         // Prune quickReplies entries for cards belonging to the discarded draft's conversation.
         if let convID = discardedConvID,
-           let summary = currentBrief?.openingSummary,
-           let data = summary.data(using: .utf8),
-           let json = try? JSONDecoder().decode(BriefJSON.self, from: data) {
+           let json = BriefJSON.decodeLenient(from: currentBrief?.openingSummary) {
             for card in json.cards where card.conversationId == convID {
                 quickReplies.removeValue(forKey: card.id)
             }
@@ -612,9 +610,7 @@ final class ChatViewModel: ObservableObject {
             discardDraft(id: draft.id)
             if let brief = appState.selectedBrief,
                let briefID = brief.id,
-               let summary = brief.openingSummary,
-               let data = summary.data(using: .utf8),
-               let json = try? JSONDecoder().decode(BriefJSON.self, from: data),
+               let json = BriefJSON.decodeLenient(from: brief.openingSummary),
                let card = json.cards.first(where: { $0.service == draft.serviceID && $0.conversationId == draft.conversationID }) {
                 appState.markCardHandled(briefID: briefID, cardID: card.id)
             }

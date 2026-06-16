@@ -29,23 +29,14 @@ struct ChatPanelView: View {
             return s != nil && s != .ok
         }
 
-        if var summary = appState.selectedBrief?.openingSummary {
-            let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.hasPrefix("```") {
-                summary = trimmed
-                    .replacingOccurrences(of: #"^```[a-zA-Z]*\n?"#, with: "", options: .regularExpression)
-                    .replacingOccurrences(of: #"\n?```$"#, with: "", options: .regularExpression)
-            }
-            if let data = summary.data(using: .utf8),
-               let json = try? JSONDecoder().decode(BriefJSON.self, from: data) {
-                let totalMsgs = json.total_messages ?? msgs.count
-                let svcs = Set(json.cards.map(\.service)).count
-                let briefs = json.cards.count
-                let threads = json.total_threads ?? json.cards.reduce(0) { $0 + $1.counts.threads }
-                let people = json.total_people ?? json.cards.reduce(0) { $0 + $1.counts.people }
-                let highPriority = json.cards.filter { $0.priority == "high" }.count
-                return (totalMsgs, svcs, briefs, threads, people, highPriority, failed)
-            }
+        if let json = BriefJSON.decodeLenient(from: appState.selectedBrief?.openingSummary) {
+            let totalMsgs = json.total_messages ?? msgs.count
+            let svcs = Set(json.cards.map(\.service)).count
+            let briefs = json.cards.count
+            let threads = json.total_threads ?? json.cards.reduce(0) { $0 + $1.counts.threads }
+            let people = json.total_people ?? json.cards.reduce(0) { $0 + $1.counts.people }
+            let highPriority = json.cards.filter { $0.priority == "high" }.count
+            return (totalMsgs, svcs, briefs, threads, people, highPriority, failed)
         }
         let svcs = Set(msgs.map(\.service)).count
         let convs = Set(msgs.map(\.conversationId)).count

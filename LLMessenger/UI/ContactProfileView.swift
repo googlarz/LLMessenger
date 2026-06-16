@@ -71,9 +71,7 @@ struct ContactProfileView: View {
         let allBriefs = (try? appState.repository.fetchAllBriefs()) ?? []
         var cards: [BriefCard] = []
         for brief in allBriefs {
-            guard let summary = brief.openingSummary,
-                  let data = summary.data(using: .utf8),
-                  let json = try? JSONDecoder().decode(BriefJSON.self, from: data) else { continue }
+            guard let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { continue }
             let matching = json.cards.filter {
                 $0.service == service && $0.conversationId == conversationId
             }

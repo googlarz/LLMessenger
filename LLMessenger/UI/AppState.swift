@@ -649,9 +649,7 @@ final class AppState: ObservableObject {
     private func markCardHandledForConversation(service: String, conversationId: String) {
         for brief in briefs {
             guard let briefID = brief.id,
-                  let summary = brief.openingSummary,
-                  let data = summary.data(using: .utf8),
-                  let json = try? JSONDecoder().decode(BriefJSON.self, from: data) else { continue }
+                  let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { continue }
             if let card = json.cards.first(where: { $0.service == service && $0.conversationId == conversationId }) {
                 markCardHandled(briefID: briefID, cardID: card.id)
             }
@@ -734,9 +732,7 @@ final class AppState: ObservableObject {
 
     func markAllHandled(briefID: Int64) {
         guard let brief = briefs.first(where: { $0.id == briefID }),
-              let summary = brief.openingSummary,
-              let data = summary.data(using: .utf8),
-              let json = try? JSONDecoder().decode(BriefJSON.self, from: data) else { return }
+              let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { return }
         for card in json.cards {
             markCardHandled(briefID: briefID, cardID: card.id)
         }
@@ -803,9 +799,7 @@ final class AppState: ObservableObject {
         let todayHighUnhandled = briefs
             .filter { cal.isDateInToday($0.createdAt) && $0.archivedAt == nil }
             .contains { brief in
-                guard let summary = brief.openingSummary,
-                      let data = summary.data(using: .utf8),
-                      let json = try? JSONDecoder().decode(BriefJSON.self, from: data)
+                guard let json = BriefJSON.decodeLenient(from: brief.openingSummary)
                 else { return false }
                 return json.cards.contains { card in
                     card.priority == "high" &&

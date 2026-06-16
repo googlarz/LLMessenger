@@ -251,9 +251,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let adapters = self.appState?.adapters ?? [:]
                 self.appState?.briefGenerationState = .summarizing
                 do {
-                    _ = try await self.briefEngine?.summarizeLast(hours: 168, adapters: adapters)
+                    let newBriefID = try await self.briefEngine?.summarizeLast(hours: 168, adapters: adapters)
                     self.appState?.briefGenerationState = .complete
                     self.appState?.lastError = nil
+                    // Auto-select so the brief opens immediately instead of sitting unread in the list.
+                    if let id = newBriefID { self.appState?.selectedBriefID = id }
                 } catch {
                     self.appState?.briefGenerationState = .failed
                     self.appState?.lastError = error.localizedDescription
@@ -765,18 +767,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// the count and the body is the top high-priority headline.
     /// Falls back to the generic "New messages" / notificationText pair.
     private func highPriorityCardCount(brief: Brief?) -> Int {
-        guard let summary = brief?.openingSummary,
-              let data = summary.data(using: .utf8),
-              let parsed = try? JSONDecoder().decode(BriefJSON.self, from: data)
-        else { return 0 }
-        return parsed.cards.filter { $0.priority == "high" }.count
+        (BriefJSON.decodeLenient(from: brief?.openingSummary)?.cards.filter { $0.priority == "high" }.count) ?? 0
     }
 
     private func highPriorityNotification(brief: Brief?, defaultTitle: String) -> (title: String, body: String) {
         let defaultBody = brief?.notificationText ?? "You have new messages"
-        guard let summary = brief?.openingSummary,
-              let data = summary.data(using: .utf8),
-              let parsed = try? JSONDecoder().decode(BriefJSON.self, from: data)
+        guard let parsed = BriefJSON.decodeLenient(from: brief?.openingSummary)
         else {
             return (defaultTitle, defaultBody)
         }

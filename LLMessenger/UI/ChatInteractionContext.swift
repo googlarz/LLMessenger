@@ -154,12 +154,7 @@ struct ChatInteractionContext {
     }
 
     private static func decodeCards(from brief: Brief) -> [BriefCard] {
-        guard let text = brief.openingSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let data = text.data(using: .utf8),
-              let json = try? JSONDecoder().decode(BriefJSON.self, from: data) else {
-            return []
-        }
-        return json.cards
+        BriefJSON.decodeLenient(from: brief.openingSummary)?.cards ?? []
     }
 
     private func normalized(_ text: String?) -> String? {

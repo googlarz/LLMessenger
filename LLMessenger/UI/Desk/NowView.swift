@@ -13,11 +13,7 @@ struct NowView: View {
         return appState.briefs
             .filter { cal.isDateInToday($0.createdAt) && $0.archivedAt == nil }
             .compactMap { brief -> (Brief, [BriefCard])? in
-                guard
-                    let summary = brief.openingSummary,
-                    let data = summary.data(using: .utf8),
-                    let json = try? JSONDecoder().decode(BriefJSON.self, from: data)
-                else { return nil }
+                guard let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { return nil }
                 let urgent = json.cards.filter { $0.priority == "high" }
                 return urgent.isEmpty ? nil : (brief, urgent)
             }
@@ -121,7 +117,7 @@ struct NowView: View {
                     number: index + 1,
                     card: card,
                     briefID: brief.id,
-                    conversationContext: contexts["\(card.service):\(card.conversationId)"],
+                    conversationContext: contexts["\(card.service)|\(card.conversationId)"],
                     onShowTimeline: { _, _, _ in }
                 )
                 Rule()
@@ -130,14 +126,10 @@ struct NowView: View {
     }
 
     private func contextMap(for brief: Brief) -> [String: ConversationContext] {
-        guard
-            let summary = brief.openingSummary,
-            let data = summary.data(using: .utf8),
-            let json = try? JSONDecoder().decode(BriefJSON.self, from: data)
-        else { return [:] }
+        guard let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { return [:] }
         var map: [String: ConversationContext] = [:]
         for card in json.cards {
-            let key = "\(card.service):\(card.conversationId)"
+            let key = "\(card.service)|\(card.conversationId)"
             if let ctx = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId) {
                 map[key] = ctx
             }
