@@ -107,6 +107,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         let newID = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
                         if let id = newID {
                             self.appState?.lastError = nil
+                            self.appState?.selectedBriefID = id
                             let brief = try? self.appState?.repository.fetchBrief(id: id)
                             // Notification firewall: routine briefs stay silent;
                             // only high-priority items earn an interruption.
@@ -165,6 +166,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "48h Summary")
                             self.notificationManager?.post(briefID: briefID, title: title, body: body)
                             self.appState?.briefGenerationState = .complete
+                            self.appState?.selectedBriefID = briefID
                         } else {
                             self.appState?.briefGenerationState = .noNewMessages
                         }
@@ -200,6 +202,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "7-Day Summary")
                             self.notificationManager?.post(briefID: briefID, title: title, body: body)
                             self.appState?.briefGenerationState = .complete
+                            self.appState?.selectedBriefID = briefID
                         } else {
                             self.appState?.briefGenerationState = .noNewMessages
                         }
