@@ -62,6 +62,7 @@ private struct OnboardingView: View {
     @State private var imessageGranted   = false
     @State private var signalEnabled     = false
     @State private var signalNumber      = ""
+    @State private var signalDaemonUp    = false
     @State private var telegramEnabled   = false
     @State private var telegramConnected = false
     @State private var telegramApiId     = ""
@@ -266,18 +267,46 @@ private struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("+1 (555) 000-0000", text: $signalNumber)
                 .textFieldStyle(DarkTextFieldStyle())
-            HStack(spacing: 4) {
-                Text("Requires signal-mcp running locally.")
-                    .font(Theme.sans(11))
-                    .foregroundStyle(Theme.textTertiary)
-                Button("Setup guide →") {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/googlarz/signal-mcp")!)
+                .onChange(of: signalEnabled) { if $0 { checkSignalDaemon() } }
+
+            if signalEnabled {
+                if signalDaemonUp {
+                    statusPill(icon: "checkmark.circle.fill", text: "signal-mcp detected", color: Theme.ok)
+                } else {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(Theme.sans(11))
+                        Text("signal-mcp not detected.")
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.textTertiary)
+                        Button("Setup guide →") {
+                            NSWorkspace.shared.open(URL(string: "https://github.com/googlarz/signal-mcp")!)
+                        }
+                        .buttonStyle(.plain)
+                        .font(Theme.sans(11, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                    }
                 }
-                .buttonStyle(.plain)
-                .font(Theme.sans(11, weight: .semibold))
-                .foregroundStyle(Theme.textTertiary)
             }
         }
+        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
+            guard step == .services, signalEnabled else { return }
+            checkSignalDaemon()
+        }
+    }
+
+    private func checkSignalDaemon() {
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:7583/api/v1/rpc")!)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 1.5
+        req.httpBody = Data("{\"jsonrpc\":\"2.0\",\"method\":\"listAccounts\",\"id\":1}".utf8)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        URLSession.shared.dataTask(with: req) { _, resp, _ in
+            DispatchQueue.main.async {
+                signalDaemonUp = (resp as? HTTPURLResponse).map { $0.statusCode < 500 } ?? false
+            }
+        }.resume()
     }
 
     // MARK: - Step 2: AI
