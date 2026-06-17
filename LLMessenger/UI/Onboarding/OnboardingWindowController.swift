@@ -234,11 +234,18 @@ private struct OnboardingView: View {
             })
         } else {
             VStack(spacing: 10) {
-                Text("Get your free API credentials at my.telegram.org → API development tools.")
-                    .font(Theme.sans(12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
+                HStack {
+                    Text("You need a free API key from Telegram.")
+                        .font(Theme.sans(12))
+                        .foregroundStyle(Theme.textSecondary)
+                    Spacer()
+                    Button("Get API keys →") {
+                        NSWorkspace.shared.open(URL(string: "https://my.telegram.org/apps")!)
+                    }
+                    .buttonStyle(.plain)
+                    .font(Theme.sans(12, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                }
 
                 credRow(label: "API ID",   placeholder: "12345678",  text: $telegramApiId, secure: false)
                 credRow(label: "API Hash", placeholder: "0abc123…",  text: $telegramApiHash, secure: true)
@@ -256,12 +263,20 @@ private struct OnboardingView: View {
     }
 
     @ViewBuilder private var signalInline: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             TextField("+1 (555) 000-0000", text: $signalNumber)
                 .textFieldStyle(DarkTextFieldStyle())
-            Text("LLMessenger uses signal-cli to read your messages.")
-                .font(Theme.sans(11))
+            HStack(spacing: 4) {
+                Text("Requires signal-mcp running locally.")
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.textTertiary)
+                Button("Setup guide →") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/googlarz/signal-mcp")!)
+                }
+                .buttonStyle(.plain)
+                .font(Theme.sans(11, weight: .semibold))
                 .foregroundStyle(Theme.textTertiary)
+            }
         }
     }
 

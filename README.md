@@ -73,14 +73,13 @@ It learns who matters from your own behavior, or you can just tell it: *"this is
 
 ## Quick start
 
-**60 seconds, one permission, no account, no API key.**
+**4 steps, one permission, no account required.**
 
 1. **[Download the latest release](https://github.com/googlarz/LLMessenger/releases/latest)**, unzip, move to Applications.
    > The binary is unsigned — right-click → **Open** → **Open** on first launch (or System Settings → Privacy & Security → **Open Anyway**).
-2. **Grant Full Disk Access** when the wizard asks — this lets it read your iMessage history. The screen detects the grant live; no restart needed.
-3. **That's it.** On macOS 26 with Apple Intelligence, the AI runs on-device automatically — zero configuration. Click the envelope in your menu bar → **New Brief**.
-
-Signal, Telegram, and Slack are optional and can be added any time in Settings.
+2. **Connect your services** — iMessage is on by default. Toggle Telegram or Signal to add them inline. Grant Full Disk Access when prompted; the screen detects the grant live, no restart needed.
+3. **Choose your AI** — on macOS 26 with Apple Intelligence it auto-selects with zero config. Otherwise paste an Anthropic or OpenAI key, or point at a local Ollama instance.
+4. **Watch it sync** — LLMessenger reads your last 7 days in the background. Click the envelope in your menu bar when done → **New Brief**.
 
 <details>
 <summary><strong>Build from source instead</strong></summary>
@@ -93,7 +92,7 @@ xcodegen generate
 open LLMessenger.xcodeproj   # ⌘R in Xcode 16+
 ```
 
-CI builds and runs all 553 tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
+CI builds and runs all 571 tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
 
 </details>
 
@@ -264,7 +263,7 @@ The highest-impact contribution is a **new service adapter**: implement the 6-me
 
 ```bash
 xcodegen generate                      # project.yml is the source of truth
-xcodebuild -scheme LLMessenger test    # 553 tests — keep them green
+xcodebuild -scheme LLMessenger test    # 571 tests — keep them green
 ```
 
 ## Roadmap
