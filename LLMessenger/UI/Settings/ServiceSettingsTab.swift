@@ -359,7 +359,7 @@ private struct ServiceCard: View {
         switch service {
         case "imessage":
             VStack(alignment: .leading, spacing: 10) {
-                Text("macOS needs to allow LLMessenger to read your Messages database. Grant Full Disk Access, then quit and reopen the app.")
+                Text("macOS needs to allow LLMessenger to read your Messages database. Grant Full Disk Access, then tap Retry now.")
                     .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
