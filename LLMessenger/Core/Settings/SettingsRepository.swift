@@ -9,37 +9,42 @@ enum SettingsError: Error, LocalizedError {
 
 struct SettingsRepository {
     private let keychainStore: KeychainStore
+    private let keyPrefix: String
     private let database: AppDatabase?
     private let userDefaults: UserDefaults
 
     init(keychainStore: KeychainStore = KeychainStore(),
+         keyPrefix: String = "",
          database: AppDatabase? = nil,
          userDefaults: UserDefaults = .standard) {
         self.keychainStore = keychainStore
+        self.keyPrefix = keyPrefix
         self.database = database
         self.userDefaults = userDefaults
     }
 
+    private func key(_ name: String) -> String { keyPrefix + name }
+
     // MARK: - LLM Keys
 
-    func saveLLMKey(provider: LLMProvider, key: String) throws {
-        if key.isEmpty {
-            try keychainStore.delete(account: provider.rawValue)
+    func saveLLMKey(provider: LLMProvider, key llmKey: String) throws {
+        if llmKey.isEmpty {
+            try keychainStore.delete(account: key(provider.rawValue))
         } else {
-            try keychainStore.set(account: provider.rawValue, value: key)
+            try keychainStore.set(account: key(provider.rawValue), value: llmKey)
         }
     }
 
     func loadLLMKey(provider: LLMProvider) throws -> String? {
         do {
-            return try keychainStore.get(account: provider.rawValue)
+            return try keychainStore.get(account: key(provider.rawValue))
         } catch KeychainError.itemNotFound {
             return nil
         }
     }
 
     func deleteLLMKey(provider: LLMProvider) throws {
-        try keychainStore.delete(account: provider.rawValue)
+        try keychainStore.delete(account: key(provider.rawValue))
     }
 
     func saveSelectedLLMProvider(_ provider: LLMProvider?) {
@@ -100,20 +105,20 @@ struct SettingsRepository {
 
     func saveTelegramCredentials(apiId: String, apiHash: String) throws {
         if apiId.isEmpty {
-            try? keychainStore.delete(account: "telegram_api_id")
+            try? keychainStore.delete(account: key("telegram_api_id"))
         } else {
-            try keychainStore.set(account: "telegram_api_id", value: apiId)
+            try keychainStore.set(account: key("telegram_api_id"), value: apiId)
         }
         if apiHash.isEmpty {
-            try? keychainStore.delete(account: "telegram_api_hash")
+            try? keychainStore.delete(account: key("telegram_api_hash"))
         } else {
-            try keychainStore.set(account: "telegram_api_hash", value: apiHash)
+            try keychainStore.set(account: key("telegram_api_hash"), value: apiHash)
         }
     }
 
     func loadTelegramCredentials() -> (apiId: String, apiHash: String) {
-        let apiId   = (try? keychainStore.get(account: "telegram_api_id"))  ?? ""
-        let apiHash = (try? keychainStore.get(account: "telegram_api_hash")) ?? ""
+        let apiId   = (try? keychainStore.get(account: key("telegram_api_id")))  ?? ""
+        let apiHash = (try? keychainStore.get(account: key("telegram_api_hash"))) ?? ""
         return (apiId, apiHash)
     }
 
@@ -121,24 +126,26 @@ struct SettingsRepository {
 
     func saveSignalAccount(_ number: String) throws {
         if number.isEmpty {
-            try? keychainStore.delete(account: "signal_account")
+            try? keychainStore.delete(account: key("signal_account"))
         } else {
-            try keychainStore.set(account: "signal_account", value: number)
+            try keychainStore.set(account: key("signal_account"), value: number)
         }
     }
 
     func loadSignalAccount() throws -> String? {
         // One-time migration from UserDefaults — only remove the source after a confirmed write.
-        if let legacy = UserDefaults.standard.string(forKey: "signal_account"), !legacy.isEmpty {
+        // Only run migration when not using a test prefix, to avoid polluting real data.
+        if keyPrefix.isEmpty,
+           let legacy = UserDefaults.standard.string(forKey: "signal_account"), !legacy.isEmpty {
             do {
-                try keychainStore.set(account: "signal_account", value: legacy)
+                try keychainStore.set(account: key("signal_account"), value: legacy)
                 UserDefaults.standard.removeObject(forKey: "signal_account")
             } catch {
                 // Keep the legacy value so migration retries on next launch.
             }
         }
         do {
-            return try keychainStore.get(account: "signal_account")
+            return try keychainStore.get(account: key("signal_account"))
         } catch KeychainError.itemNotFound {
             return nil
         }

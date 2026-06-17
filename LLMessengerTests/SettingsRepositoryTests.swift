@@ -4,25 +4,39 @@ import XCTest
 
 final class SettingsRepositoryTests: XCTestCase {
 
-    func testSaveAndLoadLLMProvider() throws {
-        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
-        let repo = SettingsRepository(keychainStore: store)
+    // Each test instance gets a unique prefix so concurrent tests don't collide.
+    // Keys are cleaned up after every test.
+    private var prefix: String = ""
+    private var store: KeychainStore!
 
+    override func setUp() {
+        prefix = "_test_\(UUID().uuidString.prefix(8))_"
+        store = KeychainStore()
+    }
+
+    override func tearDown() {
+        // Clean up any keys this test may have written.
+        for suffix in ["anthropic", "openai", "signal_account",
+                       "telegram_api_id", "telegram_api_hash"] {
+            try? store.delete(account: "\(prefix)\(suffix)")
+        }
+    }
+
+    func testSaveAndLoadLLMProvider() throws {
+        let repo = SettingsRepository(keychainStore: store, keyPrefix: prefix)
         try repo.saveLLMKey(provider: .anthropic, key: "sk-ant-test")
         let loaded = try repo.loadLLMKey(provider: .anthropic)
         XCTAssertEqual(loaded, "sk-ant-test")
     }
 
     func testLoadMissingKeyReturnsNil() throws {
-        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
-        let repo = SettingsRepository(keychainStore: store)
+        let repo = SettingsRepository(keychainStore: store, keyPrefix: prefix)
         let loaded = try repo.loadLLMKey(provider: .openai)
         XCTAssertNil(loaded)
     }
 
     func testDeleteLLMKey() throws {
-        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
-        let repo = SettingsRepository(keychainStore: store)
+        let repo = SettingsRepository(keychainStore: store, keyPrefix: prefix)
         try repo.saveLLMKey(provider: .anthropic, key: "sk-ant-test")
         try repo.deleteLLMKey(provider: .anthropic)
         let loaded = try repo.loadLLMKey(provider: .anthropic)
@@ -31,8 +45,7 @@ final class SettingsRepositoryTests: XCTestCase {
 
     func testSaveAndLoadServiceConfig() throws {
         let db = try AppDatabase(inMemory: true)
-        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
-        let repo = SettingsRepository(keychainStore: store, database: db)
+        let repo = SettingsRepository(keychainStore: store, keyPrefix: prefix, database: db)
 
         var cfg = ServiceConfig.default(for: "telegram")
         cfg.pollIntervalMinutes = 45
@@ -46,8 +59,7 @@ final class SettingsRepositoryTests: XCTestCase {
 
     func testSaveServiceConfigUpdatesExisting() throws {
         let db = try AppDatabase(inMemory: true)
-        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
-        let repo = SettingsRepository(keychainStore: store, database: db)
+        let repo = SettingsRepository(keychainStore: store, keyPrefix: prefix, database: db)
 
         var cfg = ServiceConfig.default(for: "telegram")
         try repo.saveServiceConfig(cfg)
@@ -60,53 +72,44 @@ final class SettingsRepositoryTests: XCTestCase {
     }
 
     func testSaveAndLoadSignalAccount() throws {
-        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
-        let repo = SettingsRepository(keychainStore: store, database: nil)
+        let repo = SettingsRepository(keychainStore: store, keyPrefix: prefix, database: nil)
         try repo.saveSignalAccount("+12345678900")
         let loaded = try repo.loadSignalAccount()
         XCTAssertEqual(loaded, "+12345678900")
     }
 
     func testLoadSignalAccountReturnsNilWhenNotSet() throws {
-        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
-        let repo = SettingsRepository(keychainStore: store, database: nil)
+        let repo = SettingsRepository(keychainStore: store, keyPrefix: prefix, database: nil)
         let loaded = try repo.loadSignalAccount()
         XCTAssertNil(loaded)
     }
 
     func testSaveAndLoadSelectedLLMProvider() throws {
         let defaults = try makeIsolatedDefaults()
-        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
-        let repo = SettingsRepository(keychainStore: store, userDefaults: defaults)
-
+        let repo = SettingsRepository(keychainStore: store, keyPrefix: prefix,
+                                      userDefaults: defaults)
         repo.saveSelectedLLMProvider(.openai)
-
         XCTAssertEqual(repo.loadSelectedLLMProvider(), .openai)
     }
 
     func testMissingSelectedLLMProviderReturnsNilEvenWhenKeyExists() throws {
         let defaults = try makeIsolatedDefaults()
-        let store = KeychainStore(service: "llmessenger-test-\(UUID().uuidString)")
-        let repo = SettingsRepository(keychainStore: store, userDefaults: defaults)
-
+        let repo = SettingsRepository(keychainStore: store, keyPrefix: prefix,
+                                      userDefaults: defaults)
         try repo.saveLLMKey(provider: .anthropic, key: "sk-ant-test")
-
         XCTAssertNil(repo.loadSelectedLLMProvider())
     }
 
     func testCloudAutoBriefConsentDefaultsFalse() throws {
         let defaults = try makeIsolatedDefaults()
         let repo = SettingsRepository(userDefaults: defaults)
-
         XCTAssertFalse(repo.loadCloudAutoBriefsConsent())
     }
 
     func testSaveAndLoadCloudAutoBriefConsent() throws {
         let defaults = try makeIsolatedDefaults()
         let repo = SettingsRepository(userDefaults: defaults)
-
         repo.saveCloudAutoBriefsConsent(true)
-
         XCTAssertTrue(repo.loadCloudAutoBriefsConsent())
     }
 

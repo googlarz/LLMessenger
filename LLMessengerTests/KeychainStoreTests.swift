@@ -4,36 +4,35 @@ import XCTest
 
 final class KeychainStoreTests: XCTestCase {
 
-    let testService = "com.llmessenger.test"
+    let store = KeychainStore()
+    // Keys used by tests — cleaned up in tearDown.
+    let testKeys = ["_test_anthropic", "_test_openai", "_test_nonexistent"]
 
     override func tearDown() {
-        try? KeychainStore(service: testService).delete(account: "anthropic")
-        try? KeychainStore(service: testService).delete(account: "openai")
+        for key in testKeys {
+            try? store.delete(account: key)
+        }
     }
 
     func testWriteAndReadKey() throws {
-        let store = KeychainStore(service: testService)
-        try store.set(account: "anthropic", value: "sk-ant-test-123")
-        let read = try store.get(account: "anthropic")
+        try store.set(account: "_test_anthropic", value: "sk-ant-test-123")
+        let read = try store.get(account: "_test_anthropic")
         XCTAssertEqual(read, "sk-ant-test-123")
     }
 
     func testOverwriteExistingKey() throws {
-        let store = KeychainStore(service: testService)
-        try store.set(account: "openai", value: "sk-old")
-        try store.set(account: "openai", value: "sk-new")
-        XCTAssertEqual(try store.get(account: "openai"), "sk-new")
+        try store.set(account: "_test_openai", value: "sk-old")
+        try store.set(account: "_test_openai", value: "sk-new")
+        XCTAssertEqual(try store.get(account: "_test_openai"), "sk-new")
     }
 
     func testDeleteKey() throws {
-        let store = KeychainStore(service: testService)
-        try store.set(account: "anthropic", value: "sk-ant-test")
-        try store.delete(account: "anthropic")
-        XCTAssertThrowsError(try store.get(account: "anthropic"))
+        try store.set(account: "_test_anthropic", value: "sk-ant-test")
+        try store.delete(account: "_test_anthropic")
+        XCTAssertThrowsError(try store.get(account: "_test_anthropic"))
     }
 
     func testGetMissingKeyThrows() {
-        let store = KeychainStore(service: testService)
-        XCTAssertThrowsError(try store.get(account: "nonexistent"))
+        XCTAssertThrowsError(try store.get(account: "_test_nonexistent"))
     }
 }

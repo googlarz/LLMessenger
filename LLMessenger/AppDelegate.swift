@@ -52,23 +52,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let alert = NSAlert()
                 alert.messageText = "Unlock your saved credentials"
                 alert.informativeText = """
-                    macOS will ask for your login password to access your saved API keys and \
-                    service credentials. This is a standard macOS security check — everything \
-                    stays on this Mac and is never sent anywhere.
+                    macOS will ask for your login password once to unlock your saved API keys \
+                    and service credentials. This is a standard macOS security check — \
+                    everything stays on this Mac and is never sent anywhere.
 
-                    Click "Always Allow" on each prompt so you're never asked again.
+                    Click "Always Allow" and you'll never be asked again.
                     """
                 alert.addButton(withTitle: "OK, got it")
                 alert.alertStyle = .informational
                 alert.runModal()
             }
 
-            // Migrate credentials from old bundle-ID service name to human-readable name.
-            let legacyService = "com.llmessenger.app"
+            // Migrate any per-item legacy credentials into the single-blob store.
+            // Covers both old service names so nothing is lost on upgrade.
             let store = KeychainStore()
+            let legacyServices = ["com.llmessenger.app", "LLMessenger Credentials"]
             let migrateAccounts = ["anthropic", "openai", "telegram_api_id", "telegram_api_hash", "signal_account"]
-            for account in migrateAccounts {
-                store.migrateIfNeeded(account: account, legacyService: legacyService)
+            for svc in legacyServices {
+                for account in migrateAccounts {
+                    store.migrateIfNeeded(account: account, legacyService: svc)
+                }
             }
 
             let llm = resolvedProvider()
