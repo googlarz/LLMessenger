@@ -9,6 +9,7 @@ struct TodayView: View {
     @EnvironmentObject var appState: AppState
     @State private var events: [TriageEvent] = []
     @State private var expandedEventID: Int64? = nil
+    @State private var displayNames: [String: String] = [:]
 
     var body: some View {
         ScrollView {
@@ -66,7 +67,7 @@ struct TodayView: View {
 
                         ServiceStamp(service: event.service, size: 18)
 
-                        Text(event.conversationId.uppercased())
+                        Text((displayNames["\(event.service)|\(event.conversationId)"] ?? event.conversationId).uppercased())
                             .font(Theme.mono(10, weight: .semibold))
                             .tracking(0.9)
                             .foregroundStyle(Theme.textSecondary)
@@ -115,14 +116,25 @@ struct TodayView: View {
 
     private func loadEvents() async {
         let db = appState.database.dbQueue
-        let fetched: [TriageEvent] = (try? await db.read { d in
+        let result: ([TriageEvent], [String: String]) = (try? await db.read { d in
             let start = Calendar.current.startOfDay(for: Date())
-            return try TriageEvent
+            let fetched = try TriageEvent
                 .filter(Column("createdAt") >= start)
                 .order(Column("createdAt").desc)
                 .fetchAll(d)
-        }) ?? []
-        events = fetched
+            var names: [String: String] = [:]
+            for event in fetched {
+                let key = "\(event.service)|\(event.conversationId)"
+                guard names[key] == nil else { continue }
+                let row = try Row.fetchOne(d,
+                    sql: "SELECT conversationName FROM messages WHERE service = ? AND conversationId = ? AND conversationName IS NOT NULL ORDER BY timestamp DESC LIMIT 1",
+                    arguments: [event.service, event.conversationId])
+                if let name = row?["conversationName"] as? String { names[key] = name }
+            }
+            return (fetched, names)
+        }) ?? ([], [:])
+        events = result.0
+        displayNames = result.1
     }
 
     private func timeString(_ date: Date) -> String {
