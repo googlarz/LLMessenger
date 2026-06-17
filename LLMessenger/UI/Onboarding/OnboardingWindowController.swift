@@ -73,6 +73,8 @@ private struct OnboardingView: View {
     @State private var imessageAccessGranted: Bool = false
     @State private var telegramEnabled: Bool = false
     @State private var telegramAdapter: SubprocessAdapter? = nil
+    @State private var telegramApiId: String = ""
+    @State private var telegramApiHash: String = ""
 
     private var repo: SettingsRepository { SettingsRepository(database: database) }
 
@@ -447,11 +449,52 @@ private struct OnboardingView: View {
                         })
                         .frame(width: 360)
                     } else {
-                        VStack(spacing: 12) {
-                            Text("Telegram requires API credentials from my.telegram.org and the LLMessenger Telegram adapter binary.")
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Enter your Telegram API credentials. Get them free at my.telegram.org → API development tools.")
                                 .font(Theme.sans(12.5))
                                 .foregroundStyle(Theme.textSecondary)
                                 .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+
+                            VStack(spacing: 8) {
+                                HStack {
+                                    Text("API ID")
+                                        .font(Theme.mono(11, weight: .semibold))
+                                        .foregroundStyle(Theme.textTertiary)
+                                        .frame(width: 70, alignment: .leading)
+                                    TextField("12345678", text: $telegramApiId)
+                                        .textFieldStyle(DarkTextFieldStyle())
+                                }
+                                HStack {
+                                    Text("API Hash")
+                                        .font(Theme.mono(11, weight: .semibold))
+                                        .foregroundStyle(Theme.textTertiary)
+                                        .frame(width: 70, alignment: .leading)
+                                    SecureField("0abc123…", text: $telegramApiHash)
+                                        .textFieldStyle(DarkTextFieldStyle())
+                                }
+                            }
+
+                            Button("Connect Telegram") {
+                                guard let path = telegramAdapterPath() else { return }
+                                try? SettingsRepository().saveTelegramCredentials(
+                                    apiId: telegramApiId.trimmingCharacters(in: .whitespaces),
+                                    apiHash: telegramApiHash.trimmingCharacters(in: .whitespaces)
+                                )
+                                telegramAdapter = SubprocessAdapter(
+                                    serviceID: "telegram",
+                                    adapterPath: path,
+                                    config: makeTelegramConfig(
+                                        apiId: telegramApiId.trimmingCharacters(in: .whitespaces),
+                                        apiHash: telegramApiHash.trimmingCharacters(in: .whitespaces)
+                                    )
+                                )
+                            }
+                            .buttonStyle(PrimaryButtonStyle())
+                            .disabled(telegramApiId.trimmingCharacters(in: .whitespaces).isEmpty ||
+                                      telegramApiHash.trimmingCharacters(in: .whitespaces).isEmpty ||
+                                      telegramAdapterPath() == nil)
+                            .frame(maxWidth: .infinity)
                         }
                         .padding(20)
                         .background(Theme.surface)
@@ -478,10 +521,13 @@ private struct OnboardingView: View {
     }
 
     private func buildTelegramAdapterIfNeeded() {
-        guard telegramAdapter == nil,
-              let path = telegramAdapterPath() else { return }
         let creds = SettingsRepository().loadTelegramCredentials()
-        guard !creds.apiId.isEmpty && !creds.apiHash.isEmpty else { return }
+        // Pre-fill fields so returning users don't have to retype credentials.
+        if telegramApiId.isEmpty { telegramApiId = creds.apiId }
+        if telegramApiHash.isEmpty { telegramApiHash = creds.apiHash }
+        guard telegramAdapter == nil,
+              let path = telegramAdapterPath(),
+              !creds.apiId.isEmpty, !creds.apiHash.isEmpty else { return }
         telegramAdapter = SubprocessAdapter(
             serviceID: "telegram",
             adapterPath: path,
