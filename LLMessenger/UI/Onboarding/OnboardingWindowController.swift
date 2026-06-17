@@ -637,6 +637,12 @@ private struct OnboardingView: View {
             serviceID: "telegram", adapterPath: path,
             config: makeTelegramConfig(apiId: creds.apiId, apiHash: creds.apiHash)
         )
+        // Session file means the user already authenticated — skip sign-in flow.
+        let sessionPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/llmessenger/data/telegram/session.session").path
+        if FileManager.default.fileExists(atPath: sessionPath) {
+            telegramConnected = true
+        }
     }
 
     private func telegramAdapterPath() -> String? {
