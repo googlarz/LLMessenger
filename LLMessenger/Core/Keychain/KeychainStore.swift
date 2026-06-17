@@ -19,7 +19,7 @@ enum KeychainError: Error, LocalizedError {
 struct KeychainStore {
     let service: String
 
-    init(service: String = "com.llmessenger.app") {
+    init(service: String = "LLMessenger Credentials") {
         self.service = service
     }
 
@@ -73,6 +73,15 @@ struct KeychainStore {
             throw KeychainError.invalidData
         }
         return str
+    }
+
+    /// Copies an item stored under `legacyService` into the current service name,
+    /// then deletes the old entry. Call once per account during app startup.
+    func migrateIfNeeded(account: String, legacyService: String) {
+        let legacyStore = KeychainStore(service: legacyService)
+        guard let value = try? legacyStore.get(account: account) else { return }
+        try? set(account: account, value: value)
+        try? legacyStore.delete(account: account)
     }
 
     func delete(account: String) throws {

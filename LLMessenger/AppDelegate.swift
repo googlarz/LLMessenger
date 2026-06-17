@@ -45,6 +45,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let db = try AppDatabase.production()
             database = db
 
+            // One-time explanation shown before the first keychain read so the
+            // macOS "Always Allow" prompt doesn't look suspicious to the user.
+            if !UserDefaults.standard.bool(forKey: "hasSeenKeychainExplanation") {
+                UserDefaults.standard.set(true, forKey: "hasSeenKeychainExplanation")
+                let alert = NSAlert()
+                alert.messageText = "Unlock your saved credentials"
+                alert.informativeText = """
+                    macOS will ask for your login password to access your saved API keys and \
+                    service credentials. This is a standard macOS security check — everything \
+                    stays on this Mac and is never sent anywhere.
+
+                    Click "Always Allow" on each prompt so you're never asked again.
+                    """
+                alert.addButton(withTitle: "OK, got it")
+                alert.alertStyle = .informational
+                alert.runModal()
+            }
+
+            // Migrate credentials from old bundle-ID service name to human-readable name.
+            let legacyService = "com.llmessenger.app"
+            let store = KeychainStore()
+            let migrateAccounts = ["anthropic", "openai", "telegram_api_id", "telegram_api_hash", "signal_account"]
+            for account in migrateAccounts {
+                store.migrateIfNeeded(account: account, legacyService: legacyService)
+            }
+
             let llm = resolvedProvider()
 
             let savedPrompt = SettingsRepository(database: db).loadBasePrompt()
@@ -671,6 +697,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             _ = await signal.restartWatchDaemon()
             // Brief pause so the daemon's first poll lands before we retry.
             try? await Task.sleep(nanoseconds: 1_500_000_000)
+            // Reset lastCheck to 48h ago so the poll window covers recent data.
+            // Without this, a lastCheck set to "now" skips everything the daemon
+            // just synced — the chip turns green but no messages appear.
+            try? await db.dbQueue.write { grdb in
+                if var h = try ServiceHealth.fetchOne(grdb, key: "signal") {
+                    h.lastCheck = Date().addingTimeInterval(-48 * 3600)
+                    try h.save(grdb)
+                }
+            }
         }
         if serviceID == "telegram" {
             // Clean up SQLite rollback journals left by a previously crashed
