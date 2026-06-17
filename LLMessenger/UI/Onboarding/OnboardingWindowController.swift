@@ -77,6 +77,7 @@ private struct OnboardingView: View {
 
     // Syncing tips
     @State private var tipIndex = 0
+    @State private var firstBriefReady = false
     private let tips = [
         "Your first brief will be ready in a few minutes.",
         "Open the menu bar icon any time to check for new briefs.",
@@ -408,15 +409,25 @@ private struct OnboardingView: View {
         VStack(spacing: 28) {
             Spacer()
 
-            // Progress
+            // Progress / ready
             VStack(spacing: 12) {
-                ProgressView()
-                    .scaleEffect(1.3)
-                    .tint(Theme.textSecondary)
-                Text("Reading your messages…")
-                    .font(Theme.sans(13, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
+                if firstBriefReady {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(Theme.ok)
+                    Text("Your first brief is ready.")
+                        .font(Theme.sans(13, weight: .medium))
+                        .foregroundStyle(Theme.textPrimary)
+                } else {
+                    ProgressView()
+                        .scaleEffect(1.3)
+                        .tint(Theme.textSecondary)
+                    Text("Reading your messages…")
+                        .font(Theme.sans(13, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
+                }
             }
+            .animation(.easeInOut(duration: 0.4), value: firstBriefReady)
 
             // Rotating tips
             VStack(alignment: .leading, spacing: 8) {
@@ -434,7 +445,7 @@ private struct OnboardingView: View {
             .padding(16)
             .surfaceCard()
 
-            Button("Open LLMessenger →") { onComplete() }
+            Button(firstBriefReady ? "Open your first brief →" : "Open LLMessenger →") { onComplete() }
                 .buttonStyle(PrimaryButtonStyle())
 
             Spacer()
@@ -443,6 +454,9 @@ private struct OnboardingView: View {
         .onReceive(Timer.publish(every: 4, on: .main, in: .common).autoconnect()) { _ in
             guard step == .syncing else { return }
             tipIndex += 1
+            if !firstBriefReady {
+                firstBriefReady = (try? BriefRepository(database: database).latestBriefID()) != nil
+            }
         }
     }
 
