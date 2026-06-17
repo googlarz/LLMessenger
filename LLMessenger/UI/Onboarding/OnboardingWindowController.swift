@@ -14,7 +14,7 @@ final class OnboardingWindowController: NSWindowController {
         self.database = database
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -25,15 +25,13 @@ final class OnboardingWindowController: NSWindowController {
         window.backgroundColor = NSColor(Theme.bg)
         window.isReleasedWhenClosed = false
         window.level = .floating
-        // Same fullscreen-Space fix as SettingsWindowController: a managed window can't
-        // open over another app's fullscreen Space without hanging/crashing the app.
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         super.init(window: window)
 
         let view = OnboardingView(database: database, onComplete: { [weak self] in
-            self?.close()       // close before releasing self
-            self?.onComplete?() // then notify — AppDelegate nils the reference after this
+            self?.close()
+            self?.onComplete?()
         })
         window.contentView = NSHostingView(rootView: view)
     }
@@ -55,192 +53,248 @@ private struct OnboardingView: View {
     let database: AppDatabase
     let onComplete: () -> Void
 
-    private enum Step: CaseIterable {
-        case welcome, imessageSetup, llmSetup, signalSetup, telegramSetup, done
+    private enum Step { case services, aiSetup, prepareSync, syncing }
 
-        // Steps shown as dots (excluding welcome and done)
-        static var dotSteps: [Step] { [.imessageSetup, .llmSetup, .signalSetup, .telegramSetup, .done] }
-    }
+    @State private var step: Step = .services
 
-    @State private var currentStep: Step = .welcome
+    // Services
+    @State private var imessageEnabled   = true
+    @State private var imessageGranted   = false
+    @State private var signalEnabled     = false
+    @State private var signalNumber      = ""
+    @State private var telegramEnabled   = false
+    @State private var telegramConnected = false
+    @State private var telegramApiId     = ""
+    @State private var telegramApiHash   = ""
+    @State private var telegramAdapter: SubprocessAdapter?
+
+    // AI
     @State private var selectedProvider: LLMProvider = AppleFM.isAvailable ? .appleIntelligence : .anthropic
-    @State private var anthropicKey: String = ""
-    @State private var openAIKey: String = ""
-    @State private var ollamaModel: String = ""
-    @State private var signalEnabled: Bool = false
-    @State private var signalNumber: String = ""
-    @State private var imessageEnabled: Bool = true
-    @State private var imessageAccessGranted: Bool = false
-    @State private var telegramEnabled: Bool = false
-    @State private var telegramAdapter: SubprocessAdapter? = nil
-    @State private var telegramApiId: String = ""
-    @State private var telegramApiHash: String = ""
+    @State private var anthropicKey = ""
+    @State private var openAIKey    = ""
+    @State private var ollamaModel  = ""
+
+    // Syncing tips
+    @State private var tipIndex = 0
+    private let tips = [
+        "Your first brief will be ready in a few minutes.",
+        "Open the menu bar icon any time to check for new briefs.",
+        "Reply directly from your brief — LLMessenger drafts in your voice.",
+        "The Desk shows everything that needs your attention today.",
+        "LLMessenger learns your tone and relationships over time."
+    ]
 
     private var repo: SettingsRepository { SettingsRepository(database: database) }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            VStack(spacing: 0) {
-                // Back button row
-                HStack {
-                    if currentStep != .welcome {
-                        Button(action: goBack) {
-                            Label("Back", systemImage: "chevron.left")
-                                .font(Theme.sans(12.5))
-                                .foregroundStyle(Theme.textSecondary)
-                        }
-                        .buttonStyle(.plain)
+        VStack(spacing: 0) {
+            // Back row
+            HStack {
+                if step == .aiSetup || step == .prepareSync {
+                    Button(action: goBack) {
+                        Label("Back", systemImage: "chevron.left")
+                            .font(Theme.sans(12.5))
+                            .foregroundStyle(Theme.textSecondary)
                     }
-                    Spacer()
+                    .buttonStyle(.plain)
                 }
-                .frame(height: 44)
-                .padding(.horizontal, 28)
+                Spacer()
+            }
+            .frame(height: 44)
+            .padding(.horizontal, 28)
 
-                // Step content
-                Group {
-                    switch currentStep {
-                    case .welcome:      welcomeStep
-                    case .llmSetup:     llmStep
-                    case .signalSetup:  signalStep
-                    case .imessageSetup: imessageStep
-                    case .telegramSetup: telegramStep
-                    case .done:         doneStep
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                // Progress dots
-                if currentStep != .welcome {
-                    progressDots
-                        .padding(.bottom, 24)
+            // Content
+            Group {
+                switch step {
+                case .services:    servicesStep
+                case .aiSetup:     aiStep
+                case .prepareSync: prepareSyncStep
+                case .syncing:     syncingStep
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Dots
+            HStack(spacing: 8) {
+                ForEach([Step.services, .aiSetup, .prepareSync, .syncing], id: \.hashValue) { s in
+                    Circle()
+                        .fill(step == s ? Theme.textPrimary : Theme.border)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.bottom, 24)
         }
-        .frame(width: 520, height: 580)
+        .frame(width: 520, height: 600)
         .background(Theme.bg)
         .foregroundStyle(Theme.textPrimary)
-    }
-
-    // MARK: - Progress Dots
-
-    private var progressDots: some View {
-        HStack(spacing: 8) {
-            ForEach(Array(Step.dotSteps.enumerated()), id: \.offset) { index, step in
-                Circle()
-                    .fill(currentStep == step ? Theme.textPrimary : Theme.border)
-                    .frame(width: 6, height: 6)
-            }
-        }
     }
 
     // MARK: - Navigation
 
     private func goBack() {
-        switch currentStep {
-        case .imessageSetup: currentStep = .welcome
-        case .llmSetup:      currentStep = .imessageSetup
-        case .signalSetup:   currentStep = .llmSetup
-        case .telegramSetup: currentStep = .signalSetup
-        case .done:          currentStep = .telegramSetup
+        switch step {
+        case .aiSetup:     step = .services
+        case .prepareSync: step = .aiSetup
         default: break
         }
     }
 
-    private func advance() {
-        switch currentStep {
-        case .welcome:       currentStep = .imessageSetup
-        case .imessageSetup: currentStep = .llmSetup
-        case .llmSetup:      currentStep = .signalSetup
-        case .signalSetup:   currentStep = .telegramSetup
-        case .telegramSetup: currentStep = .done
-        case .done:          break
-        }
-    }
+    // MARK: - Step 1: Services
 
-    // MARK: - Step 1: Welcome
+    private var servicesStep: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                stepHeader(
+                    title: "Connect your messages",
+                    subtitle: "Choose which services to include in your briefs. You can change this any time."
+                )
 
-    private var welcomeStep: some View {
-        VStack(spacing: 28) {
-            Spacer()
-            Image(systemName: "tray.2.fill")
-                .font(Theme.sans(56, weight: .thin))
-                .foregroundStyle(Theme.textSecondary)
+                serviceRow(title: "iMessage", icon: "message.fill",
+                           color: Theme.serviceIMessage, isEnabled: $imessageEnabled) {
+                    imessageInline
+                }
 
-            VStack(spacing: 10) {
-                Text("Welcome to LLMessenger")
-                    .font(Theme.display(26))
-                    .foregroundStyle(Theme.textPrimary)
-                Text("Free, open source, private.\nYour first brief in under a minute.")
-                    .font(Theme.bodyFont)
-                    .foregroundStyle(Theme.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
+                serviceRow(title: "Telegram", icon: "paperplane.fill",
+                           color: Theme.serviceTelegram, isEnabled: $telegramEnabled) {
+                    telegramInline
+                }
 
-            Button("Get Started") { advance() }
-                .buttonStyle(PrimaryButtonStyle())
+                serviceRow(title: "Signal", icon: "lock.shield.fill",
+                           color: Theme.serviceSignal, isEnabled: $signalEnabled) {
+                    signalInline
+                }
 
-            // Demo mode is only offered on a fresh database, so seeding into
-            // the live store is safe; exiting the demo wipes everything.
-            if databaseIsEmpty {
-                VStack(spacing: 6) {
-                    Button("EXPLORE THE DEMO DESK") {
-                        try? DemoSeeder.seed(into: database)
-                        onComplete()
+                VStack(spacing: 10) {
+                    Button("Continue") {
+                        saveAllServices()
+                        step = .aiSetup
                     }
-                    .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
-                    Text("A finished brief with sample data — nothing to connect.")
-                        .font(Theme.sans(11))
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(!servicesReady)
+
+                    if databaseIsEmpty {
+                        Button("Explore the demo instead") {
+                            try? DemoSeeder.seed(into: database)
+                            onComplete()
+                        }
+                        .buttonStyle(.plain)
+                        .font(Theme.sans(12))
                         .foregroundStyle(Theme.textTertiary)
+                    }
                 }
             }
-
-            Spacer()
+            .padding(.horizontal, 36)
+            .padding(.top, 4)
+            .padding(.bottom, 16)
         }
-        .padding(.horizontal, 48)
+        .onAppear {
+            imessageGranted = Self.checkFullDiskAccess()
+            buildTelegramAdapterIfNeeded()
+        }
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+            guard step == .services, !imessageGranted else { return }
+            imessageGranted = Self.checkFullDiskAccess()
+        }
     }
 
-    private var databaseIsEmpty: Bool {
-        ((try? BriefRepository(database: database).latestBriefID()) ?? nil) == nil
+    private var servicesReady: Bool {
+        guard imessageEnabled || telegramEnabled || signalEnabled else { return false }
+        if telegramEnabled && !telegramConnected { return false }
+        if signalEnabled && signalNumber.trimmingCharacters(in: .whitespaces).isEmpty { return false }
+        return true
     }
 
-    // MARK: - Step 2: LLM Setup
+    @ViewBuilder private var imessageInline: some View {
+        if imessageGranted {
+            statusPill(icon: "checkmark.circle.fill", text: "Full Disk Access granted", color: Theme.ok)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                instructionRow(n: "1", text: "Open System Settings → Privacy & Security → Full Disk Access")
+                instructionRow(n: "2", text: "Click + and add LLMessenger")
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .surfaceCard()
 
-    private var llmStep: some View {
+            Button("Open Privacy Settings") {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder private var telegramInline: some View {
+        if telegramConnected {
+            statusPill(icon: "checkmark.circle.fill", text: "Telegram connected", color: Theme.ok)
+        } else if let adapter = telegramAdapter {
+            TelegramSignInView(adapter: adapter, onSuccess: {
+                telegramConnected = true
+                saveServiceEnabled("telegram", true)
+            })
+        } else {
+            VStack(spacing: 10) {
+                Text("Get your free API credentials at my.telegram.org → API development tools.")
+                    .font(Theme.sans(12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+
+                credRow(label: "API ID",   placeholder: "12345678",  text: $telegramApiId, secure: false)
+                credRow(label: "API Hash", placeholder: "0abc123…",  text: $telegramApiHash, secure: true)
+
+                Button("Connect Telegram") { connectTelegram() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(telegramApiId.trimmingCharacters(in: .whitespaces).isEmpty ||
+                              telegramApiHash.trimmingCharacters(in: .whitespaces).isEmpty ||
+                              telegramAdapterPath() == nil)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(14)
+            .surfaceCard()
+        }
+    }
+
+    @ViewBuilder private var signalInline: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField("+1 (555) 000-0000", text: $signalNumber)
+                .textFieldStyle(DarkTextFieldStyle())
+            Text("LLMessenger uses signal-cli to read your messages.")
+                .font(Theme.sans(11))
+                .foregroundStyle(Theme.textTertiary)
+        }
+    }
+
+    // MARK: - Step 2: AI
+
+    private var aiStep: some View {
         ScrollView {
             VStack(spacing: 24) {
-                stepHeader(title: "Choose Your AI", subtitle: nil)
+                stepHeader(title: "Choose your AI", subtitle: nil)
 
                 // Provider picker
                 HStack(spacing: 0) {
                     ForEach(LLMProvider.availableCases, id: \.self) { provider in
-                        Button(provider.displayName) {
-                            selectedProvider = provider
-                        }
-                        .buttonStyle(SegmentButtonStyle(isSelected: selectedProvider == provider))
+                        Button(provider.displayName) { selectedProvider = provider }
+                            .buttonStyle(SegmentButtonStyle(isSelected: selectedProvider == provider))
                     }
                 }
                 .background(Theme.surface)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.radius)
-                        .strokeBorder(Theme.border, lineWidth: Theme.hairline)
-                )
+                .overlay(RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(Theme.border, lineWidth: Theme.hairline))
 
-                // Key / model field
                 VStack(alignment: .leading, spacing: 8) {
                     switch selectedProvider {
                     case .appleIntelligence:
                         HStack(spacing: 8) {
-                            Image(systemName: "lock.laptopcomputer")
-                                .foregroundStyle(Theme.ok)
+                            Image(systemName: "lock.laptopcomputer").foregroundStyle(Theme.ok)
                             Text("Runs entirely on this Mac. No account, no API key — your messages never leave your computer.")
                                 .font(Theme.sans(12))
                                 .foregroundStyle(Theme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(12)
-                        .background(Theme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+                        .surfaceCard()
                     case .anthropic:
                         SecureField("API Key (sk-ant-…)", text: $anthropicKey)
                             .textFieldStyle(DarkTextFieldStyle())
@@ -250,174 +304,195 @@ private struct OnboardingView: View {
                     case .ollama:
                         TextField("Model (e.g. llama3.1)", text: $ollamaModel)
                             .textFieldStyle(DarkTextFieldStyle())
-                        Text("Requires Ollama running locally")
-                            .font(Theme.sans(11))
-                            .foregroundStyle(Theme.textSecondary)
+                        Text("Requires Ollama running locally.")
+                            .font(Theme.sans(11)).foregroundStyle(Theme.textSecondary)
                     }
 
                     if selectedProvider.requiresAPIKey {
                         Text("Your messages are processed by \(selectedProvider.displayName) to generate summaries.")
-                            .font(Theme.sans(11))
-                            .foregroundStyle(Theme.textSecondary)
+                            .font(Theme.sans(11)).foregroundStyle(Theme.textSecondary)
                     }
                 }
 
-                Button("Continue") {
-                    saveLLMSettings()
-                    advance()
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(!llmValid)
+                Button("Continue") { saveLLMSettings(); step = .prepareSync }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(!llmValid)
             }
             .padding(.horizontal, 48)
             .padding(.vertical, 16)
         }
     }
 
-    private var llmValid: Bool {
-        switch selectedProvider {
-        case .anthropic: return !anthropicKey.trimmingCharacters(in: .whitespaces).isEmpty
-        case .openai:    return !openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
-        case .ollama, .appleIntelligence: return true
-        }
-    }
+    // MARK: - Step 3: Prepare Sync
 
-    private func saveLLMSettings() {
-        repo.saveSelectedLLMProvider(selectedProvider)
-        switch selectedProvider {
-        case .appleIntelligence:
-            break // nothing to configure — that's the point
-        case .anthropic:
-            try? repo.saveLLMKey(provider: .anthropic, key: anthropicKey)
-        case .openai:
-            try? repo.saveLLMKey(provider: .openai, key: openAIKey)
-        case .ollama:
-            let model = ollamaModel.trimmingCharacters(in: .whitespaces)
-            repo.saveOllamaModel(model.isEmpty ? "llama3.1" : model)
-        }
-    }
+    private var prepareSyncStep: some View {
+        VStack(spacing: 28) {
+            Spacer()
 
-    // MARK: - Step 3: Signal
+            stepHeader(
+                title: "Almost ready",
+                subtitle: "Before your first brief, we'll do two things in the background."
+            )
 
-    private var signalStep: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                serviceToggleHeader(
-                    title: "Signal",
-                    icon: "lock.shield.fill",
-                    color: Theme.serviceSignal,
-                    isEnabled: $signalEnabled
+            VStack(spacing: 12) {
+                whyCard(
+                    icon: "calendar.badge.clock",
+                    title: "Build your 7-day history",
+                    body: "We read your last week of messages so your first brief has full context — not just what arrives from today forward."
                 )
-
-                if signalEnabled {
-                    VStack(spacing: 8) {
-                        Text("Enter your Signal phone number. LLMessenger uses signal-cli to read messages.")
-                            .font(Theme.sans(12.5))
-                            .foregroundStyle(Theme.textSecondary)
-                            .multilineTextAlignment(.center)
-
-                        TextField("+1 (555) 000-0000", text: $signalNumber)
-                            .textFieldStyle(DarkTextFieldStyle())
-                    }
-                }
-
-                Button("Continue") {
-                    if signalEnabled && !signalNumber.trimmingCharacters(in: .whitespaces).isEmpty {
-                        try? repo.saveSignalAccount(signalNumber)
-                    }
-                    saveServiceEnabled("signal", signalEnabled)
-                    advance()
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(signalEnabled && signalNumber.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(.horizontal, 48)
-            .padding(.vertical, 16)
-        }
-    }
-
-    // MARK: - Step 4: iMessage
-
-    private var imessageStep: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                serviceToggleHeader(
-                    title: "iMessage",
-                    icon: "message.fill",
-                    color: Theme.serviceIMessage,
-                    isEnabled: $imessageEnabled
+                whyCard(
+                    icon: "person.2.fill",
+                    title: "Sync your contacts",
+                    body: "We match phone numbers to names so briefs say \"Mom\" and \"Anna\" instead of \"+49 123 456 7890\"."
                 )
-
-                if imessageEnabled {
-                    Text("Your existing Messages history powers your first brief — no accounts, no QR codes. One permission and you're done.")
-                        .font(Theme.sans(12.5))
-                        .foregroundStyle(Theme.textSecondary)
-                        .multilineTextAlignment(.center)
-
-                    if imessageAccessGranted {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(Theme.ok)
-                            Text("Full Disk Access granted")
-                                .font(Theme.sans(12.5, weight: .semibold))
-                                .foregroundStyle(Theme.ok)
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity)
-                        .background(Theme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.radius)
-                                .strokeBorder(Theme.ok.opacity(0.4), lineWidth: Theme.hairline)
-                        )
-                    } else {
-                        VStack(alignment: .leading, spacing: 10) {
-                            instructionRow(number: "1", text: "Open System Settings → Privacy & Security → Full Disk Access")
-                            instructionRow(number: "2", text: "Click the + button and add LLMessenger")
-                            instructionRow(number: "3", text: "This screen updates automatically once access is granted")
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                        .background(Theme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.radius)
-                                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
-                        )
-
-                        Button("Open Privacy Settings") {
-                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                    }
-                }
-
-                Button("Continue") {
-                    saveServiceEnabled("imessage", imessageEnabled)
-                    advance()
-                }
-                .buttonStyle(PrimaryButtonStyle())
             }
-            .padding(.horizontal, 48)
-            .padding(.vertical, 16)
+
+            Button("Start Building") {
+                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                step = .syncing
+            }
+            .buttonStyle(PrimaryButtonStyle())
+
+            Spacer()
         }
-        .onAppear { imessageAccessGranted = Self.checkFullDiskAccess() }
-        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
-            guard currentStep == .imessageSetup, !imessageAccessGranted else { return }
-            imessageAccessGranted = Self.checkFullDiskAccess()
+        .padding(.horizontal, 48)
+    }
+
+    // MARK: - Step 4: Syncing + How To Use
+
+    private var syncingStep: some View {
+        VStack(spacing: 28) {
+            Spacer()
+
+            // Progress
+            VStack(spacing: 12) {
+                ProgressView()
+                    .scaleEffect(1.3)
+                    .tint(Theme.textSecondary)
+                Text("Reading your messages…")
+                    .font(Theme.sans(13, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+
+            // Rotating tips
+            VStack(alignment: .leading, spacing: 8) {
+                Text("WHILE YOU WAIT")
+                    .font(Theme.mono(9, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .tracking(0.5)
+
+                Text(tips[tipIndex % tips.count])
+                    .font(Theme.sans(13))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .animation(.easeInOut(duration: 0.3), value: tipIndex)
+            }
+            .padding(16)
+            .surfaceCard()
+
+            Button("Open LLMessenger →") { onComplete() }
+                .buttonStyle(PrimaryButtonStyle())
+
+            Spacer()
+        }
+        .padding(.horizontal, 48)
+        .onReceive(Timer.publish(every: 4, on: .main, in: .common).autoconnect()) { _ in
+            guard step == .syncing else { return }
+            tipIndex += 1
         }
     }
 
-    /// Full Disk Access is provable by attempting to read chat.db directly —
-    /// the file always exists once Messages has run; only FDA gates reading it.
-    private static func checkFullDiskAccess() -> Bool {
-        let path = NSHomeDirectory() + "/Library/Messages/chat.db"
-        return FileManager.default.isReadableFile(atPath: path)
+    // MARK: - Reusable Components
+
+    private func serviceRow<Content: View>(
+        title: String, icon: String, color: Color,
+        isEnabled: Binding<Bool>,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(spacing: 8) {
+            // Header toggle
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(color.opacity(0.5), lineWidth: 1)
+                        .frame(width: 38, height: 38)
+                    Image(systemName: icon)
+                        .font(Theme.sans(16))
+                        .foregroundStyle(color)
+                }
+                Text(title).font(Theme.display(15))
+                Spacer()
+                Toggle("", isOn: isEnabled).toggleStyle(.switch).labelsHidden()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(Theme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.radius)
+                    .strokeBorder(isEnabled.wrappedValue ? color.opacity(0.35) : Theme.border,
+                                  lineWidth: Theme.hairline)
+            )
+
+            // Inline setup when enabled
+            if isEnabled.wrappedValue {
+                content()
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(Theme.quick, value: isEnabled.wrappedValue)
     }
 
-    private func instructionRow(number: String, text: String) -> some View {
+    private func whyCard(icon: String, title: String, body: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(Theme.sans(18))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(Theme.sans(13, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text(body)
+                    .font(Theme.sans(12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .surfaceCard()
+    }
+
+    private func statusPill(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon).foregroundStyle(color)
+            Text(text).font(Theme.sans(12.5, weight: .semibold)).foregroundStyle(color)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(color.opacity(0.3), lineWidth: Theme.hairline))
+    }
+
+    private func credRow(label: String, placeholder: String, text: Binding<String>, secure: Bool) -> some View {
+        HStack {
+            Text(label)
+                .font(Theme.mono(11, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: 64, alignment: .leading)
+            if secure {
+                SecureField(placeholder, text: text).textFieldStyle(DarkTextFieldStyle())
+            } else {
+                TextField(placeholder, text: text).textFieldStyle(DarkTextFieldStyle())
+            }
+        }
+    }
+
+    private func instructionRow(n: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Text(number)
+            Text(n)
                 .font(Theme.mono(10, weight: .bold))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(width: 18, height: 18)
@@ -429,197 +504,9 @@ private struct OnboardingView: View {
         }
     }
 
-    // MARK: - Step 5: Telegram
-
-    private var telegramStep: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                serviceToggleHeader(
-                    title: "Telegram",
-                    icon: "paperplane.fill",
-                    color: Theme.serviceTelegram,
-                    isEnabled: $telegramEnabled
-                )
-
-                if telegramEnabled {
-                    if let adapter = telegramAdapter {
-                        TelegramSignInView(adapter: adapter, onSuccess: {
-                            saveServiceEnabled("telegram", true)
-                            advance()
-                        })
-                        .frame(width: 360)
-                    } else {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Enter your Telegram API credentials. Get them free at my.telegram.org → API development tools.")
-                                .font(Theme.sans(12.5))
-                                .foregroundStyle(Theme.textSecondary)
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: .infinity)
-
-                            VStack(spacing: 8) {
-                                HStack {
-                                    Text("API ID")
-                                        .font(Theme.mono(11, weight: .semibold))
-                                        .foregroundStyle(Theme.textTertiary)
-                                        .frame(width: 70, alignment: .leading)
-                                    TextField("12345678", text: $telegramApiId)
-                                        .textFieldStyle(DarkTextFieldStyle())
-                                }
-                                HStack {
-                                    Text("API Hash")
-                                        .font(Theme.mono(11, weight: .semibold))
-                                        .foregroundStyle(Theme.textTertiary)
-                                        .frame(width: 70, alignment: .leading)
-                                    SecureField("0abc123…", text: $telegramApiHash)
-                                        .textFieldStyle(DarkTextFieldStyle())
-                                }
-                            }
-
-                            Button("Connect Telegram") {
-                                guard let path = telegramAdapterPath() else { return }
-                                try? SettingsRepository().saveTelegramCredentials(
-                                    apiId: telegramApiId.trimmingCharacters(in: .whitespaces),
-                                    apiHash: telegramApiHash.trimmingCharacters(in: .whitespaces)
-                                )
-                                telegramAdapter = SubprocessAdapter(
-                                    serviceID: "telegram",
-                                    adapterPath: path,
-                                    config: makeTelegramConfig(
-                                        apiId: telegramApiId.trimmingCharacters(in: .whitespaces),
-                                        apiHash: telegramApiHash.trimmingCharacters(in: .whitespaces)
-                                    )
-                                )
-                            }
-                            .buttonStyle(PrimaryButtonStyle())
-                            .disabled(telegramApiId.trimmingCharacters(in: .whitespaces).isEmpty ||
-                                      telegramApiHash.trimmingCharacters(in: .whitespaces).isEmpty ||
-                                      telegramAdapterPath() == nil)
-                            .frame(maxWidth: .infinity)
-                        }
-                        .padding(20)
-                        .background(Theme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.radius)
-                                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
-                        )
-                    }
-                }
-
-                if !telegramEnabled || telegramAdapter == nil {
-                    Button("Continue") {
-                        saveServiceEnabled("telegram", telegramEnabled)
-                        advance()
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                }
-            }
-            .padding(.horizontal, 48)
-            .padding(.vertical, 16)
-        }
-        .onAppear { buildTelegramAdapterIfNeeded() }
-    }
-
-    private func buildTelegramAdapterIfNeeded() {
-        let creds = SettingsRepository().loadTelegramCredentials()
-        // Pre-fill fields so returning users don't have to retype credentials.
-        if telegramApiId.isEmpty { telegramApiId = creds.apiId }
-        if telegramApiHash.isEmpty { telegramApiHash = creds.apiHash }
-        guard telegramAdapter == nil,
-              let path = telegramAdapterPath(),
-              !creds.apiId.isEmpty, !creds.apiHash.isEmpty else { return }
-        telegramAdapter = SubprocessAdapter(
-            serviceID: "telegram",
-            adapterPath: path,
-            config: makeTelegramConfig(apiId: creds.apiId, apiHash: creds.apiHash)
-        )
-    }
-
-    private func telegramAdapterPath() -> String? {
-        let bundled = Bundle.main.path(forResource: "telegram-adapter", ofType: nil)
-        if let p = bundled, FileManager.default.fileExists(atPath: p) { return p }
-        let community = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/llmessenger/adapters/telegram/telegram-adapter")
-        if FileManager.default.fileExists(atPath: community.path) { return community.path }
-        return nil
-    }
-
-    private func makeTelegramConfig(apiId: String, apiHash: String) -> [String: Any] {
-        let sessionPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/llmessenger/data/telegram/session").path
-        return ["api_id": apiId, "api_hash": apiHash, "session_path": sessionPath]
-    }
-
-    // MARK: - Step 6: Done
-
-    private var doneStep: some View {
-        VStack(spacing: 28) {
-            Spacer()
-            Image(systemName: "checkmark.circle.fill")
-                .font(Theme.sans(56, weight: .thin))
-                .foregroundStyle(Theme.ok)
-
-            VStack(spacing: 10) {
-                Text("You're all set!")
-                    .font(Theme.display(26))
-                    .foregroundStyle(Theme.textPrimary)
-                Text("LLMessenger is ready. It will check your messages\nand generate briefs automatically.")
-                    .font(Theme.bodyFont)
-                    .foregroundStyle(Theme.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            Button("Start Using LLMessenger") {
-                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                onComplete()
-            }
-            .buttonStyle(PrimaryButtonStyle())
-
-            Spacer()
-        }
-        .padding(.horizontal, 48)
-    }
-
-    // MARK: - Helpers
-
-    private func serviceToggleHeader(title: String, icon: String, color: Color, isEnabled: Binding<Bool>) -> some View {
-        HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: Theme.radius)
-                    .strokeBorder(color.opacity(0.55), lineWidth: 1)
-                    .frame(width: 44, height: 44)
-                Image(systemName: icon)
-                    .font(Theme.sans(20))
-                    .foregroundStyle(color)
-            }
-            Text(title)
-                .font(Theme.display(17))
-                .foregroundStyle(Theme.textPrimary)
-            Spacer()
-            Toggle("", isOn: isEnabled)
-                .toggleStyle(.switch)
-                .labelsHidden()
-        }
-        .padding(16)
-        .background(Theme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.radius)
-                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
-        )
-    }
-
-    private func saveServiceEnabled(_ service: String, _ enabled: Bool) {
-        var config = ServiceConfig.default(for: service)
-        config.enabled = enabled
-        try? repo.saveServiceConfig(config)
-    }
-
     private func stepHeader(title: String, subtitle: String?) -> some View {
         VStack(spacing: 8) {
-            Text(title)
-                .font(Theme.headlineFont)
-                .foregroundStyle(Theme.textPrimary)
+            Text(title).font(Theme.headlineFont).foregroundStyle(Theme.textPrimary)
             if let subtitle {
                 Text(subtitle)
                     .font(Theme.sans(12.5))
@@ -628,11 +515,104 @@ private struct OnboardingView: View {
             }
         }
     }
+
+    // MARK: - Logic
+
+    private var llmValid: Bool {
+        switch selectedProvider {
+        case .anthropic: return !anthropicKey.trimmingCharacters(in: .whitespaces).isEmpty
+        case .openai:    return !openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
+        case .ollama, .appleIntelligence: return true
+        }
+    }
+
+    private var databaseIsEmpty: Bool {
+        ((try? BriefRepository(database: database).latestBriefID()) ?? nil) == nil
+    }
+
+    private func saveLLMSettings() {
+        repo.saveSelectedLLMProvider(selectedProvider)
+        switch selectedProvider {
+        case .appleIntelligence: break
+        case .anthropic: try? repo.saveLLMKey(provider: .anthropic, key: anthropicKey)
+        case .openai:    try? repo.saveLLMKey(provider: .openai, key: openAIKey)
+        case .ollama:
+            let m = ollamaModel.trimmingCharacters(in: .whitespaces)
+            repo.saveOllamaModel(m.isEmpty ? "llama3.1" : m)
+        }
+    }
+
+    private func saveAllServices() {
+        saveServiceEnabled("imessage", imessageEnabled)
+        saveServiceEnabled("signal", signalEnabled)
+        if signalEnabled, !signalNumber.trimmingCharacters(in: .whitespaces).isEmpty {
+            try? repo.saveSignalAccount(signalNumber)
+        }
+        if !telegramEnabled { saveServiceEnabled("telegram", false) }
+    }
+
+    private func saveServiceEnabled(_ service: String, _ enabled: Bool) {
+        var config = ServiceConfig.default(for: service)
+        config.enabled = enabled
+        try? repo.saveServiceConfig(config)
+    }
+
+    private func connectTelegram() {
+        guard let path = telegramAdapterPath() else { return }
+        let id   = telegramApiId.trimmingCharacters(in: .whitespaces)
+        let hash = telegramApiHash.trimmingCharacters(in: .whitespaces)
+        try? SettingsRepository().saveTelegramCredentials(apiId: id, apiHash: hash)
+        telegramAdapter = SubprocessAdapter(
+            serviceID: "telegram", adapterPath: path,
+            config: makeTelegramConfig(apiId: id, apiHash: hash)
+        )
+    }
+
+    private func buildTelegramAdapterIfNeeded() {
+        let creds = SettingsRepository().loadTelegramCredentials()
+        if telegramApiId.isEmpty  { telegramApiId   = creds.apiId }
+        if telegramApiHash.isEmpty { telegramApiHash = creds.apiHash }
+        guard telegramAdapter == nil,
+              let path = telegramAdapterPath(),
+              !creds.apiId.isEmpty, !creds.apiHash.isEmpty else { return }
+        telegramAdapter = SubprocessAdapter(
+            serviceID: "telegram", adapterPath: path,
+            config: makeTelegramConfig(apiId: creds.apiId, apiHash: creds.apiHash)
+        )
+    }
+
+    private func telegramAdapterPath() -> String? {
+        if let p = Bundle.main.path(forResource: "telegram-adapter", ofType: nil),
+           FileManager.default.fileExists(atPath: p) { return p }
+        let p = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/llmessenger/adapters/telegram/telegram-adapter").path
+        return FileManager.default.fileExists(atPath: p) ? p : nil
+    }
+
+    private func makeTelegramConfig(apiId: String, apiHash: String) -> [String: Any] {
+        let session = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/llmessenger/data/telegram/session").path
+        return ["api_id": apiId, "api_hash": apiHash, "session_path": session]
+    }
+
+    private static func checkFullDiskAccess() -> Bool {
+        FileManager.default.isReadableFile(atPath: NSHomeDirectory() + "/Library/Messages/chat.db")
+    }
+}
+
+// MARK: - View Modifier
+
+private extension View {
+    func surfaceCard() -> some View {
+        self
+            .background(Theme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(Theme.border, lineWidth: Theme.hairline))
+    }
 }
 
 // MARK: - Button Styles
 
-/// Paper on ink — onboarding's prominent action, sized up from PaperButtonStyle.
 private struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -640,10 +620,7 @@ private struct PrimaryButtonStyle: ButtonStyle {
             .foregroundStyle(Theme.bg)
             .padding(.horizontal, 24)
             .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .fill(Theme.textPrimary)
-            )
+            .background(RoundedRectangle(cornerRadius: Theme.controlRadius).fill(Theme.textPrimary))
             .opacity(configuration.isPressed ? 0.75 : 1)
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .animation(Theme.quick, value: configuration.isPressed)
@@ -657,21 +634,14 @@ private struct SecondaryButtonStyle: ButtonStyle {
             .foregroundStyle(Theme.textSecondary)
             .padding(.horizontal, 24)
             .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .fill(Theme.surface.opacity(configuration.isPressed ? 0.6 : 1))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .strokeBorder(Theme.border, lineWidth: Theme.hairline)
-            )
+            .background(RoundedRectangle(cornerRadius: Theme.controlRadius).fill(Theme.surface.opacity(configuration.isPressed ? 0.6 : 1)))
+            .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(Theme.border, lineWidth: Theme.hairline))
             .animation(Theme.quick, value: configuration.isPressed)
     }
 }
 
 private struct SegmentButtonStyle: ButtonStyle {
     let isSelected: Bool
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.sans(12.5, weight: isSelected ? .semibold : .regular))
@@ -691,11 +661,10 @@ private struct DarkTextFieldStyle: TextFieldStyle {
             .padding(.vertical, 8)
             .background(Theme.surface)
             .clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .strokeBorder(Theme.border, lineWidth: 1)
-            )
+            .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(Theme.border, lineWidth: 1))
             .foregroundStyle(Theme.textPrimary)
             .font(Theme.sans(12.5))
     }
 }
+
+// ponytail: WireActionStyle was used only for demo in old welcome step; removed with welcome step.
