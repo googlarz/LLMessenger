@@ -74,6 +74,10 @@ struct OwedView: View {
             HStack(spacing: 8) {
                 if !isDraftingDisabled(reply) {
                     actionButton("Reply") {
+                        // Ensure the chat panel is visible before setting the input text.
+                        if appState.selectedBrief == nil, let id = appState.briefs.first?.id {
+                            appState.selectedBriefID = id
+                        }
                         chatViewModel.prepareReply(
                             service: reply.service,
                             conversationID: reply.conversationId,
