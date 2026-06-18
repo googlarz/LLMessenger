@@ -1,25 +1,18 @@
 // LLMessenger/UI/Desk/DeskView.swift
 //
-// Top-level three-altitude shell: Now / Today / Archive tabs.
+// Persistent left-panel sidebar: Inbox / Waiting / Activity.
 
 import SwiftUI
 
 struct DeskView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
-    @State private var selectedTab: DeskTab
-
-    init(initialTab: DeskTab = .act) {
-        _selectedTab = State(initialValue: initialTab)
-    }
+    @State private var selectedTab: DeskTab = .inbox
 
     enum DeskTab: String, CaseIterable {
-        case act         = "Act"
-        case now         = "Now"
-        case owed        = "Owed"
-        case commitments = "Commitments"
-        case today       = "Today"
-        case archive     = "Archive"
+        case inbox    = "Inbox"
+        case waiting  = "Waiting"
+        case activity = "Activity"
     }
 
     var body: some View {
@@ -27,61 +20,92 @@ struct DeskView: View {
             tabBar
             Rule()
 
-            switch selectedTab {
-            case .act:
-                ActView()
-            case .now:
-                NowView()
-            case .owed:
-                OwedView()
-            case .commitments:
-                CommitmentsView()
-            case .today:
-                TodayView()
-            case .archive:
-                BriefListView()
+            Group {
+                switch selectedTab {
+                case .inbox:
+                    InboxView()
+                case .waiting:
+                    OwedView()
+                case .activity:
+                    ActivityView()
+                }
             }
+            .id(selectedTab)
+            .transition(.opacity)
         }
     }
 
     private var tabBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 16) {
             ForEach(DeskTab.allCases, id: \.self) { tab in
-                tabButton(tab)
+                DeskTabButton(
+                    tab: tab,
+                    isSelected: selectedTab == tab,
+                    hasBadge: hasBadge(tab),
+                    keyEquivalent: keyForTab(tab)
+                ) {
+                    withAnimation(Theme.quick) { selectedTab = tab }
+                }
             }
             Spacer()
         }
         .padding(.horizontal, Theme.gutter)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(Theme.bg)
+        .padding(.top, 12)
+        .padding(.bottom, 0)
+        .background(Theme.sidebar)
     }
 
-    private func tabButton(_ tab: DeskTab) -> some View {
-        Button {
-            withAnimation(Theme.quick) { selectedTab = tab }
-        } label: {
-            HStack(spacing: 5) {
-                if (tab == .act && appState.actionsReadyCount > 0) ||
-                   (tab == .now && appState.nowNeedsAttention) ||
-                   (tab == .owed && appState.owedCount > 0) ||
-                   (tab == .commitments && appState.commitmentsCount > 0) {
-                    Circle()
-                        .fill(Theme.signal)
-                        .frame(width: 5, height: 5)
+    private func hasBadge(_ tab: DeskTab) -> Bool {
+        switch tab {
+        case .inbox:
+            return appState.nowNeedsAttention || appState.actionsReadyCount > 0
+        case .waiting:
+            return appState.owedCount > 0
+        case .activity:
+            return false
+        }
+    }
+
+    private func keyForTab(_ tab: DeskTab) -> KeyEquivalent {
+        switch tab {
+        case .inbox:    return "1"
+        case .waiting:  return "2"
+        case .activity: return "3"
+        }
+    }
+}
+
+private struct DeskTabButton: View {
+    let tab: DeskView.DeskTab
+    let isSelected: Bool
+    let hasBadge: Bool
+    let keyEquivalent: KeyEquivalent
+    let onTap: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 6) {
+                HStack(spacing: 5) {
+                    if hasBadge {
+                        Circle()
+                            .fill(isSelected ? Theme.signal : Theme.signal.opacity(0.6))
+                            .frame(width: 5, height: 5)
+                    }
+                    Text(tab.rawValue.uppercased())
+                        .font(Theme.mono(10.5, weight: .semibold))
+                        .tracking(1.1)
+                        .foregroundStyle(isSelected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary))
                 }
-                Text(tab.rawValue.uppercased())
-                    .font(Theme.mono(10.5, weight: .semibold))
-                    .tracking(1.1)
-                    .foregroundStyle(selectedTab == tab ? Theme.textPrimary : Theme.textTertiary)
+                .padding(.bottom, 8)
+
+                (isSelected ? Theme.textPrimary : (isHovered ? Theme.textTertiary : Color.clear))
+                    .frame(height: 1.5)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .fill(selectedTab == tab ? Theme.surfaceHigh : Color.clear)
-            )
         }
         .buttonStyle(.plain)
+        .keyboardShortcut(keyEquivalent, modifiers: .command)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }

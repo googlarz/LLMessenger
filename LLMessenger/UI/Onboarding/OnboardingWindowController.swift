@@ -21,7 +21,7 @@ final class OnboardingWindowController: NSWindowController {
         )
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.appearance = .dark
+        // Follow NSApp.appearance (set from saved theme in AppDelegate).
         window.backgroundColor = NSColor(Theme.bg)
         window.isReleasedWhenClosed = false
         window.level = .floating
@@ -74,6 +74,10 @@ private struct OnboardingView: View {
     @State private var anthropicKey = ""
     @State private var openAIKey    = ""
     @State private var ollamaModel  = ""
+    @State private var backHovered = false
+    @State private var demoLinkHovered = false
+    @State private var telegramApiLinkHovered = false
+    @State private var signalSetupLinkHovered = false
 
     // Syncing tips
     @State private var tipIndex = 0
@@ -96,9 +100,11 @@ private struct OnboardingView: View {
                     Button(action: goBack) {
                         Label("Back", systemImage: "chevron.left")
                             .font(Theme.sans(12.5))
-                            .foregroundStyle(Theme.textSecondary)
+                            .foregroundStyle(backHovered ? Theme.textPrimary : Theme.textSecondary)
                     }
                     .buttonStyle(.plain)
+                    .animation(Theme.quick, value: backHovered)
+                    .onHover { backHovered = $0 }
                 }
                 Spacer()
             }
@@ -114,6 +120,9 @@ private struct OnboardingView: View {
                 case .syncing:     syncingStep
                 }
             }
+            .id(step.hashValue)
+            .transition(.opacity)
+            .animation(Theme.quick, value: step.hashValue)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Dots
@@ -122,6 +131,7 @@ private struct OnboardingView: View {
                     Circle()
                         .fill(step == s ? Theme.textPrimary : Theme.border)
                         .frame(width: 6, height: 6)
+                        .animation(Theme.quick, value: step)
                 }
             }
             .padding(.bottom, 24)
@@ -134,10 +144,12 @@ private struct OnboardingView: View {
     // MARK: - Navigation
 
     private func goBack() {
-        switch step {
-        case .aiSetup:     step = .services
-        case .prepareSync: step = .aiSetup
-        default: break
+        withAnimation(Theme.quick) {
+            switch step {
+            case .aiSetup:     step = .services
+            case .prepareSync: step = .aiSetup
+            default: break
+            }
         }
     }
 
@@ -169,7 +181,7 @@ private struct OnboardingView: View {
                 VStack(spacing: 10) {
                     Button("Continue") {
                         saveAllServices()
-                        step = .aiSetup
+                        withAnimation(Theme.quick) { step = .aiSetup }
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(!servicesReady)
@@ -181,7 +193,9 @@ private struct OnboardingView: View {
                         }
                         .buttonStyle(.plain)
                         .font(Theme.sans(12))
-                        .foregroundStyle(Theme.textTertiary)
+                        .foregroundStyle(demoLinkHovered ? Theme.textSecondary : Theme.textTertiary)
+                        .animation(Theme.quick, value: demoLinkHovered)
+                        .onHover { demoLinkHovered = $0 }
                     }
                 }
             }
@@ -221,7 +235,7 @@ private struct OnboardingView: View {
             Button("Open Privacy Settings") {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
             }
-            .buttonStyle(SecondaryButtonStyle())
+            .buttonStyle(PaperButtonStyle())
             .frame(maxWidth: .infinity)
         }
     }
@@ -246,7 +260,9 @@ private struct OnboardingView: View {
                     }
                     .buttonStyle(.plain)
                     .font(Theme.sans(12, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .foregroundStyle(telegramApiLinkHovered ? Theme.textSecondary : Theme.textPrimary)
+                    .animation(Theme.quick, value: telegramApiLinkHovered)
+                    .onHover { telegramApiLinkHovered = $0 }
                 }
 
                 credRow(label: "API ID",   placeholder: "12345678",  text: $telegramApiId, secure: false)
@@ -286,7 +302,9 @@ private struct OnboardingView: View {
                         }
                         .buttonStyle(.plain)
                         .font(Theme.sans(11, weight: .semibold))
-                        .foregroundStyle(Theme.textTertiary)
+                        .foregroundStyle(signalSetupLinkHovered ? Theme.textSecondary : Theme.textTertiary)
+                        .animation(Theme.quick, value: signalSetupLinkHovered)
+                        .onHover { signalSetupLinkHovered = $0 }
                     }
                 }
             }
@@ -359,7 +377,7 @@ private struct OnboardingView: View {
                     }
                 }
 
-                Button("Continue") { saveLLMSettings(); step = .prepareSync }
+                Button("Continue") { saveLLMSettings(); withAnimation(Theme.quick) { step = .prepareSync } }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(!llmValid)
             }
@@ -394,7 +412,7 @@ private struct OnboardingView: View {
 
             Button("Start Building") {
                 UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                step = .syncing
+                withAnimation(Theme.quick) { step = .syncing }
             }
             .buttonStyle(PrimaryButtonStyle())
 
@@ -432,7 +450,7 @@ private struct OnboardingView: View {
             // Rotating tips
             VStack(alignment: .leading, spacing: 8) {
                 Text("WHILE YOU WAIT")
-                    .font(Theme.mono(9, weight: .semibold))
+                    .font(Theme.mono(11, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
                     .tracking(0.5)
 
@@ -551,7 +569,7 @@ private struct OnboardingView: View {
     private func instructionRow(n: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(n)
-                .font(Theme.mono(10, weight: .bold))
+                .font(Theme.mono(11, weight: .bold))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(width: 18, height: 18)
                 .overlay(Circle().strokeBorder(Theme.border, lineWidth: 1))
@@ -691,18 +709,6 @@ private struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
-private struct SecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Theme.sans(12.5, weight: .semibold))
-            .foregroundStyle(Theme.textSecondary)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: Theme.controlRadius).fill(Theme.surface.opacity(configuration.isPressed ? 0.6 : 1)))
-            .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(Theme.border, lineWidth: Theme.hairline))
-            .animation(Theme.quick, value: configuration.isPressed)
-    }
-}
 
 private struct SegmentButtonStyle: ButtonStyle {
     let isSelected: Bool

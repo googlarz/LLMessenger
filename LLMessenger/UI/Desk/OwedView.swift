@@ -31,19 +31,25 @@ struct OwedView: View {
 
     private var emptyState: some View {
         VStack(spacing: 10) {
-            WireLabel("Owed")
-            Text("Nobody's waiting on you")
+            Image(systemName: "envelope.open")
+                .font(Theme.sans(28, weight: .thin))
+                .foregroundStyle(Theme.textTertiary.opacity(0.5))
+                .padding(.bottom, 4)
+            WireLabel("Waiting")
+            Text("All replied")
                 .font(Theme.display(21))
                 .foregroundStyle(Theme.textPrimary)
-            Text("all clear")
+            Text("Nobody's waiting on you.")
                 .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textTertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.bg)
+        .background(Theme.sidebar)
     }
 
     // MARK: - Row
+
+    @State private var hoveredReplyID: String? = nil
 
     private func replyRow(_ reply: OwedReply) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -51,7 +57,7 @@ struct OwedView: View {
                 ServiceStamp(service: reply.service, size: 18)
 
                 Text(reply.conversationName.uppercased())
-                    .font(Theme.mono(10, weight: .semibold))
+                    .font(Theme.mono(11, weight: .semibold))
                     .tracking(0.9)
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
@@ -59,7 +65,7 @@ struct OwedView: View {
                 Spacer()
 
                 Text("\(reply.ageDays(now: Date()))d")
-                    .font(Theme.mono(9.5))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.textTertiary)
 
                 WireLabel(reply.reason, color: Theme.standby)
@@ -74,7 +80,6 @@ struct OwedView: View {
             HStack(spacing: 8) {
                 if !isDraftingDisabled(reply) {
                     actionButton("Reply") {
-                        // Ensure the chat panel is visible before setting the input text.
                         if appState.selectedBrief == nil, let id = appState.briefs.first?.id {
                             appState.selectedBriefID = id
                         }
@@ -99,6 +104,9 @@ struct OwedView: View {
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 12)
+        .background(hoveredReplyID == reply.id ? Theme.surface.opacity(0.5) : Color.clear)
+        .onHover { h in hoveredReplyID = h ? reply.id : nil }
+        .animation(Theme.quick, value: hoveredReplyID)
     }
 
     /// never_draft privacy override hides the reply-draft affordance for this conversation.
@@ -108,18 +116,7 @@ struct OwedView: View {
     }
 
     private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title.uppercased())
-                .font(Theme.mono(9.5, weight: .semibold))
-                .tracking(0.9)
-                .foregroundStyle(Theme.textSecondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.controlRadius)
-                        .fill(Theme.surfaceHigh)
-                )
-        }
-        .buttonStyle(.plain)
+        Button(title, action: action)
+            .buttonStyle(WireActionStyle())
     }
 }

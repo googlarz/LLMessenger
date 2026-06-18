@@ -49,7 +49,7 @@ actor AgentEngine {
             while true {
                 guard let self, await self.isRunning else { return }
                 await self.trigger()
-                try? await Task.sleep(for: .seconds(60))
+                try? await Task.sleep(for: .seconds(300))
             }
         }
     }
@@ -63,6 +63,7 @@ actor AgentEngine {
     /// Run one planning cycle now. Honors the kill switch.
     func trigger() async {
         guard !UserDefaults.standard.bool(forKey: "agentDisabled") else { return }
+        guard !UserDefaults.standard.bool(forKey: DemoSeeder.demoFlagKey) else { return }
 
         let owed: [OwedReply]
         do {
@@ -189,10 +190,18 @@ actor AgentEngine {
         let existingKeys = (try? pendingActionKeys()) ?? []
         var produced = false
 
+        let calWatermarkKey = "calendarProposalWatermarks"
+        var calWatermarks = UserDefaults.standard.dictionary(forKey: calWatermarkKey) as? [String: Double] ?? [:]
+
         for (key, msgs) in byKey {
             guard let last = msgs.last else { continue }
             // Dedupe: one pending calendar action per conversation.
             if existingKeys.contains(key) { continue }
+
+            // Skip if no new messages since last calendar scan for this conversation.
+            let latestTimestamp = msgs.map { $0.timestamp.timeIntervalSince1970 }.max() ?? 0
+            if let seen = calWatermarks[key], seen >= latestTimestamp { continue }
+            calWatermarks[key] = latestTimestamp
 
             let ctx = (try? repository.fetchConversationContext(
                 service: last.service, conversationId: last.conversationId)) ?? nil
@@ -203,6 +212,7 @@ actor AgentEngine {
                 if (try? persist(action)) != nil { produced = true }
             }
         }
+        UserDefaults.standard.set(calWatermarks, forKey: calWatermarkKey)
         return produced
     }
 

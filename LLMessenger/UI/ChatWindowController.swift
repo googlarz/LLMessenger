@@ -23,7 +23,7 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.toolbarStyle = .unified
-        window.appearance = .dark
+        // Follow NSApp.appearance (set from saved theme in AppDelegate).
         window.backgroundColor = NSColor(Theme.bg)
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false

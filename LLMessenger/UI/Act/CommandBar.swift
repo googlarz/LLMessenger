@@ -19,6 +19,8 @@ struct CommandBar<Recognizer: SpeechRecognizing>: View {
     @State private var resultLine: String?
     @State private var isRunning = false
     @State private var micDenied = false
+    @State private var micHovered = false
+    @State private var runHovered = false
 
     init(speech: @autoclosure @escaping () -> Recognizer) {
         _speech = StateObject(wrappedValue: speech())
@@ -94,14 +96,16 @@ struct CommandBar<Recognizer: SpeechRecognizing>: View {
         Button { toggleListening() } label: {
             ZStack {
                 Circle()
-                    .fill(speech.isListening ? Theme.textPrimary : Theme.surfaceHigh)
+                    .fill(speech.isListening ? Theme.textPrimary : (micHovered ? Theme.surface : Theme.surfaceHigh))
                     .frame(width: 28, height: 28)
                 Image(systemName: speech.isListening ? "mic.fill" : "mic")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(speech.isListening ? Theme.bg : Theme.textSecondary)
+                    .foregroundStyle(speech.isListening ? Theme.bg : (micHovered ? Theme.textPrimary : Theme.textSecondary))
             }
         }
         .buttonStyle(.plain)
+        .animation(Theme.quick, value: micHovered)
+        .onHover { micHovered = $0 }
         .help(speech.isListening ? "Stop dictation" : "Dictate a command")
     }
 
@@ -130,7 +134,7 @@ struct CommandBar<Recognizer: SpeechRecognizing>: View {
         Button { run() } label: {
             ZStack {
                 Circle()
-                    .fill(canRun ? Theme.textPrimary : Theme.surfaceHigh)
+                    .fill(canRun ? (runHovered ? Theme.textSecondary : Theme.textPrimary) : Theme.surfaceHigh)
                     .frame(width: 28, height: 28)
                 Image(systemName: "arrow.up")
                     .font(.system(size: 12, weight: .bold))
@@ -139,6 +143,8 @@ struct CommandBar<Recognizer: SpeechRecognizing>: View {
         }
         .buttonStyle(.plain)
         .disabled(!canRun)
+        .animation(Theme.quick, value: runHovered)
+        .onHover { runHovered = $0 }
         .keyboardShortcut(.return, modifiers: .command)
         .help("Run command (⌘↩)")
     }

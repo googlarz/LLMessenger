@@ -23,7 +23,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.minSize = NSSize(width: 640, height: 480)
         window.title = "LLMessenger Settings"
         window.titlebarAppearsTransparent = true
-        window.appearance = .dark
+        // Follow NSApp.appearance (set from saved theme in AppDelegate).
         window.backgroundColor = NSColor(Theme.bg)
         // Bumped autosave key so the old cached 540×480 frame (saved before the Privacy
         // tab + wider layout) doesn't shrink the new larger window on first open.

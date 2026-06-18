@@ -12,6 +12,7 @@ struct BriefListView: View {
     @State private var searchQuery = ""
     @State private var dateFrom: Date? = nil
     @State private var dateTo: Date? = nil
+    @State private var dateClearHovered = false
     @State private var showDateFilter = false
     @State private var searchResults: [MessageSearchResult] = []
     @State private var searchBriefResults: [Brief] = []
@@ -20,6 +21,7 @@ struct BriefListView: View {
     @State private var loadTask: Task<Void, Never>? = nil
     @State private var needsReplyCards: [(card: BriefCardRecord, briefCreatedAt: Date)] = []
     @State private var showArchivedSection = false
+    @State private var archiveToggleHovered = false
     @State private var snoozeTargetBriefID: Int64? = nil
     @State private var showSnoozePopover = false
 
@@ -57,10 +59,12 @@ struct BriefListView: View {
                     Button { dateFrom = nil; dateTo = nil } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Theme.textTertiary)
+                            .foregroundStyle(dateClearHovered ? Theme.textSecondary : Theme.textTertiary)
                     }
                     .buttonStyle(.plain)
                     .help("Clear date filter")
+                    .animation(Theme.quick, value: dateClearHovered)
+                    .onHover { dateClearHovered = $0 }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
@@ -99,19 +103,23 @@ struct BriefListView: View {
 
                         // Empty state
                         if filteredGroups.isEmpty && appState.pinnedBriefs.isEmpty && needsReplyCards.isEmpty && searchQuery.isEmpty {
-                            VStack(spacing: 10) {
-                                Spacer().frame(height: 28)
-                                WireLabel("Archive empty")
-                                Text("Your first brief lands\nafter the next poll.")
-                                    .font(Theme.display(14))
+                            VStack(spacing: 8) {
+                                Spacer().frame(height: 32)
+                                Image(systemName: "newspaper")
+                                    .font(.system(size: 28, weight: .thin))
+                                    .foregroundStyle(Theme.textTertiary.opacity(0.4))
+                                    .padding(.bottom, 4)
+                                Text("No briefs yet")
+                                    .font(Theme.display(16))
                                     .foregroundStyle(Theme.textSecondary)
-                                    .multilineTextAlignment(.center)
-                                Text("Check Settings to confirm your\nservices are connected.")
-                                    .font(Theme.sans(11.5))
+                                Text("Your first brief arrives\nafter the next message poll.")
+                                    .font(Theme.sans(12))
                                     .foregroundStyle(Theme.textTertiary)
                                     .multilineTextAlignment(.center)
+                                    .lineSpacing(2)
                                 Button("OPEN SETTINGS") { appState.onOpenSettings?() }
-                                    .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
+                                    .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
+                                    .padding(.top, 4)
                                 Spacer()
                             }
                             .frame(maxWidth: .infinity)
@@ -151,9 +159,10 @@ struct BriefListView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(Theme.textTertiary)
+                                        .foregroundStyle(archiveToggleHovered ? Theme.textSecondary : Theme.textTertiary)
                                         .rotationEffect(.degrees(showArchivedSection ? 90 : 0))
-                                    WireLabel("Filed away (\(archived.count))")
+                                    WireLabel("Filed away (\(archived.count))",
+                                              color: archiveToggleHovered ? Theme.textSecondary : Theme.textTertiary)
                                     Spacer()
                                 }
                                 .padding(.horizontal, 16)
@@ -162,6 +171,8 @@ struct BriefListView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .animation(Theme.quick, value: archiveToggleHovered)
+                            .onHover { archiveToggleHovered = $0 }
 
                             if showArchivedSection {
                                 ForEach(archived, id: \.id) { brief in
@@ -174,7 +185,7 @@ struct BriefListView: View {
                                             } label: {
                                                 Label("Unarchive", systemImage: "arrow.uturn.backward")
                                             }
-                                            .tint(.blue)
+                                            .tint(Theme.ok)
                                         }
                                 }
                             }
@@ -225,7 +236,7 @@ struct BriefListView: View {
         } label: {
             Label("Archive", systemImage: "archivebox")
         }
-        .tint(.orange)
+        .tint(Theme.standby)
 
         Button {
             snoozeTargetBriefID = brief.id
@@ -233,7 +244,7 @@ struct BriefListView: View {
         } label: {
             Label("Snooze", systemImage: "moon.zzz")
         }
-        .tint(.indigo)
+        .tint(Theme.textTertiary)
         .popover(isPresented: $showSnoozePopover) {
             if let briefID = snoozeTargetBriefID,
                let brief = appState.briefs.first(where: { $0.id == briefID }) {
@@ -314,19 +325,22 @@ struct BriefListView: View {
 private struct DateFilterButton: View {
     let isActive: Bool
     @Binding var showPopover: Bool
+    @State private var isHovered = false
 
     var body: some View {
         Button { showPopover.toggle() } label: {
             Image(systemName: isActive ? "calendar.badge.clock" : "calendar")
                 .font(.system(size: 13))
-                .foregroundStyle(isActive ? Theme.textPrimary : Theme.textTertiary)
+                .foregroundStyle(isActive || isHovered ? Theme.textPrimary : Theme.textTertiary)
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: Theme.controlRadius)
-                .fill(isActive ? Theme.surfaceHigh : Color.clear)
+                .fill(isActive || isHovered ? Theme.surfaceHigh : Color.clear)
         )
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
         .help("Filter by date range")
     }
 }
@@ -387,7 +401,7 @@ private struct NextRefreshLine: View {
         HStack {
             WireLabel("Next brief")
             Spacer()
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
+            TimelineView(.periodic(from: .now, by: 10)) { _ in
                 Text(countdownText)
                     .font(Theme.mono(11, weight: .semibold))
                     .foregroundStyle(Theme.textSecondary)
@@ -409,6 +423,7 @@ private struct NextRefreshLine: View {
 private struct SearchBarView: View {
     @Binding var query: String
     @FocusState private var focused: Bool
+    @State private var clearHovered = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -424,9 +439,11 @@ private struct SearchBarView: View {
                 Button { query = "" } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Theme.textTertiary)
+                        .foregroundStyle(clearHovered ? Theme.textSecondary : Theme.textTertiary)
                 }
                 .buttonStyle(.plain)
+                .animation(Theme.quick, value: clearHovered)
+                .onHover { clearHovered = $0 }
             }
         }
         .padding(.horizontal, 9)
@@ -479,7 +496,7 @@ private struct BriefRowView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     // Day lives in the section header — the row carries time only.
                     Text(timeLabel)
-                        .font(Theme.mono(9.5, weight: .semibold))
+                        .font(Theme.mono(11, weight: .semibold))
                         .foregroundStyle(isSelected ? Theme.textSecondary : Theme.textTertiary)
                     if brief.pinned {
                         Image(systemName: "pin.fill")
@@ -519,21 +536,25 @@ private struct BriefRowView: View {
 
 private struct SettingsButtonView: View {
     @EnvironmentObject var appState: AppState
+    @State private var isHovered = false
 
     var body: some View {
         Button { appState.onOpenSettings?() } label: {
             HStack(spacing: 8) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
-                WireLabel("Settings", color: Theme.textSecondary)
+                    .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
+                WireLabel("Settings", color: isHovered ? Theme.textPrimary : Theme.textSecondary)
                 Spacer()
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 8)
+            .background(isHovered ? Theme.surface : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -566,16 +587,29 @@ private struct SnoozePickerView: View {
     }
 
     private func snoozeOption(_ label: String, action: @escaping () -> Void) -> some View {
+        SnoozeOptionRow(label: label, action: action)
+    }
+}
+
+private struct SnoozeOptionRow: View {
+    let label: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
         Button(action: action) {
             Text(label)
                 .font(Theme.sans(13))
-                .foregroundStyle(Theme.textPrimary)
+                .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 5)
                 .padding(.horizontal, 6)
+                .background(RoundedRectangle(cornerRadius: Theme.controlRadius).fill(isHovered ? Theme.surface : Color.clear))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -592,7 +626,7 @@ private struct NeedsReplySection: View {
                 WireLabel("Needs reply", color: Theme.signal)
                 Spacer()
                 Text("\(cards.count)")
-                    .font(Theme.mono(10, weight: .semibold))
+                    .font(Theme.mono(11, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .padding(.horizontal, 16)
@@ -600,40 +634,62 @@ private struct NeedsReplySection: View {
             .padding(.bottom, 6)
 
             ForEach(cards, id: \.card.id) { item in
-                Button { onTap(item.card) } label: {
-                    HStack(alignment: .top, spacing: 8) {
-                        Theme.signal.frame(width: 2)
-                            .clipShape(RoundedRectangle(cornerRadius: 1))
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                ServiceStamp(service: item.card.service, size: 14)
-                                Text((item.card.conversationTitle ?? Theme.serviceName(item.card.service)).uppercased())
-                                    .font(Theme.mono(9, weight: .semibold))
-                                    .tracking(0.8)
-                                    .foregroundStyle(Theme.textSecondary)
-                                    .lineLimit(1)
-                                Spacer(minLength: 4)
-                                Text(briefAge(item.briefCreatedAt))
-                                    .font(Theme.mono(9))
-                                    .foregroundStyle(Theme.textTertiary)
-                            }
-                            Text(item.card.headline)
-                                .font(Theme.sans(11.5))
-                                .foregroundStyle(Theme.textPrimary)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                NeedsReplyRow(card: item.card, briefCreatedAt: item.briefCreatedAt, onTap: onTap)
             }
 
             Rule()
                 .padding(.top, 8)
         }
+    }
+
+    private func briefAge(_ date: Date) -> String {
+        let s = Date().timeIntervalSince(date)
+        if s < 3600  { return "\(Int(s / 60))m" }
+        if s < 86400 { return "\(Int(s / 3600))h" }
+        return "\(Int(s / 86400))d"
+    }
+}
+
+private struct NeedsReplyRow: View {
+    let card: BriefCardRecord
+    let briefCreatedAt: Date
+    let onTap: (BriefCardRecord) -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button { onTap(card) } label: {
+            HStack(alignment: .top, spacing: 8) {
+                (isHovered ? Theme.signal.opacity(0.7) : Theme.signal)
+                    .frame(width: 2)
+                    .clipShape(RoundedRectangle(cornerRadius: 1))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        ServiceStamp(service: card.service, size: 14)
+                        Text((card.conversationTitle ?? Theme.serviceName(card.service)).uppercased())
+                            .font(Theme.mono(11, weight: .semibold))
+                            .tracking(0.8)
+                            .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textSecondary)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(briefAge(briefCreatedAt))
+                            .font(Theme.mono(11))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    Text(card.headline)
+                        .font(Theme.sans(11.5))
+                        .foregroundStyle(Theme.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 
     private func briefAge(_ date: Date) -> String {

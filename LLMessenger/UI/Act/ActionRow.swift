@@ -11,6 +11,7 @@ struct ActionRow: View {
 
     @State private var isEditing = false
     @State private var editText = ""
+    @State private var isHovered = false
 
     private var draftText: String {
         action.replyPayload?.draftText ?? action.payload
@@ -23,7 +24,7 @@ struct ActionRow: View {
                 ServiceStamp(service: action.service, size: 18)
 
                 Text(action.conversationName.uppercased())
-                    .font(Theme.mono(10, weight: .semibold))
+                    .font(Theme.mono(11, weight: .semibold))
                     .tracking(0.9)
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
@@ -85,6 +86,9 @@ struct ActionRow: View {
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 12)
+        .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 
     @State private var now = Date()
@@ -93,7 +97,7 @@ struct ActionRow: View {
     private var armedBar: some View {
         HStack(spacing: 8) {
             Text("SENDING IN \(secondsRemaining)s")
-                .font(Theme.mono(9.5, weight: .semibold))
+                .font(Theme.mono(11, weight: .semibold))
                 .tracking(0.9)
                 .foregroundStyle(Theme.signal)
             actionButton("Undo") { appState.undoAutoSend(action) }
@@ -130,18 +134,7 @@ struct ActionRow: View {
     }
 
     private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title.uppercased())
-                .font(Theme.mono(9.5, weight: .semibold))
-                .tracking(0.9)
-                .foregroundStyle(Theme.textSecondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.controlRadius)
-                        .fill(Theme.surfaceHigh)
-                )
-        }
-        .buttonStyle(.plain)
+        Button(title, action: action)
+            .buttonStyle(WireActionStyle())
     }
 }

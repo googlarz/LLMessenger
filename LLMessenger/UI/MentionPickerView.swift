@@ -75,35 +75,45 @@ private struct ContactRow: View {
             }
             HStack(spacing: 6) {
                 ForEach(directory.orderedHandles(for: contact), id: \.self) { handle in
-                    Button {
-                        onPickService(handle)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(Theme.serviceColor(handle.service))
-                                .frame(width: 6, height: 6)
-                            Text(Theme.serviceName(handle.service))
-                                .font(Theme.mono(10, weight: .semibold))
-                                .foregroundStyle(Theme.textSecondary)
-                            if handle.isGroup {
-                                Text("GROUP")
-                                    .font(Theme.mono(8.5, weight: .semibold))
-                                    .tracking(0.5)
-                                    .foregroundStyle(Theme.textTertiary)
-                            }
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: Theme.controlRadius)
-                                .fill(Theme.surfaceHigh)
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    ServiceHandleChip(handle: handle) { onPickService(handle) }
                 }
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+}
+
+private struct ServiceHandleChip: View {
+    let handle: ServiceHandle
+    let onTap: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Theme.serviceColor(handle.service))
+                    .frame(width: 6, height: 6)
+                Text(Theme.serviceName(handle.service))
+                    .font(Theme.mono(11, weight: .semibold))
+                    .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textSecondary)
+                if handle.isGroup {
+                    Text("GROUP")
+                        .font(Theme.mono(8.5, weight: .semibold))
+                        .tracking(0.5)
+                        .foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .fill(isHovered ? Theme.surface : Theme.surfaceHigh)
+            )
+        }
+        .buttonStyle(.plain)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }

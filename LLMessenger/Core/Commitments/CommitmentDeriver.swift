@@ -40,11 +40,18 @@ struct CommitmentDeriver {
 
         var inserted: [Commitment] = []
 
-        for (_, convMessages) in byKey {
+        let watermarkKey = "commitmentDeriverWatermarks"
+        var watermarks = UserDefaults.standard.dictionary(forKey: watermarkKey) as? [String: Double] ?? [:]
+
+        for (convKey, convMessages) in byKey {
             guard let last = convMessages.last else { continue }
             let service = last.service
             let conversationId = last.conversationId
             let conversationName = last.conversationName ?? conversationId
+
+            // Skip if no new messages since last derivation run for this conversation.
+            let latestTimestamp = convMessages.map { $0.timestamp.timeIntervalSince1970 }.max() ?? 0
+            if let seen = watermarks[convKey], seen >= latestTimestamp { continue }
 
             let ctx = (try? repository.fetchConversationContext(
                 service: service, conversationId: conversationId)) ?? nil
@@ -53,6 +60,8 @@ struct CommitmentDeriver {
             if ctx?.privacyOverride == "never_draft" { continue }
             // local_only: only mine on a local model.
             if ctx?.privacyOverride == "local_only", !llmClient.isLocal { continue }
+
+            watermarks[convKey] = latestTimestamp
 
             let extracted = await extract(
                 messages: convMessages,
@@ -90,6 +99,7 @@ struct CommitmentDeriver {
             }
         }
 
+        UserDefaults.standard.set(watermarks, forKey: watermarkKey)
         return inserted
     }
 

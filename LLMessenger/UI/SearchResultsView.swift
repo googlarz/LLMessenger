@@ -75,30 +75,35 @@ private struct SectionLabel: View {
 
 private struct BriefSearchResultRow: View {
     let brief: Brief
+    @State private var isHovered = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
                 Image(systemName: "doc.text")
                     .font(Theme.sans(11))
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
                 Text(brief.createdAt, style: .date)
                     .font(Theme.mono(10.5))
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
             }
             Text(brief.notificationText)
                 .font(Theme.sans(12))
-                .foregroundStyle(Theme.textPrimary)
+                .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textSecondary)
                 .lineLimit(2)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color.clear)
+        .background(isHovered ? Theme.surface : Color.clear)
         .contentShape(Rectangle())
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }
 
 private struct MessageSearchResultRow: View {
     let result: MessageSearchResult
+    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -107,12 +112,12 @@ private struct MessageSearchResultRow: View {
                 if let name = result.conversationName {
                     Text(name)
                         .font(Theme.sans(11, weight: .medium))
-                        .foregroundStyle(Theme.textSecondary)
+                        .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textSecondary)
                         .lineLimit(1)
                 }
                 Spacer()
                 Text(result.timestamp, style: .relative)
-                    .font(Theme.mono(10))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.textTertiary)
             }
             // Strip << >> highlight markers for plain display
@@ -123,8 +128,10 @@ private struct MessageSearchResultRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color.clear)
+        .background(isHovered ? Theme.surface : Color.clear)
         .contentShape(Rectangle())
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 
     private var plainSnippet: String {

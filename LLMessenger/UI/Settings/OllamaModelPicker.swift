@@ -14,6 +14,7 @@ struct OllamaModelPicker: View {
     }
 
     @State private var loadState: LoadState = .idle
+    @State private var refreshHovered = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -40,10 +41,12 @@ struct OllamaModelPicker: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12))
-                        .foregroundStyle(Theme.textSecondary)
+                        .foregroundStyle(refreshHovered ? Theme.textPrimary : Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .help("Refresh model list")
+                .animation(Theme.quick, value: refreshHovered)
+                .onHover { refreshHovered = $0 }
 
             case .loaded, .failed:
                 TextField("Model name (e.g. llama3.1)", text: $selectedModel)
@@ -54,10 +57,14 @@ struct OllamaModelPicker: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12))
-                        .foregroundStyle(loadState == .failed ? Theme.signal : Theme.textSecondary)
+                        .foregroundStyle(loadState == .failed
+                                         ? (refreshHovered ? Theme.signal.opacity(0.7) : Theme.signal)
+                                         : (refreshHovered ? Theme.textPrimary : Theme.textSecondary))
                 }
                 .buttonStyle(.plain)
                 .help(loadState == .failed ? "Ollama not running — click to retry" : "Refresh")
+                .animation(Theme.quick, value: refreshHovered)
+                .onHover { refreshHovered = $0 }
             }
         }
         .task { await load() }

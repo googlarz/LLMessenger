@@ -31,7 +31,10 @@ struct ConversationPickerView: View {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(options) { opt in
-                        Button {
+                        ConversationOptionRow(
+                            opt: opt,
+                            label: primaryLabel(for: opt)
+                        ) {
                             Task {
                                 await chatViewModel.selectPickerOption(
                                     pickerID: pickerID,
@@ -39,31 +42,7 @@ struct ConversationPickerView: View {
                                     option: opt
                                 )
                             }
-                        } label: {
-                            HStack(spacing: 10) {
-                                Text("\(opt.number)")
-                                    .font(Theme.mono(10, weight: .semibold))
-                                    .foregroundStyle(Theme.textTertiary)
-                                    .frame(width: 14, alignment: .trailing)
-                                ServiceStamp(service: opt.service, size: 16)
-                                Text(primaryLabel(for: opt))
-                                    .font(Theme.sans(13, weight: .medium))
-                                    .foregroundStyle(Theme.textPrimary)
-                                Text(Theme.serviceName(opt.service).uppercased())
-                                    .font(Theme.mono(9))
-                                    .tracking(0.8)
-                                    .foregroundStyle(Theme.textTertiary)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: Theme.controlRadius)
-                                    .fill(Theme.surface)
-                            )
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
                     }
                 }
 
@@ -151,7 +130,7 @@ struct AssistantResponseView: View {
             trailing: providerLabel.map { label in
                 AnyView(
                     Text(label.uppercased())
-                        .font(Theme.mono(8.5))
+                        .font(Theme.mono(11))
                         .tracking(0.8)
                         .foregroundStyle(Theme.textTertiary.opacity(0.8))
                 )
@@ -189,15 +168,15 @@ struct AssistantResponseWithSourcesView: View {
                             HStack(spacing: 7) {
                                 ServiceStamp(service: source.service, size: 14)
                                 Text(source.sender.uppercased())
-                                    .font(Theme.mono(9, weight: .semibold))
+                                    .font(Theme.mono(11, weight: .semibold))
                                     .tracking(0.8)
                                     .foregroundStyle(Theme.textSecondary)
                                 Text(source.timestamp, style: .time)
-                                    .font(Theme.mono(9))
+                                    .font(Theme.mono(11))
                                     .foregroundStyle(Theme.textTertiary)
                             }
                             Text(source.text)
-                                .font(.system(size: 12.5, design: .serif))
+                                .font(Theme.display(12.5))
                                 .italic()
                                 .foregroundStyle(Theme.textPrimary.opacity(0.85))
                                 .lineSpacing(3)
@@ -228,7 +207,7 @@ struct SendConfirmationView: View {
                     HStack(spacing: 7) {
                         ServiceStamp(service: draft.serviceID, size: 16)
                         Text("TO \((draft.senderName.isEmpty ? draft.conversationID : draft.senderName).uppercased())")
-                            .font(Theme.mono(9.5, weight: .semibold))
+                            .font(Theme.mono(11, weight: .semibold))
                             .tracking(0.8)
                             .foregroundStyle(Theme.textSecondary)
                     }
@@ -261,5 +240,42 @@ struct SendConfirmationView: View {
                 }
             }
         }
+    }
+}
+
+private struct ConversationOptionRow: View {
+    let opt: ConversationOption
+    let label: String
+    let onTap: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                Text("\(opt.number)")
+                    .font(Theme.mono(11, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(width: 14, alignment: .trailing)
+                ServiceStamp(service: opt.service, size: 16)
+                Text(label)
+                    .font(Theme.sans(13, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                Text(Theme.serviceName(opt.service).uppercased())
+                    .font(Theme.mono(11))
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.textTertiary)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .fill(isHovered ? Theme.surfaceHigh : Theme.surface)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }

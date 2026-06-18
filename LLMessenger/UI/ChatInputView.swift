@@ -10,6 +10,7 @@ struct ChatInputView: View {
     @State private var mentionQuery = ""
     // Range of "@<query>" inside inputText that the picker is currently completing.
     @State private var mentionRange: Range<String.Index>?
+    @State private var sendHovered = false
 
     var body: some View {
         if DemoSeeder.isActive {
@@ -49,25 +50,11 @@ struct ChatInputView: View {
             HStack(spacing: 14) {
                 WireLabel("Tone")
                 ForEach(["Formal", "Short", "Casual"], id: \.self) { tone in
-                    let selected = selectedTone == tone
-                    Button {
+                    ToneButton(tone: tone, selected: selectedTone == tone) {
                         withAnimation(Theme.quick) {
-                            selectedTone = selected ? nil : tone
+                            selectedTone = selectedTone == tone ? nil : tone
                         }
-                    } label: {
-                        Text(tone.uppercased())
-                            .font(Theme.mono(9.5, weight: .semibold))
-                            .tracking(1.0)
-                            .foregroundStyle(selected ? Theme.textPrimary : Theme.textTertiary)
-                            .padding(.vertical, 2)
-                            .overlay(alignment: .bottom) {
-                                (selected ? Theme.textPrimary : Color.clear)
-                                    .frame(height: 1.5)
-                                    .offset(y: 2)
-                            }
-                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -112,7 +99,7 @@ struct ChatInputView: View {
                 Button { sendIfPossible() } label: {
                     ZStack {
                         Circle()
-                            .fill(canSend ? Theme.textPrimary : Theme.surfaceHigh)
+                            .fill(canSend ? (sendHovered ? Theme.textSecondary : Theme.textPrimary) : Theme.surfaceHigh)
                             .frame(width: 28, height: 28)
                         Image(systemName: "arrow.up")
                             .font(.system(size: 12, weight: .bold))
@@ -122,6 +109,8 @@ struct ChatInputView: View {
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .animation(Theme.quick, value: canSend)
+                .animation(Theme.quick, value: sendHovered)
+                .onHover { sendHovered = $0 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .help("Send (⌘↩)")
             }
@@ -208,15 +197,42 @@ struct ChatInputView: View {
     }
 }
 
+private struct ToneButton: View {
+    let tone: String
+    let selected: Bool
+    let onTap: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(tone.uppercased())
+                .font(Theme.mono(11, weight: .semibold))
+                .tracking(1.0)
+                .foregroundStyle(selected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary))
+                .padding(.vertical, 2)
+                .overlay(alignment: .bottom) {
+                    (selected ? Theme.textPrimary : (isHovered ? Theme.textTertiary : Color.clear))
+                        .frame(height: 1.5)
+                        .offset(y: 2)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
+    }
+}
+
 private struct MentionTargetChip: View {
     let target: ChatViewModel.MentionTarget
     let onClear: () -> Void
+    @State private var clearHovered = false
 
     var body: some View {
         HStack(spacing: 7) {
             ServiceStamp(service: target.service, size: 16)
             Text("TO \(target.displayName.uppercased())")
-                .font(Theme.mono(9.5, weight: .semibold))
+                .font(Theme.mono(11, weight: .semibold))
                 .tracking(0.8)
                 .foregroundStyle(Theme.textPrimary)
             if target.isGroup {
@@ -225,10 +241,12 @@ private struct MentionTargetChip: View {
             Button(action: onClear) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(clearHovered ? Theme.textSecondary : Theme.textTertiary)
             }
             .buttonStyle(.plain)
             .help("Clear recipient")
+            .animation(Theme.quick, value: clearHovered)
+            .onHover { clearHovered = $0 }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)

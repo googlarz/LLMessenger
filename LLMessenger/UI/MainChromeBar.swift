@@ -15,9 +15,12 @@ struct MainChromeBar: View {
     @Binding var sidebarCollapsed: Bool
     @Binding var showMedia: Bool
     @Binding var showSearch: Bool
+    /// Binding into ContentView — toggles the persistent Desk panel (Inbox/Waiting/Activity).
+    var deskCollapsed: Binding<Bool>? = nil
     var onRetryService: ((String) -> Void)? = nil
 
     @State private var showingBriefPicker = false
+    @State private var briefPickerHovered = false
 
     var body: some View {
         ZStack {
@@ -29,6 +32,14 @@ struct MainChromeBar: View {
 
                 chromeIcon("sidebar.left", active: !sidebarCollapsed, help: "Toggle archive (⌥⌘S)") {
                     withAnimation(Theme.spring) { sidebarCollapsed.toggle() }
+                }
+
+                if let deskCollapsed {
+                    chromeIcon("sidebar.squares.left",
+                               active: !deskCollapsed.wrappedValue,
+                               help: "Toggle inbox panel") {
+                        withAnimation(Theme.spring) { deskCollapsed.wrappedValue.toggle() }
+                    }
                 }
 
                 Theme.border.frame(width: Theme.hairline, height: 14)
@@ -46,7 +57,7 @@ struct MainChromeBar: View {
 
                 if let checked = appState.lastCheckedDate {
                     Text(lastCheckedLabel(from: checked).uppercased())
-                        .font(Theme.mono(9))
+                        .font(Theme.mono(11))
                         .tracking(0.8)
                         .foregroundStyle(appState.hasServiceError ? Theme.standby : Theme.textTertiary)
                 } else if appState.hasServiceError {
@@ -58,7 +69,7 @@ struct MainChromeBar: View {
                 if DemoSeeder.isActive {
                     HStack(spacing: 6) {
                         Text("DEMO")
-                            .font(Theme.mono(9, weight: .bold))
+                            .font(Theme.mono(11, weight: .bold))
                             .tracking(1.1)
                             .foregroundStyle(Theme.standby)
                             .padding(.horizontal, 6)
@@ -92,19 +103,7 @@ struct MainChromeBar: View {
 
     private func chromeIcon(_ symbol: String, active: Bool, help: String,
                             action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(active ? Theme.textPrimary : Theme.textTertiary)
-                .frame(width: 26, height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.controlRadius)
-                        .fill(active ? Theme.surfaceHigh : Color.clear)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(help)
+        ChromeIconButton(symbol: symbol, active: active, help: help, action: action)
     }
 
     // MARK: - Brief picker cluster
@@ -131,15 +130,17 @@ struct MainChromeBar: View {
                 .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: Theme.controlRadius)
-                        .fill(Theme.surface)
+                        .fill(briefPickerHovered ? Theme.surfaceHigh : Theme.surface)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.controlRadius)
-                        .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+                        .strokeBorder(briefPickerHovered ? Theme.textTertiary : Theme.border, lineWidth: Theme.hairline)
                 )
             }
             .buttonStyle(.plain)
             .help("Browse the brief archive")
+            .animation(Theme.quick, value: briefPickerHovered)
+            .onHover { briefPickerHovered = $0 }
             .popover(isPresented: $showingBriefPicker, arrowEdge: .bottom) {
                 BriefListView()
                     .environmentObject(appState)
@@ -156,16 +157,8 @@ struct MainChromeBar: View {
 
     private func arrowButton(_ symbol: String, enabled: Bool, key: Character,
                              action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(enabled ? Theme.textSecondary : Theme.textTertiary.opacity(0.35))
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .keyboardShortcut(KeyEquivalent(key), modifiers: .command)
+        BriefArrowButton(symbol: symbol, enabled: enabled, action: action)
+            .keyboardShortcut(KeyEquivalent(key), modifiers: .command)
     }
 
     // MARK: - Helpers
@@ -224,6 +217,62 @@ struct MainChromeBar: View {
     }
 }
 
+// MARK: - Chrome icon button
+
+private struct ChromeIconButton: View {
+    let symbol: String
+    let active: Bool
+    let help: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(active || isHovered ? Theme.textPrimary : Theme.textTertiary)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.controlRadius)
+                        .fill(active ? Theme.surfaceHigh : (isHovered ? Theme.surface : Color.clear))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Brief arrow button
+
+private struct BriefArrowButton: View {
+    let symbol: String
+    let enabled: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(isHovered && enabled ? Theme.textPrimary
+                                 : (enabled ? Theme.textSecondary : Theme.textTertiary.opacity(0.35)))
+                .frame(width: 22, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.controlRadius)
+                        .fill(isHovered && enabled ? Theme.surface : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
+    }
+}
+
 // MARK: - Service health stamp
 
 private struct ServiceHealthChip: View {
@@ -240,7 +289,7 @@ private struct ServiceHealthChip: View {
                     .fill(dotColor)
                     .frame(width: 5, height: 5)
                 Text(shortName)
-                    .font(Theme.mono(9.5, weight: .bold))
+                    .font(Theme.mono(11, weight: .bold))
                     .tracking(0.6)
                     .foregroundStyle(textColor)
             }
@@ -252,6 +301,7 @@ private struct ServiceHealthChip: View {
             )
         }
         .buttonStyle(.plain)
+        .animation(Theme.quick, value: hovering)
         .onHover { hovering = $0 }
         .help(helpText)
     }

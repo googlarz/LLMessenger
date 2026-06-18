@@ -23,7 +23,7 @@ struct PriorityStamp: View {
 
     var body: some View {
         Text(label)
-            .font(Theme.mono(9.5, weight: .bold))
+            .font(Theme.mono(11, weight: .bold))
             .tracking(1.1)
             .foregroundStyle(color)
             .padding(.horizontal, 6)
@@ -74,6 +74,8 @@ struct BriefCardView: View {
     @State private var labelEditText = ""
     @State private var labelEditHint = "auto"
     @State private var hovering = false
+    @State private var labelHovered = false
+    @State private var chevronHovered = false
     /// Set on save so the stamp updates immediately; the parent's batch
     /// cache refreshes on the next brief change.
     @State private var savedContextOverride: ConversationContext?
@@ -134,7 +136,7 @@ struct BriefCardView: View {
     private var stampRow: some View {
         HStack(spacing: 8) {
             Text(String(format: "%02d", number))
-                .font(Theme.mono(10, weight: .semibold))
+                .font(Theme.mono(11, weight: .semibold))
                 .foregroundStyle(Theme.textTertiary)
 
             ServiceStamp(service: card.service, size: 18)
@@ -148,18 +150,20 @@ struct BriefCardView: View {
                     Text(convName.uppercased())
                         .font(Theme.mono(10.5, weight: .semibold))
                         .tracking(1.0)
-                        .foregroundStyle(isHandled ? Theme.textTertiary : Theme.textSecondary)
+                        .foregroundStyle(isHandled ? Theme.textTertiary : (labelHovered ? Theme.textPrimary : Theme.textSecondary))
                         .lineLimit(1)
                     if let lbl = effectiveContext?.label, !lbl.isEmpty {
                         Text(lbl.uppercased())
-                            .font(Theme.mono(9, weight: .medium))
+                            .font(Theme.mono(11, weight: .medium))
                             .tracking(0.8)
-                            .foregroundStyle(Theme.textTertiary)
+                            .foregroundStyle(labelHovered ? Theme.textSecondary : Theme.textTertiary)
                     }
                 }
             }
             .buttonStyle(.plain)
             .help("Add a label or priority hint for this conversation")
+            .animation(Theme.quick, value: labelHovered)
+            .onHover { labelHovered = $0 }
             .popover(isPresented: $showLabelEditor) {
                 LabelEditorPopover(
                     convName: convName,
@@ -196,7 +200,7 @@ struct BriefCardView: View {
 
             if card.counts.messages > 1 {
                 Text("\(card.counts.messages)M · \(card.counts.people)P")
-                    .font(Theme.mono(9))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.textTertiary)
             }
 
@@ -228,11 +232,14 @@ struct BriefCardView: View {
                 } label: {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Theme.textTertiary)
+                        .foregroundStyle(chevronHovered ? Theme.textSecondary : Theme.textTertiary)
                         .rotationEffect(.degrees(isBodyExpanded ? 180 : 0))
                 }
                 .buttonStyle(.plain)
+                .help(isBodyExpanded ? "Collapse" : "Expand")
                 .accessibilityLabel(isBodyExpanded ? "Collapse details" : "Expand details")
+                .animation(Theme.quick, value: chevronHovered)
+                .onHover { chevronHovered = $0 }
             }
         }
         .contentShape(Rectangle())
@@ -454,18 +461,18 @@ struct BriefCardEvidenceView: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
                 Text((item.message?.sender ?? "Unknown").uppercased())
-                    .font(Theme.mono(9.5, weight: .semibold))
+                    .font(Theme.mono(11, weight: .semibold))
                     .tracking(0.8)
                     .foregroundStyle(Theme.textSecondary)
                 Text(item.message.map { timeStr($0.timestamp) } ?? "")
-                    .font(Theme.mono(9.5))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.textTertiary)
                 WireLabel(roleLabel(item.source.sourceRole),
                           color: item.source.sourceRole == "quote" ? Theme.standby : Theme.textTertiary)
                 Spacer()
             }
             Text(item.message?.text ?? item.source.quoteText ?? "(No message text)")
-                .font(.system(size: 13, design: .serif))
+                .font(Theme.display(13))
                 .italic()
                 .foregroundStyle(Theme.textPrimary.opacity(0.85))
                 .lineSpacing(3)
@@ -524,23 +531,13 @@ private struct QuickReplyRow: View {
                 HStack(spacing: 8) {
                     WireLabel("Send:")
                     ForEach(replies) { reply in
-                        Button(reply.label) {
+                        QuickReplyChip(reply: reply) {
                             chatViewModel.applyQuickReply(reply,
                                                           cardID: card.id,
                                                           service: card.service,
                                                           convId: card.conversationId,
                                                           convName: convName)
                         }
-                        .buttonStyle(.plain)
-                        .font(Theme.sans(12, weight: .medium))
-                        .foregroundStyle(Theme.textPrimary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule().strokeBorder(Theme.border, lineWidth: Theme.hairline)
-                                .background(Capsule().fill(Theme.surface))
-                        )
-                        .help(reply.draft)
                     }
                 }
                 .padding(.vertical, 2)
@@ -561,6 +558,35 @@ private struct QuickReplyRow: View {
             .padding(.top, 1)
             .help("Generate one-tap reply drafts in your style")
         }
+    }
+}
+
+// MARK: - Quick reply chip
+
+private struct QuickReplyChip: View {
+    let reply: QuickReply
+    let onTap: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(reply.label)
+                .font(Theme.sans(12, weight: .medium))
+                .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(isHovered ? Theme.surfaceHigh : Theme.surface)
+                )
+                .overlay(
+                    Capsule().strokeBorder(isHovered ? Theme.textTertiary : Theme.border, lineWidth: Theme.hairline)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(reply.draft)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }
 

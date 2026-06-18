@@ -10,7 +10,7 @@ struct TaskListView: View {
                 WireLabel("Open items")
                 Spacer()
                 Text("\(appState.tasks.count)")
-                    .font(Theme.mono(10, weight: .semibold))
+                    .font(Theme.mono(11, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .padding(.horizontal, 16)
@@ -42,17 +42,20 @@ struct TaskListView: View {
 private struct TaskRowView: View {
     let task: BriefTask
     let onComplete: () -> Void
+    @State private var checkHovered = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 9) {
             Button { onComplete() } label: {
-                Image(systemName: "circle")
+                Image(systemName: checkHovered ? "checkmark.circle" : "circle")
                     .font(.system(size: 12, weight: .light))
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(checkHovered ? Theme.textSecondary : Theme.textTertiary)
             }
             .buttonStyle(.plain)
             .padding(.top, 2)
             .help("Mark done")
+            .animation(Theme.quick, value: checkHovered)
+            .onHover { checkHovered = $0 }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.text)

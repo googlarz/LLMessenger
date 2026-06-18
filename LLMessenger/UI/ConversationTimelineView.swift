@@ -79,6 +79,7 @@ struct ConversationTimelineView: View {
 private struct TimelineEntryRow: View {
     let entry: (briefDate: Date, card: BriefCardRecord)
     @State private var expanded = false
+    @State private var isHovered = false
 
     private var actionItems: [String] {
         guard let data = entry.card.actionItems.data(using: .utf8),
@@ -133,12 +134,11 @@ private struct TimelineEntryRow: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+        .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
         .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(Theme.spring) {
-                expanded.toggle()
-            }
-        }
+        .onTapGesture { withAnimation(Theme.spring) { expanded.toggle() } }
+        .onHover { isHovered = $0 }
+        .animation(Theme.quick, value: isHovered)
     }
 
     private func priorityBadge(_ priority: String) -> some View {
@@ -150,7 +150,7 @@ private struct TimelineEntryRow: View {
         return HStack(spacing: 4) {
             Circle().fill(color).frame(width: 5, height: 5)
             Text(label)
-                .font(Theme.mono(9, weight: .bold))
+                .font(Theme.mono(11, weight: .bold))
                 .tracking(0.5)
                 .foregroundStyle(color)
                 .textCase(.uppercase)

@@ -49,7 +49,7 @@ struct NowView: View {
             HStack(spacing: 8) {
                 ServiceStamp(service: suggestion.service, size: 18)
                 Text(suggestion.conversationName.uppercased())
-                    .font(Theme.mono(10, weight: .semibold))
+                    .font(Theme.mono(11, weight: .semibold))
                     .tracking(0.9)
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
@@ -75,30 +75,23 @@ struct NowView: View {
     }
 
     private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title.uppercased())
-                .font(Theme.mono(9.5, weight: .semibold))
-                .tracking(0.9)
-                .foregroundStyle(Theme.textSecondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.controlRadius)
-                        .fill(Theme.surfaceHigh)
-                )
-        }
-        .buttonStyle(.plain)
+        Button(title, action: action)
+            .buttonStyle(WireActionStyle())
     }
 
     // MARK: - Empty state
 
     private var emptyState: some View {
         VStack(spacing: 10) {
+            Image(systemName: "circle.dashed")
+                .font(Theme.sans(28, weight: .thin))
+                .foregroundStyle(Theme.textTertiary.opacity(0.5))
+                .padding(.bottom, 4)
             WireLabel("Now")
-            Text("Nothing needs you")
+            Text("Nothing urgent")
                 .font(Theme.display(21))
                 .foregroundStyle(Theme.textPrimary)
-            Text("\(appState.heldBackCount) held back")
+            Text(appState.heldBackCount > 0 ? "\(appState.heldBackCount) lower-priority items held back" : "You're up to date.")
                 .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textTertiary)
         }

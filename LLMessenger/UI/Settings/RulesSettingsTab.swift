@@ -17,10 +17,25 @@ struct RulesSettingsTab: View {
                 WireLabel("Priority Rules")
                     .padding(.bottom, 10)
 
-                VStack(spacing: 0) {
-                    ForEach(rules) { rule in
-                        RuleRowView(rule: rule, onDelete: { deleteRule(rule) })
-                        Rule()
+                if rules.isEmpty {
+                    VStack(spacing: 6) {
+                        Text("No rules yet")
+                            .font(Theme.sans(13))
+                            .foregroundStyle(Theme.textSecondary)
+                        Text("Add a rule to override the AI's priority decisions for specific contacts or keywords.")
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.textTertiary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(rules) { rule in
+                            RuleRowView(rule: rule, onDelete: { deleteRule(rule) })
+                            Rule()
+                        }
                     }
                 }
 
@@ -86,6 +101,7 @@ struct RulesSettingsTab: View {
 private struct RuleRowView: View {
     let rule: PriorityRule
     let onDelete: () -> Void
+    @State private var deleteHovered = false
 
     var body: some View {
         HStack {
@@ -95,10 +111,12 @@ private struct RuleRowView: View {
             Spacer()
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "minus.circle")
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(deleteHovered ? Theme.signal : Theme.textTertiary)
             }
             .buttonStyle(.plain)
             .help("Delete rule")
+            .animation(Theme.quick, value: deleteHovered)
+            .onHover { deleteHovered = $0 }
         }
         .padding(.vertical, 8)
     }
@@ -178,8 +196,12 @@ private struct AddRuleView: View {
                 .font(Theme.sans(13))
                 Toggle("Suppress notification", isOn: $suppress)
                     .font(Theme.sans(13))
+                    .toggleStyle(.switch)
+                    .tint(Theme.ok)
                 Toggle("Always notify", isOn: $alwaysNotify)
                     .font(Theme.sans(13))
+                    .toggleStyle(.switch)
+                    .tint(Theme.ok)
             }
             .padding(.vertical, 14)
 

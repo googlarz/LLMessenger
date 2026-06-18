@@ -49,6 +49,7 @@ struct ChatPanelView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
+                        Color.clear.frame(height: 0).id("brief-top")
                         if let brief = appState.selectedBrief {
                             let stats = headerStats
                             BriefHeaderView(
@@ -64,12 +65,15 @@ struct ChatPanelView: View {
                                 errorText: appState.lastError,
                                 onRefresh: { appState.onRequestRefresh?() }
                             )
+                            .id(brief.id)
+                            .transition(.opacity)
 
                             Rule()
                                 .padding(.horizontal, Theme.gutter)
 
                             BriefProseView(brief: brief, messages: briefMessages)
                                 .id(brief.id)
+                                .transition(.opacity)
                         }
 
                         // Q&A zone — a side conversation about the brief, set apart
@@ -102,6 +106,12 @@ struct ChatPanelView: View {
                     }
                 }
                 .background(Theme.bg)
+                .onChange(of: appState.selectedBriefID) { _ in
+                    // Reset scroll position when navigating to a different brief.
+                    DispatchQueue.main.async {
+                        proxy.scrollTo("brief-top", anchor: .top)
+                    }
+                }
                 .onChange(of: chatViewModel.threadItems.count) { _ in
                     // Delay one run-loop so the new item finishes rendering before scrollTo.
                     DispatchQueue.main.async {
@@ -134,6 +144,7 @@ struct ChatPanelView: View {
         .task(id: appState.selectedBriefID) {
             guard let brief = appState.selectedBrief else { return }
             try? await chatViewModel.loadBrief(brief)
+            if let id = brief.id { appState.markAsOpen(briefID: id) }
         }
     }
 
@@ -173,9 +184,10 @@ private struct BriefFooterView: View {
 
     var body: some View {
         Rule(color: Theme.border.opacity(0.6))
-        TimelineView(.periodic(from: .now, by: 1)) { _ in
+        // Refresh every 60s — no need for a per-second ticker here.
+        TimelineView(.periodic(from: .now, by: 60)) { _ in
             Text(footerText.uppercased())
-                .font(Theme.mono(9.5))
+                .font(Theme.mono(11))
                 .tracking(1.0)
                 .foregroundStyle(Theme.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -190,9 +202,8 @@ private struct BriefFooterView: View {
         if let next = appState.nextPollDate {
             let secs = max(0, Int(next.timeIntervalSinceNow))
             if secs > 0 {
-                let m = secs / 60
-                let s = secs % 60
-                parts.append("Next brief \(String(format: "%dm %02ds", m, s))")
+                let mins = Int(ceil(Double(secs) / 60.0))
+                parts.append(mins <= 1 ? "Next brief soon" : "Next brief ~\(mins)m")
             }
         }
         parts.append("AI-generated · may miss nuance")

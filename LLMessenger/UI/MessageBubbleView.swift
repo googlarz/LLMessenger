@@ -23,7 +23,7 @@ struct MessageBubbleView: View {
                         .font(Theme.sans(11, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                     Text(message.timestamp, style: .time)
-                        .font(Theme.mono(10))
+                        .font(Theme.mono(11))
                         .foregroundStyle(Theme.textTertiary)
                     ServiceStamp(service: message.service, size: 16)
                 }

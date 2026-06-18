@@ -17,6 +17,7 @@ struct TelegramSignInView: View {
     @State private var password: String = ""
     @State private var errorMessage: String? = nil
     @State private var isLoading: Bool = true   // true until adapter starts
+    @State private var closeHovered = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -63,11 +64,13 @@ struct TelegramSignInView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(closeHovered ? Theme.textSecondary : Theme.textTertiary)
             }
             .buttonStyle(.plain)
             .padding(12)
             .keyboardShortcut("w", modifiers: .command)
+            .animation(Theme.quick, value: closeHovered)
+            .onHover { closeHovered = $0 }
         }
         .frame(width: 380)
         .background(Theme.surface)

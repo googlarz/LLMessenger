@@ -86,12 +86,13 @@ struct SlackWorkspacesView: View {
 private struct WorkspaceRow: View {
     let workspace: SlackWorkspace
     let onRemove: () -> Void
+    @State private var removeHovered = false
 
     var body: some View {
         HStack(spacing: 12) {
             // Stamp-style team initial — muted service ink, never the brand fill.
             Text(workspace.teamName.prefix(1).uppercased())
-                .font(Theme.mono(10, weight: .bold))
+                .font(Theme.mono(11, weight: .bold))
                 .foregroundStyle(Theme.serviceSlack)
                 .frame(width: 26, height: 20)
                 .overlay(
@@ -111,10 +112,12 @@ private struct WorkspaceRow: View {
                 onRemove()
             } label: {
                 Image(systemName: "trash")
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(removeHovered ? Theme.signal : Theme.textTertiary)
             }
             .buttonStyle(.plain)
             .help("Remove workspace")
+            .animation(Theme.quick, value: removeHovered)
+            .onHover { removeHovered = $0 }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)

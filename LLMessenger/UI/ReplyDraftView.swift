@@ -6,6 +6,7 @@ struct ReplyDraftView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
     let draftID: UUID
     let draft: ReplyDraft
+    @State private var discardHovered = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -21,13 +22,15 @@ struct ReplyDraftView: View {
                     Button { chatViewModel.discardDraft(id: draftID) } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Theme.textTertiary)
+                            .foregroundStyle(discardHovered ? Theme.textSecondary : Theme.textTertiary)
                             .frame(minWidth: 22, minHeight: 22)
                             .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Discard draft")
                     .help("Discard this draft")
                     .buttonStyle(.plain)
+                    .animation(Theme.quick, value: discardHovered)
+                    .onHover { discardHovered = $0 }
                 }
 
                 if draft.conversationID == "unknown" {
@@ -39,7 +42,7 @@ struct ReplyDraftView: View {
                     HStack(spacing: 7) {
                         ServiceStamp(service: draft.serviceID, size: 14)
                         Text(draft.conversationID.uppercased())
-                            .font(Theme.mono(9))
+                            .font(Theme.mono(11))
                             .tracking(0.6)
                             .foregroundStyle(Theme.textTertiary)
                             .lineLimit(1)

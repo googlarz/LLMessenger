@@ -58,11 +58,15 @@ struct CommitmentsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 10) {
+            Image(systemName: "checkmark.seal")
+                .font(Theme.sans(28, weight: .thin))
+                .foregroundStyle(Theme.textTertiary.opacity(0.5))
+                .padding(.bottom, 4)
             WireLabel("Commitments")
-            Text("No open commitments")
+            Text("All square")
                 .font(Theme.display(21))
                 .foregroundStyle(Theme.textPrimary)
-            Text("nothing promised, nothing owed")
+            Text("Nothing promised, nothing owed.")
                 .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textTertiary)
         }
@@ -72,13 +76,15 @@ struct CommitmentsView: View {
 
     // MARK: - Row
 
+    @State private var hoveredCommitmentID: Int64? = nil
+
     private func commitmentRow(_ commitment: Commitment) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 ServiceStamp(service: commitment.service, size: 18)
 
                 Text(commitment.conversationName.uppercased())
-                    .font(Theme.mono(10, weight: .semibold))
+                    .font(Theme.mono(11, weight: .semibold))
                     .tracking(0.9)
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
@@ -106,6 +112,9 @@ struct CommitmentsView: View {
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 12)
+        .background(hoveredCommitmentID == commitment.id ? Theme.surface.opacity(0.5) : Color.clear)
+        .onHover { h in hoveredCommitmentID = h ? commitment.id : nil }
+        .animation(Theme.quick, value: hoveredCommitmentID)
     }
 
     private func isDue(_ commitment: Commitment) -> Bool {
@@ -121,7 +130,7 @@ struct CommitmentsView: View {
         } else {
             let days = max(0, Int(Date().timeIntervalSince(commitment.createdAt) / 86400))
             Text("\(days)d")
-                .font(Theme.mono(9.5))
+                .font(Theme.mono(11))
                 .foregroundStyle(Theme.textTertiary)
         }
     }
@@ -133,18 +142,7 @@ struct CommitmentsView: View {
     }()
 
     private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title.uppercased())
-                .font(Theme.mono(9.5, weight: .semibold))
-                .tracking(0.9)
-                .foregroundStyle(Theme.textSecondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.controlRadius)
-                        .fill(Theme.surfaceHigh)
-                )
-        }
-        .buttonStyle(.plain)
+        Button(title, action: action)
+            .buttonStyle(WireActionStyle())
     }
 }

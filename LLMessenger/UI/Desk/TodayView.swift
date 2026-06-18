@@ -36,16 +36,20 @@ struct TodayView: View {
 
     private var emptyState: some View {
         VStack(spacing: 10) {
+            Image(systemName: "calendar.badge.clock")
+                .font(Theme.sans(28, weight: .thin))
+                .foregroundStyle(Theme.textTertiary.opacity(0.5))
+                .padding(.bottom, 4)
             WireLabel("Today")
-            Text("No triage events yet")
+            Text("Nothing yet today")
                 .font(Theme.display(21))
                 .foregroundStyle(Theme.textPrimary)
-            Text("Events will appear here as messages arrive.")
+            Text("Events appear here as messages arrive.")
                 .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textTertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 80)
+        .padding(.top, 60)
     }
 
     // MARK: - Event row
@@ -62,13 +66,13 @@ struct TodayView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(timeString(event.createdAt))
-                            .font(Theme.mono(9.5))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.textTertiary)
 
                         ServiceStamp(service: event.service, size: 18)
 
                         Text((displayNames["\(event.service)|\(event.conversationId)"] ?? event.conversationId).uppercased())
-                            .font(Theme.mono(10, weight: .semibold))
+                            .font(Theme.mono(11, weight: .semibold))
                             .tracking(0.9)
                             .foregroundStyle(Theme.textSecondary)
                             .lineLimit(1)

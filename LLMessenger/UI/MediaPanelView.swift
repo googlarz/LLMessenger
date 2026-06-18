@@ -4,6 +4,7 @@ import SwiftUI
 struct MediaPanelView: View {
     let onClose: () -> Void
     @State private var selectedTab = "photos"
+    @State private var closeHovered = false
 
     private let tabs = [
         ("photos", "photo", "Photos"),
@@ -21,11 +22,14 @@ struct MediaPanelView: View {
                 Button { onClose() } label: {
                     Image(systemName: "xmark")
                         .font(Theme.sans(11, weight: .medium))
-                        .foregroundStyle(Theme.textTertiary)
+                        .foregroundStyle(closeHovered ? Theme.textSecondary : Theme.textTertiary)
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .help("Close")
+                .animation(Theme.quick, value: closeHovered)
+                .onHover { closeHovered = $0 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -35,24 +39,9 @@ struct MediaPanelView: View {
             // Tab bar
             HStack(spacing: 0) {
                 ForEach(tabs, id: \.0) { tab in
-                    let sel = selectedTab == tab.0
-                    Button { selectedTab = tab.0 } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: tab.1)
-                                .font(Theme.sans(11))
-                            Text(tab.2)
-                                .font(Theme.sans(10.5, weight: sel ? .semibold : .medium))
-                        }
-                        .foregroundStyle(sel ? Theme.textPrimary : Theme.textTertiary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .overlay(alignment: .bottom) {
-                            if sel {
-                                Theme.textPrimary.frame(height: 1)
-                            }
-                        }
+                    MediaTabButton(id: tab.0, symbol: tab.1, label: tab.2, selected: selectedTab == tab.0) {
+                        selectedTab = tab.0
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 4)
@@ -96,5 +85,35 @@ private struct EmptyMediaState: View {
                 .foregroundStyle(Theme.textTertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct MediaTabButton: View {
+    let id: String
+    let symbol: String
+    let label: String
+    let selected: Bool
+    let onTap: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 3) {
+                Image(systemName: symbol)
+                    .font(Theme.sans(11))
+                Text(label)
+                    .font(Theme.sans(10.5, weight: selected ? .semibold : .medium))
+            }
+            .foregroundStyle(selected || isHovered ? Theme.textPrimary : Theme.textTertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .overlay(alignment: .bottom) {
+                (selected ? Theme.textPrimary : (isHovered ? Theme.textTertiary : Color.clear))
+                    .frame(height: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }

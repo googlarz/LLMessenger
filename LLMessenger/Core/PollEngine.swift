@@ -149,11 +149,14 @@ final class PollEngine {
             failureCounts[serviceID] = 0
 
             let healthResult = await adapter.healthCheck()
+            // ponytail: only advance lastCheck when data was actually fetched — a 0-message
+            // poll must not leap the watermark past messages signal-mcp hasn't synced yet.
+            let advanceWatermark = totalMsgs > 0
             if healthResult.status == .ok {
-                writeHealth(service: serviceID, status: "ok", error: nil, updateLastCheck: true)
+                writeHealth(service: serviceID, status: "ok", error: nil, updateLastCheck: advanceWatermark)
             } else {
                 writeHealth(service: serviceID, status: healthResult.status.rawValue,
-                            error: healthResult.reason, updateLastCheck: true)
+                            error: healthResult.reason, updateLastCheck: advanceWatermark)
                 if let reason = healthResult.reason {
                     await onHealthWarning?(serviceID, reason)
                 }

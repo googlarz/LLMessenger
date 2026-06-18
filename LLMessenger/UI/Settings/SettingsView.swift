@@ -30,6 +30,8 @@ struct SettingsView: View {
 
             tabContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
+                .id(selectedTab)
         }
         // 720pt comfortably fits six wire tabs at the top — at 540pt the tab
         // content gets cramped, especially on the AI tab with three provider blocks.
@@ -61,6 +63,18 @@ struct SettingsView: View {
     }
 
     private func tabButton(_ index: Int, _ title: String) -> some View {
+        SettingsTabButton(index: index, title: title, selectedTab: $selectedTab)
+    }
+}
+
+private struct SettingsTabButton: View {
+    let index: Int
+    let title: String
+    @Binding var selectedTab: Int
+    @State private var isHovered = false
+
+    var body: some View {
+        let isSelected = selectedTab == index
         Button {
             withAnimation(Theme.quick) { selectedTab = index }
         } label: {
@@ -68,13 +82,19 @@ struct SettingsView: View {
                 Text(title.uppercased())
                     .font(Theme.labelFont)
                     .tracking(Theme.labelTracking)
-                    .foregroundStyle(selectedTab == index ? Theme.textPrimary : Theme.textTertiary)
-                (selectedTab == index ? Theme.textPrimary : Color.clear)
+                    .foregroundStyle(
+                        isSelected ? Theme.textPrimary
+                        : isHovered ? Theme.textSecondary
+                        : Theme.textTertiary
+                    )
+                (isSelected ? Theme.textPrimary : Color.clear)
                     .frame(height: 1.5)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help("\(title) settings")
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }

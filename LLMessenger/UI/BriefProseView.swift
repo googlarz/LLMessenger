@@ -308,31 +308,10 @@ struct BriefProseView: View {
     }
 
     private func filterItem(id: String, label: String, count: Int, color: Color?) -> some View {
-        let selected = filter == id
-        return Button {
+        FilterTabButton(id: id, label: label, count: count, color: color,
+                        selected: filter == id) {
             withAnimation(Theme.quick) { filter = id }
-        } label: {
-            HStack(spacing: 5) {
-                if let color {
-                    Circle().fill(color.opacity(selected ? 1 : 0.5)).frame(width: 5, height: 5)
-                }
-                Text(label.uppercased())
-                    .font(Theme.mono(10, weight: .semibold))
-                    .tracking(1.0)
-                    .foregroundStyle(selected ? Theme.textPrimary : Theme.textTertiary)
-                Text("\(count)")
-                    .font(Theme.mono(10))
-                    .foregroundStyle(selected ? Theme.textSecondary : Theme.textTertiary.opacity(0.7))
-            }
-            .padding(.vertical, 4)
-            .overlay(alignment: .bottom) {
-                (selected ? Theme.textPrimary : Color.clear)
-                    .frame(height: 1.5)
-                    .offset(y: 2)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Fallback: raw summary grouped by service
@@ -413,18 +392,18 @@ struct BriefProseView: View {
     private func quoteRow(_ msg: Message) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text(timeStr(msg.timestamp))
-                .font(Theme.mono(10))
+                .font(Theme.mono(11))
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: 36, alignment: .leading)
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(msg.sender.uppercased())
-                    .font(Theme.mono(9.5, weight: .semibold))
+                    .font(Theme.mono(11, weight: .semibold))
                     .tracking(0.8)
                     .foregroundStyle(Theme.textSecondary)
                 Text(msg.text)
-                    .font(.system(size: 13, design: .serif))
+                    .font(Theme.display(13))
                     .italic()
                     .foregroundStyle(Theme.textPrimary.opacity(0.8))
                     .lineLimit(5)
@@ -446,10 +425,13 @@ struct BriefProseView: View {
 
 /// Folded FYI section: a single tappable line that expands to compact serif
 /// one-liners. Cards with DigestOrdering.collapsed == true land here.
+/// Each row is tappable to reveal its full summary inline.
 private struct NoiseStripView: View {
     let cards: [NumberedBriefCard]
     let startNumber: Int
     @State private var expanded = false
+    @State private var expandedRowIDs = Set<String>() // ponytail: set toggle, no subview needed
+    @State private var headerHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -458,11 +440,11 @@ private struct NoiseStripView: View {
             } label: {
                 HStack(spacing: 10) {
                     WireLabel("FYI · \(cards.count) quiet item\(cards.count == 1 ? "" : "s")",
-                              color: Theme.textTertiary)
+                              color: headerHovered ? Theme.textPrimary : Theme.textSecondary)
                     Rule()
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(Theme.textTertiary)
+                        .foregroundStyle(headerHovered ? Theme.textPrimary : Theme.textSecondary)
                         .rotationEffect(.degrees(expanded ? 180 : 0))
                         .animation(Theme.spring, value: expanded)
                 }
@@ -471,6 +453,8 @@ private struct NoiseStripView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { headerHovered = $0 }
+            .animation(Theme.quick, value: headerHovered)
             .accessibilityLabel("FYI, \(cards.count) quiet item\(cards.count == 1 ? "" : "s")")
             .accessibilityValue(expanded ? "Expanded" : "Collapsed")
             .accessibilityHint(expanded ? "Hides quiet items" : "Shows quiet items")
@@ -490,34 +474,76 @@ private struct NoiseStripView: View {
         .animation(Theme.spring, value: expanded)
     }
 
+    @ViewBuilder
     private func noiseRow(_ numbered: NumberedBriefCard, number: Int) -> some View {
-        let card = numbered.card
-        let headline: String = {
-            let h = card.headline
-            let norm = h.trimmingCharacters(in: .whitespaces).lowercased()
-            guard h.isEmpty || norm == "none" || norm == "none." else { return h }
-            let s = String(card.summary.prefix(80))
-            return s.isEmpty ? (card.conversation ?? Theme.serviceName(card.service)) : s
-        }()
-        return HStack(spacing: 8) {
-            Text(String(format: "%02d", number))
-                .font(Theme.mono(9.5, weight: .semibold))
-                .foregroundStyle(Theme.textTertiary)
-                .frame(width: 20, alignment: .leading)
-            ServiceStamp(service: card.service, size: 14)
-            Text(headline)
-                .font(.system(size: 13, design: .serif))
-                .foregroundStyle(Theme.textSecondary)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            if card.counts.messages > 1 {
-                Text("\(card.counts.messages)M")
-                    .font(Theme.mono(9))
-                    .foregroundStyle(Theme.textTertiary)
+        NoiseRowButton(numbered: numbered, number: number, expandedRowIDs: $expandedRowIDs)
+    }
+}
+
+private struct NoiseRowButton: View {
+    let numbered: NumberedBriefCard
+    let number: Int
+    @Binding var expandedRowIDs: Set<String>
+    @State private var isHovered = false
+
+    private var card: BriefCard { numbered.card }
+    private var rowExpanded: Bool { expandedRowIDs.contains(numbered.id) }
+    private var headline: String {
+        let h = card.headline
+        let norm = h.trimmingCharacters(in: .whitespaces).lowercased()
+        guard h.isEmpty || norm == "none" || norm == "none." else { return h }
+        let s = String(card.summary.prefix(80))
+        return s.isEmpty ? (card.conversation ?? Theme.serviceName(card.service)) : s
+    }
+
+    var body: some View {
+        Button {
+            withAnimation(Theme.spring) {
+                if rowExpanded { expandedRowIDs.remove(numbered.id) }
+                else           { expandedRowIDs.insert(numbered.id) }
             }
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Text(String(format: "%02d", number))
+                        .font(Theme.mono(11, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .frame(width: 20, alignment: .leading)
+                    ServiceStamp(service: card.service, size: 14)
+                    Text(headline)
+                        .font(Theme.display(13))
+                        .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textSecondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    if card.counts.messages > 1 {
+                        Text("\(card.counts.messages)M")
+                            .font(Theme.mono(11))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 7, weight: .semibold))
+                        .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
+                        .rotationEffect(.degrees(rowExpanded ? 90 : 0))
+                }
+                if rowExpanded, !card.summary.isEmpty {
+                    Text(card.summary)
+                        .font(Theme.bodyFont)
+                        .foregroundStyle(Theme.textPrimary.opacity(0.88))
+                        .lineSpacing(3.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 28)
+                        .padding(.top, 6)
+                        .padding(.bottom, 2)
+                        .textSelection(.enabled)
+                }
+            }
+            .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
         }
+        .buttonStyle(.plain)
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 7)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -647,12 +673,12 @@ private struct WeekAtGlanceView: View {
                         .font(Theme.display(20, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
                     Text("OF \(totalCards)")
-                        .font(Theme.mono(9))
+                        .font(Theme.mono(11))
                         .foregroundStyle(Theme.textTertiary)
                         .padding(.bottom, 1)
                 }
                 Text(character.text)
-                    .font(Theme.mono(9))
+                    .font(Theme.mono(11))
                     .tracking(0.8)
                     .foregroundStyle(character.color)
             }
@@ -666,5 +692,46 @@ private struct WeekAtGlanceView: View {
                 appeared = true
             }
         }
+    }
+}
+
+// MARK: - Filter tab button
+
+private struct FilterTabButton: View {
+    let id: String
+    let label: String
+    let count: Int
+    let color: Color?
+    let selected: Bool
+    let onTap: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 5) {
+                if let color {
+                    Circle()
+                        .fill(color.opacity(selected ? 1 : (isHovered ? 0.75 : 0.5)))
+                        .frame(width: 5, height: 5)
+                }
+                Text(label.uppercased())
+                    .font(Theme.mono(11, weight: .semibold))
+                    .tracking(1.0)
+                    .foregroundStyle(selected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary))
+                Text("\(count)")
+                    .font(Theme.mono(11))
+                    .foregroundStyle(selected ? Theme.textSecondary : Theme.textTertiary.opacity(0.7))
+            }
+            .padding(.vertical, 4)
+            .overlay(alignment: .bottom) {
+                (selected ? Theme.textPrimary : (isHovered ? Theme.textTertiary : Color.clear))
+                    .frame(height: 1.5)
+                    .offset(y: 2)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }

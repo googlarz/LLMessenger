@@ -126,7 +126,7 @@ final class MenuBarController {
         isLoading = loading
         if loading {
             loadingAngle = 0
-            loadingTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
+            loadingTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
                 Task { @MainActor [weak self] in self?.tickLoadingAnimation() }
             }
         } else {
@@ -280,26 +280,33 @@ final class MenuBarController {
         }
 
         // P2: armed delegated auto-sends + kill switch.
-        menu.addItem(.separator())
-        if armedAutoSendCount > 0 {
-            let armedItem = NSMenuItem(
-                title: "Sending \(armedAutoSendCount) message\(armedAutoSendCount == 1 ? "" : "s") soon — Undo all",
-                action: #selector(MenuActionProxy.undoAutoSends), keyEquivalent: "")
-            armedItem.target = proxy
-            menu.addItem(armedItem)
-        }
-        proxy.onToggleDelegation = { [weak self] in
-            let key = AgentDelegation.killSwitchKey
-            let now = UserDefaults.standard.bool(forKey: key)
-            UserDefaults.standard.set(!now, forKey: key)
-            self?.rebuildMenu()
-        }
+        // Only surface this section when delegation is actually active — armed
+        // sends pending, or the kill switch has been explicitly turned on. A
+        // fresh user with no delegation configured should not see "Pause auto-send"
+        // implying messages are being sent on their behalf.
         let disabled = UserDefaults.standard.bool(forKey: AgentDelegation.killSwitchKey)
-        let toggleItem = NSMenuItem(
-            title: disabled ? "Resume auto-send" : "Pause auto-send",
-            action: #selector(MenuActionProxy.toggleDelegation), keyEquivalent: "")
-        toggleItem.target = proxy
-        menu.addItem(toggleItem)
+        let showDelegationSection = armedAutoSendCount > 0 || disabled
+        if showDelegationSection {
+            menu.addItem(.separator())
+            if armedAutoSendCount > 0 {
+                let armedItem = NSMenuItem(
+                    title: "Sending \(armedAutoSendCount) message\(armedAutoSendCount == 1 ? "" : "s") soon — Undo all",
+                    action: #selector(MenuActionProxy.undoAutoSends), keyEquivalent: "")
+                armedItem.target = proxy
+                menu.addItem(armedItem)
+            }
+            proxy.onToggleDelegation = { [weak self] in
+                let key = AgentDelegation.killSwitchKey
+                let now = UserDefaults.standard.bool(forKey: key)
+                UserDefaults.standard.set(!now, forKey: key)
+                self?.rebuildMenu()
+            }
+            let toggleItem = NSMenuItem(
+                title: disabled ? "Resume auto-send" : "Pause auto-send",
+                action: #selector(MenuActionProxy.toggleDelegation), keyEquivalent: "")
+            toggleItem.target = proxy
+            menu.addItem(toggleItem)
+        }
 
         menu.addItem(.separator())
 

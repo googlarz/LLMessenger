@@ -218,44 +218,54 @@ struct ServiceStamp: View {
 /// Primary action: paper on ink — the inverted button. Secondary: quiet text.
 struct PaperButtonStyle: ButtonStyle {
     var prominent = false
+    @State private var isHovered = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let pressed = configuration.isPressed
+        return configuration.label
             .font(Theme.sans(12.5, weight: .semibold))
             .foregroundStyle(prominent ? Theme.bg : Theme.textSecondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .fill(prominent ? Theme.textPrimary : Theme.surface)
+                    .fill(prominent
+                          ? (isHovered ? Theme.textPrimary.opacity(0.88) : Theme.textPrimary)
+                          : (isHovered ? Theme.surfaceHigh : Theme.surface))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.controlRadius)
                     .strokeBorder(prominent ? Color.clear : Theme.border, lineWidth: Theme.hairline)
             )
-            .opacity(configuration.isPressed ? 0.75 : 1)
-            .scaleEffect(configuration.isPressed ? 0.985 : 1)
-            .animation(Theme.quick, value: configuration.isPressed)
+            .opacity(pressed ? 0.75 : 1)
+            .scaleEffect(pressed ? 0.985 : 1)
+            .animation(Theme.quick, value: pressed)
+            .animation(Theme.quick, value: isHovered)
+            .onHover { isHovered = $0 }
     }
 }
 
 /// Quiet inline action — mono label, no chrome until hover.
 struct WireActionStyle: ButtonStyle {
     var tint: Color = Theme.textSecondary
+    @State private var isHovered = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let pressed = configuration.isPressed
+        return configuration.label
             .font(Theme.mono(11, weight: .semibold))
             .tracking(0.4)
-            .foregroundStyle(tint)
+            .foregroundStyle(isHovered ? (tint == Theme.textSecondary ? Theme.textPrimary : tint) : tint)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .fill(configuration.isPressed ? Theme.surfaceHigh : Color.clear)
+                    .fill(pressed ? Theme.surfaceHigh : (isHovered ? Theme.surface : Color.clear))
             )
             .contentShape(Rectangle())
-            .animation(Theme.quick, value: configuration.isPressed)
+            .animation(Theme.quick, value: pressed)
+            .animation(Theme.quick, value: isHovered)
+            .onHover { isHovered = $0 }
     }
 }
 

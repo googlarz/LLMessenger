@@ -52,21 +52,8 @@ struct ActView: View {
     private var batchBar: some View {
         HStack(spacing: 8) {
             Spacer()
-            Button {
-                appState.batchApproveLowRisk()
-            } label: {
-                Text("APPROVE ALL LOW-RISK")
-                    .font(Theme.mono(9.5, weight: .semibold))
-                    .tracking(0.9)
-                    .foregroundStyle(Theme.textSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        RoundedRectangle(cornerRadius: Theme.controlRadius)
-                            .fill(Theme.surfaceHigh)
-                    )
-            }
-            .buttonStyle(.plain)
+            Button("Approve all low-risk") { appState.batchApproveLowRisk() }
+                .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 8)
@@ -76,11 +63,15 @@ struct ActView: View {
 
     private var emptyState: some View {
         VStack(spacing: 10) {
+            Image(systemName: "checkmark.circle")
+                .font(Theme.sans(32, weight: .thin))
+                .foregroundStyle(Theme.textTertiary.opacity(0.5))
+                .padding(.bottom, 4)
             WireLabel("Act")
-            Text("Nothing to do — you're clear")
+            Text("Queue clear")
                 .font(Theme.display(21))
                 .foregroundStyle(Theme.textPrimary)
-            Text("no proposed actions")
+            Text("No proposed actions right now.")
                 .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textTertiary)
         }

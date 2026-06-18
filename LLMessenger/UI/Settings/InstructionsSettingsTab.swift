@@ -71,7 +71,7 @@ struct InstructionsSettingsTab: View {
                 if !saveStatus.isEmpty {
                     Text(saveStatus)
                         .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textSecondary)
+                        .foregroundStyle(Theme.ok)
                 }
                 Spacer()
                 Button("Save") { save() }
