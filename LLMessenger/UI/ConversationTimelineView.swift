@@ -14,7 +14,7 @@ struct ConversationTimelineView: View {
         VStack(spacing: 0) {
             // Header
             HStack(spacing: 10) {
-                SourceGlyphView(service: service, size: 26)
+                ServiceStamp(service: service, size: 26)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(displayName)
                         .font(Theme.display(15))

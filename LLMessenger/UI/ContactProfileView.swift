@@ -14,7 +14,7 @@ struct ContactProfileView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Header
                 HStack(spacing: 10) {
-                    SourceGlyphView(service: service, size: 28)
+                    ServiceStamp(service: service, size: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(displayName)
                             .font(Theme.display(17))

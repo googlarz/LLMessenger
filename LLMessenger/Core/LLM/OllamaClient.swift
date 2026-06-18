@@ -37,31 +37,12 @@ final class OllamaClient: LLMClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let start = Date()
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            let ms = Int(Date().timeIntervalSince(start) * 1000)
-            NetworkAuditLog.shared.record(provider: "Ollama (local)", request: request,
-                                          status: nil, durationMs: ms, error: error)
+        let data = try await executeLLMRequest(request, session: session, provider: "Ollama (local)") { error in
             if let urlErr = error as? URLError,
                [.cannotConnectToHost, .networkConnectionLost, .timedOut].contains(urlErr.code) {
-                throw LLMError.networkFailed("Ollama server not reachable — is it running?")
+                return "Ollama server not reachable — is it running?"
             }
-            throw LLMError.networkFailed(error.localizedDescription)
-        }
-
-        guard let http = response as? HTTPURLResponse else { throw LLMError.invalidResponse }
-        let durationMs = Int(Date().timeIntervalSince(start) * 1000)
-        NetworkAuditLog.shared.record(provider: "Ollama (local)", request: request,
-                                      status: http.statusCode, durationMs: durationMs, error: nil)
-        if http.statusCode == 429 {
-            let retryAfter = http.value(forHTTPHeaderField: "retry-after").flatMap { Int($0) }
-            throw LLMError.rateLimited(retryAfter: retryAfter)
-        }
-        if http.statusCode >= 400 {
-            throw LLMError.providerError("HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            return error.localizedDescription
         }
 
         let jsonObject: Any

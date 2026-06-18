@@ -190,6 +190,7 @@
 		EBF9D849F71DA7874D3F96DD /* PollEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91DCC83C90E2B73383588FD1 /* PollEngine.swift */; };
 		EC4191319C9F98C5C2FB639C /* DelegationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064C24212405ABF70C71637 /* DelegationTests.swift */; };
 		ED026EB71E8074D35FCC0477 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 053BC1D531581B41EE1FF9FC /* GRDB */; };
+		ED0FC5F1C2E7C9A31143532A /* LLMHTTPHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68447CD013DEC23E5A0DEFFD /* LLMHTTPHelper.swift */; };
 		ED58A99EF4403B466D24E7FF /* Brief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3982B388A984024FBEEA9C82 /* Brief.swift */; };
 		EE574346F9B9265CA3795AB7 /* SignalCLIAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CEF84891E1C875158D7F4B4 /* SignalCLIAdapterTests.swift */; };
 		F28C2071A135A89B176AFC29 /* MessageSearchResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3083103C313177E5561AF1A6 /* MessageSearchResult.swift */; };
@@ -312,6 +313,7 @@
 		659D4E43E49E2A7C786664D1 /* CommitmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommitmentsView.swift; sourceTree = "<group>"; };
 		66D9CFBB9722856E912EABC7 /* FrontendRobustnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontendRobustnessTests.swift; sourceTree = "<group>"; };
 		6780A88A868BFC2F3FBB1A56 /* ContactProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactProfileView.swift; sourceTree = "<group>"; };
+		68447CD013DEC23E5A0DEFFD /* LLMHTTPHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMHTTPHelper.swift; sourceTree = "<group>"; };
 		6BC6FDFCFADDCEE5A74B7FB0 /* OllamaModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaModelPicker.swift; sourceTree = "<group>"; };
 		6BC84610C1FBB1A47EE9B2A4 /* SlackAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAdapter.swift; sourceTree = "<group>"; };
 		6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepositoryExtendedTests.swift; sourceTree = "<group>"; };
@@ -582,6 +584,7 @@
 				32280F9EFCDE9528BFCE1CFE /* AppleFMClient.swift */,
 				865BE46F6C10FA7E2EE342A6 /* IntentRoute.swift */,
 				F2480065C366A43445195D28 /* LLMClient.swift */,
+				68447CD013DEC23E5A0DEFFD /* LLMHTTPHelper.swift */,
 				09D44892CD851C4994CEA012 /* LLMProvider.swift */,
 				01F6073CF328ABEC81E9A9E2 /* OllamaClient.swift */,
 				14DE9B36EDDE0DDEA40BC7DB /* OpenAIClient.swift */,
@@ -1118,6 +1121,7 @@
 				6AA47A5737C0FE65664152C5 /* KeyboardShortcutsSheet.swift in Sources */,
 				D3E2D898475FF1A5557529FB /* KeychainStore.swift in Sources */,
 				671F4C04C5BC9ABC8ED70514 /* LLMClient.swift in Sources */,
+				ED0FC5F1C2E7C9A31143532A /* LLMHTTPHelper.swift in Sources */,
 				6FD560709B01F26879B0C14C /* LLMProvider.swift in Sources */,
 				7177450F9E2D6DC65A094DA5 /* LLMRunRecord.swift in Sources */,
 				1F3AF9DCA45D658915781028 /* LLMSettingsTab.swift in Sources */,

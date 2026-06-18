@@ -7,15 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Compatibility wrapper
-
-/// Old name used across the app; renders the wire-desk service stamp.
-struct SourceGlyphView: View {
-    let service: String
-    var size: CGFloat = 20
-    var body: some View { ServiceStamp(service: service, size: size) }
-}
-
 // MARK: - Priority stamp
 
 struct PriorityStamp: View {
