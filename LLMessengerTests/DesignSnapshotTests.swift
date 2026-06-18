@@ -291,7 +291,7 @@ final class DesignSnapshotTests: XCTestCase {
     func testSnapshotAct() throws {
         let state = try makeFixtureState()
         let chat = state.makeChatViewModel()
-        let view = DeskView(initialTab: .act)
+        let view = DeskView()
             .environmentObject(state)
             .environmentObject(chat)
             .frame(width: 760, height: 300)
@@ -304,7 +304,7 @@ final class DesignSnapshotTests: XCTestCase {
     func testSnapshotOwed() throws {
         let state = try makeFixtureState()
         let chat = state.makeChatViewModel()
-        let view = DeskView(initialTab: .owed)
+        let view = DeskView()
             .environmentObject(state)
             .environmentObject(chat)
             .frame(width: 760, height: 560)
