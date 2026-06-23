@@ -94,6 +94,7 @@ struct ActFeedView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
 
     @State private var selectedIndex: Int? = nil
+    @State private var resolvedInSession = 0
 
     private var items: [ActItem] {
         let actions = appState.agentActions
@@ -101,8 +102,14 @@ struct ActFeedView: View {
             .map { ActItem.agentAction($0) }
         let owed = appState.owedReplies
             .map { ActItem.owedReply($0) }
-        // Agent actions first (have a suggested reply ready), then owed by priority
-        return actions + owed
+        let all = actions + owed
+        // Sort: stale first, then person-waiting (red) before self-directed (grey),
+        // then by age descending (oldest = most overdue = highest urgency).
+        return all.sorted {
+            if $0.isStale != $1.isStale  { return $0.isStale }
+            if $0.isPersonWaiting != $1.isPersonWaiting { return $0.isPersonWaiting }
+            return $0.ageHours > $1.ageHours
+        }
     }
 
     var body: some View {
@@ -113,7 +120,7 @@ struct ActFeedView: View {
                 feedContent
             }
         }
-        // Keyboard navigation
+        // Keyboard navigation — J/K move, Return = approve, S = skip, E = edit
         .background(
             Group {
                 Button("") { moveSelection(by: 1) }
@@ -127,6 +134,12 @@ struct ActFeedView: View {
             }
             .opacity(0)
         )
+        .onChange(of: items.count) { newCount in
+            // Clamp selection when items shrink
+            if let idx = selectedIndex, idx >= newCount {
+                selectedIndex = newCount > 0 ? newCount - 1 : nil
+            }
+        }
     }
 
     // MARK: - Feed
@@ -146,7 +159,8 @@ struct ActFeedView: View {
                             ActCardRow(
                                 item: item,
                                 isSelected: selectedIndex == index,
-                                onTap: { selectedIndex = index }
+                                onTap: { selectedIndex = index },
+                                onResolved: { resolvedInSession += 1 }
                             )
                             Rule()
                         }
@@ -178,10 +192,17 @@ struct ActFeedView: View {
     }
 
     private var batchBar: some View {
-        HStack {
+        let lowRiskCount = appState.agentActions.filter { $0.riskEnum == .low && !$0.isMaybe }.count
+        return HStack {
+            Text("AI confidence: high on \(lowRiskCount)")
+                .font(Theme.mono(10))
+                .foregroundStyle(Theme.textTertiary)
             Spacer()
-            Button("Approve all low-risk") { appState.batchApproveLowRisk() }
-                .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
+            Button("Stage all safe") {
+                appState.batchApproveLowRisk()
+                resolvedInSession += lowRiskCount
+            }
+            .buttonStyle(WireActionStyle(tint: Theme.standby))
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 8)
@@ -199,10 +220,16 @@ struct ActFeedView: View {
             Text("You're clear")
                 .font(Theme.display(21))
                 .foregroundStyle(Theme.textPrimary)
-            Text("Nothing needs you right now.")
-                .font(Theme.sans(12.5))
-                .foregroundStyle(Theme.textTertiary)
-                .multilineTextAlignment(.center)
+            Group {
+                if resolvedInSession > 0 {
+                    Text("\(resolvedInSession) handled this session.")
+                } else {
+                    Text("Nothing needs you right now.")
+                }
+            }
+            .font(Theme.sans(12.5))
+            .foregroundStyle(Theme.textTertiary)
+            .multilineTextAlignment(.center)
             if let latest = appState.briefs.sorted(by: { $0.createdAt > $1.createdAt }).first {
                 Button("Read latest digest →") {
                     appState.selectedBriefID = latest.id
@@ -231,7 +258,8 @@ struct ActFeedView: View {
         switch items[idx] {
         case .agentAction(let a):
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
-            appState.approveAction(a)
+            appState.stageManualApprove(a)
+            resolvedInSession += 1
         case .owedReply:
             break // owed replies don't have a one-tap approve — opens detail
         }
@@ -243,9 +271,11 @@ struct ActFeedView: View {
         case .agentAction(let a):
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
             appState.skipAction(a)
+            resolvedInSession += 1
         case .owedReply(let r):
             OwedReplyStore.dismiss(r.id)
             appState.reloadOwedReplies()
+            resolvedInSession += 1
         }
     }
 }
@@ -259,6 +289,7 @@ private struct ActCardRow: View {
     let item: ActItem
     let isSelected: Bool
     let onTap: () -> Void
+    var onResolved: (() -> Void)? = nil
 
     @State private var isHovered = false
     @State private var isEditing = false
@@ -276,10 +307,11 @@ private struct ActCardRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // 2-colour accent bar
+            // 2-colour accent bar: wider + brighter when selected
             Rectangle()
                 .fill(accentColor)
-                .frame(width: 3)
+                .frame(width: isSelected ? 4 : 3)
+                .animation(Theme.quick, value: isSelected)
 
             VStack(alignment: .leading, spacing: 5) {
                 headerRow
@@ -290,6 +322,13 @@ private struct ActCardRow: View {
             .padding(.vertical, 10)
         }
         .background(background)
+        // Focus ring on selected card
+        .overlay(
+            isSelected
+                ? RoundedRectangle(cornerRadius: 2)
+                    .strokeBorder(accentColor.opacity(0.35), lineWidth: 1)
+                : nil
+        )
         .animation(Theme.quick, value: isHovered)
         .animation(Theme.quick, value: isSelected)
         .onHover { isHovered = $0 }
@@ -376,6 +415,7 @@ private struct ActCardRow: View {
                     actionButton("SKIP") {
                         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
                         appState.skipAction(a)
+                        onResolved?()
                     }
                 }
             case .owedReply(let r):
@@ -385,10 +425,12 @@ private struct ActCardRow: View {
                 actionButton("SNOOZE") {
                     OwedReplyStore.snooze(r.id, until: Date().addingTimeInterval(86400))
                     appState.reloadOwedReplies()
+                    onResolved?()
                 }
                 actionButton("DISMISS") {
                     OwedReplyStore.dismiss(r.id)
                     appState.reloadOwedReplies()
+                    onResolved?()
                 }
             }
             Spacer()
@@ -401,10 +443,11 @@ private struct ActCardRow: View {
     private func approveButton(_ action: AgentAction) -> some View {
         Button("APPROVE") {
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
-            appState.approveAction(action)
+            appState.stageManualApprove(action)
+            onResolved?()
         }
-        .buttonStyle(WireActionStyle(tint: Theme.standby))
-        .accessibilityLabel("Approve and send suggested reply to \(action.conversationName)")
+        .buttonStyle(PrimaryActionStyle(tint: Theme.standby))
+        .accessibilityLabel("Approve and send suggested reply to \(action.conversationName) — 5 second undo window")
     }
 
     private func replyButton(_ reply: OwedReply) -> some View {
@@ -418,7 +461,7 @@ private struct ActCardRow: View {
                 displayName: reply.conversationName
             )
         }
-        .buttonStyle(WireActionStyle(tint: Theme.standby))
+        .buttonStyle(PrimaryActionStyle(tint: Theme.standby))
     }
 
     private func scheduledBar(_ action: AgentAction) -> some View {

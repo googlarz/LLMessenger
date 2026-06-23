@@ -260,6 +260,32 @@ struct PaperButtonStyle: ButtonStyle {
     }
 }
 
+/// Filled primary action — for destructive-consequence buttons like APPROVE.
+/// Colored background makes the send consequence immediately legible.
+struct PrimaryActionStyle: ButtonStyle {
+    var tint: Color = Theme.standby
+    @State private var isHovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+        return configuration.label
+            .font(Theme.mono(11, weight: .bold))
+            .tracking(0.4)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .fill(isHovered ? tint.opacity(0.85) : tint)
+            )
+            .opacity(pressed ? 0.78 : 1)
+            .scaleEffect(pressed ? 0.97 : 1)
+            .animation(Theme.quick, value: pressed)
+            .animation(Theme.quick, value: isHovered)
+            .onHover { isHovered = $0 }
+    }
+}
+
 /// Quiet inline action — mono label, no chrome until hover.
 struct WireActionStyle: ButtonStyle {
     var tint: Color = Theme.textSecondary

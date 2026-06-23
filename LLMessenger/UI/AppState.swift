@@ -520,6 +520,34 @@ final class AppState: ObservableObject {
         }
     }
 
+    // 5-second staging window for manual approves. The action transitions to
+    // .scheduled and the card shows a countdown + UNDO. After 5s, approveAction fires.
+    // This gives the user a fast "whoops" escape without requiring a separate confirm step.
+    private static let manualApproveWindow: TimeInterval = 5
+
+    func stageManualApprove(_ action: AgentAction) {
+        guard let id = action.id else { return }
+        let fireAt = Date().addingTimeInterval(Self.manualApproveWindow)
+        do {
+            try repository.armAgentActionForAutoSend(id: id, scheduledAt: fireAt)
+        } catch {
+            lastError = friendly(error)
+            return
+        }
+        armedTimers[id] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.manualApproveWindow))
+            guard !Task.isCancelled else { return }
+            await self?.approveActionByID(id)
+        }
+        reloadAgentActions()
+    }
+
+    @MainActor
+    private func approveActionByID(_ id: Int64) {
+        guard let action = agentActions.first(where: { $0.id == id }) else { return }
+        approveAction(action)
+    }
+
     private func approveReplyAction(_ action: AgentAction, id: Int64) {
         guard let draftText = action.replyPayload?.draftText,
               let adapter = adapters[action.service] else {
