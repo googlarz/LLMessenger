@@ -193,6 +193,8 @@ struct BriefCardView: View {
                 Text("\(card.counts.messages)M · \(card.counts.people)P")
                     .font(Theme.mono(11))
                     .foregroundStyle(Theme.textTertiary)
+                    .help("\(card.counts.messages) messages · \(card.counts.people) \(card.counts.people == 1 ? "person" : "people")")
+                    .accessibilityLabel("\(card.counts.messages) messages, \(card.counts.people) \(card.counts.people == 1 ? "person" : "people")")
             }
 
             if isHandled {
@@ -330,7 +332,7 @@ struct BriefCardView: View {
                 HStack(spacing: 5) {
                     Text("\(card.sourceMessageIds.count) \(card.sourceMessageIds.count == 1 ? "SOURCE" : "SOURCES")")
                     if !card.quotes.isEmpty {
-                        Text("· \(card.quotes.count)Q")
+                        Text("· \(card.quotes.count) QUOTED")
                     }
                     Image(systemName: "chevron.down")
                         .font(.system(size: 7, weight: .bold))
@@ -366,7 +368,9 @@ struct BriefCardView: View {
                     displayName: card.conversation ?? ""
                 )
             }
-            .buttonStyle(WireActionStyle())
+            // The one thing you usually came here to do — tint it the signal colour so it
+            // reads as the primary action among the grey secondaries (sources/detail/file).
+            .buttonStyle(WireActionStyle(tint: Theme.signal))
             .help("Draft a reply")
 
             Spacer(minLength: 0)
@@ -535,7 +539,9 @@ private struct QuickReplyRow: View {
             }
             .padding(.top, 2)
         } else if card.priority == "high" || card.priority == "med" || !card.actions.isEmpty {
-            Button(isFailed ? "RETRY QUICK REPLY" : "QUICK REPLY") {
+            // "DRAFT REPLIES" (AI writes options) vs the card's "REPLY" (you compose) — the
+            // old "QUICK REPLY" read as a near-synonym of REPLY. Distinct verbs, distinct jobs.
+            Button(isFailed ? "RETRY DRAFTS" : "DRAFT REPLIES") {
                 Task {
                     await chatViewModel.generateQuickReplies(
                         cardID: card.id,

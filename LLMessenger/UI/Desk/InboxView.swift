@@ -149,12 +149,14 @@ struct InboxView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             WireLabel("Inbox")
-            Text("You're all caught up")
+            // Don't say "all caught up" on a true first run — you were never caught up;
+            // your first brief is still being built.
+            Text(appState.briefs.isEmpty ? "Setting up your desk" : "You're all caught up")
                 .font(Theme.display(21))
                 .foregroundStyle(Theme.textPrimary)
 
             if appState.briefs.isEmpty {
-                Text("Your first brief will appear here soon.")
+                Text("Reading your messages — your first brief is on its way.")
                     .font(Theme.sans(12.5))
                     .foregroundStyle(Theme.textTertiary)
                     .multilineTextAlignment(.center)

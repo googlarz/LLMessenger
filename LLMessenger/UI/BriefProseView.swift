@@ -624,6 +624,7 @@ private struct WeekAtGlanceView: View {
         let hasHigh    = needsYouCount > 0
         let leadCount  = hasHigh ? needsYouCount : activeCount
 
+        VStack(alignment: .leading, spacing: 7) {
         HStack(alignment: .bottom, spacing: 0) {
 
             // Left: volume histogram
@@ -684,6 +685,26 @@ private struct WeekAtGlanceView: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(leadCount) of \(totalCards) threads, \(character.text)")
+        }
+
+        // Legend — names the bars (weekly message volume) and the red "needs-you"
+        // days, so the pulse reads as data instead of decoration.
+        HStack(spacing: 12) {
+            Text("MESSAGES · LAST 7 DAYS")
+                .font(Theme.mono(8.5, weight: .medium))
+                .tracking(0.8)
+                .foregroundStyle(Theme.textTertiary.opacity(0.75))
+            if needsYouCount > 0 {
+                HStack(spacing: 4) {
+                    Circle().fill(Theme.signal).frame(width: 4, height: 4)
+                    Text("NEEDS-YOU DAY")
+                        .font(Theme.mono(8.5, weight: .medium))
+                        .tracking(0.8)
+                        .foregroundStyle(Theme.textTertiary.opacity(0.75))
+                }
+            }
+            Spacer(minLength: 0)
+        }
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.bottom, 12)

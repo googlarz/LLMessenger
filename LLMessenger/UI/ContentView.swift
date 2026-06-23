@@ -124,22 +124,12 @@ private struct NoBriefPlaceholder: View {
     @Binding var deskCollapsed: Bool
 
     var body: some View {
-        VStack(spacing: 10) {
-            if appState.briefs.isEmpty {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(Theme.sans(32, weight: .thin))
-                    .foregroundStyle(Theme.textTertiary.opacity(0.5))
-                    .padding(.bottom, 4)
-                WireLabel("Desk")
-                Text("First brief incoming")
-                    .font(Theme.display(22))
-                    .foregroundStyle(Theme.textSecondary)
-                Text("Your messages are being fetched and summarised.")
-                    .font(Theme.sans(12.5))
-                    .foregroundStyle(Theme.textTertiary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 280)
-            } else {
+        // First run (never had a brief) → an alive "preparing" skeleton that morphs into the
+        // real brief, instead of a dead void. Had-briefs-but-none-open → a quiet "nothing open".
+        if appState.briefs.isEmpty {
+            FirstBriefPreparingView()
+        } else {
+            VStack(spacing: 10) {
                 Image(systemName: "newspaper")
                     .font(Theme.sans(32, weight: .thin))
                     .foregroundStyle(Theme.textTertiary.opacity(0.5))
@@ -161,7 +151,61 @@ private struct NoBriefPlaceholder: View {
                     .padding(.top, 4)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - First-brief preparing state
+
+/// Shown on the very first run while the first brief is being built. A shimmering skeleton
+/// of the real brief layout (masthead + two entries) so the moment feels alive and previews
+/// what's coming, rather than a black void with one line of text.
+private struct FirstBriefPreparingView: View {
+    @State private var pulse = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Theme.signal)
+                    .frame(width: 6, height: 6)
+                    .opacity(pulse ? 1 : 0.25)
+                WireLabel("Preparing your first brief", color: Theme.textSecondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.bottom, 22)
+
+            VStack(alignment: .leading, spacing: 0) {
+                bar(230, 24)
+                bar(300, 11).padding(.top, 12)
+                Rule().padding(.vertical, 20)
+                ForEach(0..<2, id: \.self) { i in
+                    bar(270, 14)
+                    bar(440, 10).padding(.top, 9)
+                    bar(360, 10).padding(.top, 5)
+                    if i == 0 { Rule().padding(.vertical, 18) }
+                }
+            }
+            .opacity(pulse ? 1 : 0.5)
+            .animation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true), value: pulse)
+
+            Text("Reading your messages and writing your first brief. This usually takes a moment.")
+                .font(Theme.sans(12.5))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 26)
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.top, 30)
+        .frame(maxWidth: 560, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onAppear { pulse = true }
+    }
+
+    private func bar(_ width: CGFloat, _ height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(Theme.surfaceHigh)
+            .frame(width: width, height: height)
     }
 }
