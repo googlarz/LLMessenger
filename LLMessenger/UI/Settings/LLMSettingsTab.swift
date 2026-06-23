@@ -91,8 +91,8 @@ struct AISettingsTab: View {
 
                     Rule()
 
-                    section("Automatic Brief Privacy") {
-                        Toggle("Allow automatic briefs with the selected cloud provider", isOn: $cloudAutoBriefsConsent)
+                    section("Automatic Digest Privacy") {
+                        Toggle("Allow automatic digests with the selected cloud provider", isOn: $cloudAutoBriefsConsent)
                             .toggleStyle(.switch).controlSize(.small)
                             .font(Theme.sans(13))
                             .tint(Theme.ok)
@@ -352,7 +352,7 @@ struct AISettingsTab: View {
 
     private var consentHelpText: String {
         if selectedProviderIsCloud {
-            return "When enabled, automatic briefs may send included message content to the selected cloud provider. Manual briefs still use the selected backend when you run them."
+            return "When enabled, automatic digests may send included message content to the selected cloud provider. Manual digests still use the selected backend when you run them."
         }
         return "Automatic cloud consent is only needed when Anthropic or OpenAI is selected."
     }

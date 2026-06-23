@@ -469,7 +469,7 @@ private struct OnboardingView: View {
             .padding(16)
             .surfaceCard()
 
-            Button(firstBriefReady ? "Open your first brief →" : "Open LLMessenger →") { onComplete() }
+            Button(firstBriefReady ? "Open your first digest →" : "Open LLMessenger →") { onComplete() }
                 .buttonStyle(PrimaryButtonStyle())
 
             Spacer()

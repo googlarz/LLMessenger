@@ -103,7 +103,7 @@ struct DigestSettingsTab: View {
                             Text("Only interrupt for what matters")
                                 .font(Theme.sans(13, weight: .medium))
                                 .foregroundStyle(Theme.textPrimary)
-                            Text("Routine briefs are generated silently — you're only notified when something needs your reply. Everything held back appears in the next digest.")
+                            Text("Routine digests are generated silently — you're only notified when something needs your reply. Everything held back appears in the next digest.")
                                 .font(Theme.sans(11))
                                 .foregroundStyle(Theme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
