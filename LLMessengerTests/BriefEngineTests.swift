@@ -53,6 +53,32 @@ private let noSourceBriefJSON = """
 }
 """
 
+// Valid brief for conversation "c2", citing message id "y0" — used by the privacy-gate
+// tests where "c1" is excluded and the brief must still be built from "c2".
+private let c2BriefJSON = """
+{
+  "total_messages": 2,
+  "total_threads": 1,
+  "total_people": 1,
+  "cards": [
+    {
+      "id": "telegram-c2-1",
+      "service": "telegram",
+      "conversationId": "c2",
+      "conversationTitle": "c2",
+      "headline": "c2 headline",
+      "priority": "low",
+      "counts": {"messages": 2, "threads": 1, "people": 1},
+      "summary": "c2 summary.",
+      "callback": null,
+      "actionItems": [],
+      "quotes": [],
+      "sourceMessageIds": ["y0"]
+    }
+  ]
+}
+"""
+
 @MainActor
 final class BriefEngineTests: XCTestCase {
 
@@ -525,6 +551,150 @@ final class BriefEngineTests: XCTestCase {
 
         XCTAssertNotNil(id,
             "Brief must be created even when LLM cites a context (already-briefed) message ID in sourceMessageIds")
+    }
+
+    // MARK: - Per-conversation privacy gate
+    //
+    // BriefEngine must honor the per-conversation privacyOverride the user sets in the
+    // Context editor, matching CommitmentDeriver / AgentEngine.proposeReply:
+    //   never_draft → never sent to any LLM.
+    //   local_only  → never sent to a cloud LLM (allowed on a local one).
+    // Excluded conversations' text must never enter the prompt, and their messages must
+    // stay unattached so they aren't silently dropped from every future brief.
+
+    private func insertMessages(_ db: AppDatabase, conversationId: String, idPrefix: String, count: Int) throws {
+        try db.dbQueue.write { db in
+            for i in 0..<count {
+                var msg = Message(briefId: nil, service: "telegram",
+                                  conversationId: conversationId, messageId: "\(idPrefix)\(i)",
+                                  sender: "Alice", text: "secret-\(conversationId)-\(i)",
+                                  timestamp: Date(), isSent: false)
+                try msg.insert(db)
+            }
+        }
+    }
+
+    private func setPrivacy(_ db: AppDatabase, conversationId: String, _ override: String) throws {
+        let ctx = ConversationContext(service: "telegram", conversationId: conversationId,
+                                      label: "", priorityHint: "auto", updatedAt: Date(),
+                                      privacyOverride: override)
+        try BriefRepository(database: db).upsertConversationContext(ctx)
+    }
+
+    /// Two-conversation cloud scenario: c1 carries `override`, c2 is normal. The brief must
+    /// still be built from c2 while c1's text never reaches the prompt and stays unattached.
+    private func assertCloudBriefOmits(_ override: String) async throws {
+        let db = try setupDB()
+        try insertMessages(db, conversationId: "c1", idPrefix: "x", count: 2)
+        try insertMessages(db, conversationId: "c2", idPrefix: "y", count: 2)
+        try setPrivacy(db, conversationId: "c1", override)
+
+        let mock = MockLLMClient()   // isLocal == false (cloud)
+        mock.response = LLMResponse(text: c2BriefJSON, inputTokens: 10, outputTokens: 5)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let id = try await engine.processNewMessages()
+
+        XCTAssertNotNil(id, "Brief must still be created from the non-excluded conversation")
+        XCTAssertEqual(mock.calls.count, 1, "Exactly one LLM call for the telegram service")
+
+        let prompt = try XCTUnwrap(mock.calls.last?.messages.last?.content)
+        XCTAssertFalse(prompt.contains("secret-c1"), "Excluded conversation text must never enter the prompt")
+        XCTAssertFalse(prompt.contains("=== [telegram] c1 |"), "Excluded conversation block must be absent")
+        XCTAssertTrue(prompt.contains("=== [telegram] c2 |"), "Normal conversation must be in the prompt")
+
+        let repo = BriefRepository(database: db)
+        let unattached = try repo.fetchUnattachedMessages()
+        XCTAssertEqual(unattached.count, 2)
+        XCTAssertEqual(Set(unattached.map { $0.conversationId }), ["c1"],
+                       "Excluded conversation's messages must stay unattached (not lost)")
+        let attached = try repo.fetchMessages(forBriefID: try XCTUnwrap(id))
+        XCTAssertEqual(Set(attached.map { $0.conversationId }), ["c2"],
+                       "Only the briefed conversation's messages are attached")
+    }
+
+    func testLocalOnlyConversationOmittedFromCloudBrief() async throws {
+        try await assertCloudBriefOmits("local_only")
+    }
+
+    func testNeverDraftConversationOmittedFromCloudBrief() async throws {
+        try await assertCloudBriefOmits("never_draft")
+    }
+
+    func testLocalOnlyConversationIncludedWhenClientIsLocal() async throws {
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 2)   // conversationId "c1", ids m0/m1
+        try setPrivacy(db, conversationId: "c1", "local_only")
+
+        let local = LocalMockLLMClient()
+        local.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
+        let engine = BriefEngine(database: db, client: local, model: "test", basePrompt: "BASE")
+
+        let id = try await engine.processNewMessages()
+
+        XCTAssertNotNil(id, "local_only conversation must be briefed by a local client")
+        XCTAssertEqual(local.calls.count, 1)
+        let prompt = try XCTUnwrap(local.calls.last?.messages.last?.content)
+        XCTAssertTrue(prompt.contains("[id=m0 |"), "local_only conversation must reach a local client")
+        let stillUnattached = try BriefRepository(database: db).fetchUnattachedMessages()
+        XCTAssertEqual(stillUnattached.count, 0, "Briefed messages are attached")
+    }
+
+    func testNeverDraftConversationOmittedEvenWithLocalClient() async throws {
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 2)   // conversationId "c1"
+        try setPrivacy(db, conversationId: "c1", "never_draft")
+
+        let local = LocalMockLLMClient()
+        local.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
+        let engine = BriefEngine(database: db, client: local, model: "test", basePrompt: "BASE")
+
+        let id = try await engine.processNewMessages()
+
+        XCTAssertNil(id, "never_draft is always omitted, even with a local client")
+        XCTAssertEqual(local.calls.count, 0, "never_draft conversation must never reach any LLM")
+        let stillUnattached = try BriefRepository(database: db).fetchUnattachedMessages()
+        XCTAssertEqual(stillUnattached.count, 2, "never_draft messages must stay unattached (not lost)")
+    }
+
+    /// summarizeLast is the second, more complex path (adapter / DB-fallback branches and a
+    /// separate attach mechanism). Empty adapters force the DB-fallback branch, which collects
+    /// service IDs from stored messages and exercises the privacy gate + newlyStored filtering.
+    func testSummarizeLastOmitsNeverDraftConversationFromCloud() async throws {
+        let db = try setupDB()
+        try insertMessages(db, conversationId: "c1", idPrefix: "x", count: 2)   // never_draft
+        try insertMessages(db, conversationId: "c2", idPrefix: "y", count: 2)   // normal
+        try setPrivacy(db, conversationId: "c1", "never_draft")
+
+        let mock = MockLLMClient()   // cloud
+        mock.response = LLMResponse(text: c2BriefJSON, inputTokens: 10, outputTokens: 5)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let id = try await engine.summarizeLast(hours: 24, adapters: [:])
+
+        XCTAssertNotNil(id, "summarizeLast must still brief the non-excluded conversation")
+        XCTAssertEqual(mock.calls.count, 1)
+        let prompt = try XCTUnwrap(mock.calls.last?.messages.last?.content)
+        XCTAssertFalse(prompt.contains("secret-c1"), "never_draft text must never enter the summarizeLast prompt")
+        XCTAssertTrue(prompt.contains("=== [telegram] c2 |"))
+
+        let repo = BriefRepository(database: db)
+        let unattached = try repo.fetchUnattachedMessages()
+        XCTAssertEqual(Set(unattached.map { $0.conversationId }), ["c1"],
+                       "never_draft messages must stay unattached after summarizeLast (not lost)")
+    }
+}
+
+// Local (on-device) client stub: isLocal == true. Used to assert that local_only
+// conversations ARE briefed when the configured client never leaves the machine.
+final class LocalMockLLMClient: LLMClient {
+    var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
+    var response: LLMResponse = LLMResponse(text: "", inputTokens: 0, outputTokens: 0)
+    var isLocal: Bool { true }
+
+    func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
+        calls.append((model, messages, maxTokens))
+        return response
     }
 }
 

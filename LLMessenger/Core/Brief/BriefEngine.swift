@@ -56,6 +56,19 @@ final class BriefEngine {
         let messagesByService = Dictionary(grouping: messages, by: { $0.service })
         let services = Array(messagesByService.keys).sorted()
 
+        // Per-conversation privacy gate: conversations the user marked never_draft (no LLM
+        // ever) or local_only (cloud client only) are excluded from the brief entirely. Their
+        // text must never enter threadText, and their messages must stay unattached so they
+        // are not lost. Keys are "service|conversationId" (same convention as elsewhere).
+        let clientIsCloud = self.client.isCloud
+        let excludedConversations: Set<String> = Set(
+            messagesByService.flatMap { service, msgs in
+                Set(msgs.map { $0.conversationId })
+                    .filter { self.isExcludedByPrivacy(service: service, conversationId: $0, clientIsCloud: clientIsCloud) }
+                    .map { "\(service)|\($0)" }
+            }
+        )
+
         // Step 3: Per-service LLM call with its own episodic context
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "EEE, d MMM HH:mm"
@@ -91,6 +104,7 @@ final class BriefEngine {
                 group.addTask {
                     do {
                         let byConversation: [String: [Message]] = Dictionary(grouping: serviceMessages, by: { $0.conversationId })
+                            .filter { convId, _ in !excludedConversations.contains("\(service)|\(convId)") }
                         let contexts = byConversation.keys.compactMap {
                             try? self.repository.fetchConversationContext(service: service, conversationId: $0)
                         }
@@ -145,6 +159,9 @@ final class BriefEngine {
                             )
                             conversationBlocks.append(block)
                         }
+                        // Every conversation for this service was excluded by the privacy gate —
+                        // make no LLM call (an empty prompt would send nothing useful to the cloud).
+                        guard !conversationBlocks.isEmpty else { return nil }
                         let threadText = conversationBlocks.joined(separator: "\n\n")
 
                         let response = try await client.complete(
@@ -230,7 +247,12 @@ final class BriefEngine {
         )
         // Only attach messages from services whose LLM response parsed successfully.
         // Messages from failed services stay unattached for the next poll cycle.
-        let messagesToAttach = messages.filter { parsedServices.contains($0.service) }
+        // Privacy-excluded conversations also stay unattached — they were never sent to the
+        // LLM, so attaching them would silently drop them from every future brief.
+        let messagesToAttach = messages.filter {
+            parsedServices.contains($0.service)
+                && !excludedConversations.contains("\($0.service)|\($0.conversationId)")
+        }
 
         // Build record arrays on the main actor before entering the transaction closure.
         let (cardRecords, cardSources) = try buildBriefCardRecords(
@@ -403,12 +425,24 @@ final class BriefEngine {
                             }
                         }
 
+                        // Per-conversation privacy gate: drop conversations marked never_draft
+                        // (no LLM ever) or local_only while the client is a cloud provider, BEFORE
+                        // any text reaches the prompt. Their newly-stored messages are filtered out
+                        // of the attach set below so they stay unattached rather than being lost.
+                        let isCloud = client2.isCloud
+                        let excludedIDs = Set(conversations.map { $0.id }).filter {
+                            self.isExcludedByPrivacy(service: serviceID, conversationId: $0, clientIsCloud: isCloud)
+                        }
+                        let allowedConversations = conversations.filter { !excludedIDs.contains($0.id) }
+                        guard !allowedConversations.isEmpty else { return nil }
+                        let attachableNewlyStored = newlyStored.filter { !excludedIDs.contains($0.conversationId) }
+
                         let recent = try self.repository.recentEpisodicSummaries(service: serviceID, limit: 3)
                         let corrections = (try? self.repository.fetchRecentPriorityCorrections(limit: 6)) ?? []
                         let correctionTuples = corrections.map {
                             (headline: $0.cardHeadline, llmPriority: $0.llmPriority, userPriority: $0.userPriority)
                         }
-                        let contexts = Set(conversations.map { $0.id }).compactMap {
+                        let contexts = Set(allowedConversations.map { $0.id }).compactMap {
                             try? self.repository.fetchConversationContext(service: serviceID, conversationId: $0)
                         }
                         let systemPrompt = PromptBuilder.build(
@@ -423,7 +457,7 @@ final class BriefEngine {
 
                         var conversationBlocks: [String] = []
                         var msgCount = 0
-                        for conv in conversations {
+                        for conv in allowedConversations {
                             let sorted = conv.messages.sorted { $0.timestamp < $1.timestamp }
                             let capped = sorted.count > 100 ? Array(sorted.suffix(100)) : sorted
                             let omitted = sorted.count - capped.count
@@ -471,7 +505,7 @@ final class BriefEngine {
                                 cards: parsed.cards,
                                 stats: (parsed.totalMessages ?? msgCount, parsed.totalThreads ?? 0, parsed.totalPeople ?? 0),
                                 sourceMessages: sourceMessages,
-                                newlyStored: newlyStored,
+                                newlyStored: attachableNewlyStored,
                                 success: true
                             )
                         } catch {
@@ -761,6 +795,17 @@ final class BriefEngine {
         case "low":             return 2
         default:                return 3
         }
+    }
+
+    /// Per-conversation privacy gate shared by both brief paths. A conversation is
+    /// excluded from the brief — its message text never reaches the LLM — when it is
+    /// marked never_draft (no LLM ever) or local_only while the client is a cloud
+    /// provider. Mirrors CommitmentDeriver.derive and AgentEngine.proposeReply.
+    private nonisolated func isExcludedByPrivacy(service: String, conversationId: String, clientIsCloud: Bool) -> Bool {
+        let ctx = (try? repository.fetchConversationContext(service: service, conversationId: conversationId)) ?? nil
+        if ctx?.privacyOverride == "never_draft" { return true }
+        if ctx?.privacyOverride == "local_only", clientIsCloud { return true }
+        return false
     }
 
     private nonisolated func buildConversationBlock(
