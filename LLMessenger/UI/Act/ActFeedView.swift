@@ -19,6 +19,14 @@ enum ActItem: Identifiable {
         }
     }
 
+    // Higher = more urgent / more important source.
+    var priorityScore: Int {
+        switch self {
+        case .agentAction(let a): return Int(a.confidence * 100)
+        case .owedReply(let r):   return r.priorityRank
+        }
+    }
+
     // Red = someone waits on you. Grey = self-directed.
     var isPersonWaiting: Bool {
         switch self {
@@ -33,6 +41,13 @@ enum ActItem: Identifiable {
         switch self {
         case .agentAction(let a): return a.service
         case .owedReply(let r):   return r.service
+        }
+    }
+
+    var conversationId: String {
+        switch self {
+        case .agentAction(let a): return a.conversationId
+        case .owedReply(let r):   return r.conversationId
         }
     }
 
@@ -97,16 +112,26 @@ struct ActFeedView: View {
     @State private var resolvedInSession = 0
 
     private var items: [ActItem] {
-        let actions = appState.agentActions
-            .filter { !$0.isMaybe }
-            .map { ActItem.agentAction($0) }
-        let owed = appState.owedReplies
-            .map { ActItem.owedReply($0) }
-        let all = actions + owed
-        // Sort: stale first, then person-waiting (red) before self-directed (grey),
-        // then by age descending (oldest = most overdue = highest urgency).
+        let all: [ActItem] = appState.agentActions.filter { !$0.isMaybe }.map { .agentAction($0) }
+            + appState.owedReplies.map { .owedReply($0) }
+
+        // Precompute context-boosted priority to avoid repeated DB reads in sort comparator.
+        // Per-conversation priorityHint ("high" / "low") overrides the AI confidence score.
+        let scores: [String: Int] = Dictionary(uniqueKeysWithValues: all.map { item in
+            let ctx = appState.fetchConversationContext(service: item.service, conversationId: item.conversationId)
+            let boost: Int
+            switch ctx?.priorityHint {
+            case "high": boost = 100
+            case "low":  boost = -50
+            default:     boost = 0
+            }
+            return (item.id, item.priorityScore + boost)
+        })
+
         return all.sorted {
-            if $0.isStale != $1.isStale  { return $0.isStale }
+            if $0.isStale != $1.isStale { return $0.isStale }
+            let s0 = scores[$0.id, default: 0], s1 = scores[$1.id, default: 0]
+            if s0 != s1 { return s0 > s1 }
             if $0.isPersonWaiting != $1.isPersonWaiting { return $0.isPersonWaiting }
             return $0.ageHours > $1.ageHours
         }
@@ -320,6 +345,7 @@ private struct ActCardRow: View {
     @State private var isHovered = false
     @State private var isEditing = false
     @State private var editText = ""
+    @State private var showContextEditor = false
 
     private var accentColor: Color {
         item.isPersonWaiting ? Theme.signal : Theme.textTertiary
@@ -342,10 +368,16 @@ private struct ActCardRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 headerRow
                 previewRow
+                // Expanded detail: shown when card is selected
+                if isSelected {
+                    detailRow
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 actionRow
             }
             .padding(.horizontal, 11)
             .padding(.vertical, 10)
+            .animation(Theme.spring, value: isSelected)
         }
         .background(background)
         // Focus ring on selected card
@@ -359,9 +391,22 @@ private struct ActCardRow: View {
         .animation(Theme.quick, value: isSelected)
         .onHover { isHovered = $0 }
         .onTapGesture(perform: onTap)
+        .sheet(isPresented: $showContextEditor) {
+            contextEditorSheet
+        }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    @ViewBuilder
+    private var contextEditorSheet: some View {
+        ContextEditor(
+            service: item.service,
+            conversationId: item.conversationId,
+            conversationName: item.name,
+            database: appState.database
+        )
     }
 
     // MARK: Header
@@ -418,6 +463,87 @@ private struct ActCardRow: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    // MARK: Detail (expanded when selected)
+
+    @ViewBuilder
+    private var detailRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Reasoning context — why the agent surfaced this
+            switch item {
+            case .agentAction(let a) where !a.reasoning.isEmpty:
+                HStack(alignment: .top, spacing: 5) {
+                    Image(systemName: "brain")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Theme.textTertiary)
+                        .frame(width: 13)
+                        .padding(.top, 2)
+                    Text(a.reasoning)
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            case .owedReply(let r):
+                HStack(alignment: .top, spacing: 5) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Theme.textTertiary)
+                        .frame(width: 13)
+                        .padding(.top, 2)
+                    Text(r.reason)
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            default:
+                EmptyView()
+            }
+
+            // Chat-to-customize button (only for conversations that support drafting)
+            HStack(spacing: 6) {
+                customizeButton
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var customizeButton: some View {
+        switch item {
+        case .agentAction(let a)
+            where a.kindEnum == .reply || a.kindEnum == .followUp || a.kindEnum == .ack:
+            Button("Chat to customize →") {
+                chatViewModel.prepareReply(
+                    service: a.service,
+                    conversationID: a.conversationId,
+                    displayName: a.conversationName
+                )
+            }
+            .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
+            .accessibilityLabel("Open chat to write a custom reply for \(a.conversationName)")
+            Button("Customize lane") { showContextEditor = true }
+                .buttonStyle(WireActionStyle())
+                .accessibilityLabel("Edit priority and delegation settings for \(a.conversationName)")
+        case .owedReply(let r):
+            if !isDraftingDisabled(r) {
+                Button("Chat to compose →") {
+                    chatViewModel.prepareReply(
+                        service: r.service,
+                        conversationID: r.conversationId,
+                        displayName: r.conversationName
+                    )
+                }
+                .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
+                .accessibilityLabel("Open chat to compose a reply for \(r.conversationName)")
+            }
+            Button("Customize lane") { showContextEditor = true }
+                .buttonStyle(WireActionStyle())
+                .accessibilityLabel("Edit priority and delegation settings for \(r.conversationName)")
+        default:
+            Button("Customize lane") { showContextEditor = true }
+                .buttonStyle(WireActionStyle())
         }
     }
 
