@@ -107,6 +107,7 @@ struct CommandBar<Recognizer: SpeechRecognizing>: View {
         .animation(Theme.quick, value: micHovered)
         .onHover { micHovered = $0 }
         .help(speech.isListening ? "Stop dictation" : "Dictate a command")
+        .accessibilityLabel(speech.isListening ? "Stop dictation" : "Dictate a command")
     }
 
     private func toggleListening() {
@@ -147,6 +148,7 @@ struct CommandBar<Recognizer: SpeechRecognizing>: View {
         .onHover { runHovered = $0 }
         .keyboardShortcut(.return, modifiers: .command)
         .help("Run command (⌘↩)")
+        .accessibilityLabel("Run command")
     }
 
     private func run() {

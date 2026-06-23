@@ -240,6 +240,8 @@ private struct ChromeIconButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        // macOS does not expose .help() as the VoiceOver name, so label icon-only buttons explicitly.
+        .accessibilityLabel(help)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }
@@ -268,6 +270,7 @@ private struct BriefArrowButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+        .accessibilityLabel(symbol == "chevron.left" ? "Older brief" : "Newer brief")
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }
@@ -304,6 +307,7 @@ private struct ServiceHealthChip: View {
         .animation(Theme.quick, value: hovering)
         .onHover { hovering = $0 }
         .help(helpText)
+        .accessibilityLabel(helpText)
     }
 
     private var shortName: String {

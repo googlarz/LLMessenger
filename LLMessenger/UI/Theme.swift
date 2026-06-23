@@ -70,9 +70,12 @@ enum Theme {
         light: Color(red: 0.404, green: 0.388, blue: 0.353),   // #676358
         dark:  Color(red: 0.608, green: 0.596, blue: 0.561)    // #9B988F
     )
+    // Carries real content (timestamps, agent reasoning, captions), so it must clear
+    // WCAG AA 4.5:1. Computed against the page grounds: light #6E6B65 → 4.99:1 on bg /
+    // 4.6:1 on sidebar; dark #8B887F → 5.33:1 on bg / 4.51:1 on surfaceHigh.
     static let textTertiary = Color(
-        light: Color(red: 0.584, green: 0.569, blue: 0.533),   // #959188
-        dark:  Color(red: 0.412, green: 0.404, blue: 0.376)    // #696760
+        light: Color(red: 0.432, green: 0.421, blue: 0.394),   // #6E6B65
+        dark:  Color(red: 0.544, green: 0.533, blue: 0.496)    // #8B887F
     )
 
     // MARK: - Signal — the only colour that means anything
