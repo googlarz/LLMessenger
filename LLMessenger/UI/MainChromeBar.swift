@@ -164,7 +164,7 @@ struct MainChromeBar: View {
                 )
             }
             .buttonStyle(.plain)
-            .help("Browse the brief archive")
+            .help("Browse the digest archive")
             .animation(Theme.quick, value: briefPickerHovered)
             .onHover { briefPickerHovered = $0 }
             .popover(isPresented: $showingBriefPicker, arrowEdge: .bottom) {
@@ -296,7 +296,8 @@ private struct BriefArrowButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .accessibilityLabel(symbol == "chevron.left" ? "Older brief" : "Newer brief")
+        .help(symbol == "chevron.left" ? "Older digest (⌘[)" : "Newer digest (⌘])")
+        .accessibilityLabel(symbol == "chevron.left" ? "Older digest" : "Newer digest")
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }
