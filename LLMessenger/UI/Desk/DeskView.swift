@@ -42,7 +42,7 @@ struct DeskView: View {
     }
 
     private var tabBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             ForEach(DeskTab.allCases, id: \.self) { tab in
                 DeskTabButton(
                     tab: tab,
@@ -100,7 +100,9 @@ private struct DeskTabButton: View {
                     }
                     Text(tab.rawValue.uppercased())
                         .font(Theme.mono(10.5, weight: .semibold))
-                        .tracking(1.1)
+                        .tracking(0.7)
+                        .lineLimit(1)
+                        .fixedSize()
                         .foregroundStyle(isSelected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary))
                 }
                 .padding(.bottom, 8)
