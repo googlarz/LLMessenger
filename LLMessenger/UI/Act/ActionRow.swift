@@ -135,11 +135,11 @@ struct ActionRow: View {
 
     private var badgeText: String {
         switch action.kindEnum {
-        case .reply:        return "Reply"
+        case .reply:        return "Suggested reply"
         case .followUp:     return "Follow up"
         case .calendarHold: return "Hold"
         case .rsvp:         return "RSVP"
-        case .ack:          return "Ack"
+        case .ack:          return "Acknowledgement"
         case .none:         return action.kind
         }
     }

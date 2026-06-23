@@ -30,12 +30,15 @@ struct KeyboardShortcutsSheet: View {
             ("⌘[ / ⌘]",        "Older / newer digest"),
             ("⌘F",             "Search messages"),
         ]),
-        ("Inbox", [
-            ("⌘1",             "Inbox tab"),
-            ("⌘2",             "Waiting tab"),
+        ("Act queue", [
+            ("⌘1",             "Act tab"),
+            ("⌘2",             "Digest tab"),
             ("⌘3",             "Activity tab"),
+            ("J / K",          "Next / previous action"),
+            ("↩ Return",       "Approve selected"),
+            ("S",              "Skip selected"),
         ]),
-        ("Brief", [
+        ("Digest", [
             ("H",              "File the first unhandled card"),
             ("⌘↩",             "Send reply draft"),
         ]),

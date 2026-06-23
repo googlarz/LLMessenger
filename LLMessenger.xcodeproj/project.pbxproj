@@ -25,6 +25,7 @@
 		1B0047A6CC4EC78192C7D255 /* AssistantResponseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3154370024E6D2FFA5B0FE62 /* AssistantResponseView.swift */; };
 		1E597D052F2EA5B2614334E0 /* AgentSecurityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF2430D04C07D732A7D2022C /* AgentSecurityTests.swift */; };
 		1F3AF9DCA45D658915781028 /* LLMSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D6788AD581D62FE11B99E8 /* LLMSettingsTab.swift */; };
+		1F656903F16B668B1D56C644 /* ActFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C4728BC854087743AC6F15 /* ActFeedView.swift */; };
 		1F796966A2714498BA6538F7 /* PluginProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ECB8B95607B4E578CE76872 /* PluginProtocolTests.swift */; };
 		1FC421AD6FE5271823476679 /* CalendarActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C53599E26085F5DEAF82B4 /* CalendarActor.swift */; };
 		237D39CA190899E3F771F2DA /* ChatWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2415F8132629B43CC77A08F8 /* ChatWindowController.swift */; };
@@ -415,6 +416,7 @@
 		E4EAC3FF4C541A3244CB0AA7 /* ActionAuditLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionAuditLog.swift; sourceTree = "<group>"; };
 		E57E89D590DFB17E9E8E1AB3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E82D9B6A89CA7BF31CBF04C4 /* DesignSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSnapshotTests.swift; sourceTree = "<group>"; };
+		E9C4728BC854087743AC6F15 /* ActFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActFeedView.swift; sourceTree = "<group>"; };
 		E9CB123F828CD9B509AA4977 /* DigestOrdering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigestOrdering.swift; sourceTree = "<group>"; };
 		E9EE3EF414B3C88A6A4DA98E /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		EA922739153C1094C79DAF50 /* ActionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionRow.swift; sourceTree = "<group>"; };
@@ -610,6 +612,7 @@
 		448667159EF25871210AB543 /* Act */ = {
 			isa = PBXGroup;
 			children = (
+				E9C4728BC854087743AC6F15 /* ActFeedView.swift */,
 				EA922739153C1094C79DAF50 /* ActionRow.swift */,
 				F6BBDDF867CAC9413B855974 /* ActView.swift */,
 				61E60396E1F50C65B7337E04 /* CommandBar.swift */,
@@ -1066,6 +1069,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9B30345F5A5A20571E4BE12D /* AboutSettingsTab.swift in Sources */,
+				1F656903F16B668B1D56C644 /* ActFeedView.swift in Sources */,
 				A19403F06D237FE1DB505415 /* ActView.swift in Sources */,
 				7B0DF6BFD9331018D7098753 /* ActionAuditLog.swift in Sources */,
 				2AC53CAC61EFF5CC059F3C90 /* ActionRow.swift in Sources */,

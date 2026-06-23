@@ -1,17 +1,19 @@
 // LLMessenger/UI/Desk/DeskView.swift
 //
-// Persistent left-panel sidebar: Inbox / Waiting / Activity.
+// Persistent left-panel sidebar: Act (primary) / Digest / Activity.
+// Act is the default — it merges agent proposals + owed replies.
+// Digest lists the brief archive. Activity shows the audit trail.
 
 import SwiftUI
 
 struct DeskView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
-    @State private var selectedTab: DeskTab = .inbox
+    @State private var selectedTab: DeskTab = .act
 
     enum DeskTab: String, CaseIterable {
-        case inbox    = "Inbox"
-        case waiting  = "Waiting"
+        case act      = "Act"
+        case digest   = "Digest"
         case activity = "Activity"
     }
 
@@ -29,10 +31,10 @@ struct DeskView: View {
 
             Group {
                 switch selectedTab {
-                case .inbox:
-                    InboxView()
-                case .waiting:
-                    OwedView()
+                case .act:
+                    ActFeedView()
+                case .digest:
+                    BriefListView()
                 case .activity:
                     ActivityView()
                 }
@@ -40,8 +42,6 @@ struct DeskView: View {
             .id(selectedTab)
             .transition(.opacity)
         }
-        // The strip is always on screen, so make sure its global incomplete-task list is loaded
-        // even when the brief-archive drawer (which also refreshes it) is never opened.
         .onAppear { appState.refreshTasks() }
     }
 
@@ -51,7 +51,7 @@ struct DeskView: View {
                 DeskTabButton(
                     tab: tab,
                     isSelected: selectedTab == tab,
-                    hasBadge: hasBadge(tab),
+                    badge: badge(for: tab),
                     keyEquivalent: keyForTab(tab)
                 ) {
                     withAnimation(Theme.quick) { selectedTab = tab }
@@ -65,21 +65,24 @@ struct DeskView: View {
         .background(Theme.sidebar)
     }
 
-    private func hasBadge(_ tab: DeskTab) -> Bool {
+    private func badge(for tab: DeskTab) -> String? {
         switch tab {
-        case .inbox:
-            return appState.nowNeedsAttention || appState.actionsReadyCount > 0
-        case .waiting:
-            return appState.owedCount > 0
+        case .act:
+            let count = appState.actionsReadyCount + appState.owedCount
+            return count > 0 ? "\(count)" : nil
+        case .digest:
+            let cal = Calendar.current
+            let todayCount = appState.briefs.filter { cal.isDateInToday($0.createdAt) }.count
+            return todayCount > 0 ? "\(todayCount)" : nil
         case .activity:
-            return false
+            return nil
         }
     }
 
     private func keyForTab(_ tab: DeskTab) -> KeyEquivalent {
         switch tab {
-        case .inbox:    return "1"
-        case .waiting:  return "2"
+        case .act:      return "1"
+        case .digest:   return "2"
         case .activity: return "3"
         }
     }
@@ -88,7 +91,7 @@ struct DeskView: View {
 private struct DeskTabButton: View {
     let tab: DeskView.DeskTab
     let isSelected: Bool
-    let hasBadge: Bool
+    let badge: String?          // nil = no badge; non-nil = numeric count shown
     let keyEquivalent: KeyEquivalent
     let onTap: () -> Void
     @State private var isHovered = false
@@ -97,17 +100,23 @@ private struct DeskTabButton: View {
         Button(action: onTap) {
             VStack(spacing: 6) {
                 HStack(spacing: 5) {
-                    if hasBadge {
-                        Circle()
-                            .fill(isSelected ? Theme.signal : Theme.signal.opacity(0.6))
-                            .frame(width: 5, height: 5)
-                    }
                     Text(tab.rawValue.uppercased())
                         .font(Theme.mono(10.5, weight: .semibold))
                         .tracking(0.7)
                         .lineLimit(1)
                         .fixedSize()
                         .foregroundStyle(isSelected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary))
+
+                    if let badge {
+                        Text(badge)
+                            .font(Theme.mono(9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(
+                                Capsule().fill(isSelected ? Theme.signal : Theme.signal.opacity(0.7))
+                            )
+                    }
                 }
                 .padding(.bottom, 8)
 
