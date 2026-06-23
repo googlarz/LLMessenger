@@ -34,7 +34,7 @@ struct ReplyDraftView: View {
                 }
 
                 if draft.conversationID == "unknown" {
-                    Text("Cannot determine recipient — brief spans multiple conversations. Discard and ask about one conversation specifically.")
+                    Text("Cannot determine recipient — this digest spans multiple conversations. Discard and ask about one conversation specifically.")
                         .font(Theme.sans(11.5))
                         .foregroundStyle(Theme.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)

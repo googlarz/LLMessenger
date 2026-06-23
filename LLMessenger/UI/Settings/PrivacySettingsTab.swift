@@ -48,7 +48,7 @@ struct PrivacySettingsTab: View {
                     Text("Redact sensitive patterns before sending to cloud LLM")
                         .font(Theme.sans(13, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
-                    Text("Replaces credit card numbers, US SSNs, IBANs, and email addresses with [REDACTED:…] tokens in cloud LLM prompts. Best-effort, not a guarantee. May reduce brief quality.")
+                    Text("Replaces credit card numbers, US SSNs, IBANs, and email addresses with [REDACTED:…] tokens in cloud LLM prompts. Best-effort, not a guarantee. May reduce digest quality.")
                         .font(Theme.sans(11))
                         .foregroundStyle(Theme.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)

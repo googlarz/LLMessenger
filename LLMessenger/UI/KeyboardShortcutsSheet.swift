@@ -26,8 +26,8 @@ struct KeyboardShortcutsSheet: View {
 
     private let sections: [(title: String, shortcuts: [(key: String, description: String)])] = [
         ("Navigation", [
-            ("J / K",          "Older / newer brief"),
-            ("⌘[ / ⌘]",        "Older / newer brief"),
+            ("J / K",          "Older / newer digest"),
+            ("⌘[ / ⌘]",        "Older / newer digest"),
             ("⌘F",             "Search messages"),
         ]),
         ("Inbox", [

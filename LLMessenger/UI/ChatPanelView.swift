@@ -203,7 +203,7 @@ private struct BriefFooterView: View {
             let secs = max(0, Int(next.timeIntervalSinceNow))
             if secs > 0 {
                 let mins = Int(ceil(Double(secs) / 60.0))
-                parts.append(mins <= 1 ? "Next brief soon" : "Next brief ~\(mins)m")
+                parts.append(mins <= 1 ? "Next digest soon" : "Next digest ~\(mins)m")
             }
         }
         parts.append("AI-generated · may miss nuance")

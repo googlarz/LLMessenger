@@ -17,7 +17,7 @@ struct ChatInputView: View {
             HStack(spacing: 10) {
                 Theme.standby.frame(width: 2, height: 24)
                     .clipShape(RoundedRectangle(cornerRadius: 1))
-                Text("Example data — not your messages. Connect your accounts to brief your real conversations.")
+                Text("Example data — not your messages. Connect your accounts to digest your real conversations.")
                     .font(Theme.sans(12.5))
                     .foregroundStyle(Theme.textSecondary)
                 Button("SET UP MY ACCOUNTS") { appState.onExitDemo?() }
@@ -30,7 +30,7 @@ struct ChatInputView: View {
             HStack(spacing: 10) {
                 Theme.standby.frame(width: 2, height: 24)
                     .clipShape(RoundedRectangle(cornerRadius: 1))
-                Text("No AI backend configured — briefs and replies are paused.")
+                Text("No AI backend configured — digests and replies are paused.")
                     .font(Theme.sans(12.5))
                     .foregroundStyle(Theme.textSecondary)
                 Button("OPEN SETTINGS") { appState.onOpenSettings?() }

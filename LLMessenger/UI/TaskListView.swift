@@ -18,7 +18,7 @@ struct TaskListView: View {
             .padding(.bottom, 6)
 
             if appState.tasks.isEmpty {
-                Text("No pending tasks — action items from briefs appear here")
+                Text("No pending tasks — action items from digests appear here")
                     .font(Theme.sans(11))
                     .foregroundStyle(Theme.textTertiary)
                     .padding(.horizontal, 16)

@@ -89,7 +89,7 @@ struct MainChromeBar: View {
 
                 Spacer()
 
-                chromeIcon("magnifyingglass", active: showSearch, help: "Search messages and briefs (⌘F)") {
+                chromeIcon("magnifyingglass", active: showSearch, help: "Search messages and digests (⌘F)") {
                     showSearch.toggle()
                 }
                 .keyboardShortcut("f", modifiers: .command)
@@ -222,7 +222,7 @@ struct MainChromeBar: View {
     private var currentBriefLabel: String {
         guard let id = appState.selectedBriefID,
               let brief = appState.briefs.first(where: { $0.id == id })
-        else { return "No brief" }
+        else { return "No digest" }
         let f = DateFormatter()
         let cal = Calendar.current
         if cal.isDateInToday(brief.createdAt) {
