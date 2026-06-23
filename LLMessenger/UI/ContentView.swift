@@ -38,7 +38,7 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 // Brief archive (power-user drawer, collapsed by default)
                 if !sidebarCollapsed {
-                    BriefListView()
+                    BriefListView(showSearch: showSearch)
                         .frame(width: 248)
                         .background(Theme.sidebar)
                         .transition(.move(edge: .leading).combined(with: .opacity))

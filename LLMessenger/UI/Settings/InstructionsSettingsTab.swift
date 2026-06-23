@@ -6,6 +6,7 @@ struct InstructionsSettingsTab: View {
     @State private var prompt: String = ""
     @State private var theme: String = "system"
     @State private var saveStatus: String = ""
+    @State private var showResetConfirmation = false
 
     private let repo = SettingsRepository()
 
@@ -34,8 +35,20 @@ struct InstructionsSettingsTab: View {
                                 .font(Theme.sans(11))
                                 .foregroundStyle(Theme.textTertiary)
                             Spacer()
-                            Button("Reset to Default") { prompt = PromptBuilder.defaultBasePrompt }
+                            Button("Reset to Default") { showResetConfirmation = true }
                                 .buttonStyle(WireActionStyle())
+                                .confirmationDialog(
+                                    "Reset system prompt to default?",
+                                    isPresented: $showResetConfirmation,
+                                    titleVisibility: .visible
+                                ) {
+                                    Button("Reset", role: .destructive) {
+                                        prompt = PromptBuilder.defaultBasePrompt
+                                    }
+                                    Button("Cancel", role: .cancel) {}
+                                } message: {
+                                    Text("Your current prompt will be replaced. This cannot be undone.")
+                                }
                         }
                     }
                     .padding(.vertical, 14)

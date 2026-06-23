@@ -7,8 +7,11 @@
 import SwiftUI
 
 struct BriefListView: View {
+    var showSearch: Bool = false
+
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
+    @FocusState private var searchFocused: Bool
     @State private var searchQuery = ""
     @State private var dateFrom: Date? = nil
     @State private var dateTo: Date? = nil
@@ -39,7 +42,7 @@ struct BriefListView: View {
             VStack(spacing: 8) {
                 NextRefreshLine()
                 HStack(spacing: 6) {
-                    SearchBarView(query: $searchQuery)
+                    SearchBarView(query: $searchQuery, isFocused: $searchFocused)
                         .onChange(of: searchQuery) { q in performSearch(q) }
                     DateFilterButton(isActive: dateFrom != nil || dateTo != nil,
                                      showPopover: $showDateFilter)
@@ -211,6 +214,8 @@ struct BriefListView: View {
         .onAppear { refreshNeedsReply(); appState.refreshTasks() }
         .onChange(of: appState.briefs.map { $0.id }) { _ in refreshNeedsReply(); appState.refreshTasks() }
         .onChange(of: appState.handledCardKeys) { _ in refreshNeedsReply() }
+        // When Cmd-F opens the sidebar, immediately focus the search field.
+        .onChange(of: showSearch) { if $0 { searchFocused = true } }
     }
 
     // MARK: - Helpers
@@ -431,7 +436,7 @@ private struct NextRefreshLine: View {
 
 private struct SearchBarView: View {
     @Binding var query: String
-    @FocusState private var focused: Bool
+    var isFocused: FocusState<Bool>.Binding
     @State private var clearHovered = false
 
     var body: some View {
@@ -443,7 +448,7 @@ private struct SearchBarView: View {
                 .font(Theme.sans(12.5))
                 .textFieldStyle(.plain)
                 .foregroundStyle(Theme.textPrimary)
-                .focused($focused)
+                .focused(isFocused)
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark")
@@ -463,10 +468,10 @@ private struct SearchBarView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: Theme.controlRadius)
-                .strokeBorder(focused ? Theme.textSecondary : Theme.border,
-                              lineWidth: focused ? 1 : Theme.hairline)
+                .strokeBorder(isFocused.wrappedValue ? Theme.textSecondary : Theme.border,
+                              lineWidth: isFocused.wrappedValue ? 1 : Theme.hairline)
         )
-        .animation(Theme.quick, value: focused)
+        .animation(Theme.quick, value: isFocused.wrappedValue)
     }
 }
 

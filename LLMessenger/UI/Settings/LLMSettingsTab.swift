@@ -15,6 +15,7 @@ struct AISettingsTab: View {
     @State private var saveStatus: String = ""
     @State private var testState: TestState = .idle
     @State private var usageRows: [(provider: String, inputK: Int, outputK: Int, cost: Double)] = []
+    @State private var isLocalOnlyMode: Bool = SettingsRepository().loadLocalOnlyMode()
 
     private let repo = SettingsRepository()
 
@@ -30,6 +31,26 @@ struct AISettingsTab: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     section("AI Backend") {
+                        if isLocalOnlyMode {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(Theme.ok)
+                                    .padding(.top, 2)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Local-only mode is active")
+                                        .font(Theme.mono(11, weight: .semibold))
+                                        .tracking(0.6)
+                                        .foregroundStyle(Theme.ok)
+                                    Text("Cloud providers are disabled. Change this in the Privacy tab.")
+                                        .font(Theme.sans(11.5))
+                                        .foregroundStyle(Theme.textTertiary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .padding(.vertical, 6)
+                        }
+
                         Picker("Provider", selection: $selectedProviderRaw) {
                             Text("Choose...").tag("")
                             ForEach(LLMProvider.availableCases, id: \.rawValue) { provider in
@@ -38,6 +59,7 @@ struct AISettingsTab: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
+                        .disabled(isLocalOnlyMode && selectedProviderIsCloud)
 
                         caption("LLMessenger only uses the backend selected here. API keys by themselves never enable cloud processing.")
                     }
@@ -144,7 +166,7 @@ struct AISettingsTab: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
-        .onAppear { load() }
+        .onAppear { load(); isLocalOnlyMode = repo.loadLocalOnlyMode() }
         .task { await loadUsage() }
     }
 
