@@ -232,7 +232,7 @@ final class AppState: ObservableObject {
             InstrumentationManager.shared.track(event: .briefOpened, metadata: ["briefID": briefID])
             return refreshBriefs()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
             return Task {}
         }
     }
@@ -258,7 +258,7 @@ final class AppState: ObservableObject {
                     self.reloadContextSuggestions()
                 }
             } catch {
-                await MainActor.run { self.lastError = error.localizedDescription }
+                await MainActor.run { self.lastError = self.friendly(error) }
             }
         }
     }
@@ -275,7 +275,7 @@ final class AppState: ObservableObject {
                     self.onBriefsChanged?()
                 }
             } catch {
-                await MainActor.run { self.lastError = error.localizedDescription }
+                await MainActor.run { self.lastError = self.friendly(error) }
             }
         }
     }
@@ -317,7 +317,7 @@ final class AppState: ObservableObject {
             try repository.updateCommitmentStatus(id: id, status: .fulfilled)
             reloadCommitments()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -327,7 +327,7 @@ final class AppState: ObservableObject {
             try repository.updateCommitmentStatus(id: id, status: .dropped)
             reloadCommitments()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -349,7 +349,7 @@ final class AppState: ObservableObject {
             }
             reloadCommitments()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -361,7 +361,7 @@ final class AppState: ObservableObject {
             try repository.insertAgentAction(action)
             reloadAgentActions()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -405,7 +405,7 @@ final class AppState: ObservableObject {
         do {
             try repository.armAgentActionForAutoSend(id: id, scheduledAt: fireAt)
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
             return
         }
         NotificationManager.postAutoSendArmedNotification(
@@ -579,7 +579,7 @@ final class AppState: ObservableObject {
                 try self.repository.updateAgentActionStatus(id: id, status: .done, resolvedAt: Date())
                 self.reloadAgentActions()
             } catch {
-                self.lastError = error.localizedDescription
+                self.lastError = self.friendly(error)
                 // Leave pending; do not mark failed for an access/save issue the user can fix.
             }
         }
@@ -617,7 +617,7 @@ final class AppState: ObservableObject {
                 self.reloadAgentActions()
             } catch {
                 try? self.repository.updateAgentActionStatus(id: id, status: .failed, resolvedAt: Date())
-                self.lastError = error.localizedDescription
+                self.lastError = self.friendly(error)
                 self.reloadAgentActions()
             }
         }
@@ -648,7 +648,7 @@ final class AppState: ObservableObject {
             try repository.updateAgentActionPayload(id: id, payload: AgentAction.encodeReplyPayload(newText))
             reloadAgentActions()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -658,7 +658,7 @@ final class AppState: ObservableObject {
             try repository.updateAgentActionStatus(id: id, status: .skipped, resolvedAt: Date())
             reloadAgentActions()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -752,7 +752,7 @@ final class AppState: ObservableObject {
         do {
             try repository.upsertConversationContext(ctx)
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
         contextSuggestions.removeAll { $0.id == suggestion.id }
         Task { await contextSuggestionEngine.dismissContext(suggestion: suggestion) }
@@ -777,7 +777,7 @@ final class AppState: ObservableObject {
             try repository.completeTask(id: taskID)
             refreshTasks()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -808,7 +808,7 @@ final class AppState: ObservableObject {
             try repository.setPinned(briefID: briefID, pinned: pinned)
             refreshBriefs()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -837,7 +837,7 @@ final class AppState: ObservableObject {
             try repository.setArchived(briefID: briefID, archivedAt: Date())
             refreshBriefs()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -846,7 +846,7 @@ final class AppState: ObservableObject {
             try repository.setArchived(briefID: briefID, archivedAt: nil)
             refreshBriefs()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -855,7 +855,7 @@ final class AppState: ObservableObject {
             try repository.setSnoozed(briefID: briefID, snoozedUntil: date)
             refreshBriefs()
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -899,7 +899,7 @@ final class AppState: ObservableObject {
         do {
             try repository.upsertConversationContext(ctx)
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 
@@ -930,7 +930,7 @@ final class AppState: ObservableObject {
                 cardHeadline: headline
             )
         } catch {
-            lastError = error.localizedDescription
+            lastError = friendly(error)
         }
     }
 

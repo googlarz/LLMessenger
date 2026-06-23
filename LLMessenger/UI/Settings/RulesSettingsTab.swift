@@ -5,6 +5,7 @@ import GRDB
 struct RulesSettingsTab: View {
     @State private var rules: [PriorityRule] = []
     @State private var showingAddRule = false
+    @State private var ruleToDelete: PriorityRule? = nil
     private let database: AppDatabase?
 
     init(database: AppDatabase? = nil) {
@@ -33,7 +34,7 @@ struct RulesSettingsTab: View {
                 } else {
                     VStack(spacing: 0) {
                         ForEach(rules) { rule in
-                            RuleRowView(rule: rule, onDelete: { deleteRule(rule) })
+                            RuleRowView(rule: rule, onDelete: { ruleToDelete = rule })
                             Rule()
                         }
                     }
@@ -53,6 +54,16 @@ struct RulesSettingsTab: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task { await loadRules() }
+        .confirmationDialog("Delete this rule?", isPresented: Binding(
+            get: { ruleToDelete != nil },
+            set: { if !$0 { ruleToDelete = nil } }
+        ), titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let rule = ruleToDelete { deleteRule(rule) }
+                ruleToDelete = nil
+            }
+            Button("Cancel", role: .cancel) { ruleToDelete = nil }
+        }
         .sheet(isPresented: $showingAddRule) {
             AddRuleView { rule in
                 saveRule(rule)

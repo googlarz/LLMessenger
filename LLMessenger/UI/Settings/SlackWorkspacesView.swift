@@ -4,6 +4,7 @@ struct SlackWorkspacesView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var workspaces: [SlackWorkspace] = SlackWorkspaceStore.load()
     @State private var showingAdd = false
+    @State private var workspaceToRemove: SlackWorkspace? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -41,7 +42,7 @@ struct SlackWorkspacesView: View {
                     VStack(spacing: 0) {
                         ForEach(workspaces) { ws in
                             WorkspaceRow(workspace: ws) {
-                                remove(ws)
+                                workspaceToRemove = ws
                             }
                             Rule()
                         }
@@ -67,6 +68,19 @@ struct SlackWorkspacesView: View {
         }
         .frame(width: 520, height: 420)
         .background(Theme.surface)
+        .confirmationDialog(
+            workspaceToRemove.map { "Remove \($0.teamName)?" } ?? "Remove workspace?",
+            isPresented: Binding(
+                get: { workspaceToRemove != nil },
+                set: { if !$0 { workspaceToRemove = nil } }
+            ), titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                if let ws = workspaceToRemove { remove(ws) }
+                workspaceToRemove = nil
+            }
+            Button("Cancel", role: .cancel) { workspaceToRemove = nil }
+        }
         .sheet(isPresented: $showingAdd, onDismiss: { reload() }) {
             AddSlackWorkspaceView()
         }
