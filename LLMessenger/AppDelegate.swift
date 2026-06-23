@@ -271,12 +271,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 controller.show()
             }
             settingsController.onRunSetup = runSetupWizard
-            state.onExitDemo = { [weak state] in
-                guard let state else { return }
-                try? DemoSeeder.wipe(from: state.database)
-                state.selectedBriefID = nil
-                state.refreshBriefs()
-                runSetupWizard()
+            state.onExitDemo = { [weak state, weak self] in
+                guard let self else { return }
+                state?.selectedBriefID = nil
+                // Open setup wizard first; demo briefs remain visible behind the
+                // window so the user sees the product before connecting accounts.
+                // Wipe demo data only after setup completes.
+                UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+                let demoExitController = OnboardingWindowController(database: db)
+                demoExitController.onComplete = { [weak self, weak state] in
+                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                    try? DemoSeeder.wipe(from: db)
+                    state?.refreshBriefs()
+                    self?.onboardingWindowController = nil
+                    self?.didFinishOnboarding()
+                }
+                self.onboardingWindowController = demoExitController
+                demoExitController.show()
             }
             settingsController.onBuild7DaySummaries = { [weak self] in
                 guard let self else { return }
