@@ -545,6 +545,8 @@ private struct NoiseRowButton: View {
         .padding(.vertical, 7)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
+        .help(rowExpanded ? "Collapse" : "Expand")
+        .accessibilityHint(rowExpanded ? "Collapse summary" : "Expand summary")
     }
 }
 

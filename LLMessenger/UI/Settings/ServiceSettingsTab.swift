@@ -171,7 +171,7 @@ struct ServiceSettingsTab: View {
         maintenanceStatus = "Building 7-day summary — this may take a minute…"
         await action()
         isBuildingSummaries = false
-        maintenanceStatus = "7-day summary built. New briefs will recall this context."
+        maintenanceStatus = "7-day summary built. New digests will recall this context."
     }
 
     private func runSyncContacts() async {

@@ -173,7 +173,7 @@ struct InboxView: View {
                 .foregroundStyle(Theme.textPrimary)
 
             if appState.briefs.isEmpty {
-                Text("Reading your messages — your first brief is on its way.")
+                Text("Reading your messages — your first digest is on its way.")
                     .font(Theme.sans(12.5))
                     .foregroundStyle(Theme.textTertiary)
                     .multilineTextAlignment(.center)
@@ -181,8 +181,8 @@ struct InboxView: View {
                 let total = latestBriefCardCount
                 VStack(spacing: 4) {
                     Text(total > 0
-                         ? "\(total) thread\(total == 1 ? "" : "s") in the latest brief"
-                         : "No messages in the latest brief")
+                         ? "\(total) thread\(total == 1 ? "" : "s") in the latest digest"
+                         : "No messages in the latest digest")
                         .font(Theme.sans(12.5))
                         .foregroundStyle(Theme.textTertiary)
 
@@ -229,7 +229,7 @@ private struct ReadBriefLink: View {
         Button {
             appState.selectedBriefID = briefID
         } label: {
-            Text("Read latest brief →")
+            Text("Read latest digest →")
                 .font(Theme.sans(12.5))
                 .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textSecondary)
                 .underline(isHovered)

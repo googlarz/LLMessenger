@@ -126,7 +126,7 @@ struct ChatInputView: View {
         if let target = chatViewModel.pendingTarget {
             return "Reply to \(target.displayName) on \(Theme.serviceName(target.service)) — say what you want, AI drafts it"
         }
-        return "Ask about this brief, or type @ to write to anyone"
+        return "Ask about this digest, or type @ to write to anyone"
     }
 
     private var canSend: Bool {

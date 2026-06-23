@@ -283,7 +283,7 @@ final class ChatViewModel: ObservableObject {
         } else {
             let target = normalized(action.targetName) ?? "that conversation"
             threadItems.append(.assistantResponse(id: UUID(),
-                                                   text: "I couldn't find \(target) in this brief."))
+                                                   text: "I couldn't find \(target) in this digest."))
         }
     }
 

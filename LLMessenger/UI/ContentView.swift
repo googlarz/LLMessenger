@@ -149,7 +149,7 @@ private struct NoBriefPlaceholder: View {
                 Text("Nothing open")
                     .font(Theme.display(22))
                     .foregroundStyle(Theme.textSecondary)
-                Text("Open a brief with J/K, ⌘[ / ⌘], or pick one from the inbox.")
+                Text("Open a digest with J/K, ⌘[ / ⌘], or pick one from the inbox.")
                     .font(Theme.sans(12.5))
                     .foregroundStyle(Theme.textTertiary)
                     .multilineTextAlignment(.center)
