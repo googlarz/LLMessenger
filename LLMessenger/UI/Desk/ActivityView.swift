@@ -8,22 +8,28 @@ import GRDB
 struct ActivityView: View {
     @EnvironmentObject var appState: AppState
     @State private var events: [TriageEvent] = []
+    @State private var audits: [ActionAuditRecord] = []
     @State private var expandedEventID: Int64? = nil
     @State private var displayNames: [String: String] = [:]
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
+                // What the agent actually sent for you — the "what did it do?" answer.
+                if !audits.isEmpty {
+                    sentSection
+                }
+
                 // Open commitments (if any)
                 if !appState.commitments.isEmpty {
                     commitmentsSection
                 }
 
                 // Triage events
-                if events.isEmpty && appState.commitments.isEmpty {
+                if events.isEmpty && appState.commitments.isEmpty && audits.isEmpty {
                     emptyState
                 } else if !events.isEmpty {
-                    if !appState.commitments.isEmpty {
+                    if !appState.commitments.isEmpty || !audits.isEmpty {
                         sectionHeader("Today's events")
                     }
                     ForEach(events) { event in
@@ -37,6 +43,50 @@ struct ActivityView: View {
         .background(Theme.sidebar)
         .task { await loadEvents() }
         .onChange(of: appState.briefs.count) { _ in Task { await loadEvents() } }
+    }
+
+    // MARK: - Sent-on-your-behalf section
+
+    private var sentSection: some View {
+        VStack(spacing: 0) {
+            sectionHeader("Sent on your behalf")
+            ForEach(audits, id: \.id) { audit in
+                Rule()
+                sentRow(audit)
+            }
+            Rule()
+        }
+    }
+
+    private func sentRow(_ a: ActionAuditRecord) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(timeString(a.createdAt))
+                .font(Theme.mono(11))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: 38, alignment: .leading)
+                .padding(.top, 1)
+            ServiceStamp(service: a.service, size: 16)
+            VStack(alignment: .leading, spacing: 3) {
+                Text((displayNames["\(a.service)|\(a.conversationId)"] ?? a.conversationId).uppercased())
+                    .font(Theme.mono(11, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+                Text(a.detail)
+                    .font(Theme.bodyFont)
+                    .foregroundStyle(Theme.textPrimary.opacity(0.85))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            // "Auto-sent" = the agent sent it under a delegated lane; "By you" = you approved it.
+            WireLabel(a.trigger == "delegated" ? "Auto-sent" : "By you",
+                      color: a.trigger == "delegated" ? Theme.standby : Theme.textTertiary)
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(a.trigger == "delegated" ? "Auto-sent" : "Sent by you") to \(displayNames["\(a.service)|\(a.conversationId)"] ?? a.conversationId): \(a.detail)")
     }
 
     // MARK: - Commitments section
@@ -133,25 +183,32 @@ struct ActivityView: View {
 
     private func loadEvents() async {
         let db = appState.database.dbQueue
-        let result: ([TriageEvent], [String: String]) = (try? await db.read { d in
+        let result: ([TriageEvent], [ActionAuditRecord], [String: String]) = (try? await db.read { d in
             let start = Calendar.current.startOfDay(for: Date())
             let fetched = try TriageEvent
                 .filter(Column("createdAt") >= start)
                 .order(Column("createdAt").desc)
                 .fetchAll(d)
+            let auditRows = try ActionAuditRecord
+                .filter(Column("createdAt") >= start)
+                .order(Column("createdAt").desc)
+                .fetchAll(d)
             var names: [String: String] = [:]
-            for event in fetched {
-                let key = "\(event.service)|\(event.conversationId)"
+            let pairs = fetched.map { ($0.service, $0.conversationId) }
+                + auditRows.map { ($0.service, $0.conversationId) }
+            for (service, convId) in pairs {
+                let key = "\(service)|\(convId)"
                 guard names[key] == nil else { continue }
                 let row = try Row.fetchOne(d,
                     sql: "SELECT conversationName FROM messages WHERE service = ? AND conversationId = ? AND conversationName IS NOT NULL ORDER BY timestamp DESC LIMIT 1",
-                    arguments: [event.service, event.conversationId])
+                    arguments: [service, convId])
                 if let name = row?["conversationName"] as? String { names[key] = name }
             }
-            return (fetched, names)
-        }) ?? ([], [:])
+            return (fetched, auditRows, names)
+        }) ?? ([], [], [:])
         events = result.0
-        displayNames = result.1
+        audits = result.1
+        displayNames = result.2
     }
 
     private func timeString(_ date: Date) -> String {

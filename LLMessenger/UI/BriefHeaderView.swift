@@ -136,7 +136,9 @@ struct BriefHeaderView: View {
                 ? "One thing needs you."
                 : "\(spelled(highPriorityCount)) things need you."
         }
-        if briefCount > 0 { return "Nothing urgent." }
+        // Mirror the "One thing needs you." voice — the affirming negative is its own feature
+        // for someone who lives in fear of the missed message.
+        if briefCount > 0 { return "Nothing needs you right now." }
         return "\(messageCount) new message\(messageCount == 1 ? "" : "s")."
     }
 
