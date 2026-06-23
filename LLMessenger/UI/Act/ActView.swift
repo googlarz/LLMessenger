@@ -21,16 +21,23 @@ struct ActView: View {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 0) {
+                    VStack(spacing: 0) {
                         if hasLowRisk {
                             batchBar
                         }
                         Rule()
                         ForEach(appState.agentActions) { action in
-                            ActionRow(action: action)
-                            Rule()
+                            VStack(spacing: 0) {
+                                ActionRow(action: action)
+                                Rule()
+                            }
+                            .transition(.asymmetric(
+                                insertion: .opacity,
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
                         }
                     }
+                    .animation(Theme.spring, value: appState.agentActions.map { $0.id })
                     .padding(.bottom, 24)
                 }
             }

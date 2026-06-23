@@ -3,6 +3,7 @@
 // One proposed action in the Act queue. Shows the kind badge, service, who it's
 // for, the drafted text (editable inline), the reasoning, and Approve/Edit/Skip.
 
+import AppKit
 import SwiftUI
 
 struct ActionRow: View {
@@ -74,12 +75,18 @@ struct ActionRow: View {
                     }
                     actionButton("CANCEL") { isEditing = false }
                 } else {
-                    actionButton("APPROVE") { appState.approveAction(action) }
+                    actionButton("APPROVE") {
+                        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
+                        appState.approveAction(action)
+                    }
                     actionButton("EDIT") {
                         editText = draftText
                         isEditing = true
                     }
-                    actionButton("SKIP") { appState.skipAction(action) }
+                    actionButton("SKIP") {
+                        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+                        appState.skipAction(action)
+                    }
                 }
                 Spacer()
                 Button("Customize lane") { showContextEditor = true }
