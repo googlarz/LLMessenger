@@ -13,9 +13,21 @@ actor RealtimeMonitor {
     private var pollTasks: [Task<Void, Never>] = []
     private var fsSource: DispatchSourceFileSystemObject?
     private var debounceWorkItems: [String: DispatchWorkItem] = [:]
-    private var lastSeen: [String: Date] = [:]  // conversationId → last processed date
 
     var isRunning: Bool { running }
+
+    /// Real-time firewall poll cadence for non-iMessage services (iMessage uses FSEvents and
+    /// is event-driven, so it is unaffected). Configurable via UserDefaults; default 60s. Each
+    /// tick may spawn a signal-cli/telegram subprocess, so this is the main background-CPU knob
+    /// for polled services.
+    /// ponytail: deliberately NOT coalesced into PollEngine — that polls on the ~15min brief
+    /// cadence (pollIntervalSeconds default 900), so folding triage into it would slow the
+    /// firewall to 15min. The firewall stays a separate, faster loop; raise this interval if
+    /// background CPU matters more than sub-minute urgency latency.
+    private static var pollIntervalSeconds: TimeInterval {
+        let configured = UserDefaults.standard.integer(forKey: "realtimePollIntervalSeconds")
+        return TimeInterval(configured > 0 ? configured : 60)
+    }
 
     private static let walPath = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Messages/chat.db-wal").path
@@ -109,7 +121,7 @@ actor RealtimeMonitor {
             while true {
                 guard let strongSelf = self, await strongSelf.isRunning else { return }
                 guard !UserDefaults.standard.bool(forKey: "realtimeFirewallDisabled") else { return }
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(Self.pollIntervalSeconds))
                 guard let strongSelf2 = self, await strongSelf2.isRunning else { return }
                 await strongSelf2.pollAdapter(serviceID: serviceID, adapter: adapter)
             }
@@ -118,7 +130,8 @@ actor RealtimeMonitor {
     }
 
     private func pollAdapter(serviceID: String, adapter: any MessengerAdapter) async {
-        let since = Date().addingTimeInterval(-35)
+        // Look back one full interval plus a 5s overlap so no message slips between ticks.
+        let since = Date().addingTimeInterval(-(Self.pollIntervalSeconds + 5))
         let config = FetchConfig(mode: .byTime(since: since))
         guard let result = try? await adapter.fetch(config: config) else { return }
         for conv in result.conversations {
