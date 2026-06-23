@@ -283,7 +283,8 @@ final class AppState: ObservableObject {
             let actions = (try? self.repository.fetchPendingAgentActions()) ?? []
             await MainActor.run {
                 self.agentActions = actions
-                self.actionsReadyCount = actions.count
+                // "Maybe" proposals are the user's call, not part of the ready-to-send count.
+                self.actionsReadyCount = actions.filter { !$0.isMaybe }.count
                 self.onBriefsChanged?()
                 self.evaluateDelegation()
             }
@@ -375,7 +376,9 @@ final class AppState: ObservableObject {
     /// path that arms an auto-send; the decision reads only structured action fields
     /// and user-set context — never message content.
     func evaluateDelegation() {
-        for action in agentActions where action.statusEnum == .pending {
+        // A "maybe" is the user's call and must never auto-send. (Belt-and-suspenders: maybe is
+        // only set on reply actions today, which are non-delegatable anyway.)
+        for action in agentActions where action.statusEnum == .pending && !action.isMaybe {
             guard let id = action.id, armedTimers[id] == nil else { continue }
             let ctx = fetchConversationContext(service: action.service, conversationId: action.conversationId)
             let known = isKnownRecipient(service: action.service, conversationId: action.conversationId)
@@ -650,7 +653,8 @@ final class AppState: ObservableObject {
 
     /// Batch-approves every pending low-risk action. Only touches "low" risk rows.
     func batchApproveLowRisk() {
-        for action in agentActions where action.riskEnum == .low {
+        // Never bulk-approve a "maybe" — it stays the user's individual call.
+        for action in agentActions where action.riskEnum == .low && !action.isMaybe {
             approveAction(action)
         }
     }

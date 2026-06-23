@@ -471,6 +471,13 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "commitmentId", .integer)
             }
         }
+        migrator.registerMigration("v25_agent_maybe") { db in
+            // "Maybe" surface: the agent flags a proposal it is unsure actually needs action.
+            // NOT NULL + default false so every existing row reads as a definite (non-maybe) item.
+            try db.alter(table: "agentActions") { t in
+                t.add(column: "isMaybe", .boolean).notNull().defaults(to: false)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

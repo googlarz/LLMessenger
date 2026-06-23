@@ -20,8 +20,14 @@ struct InboxView: View {
             }
     }
 
+    /// Agent proposals shown here exclude "maybe" items — those live in the persistent
+    /// ToDoStrip's Maybe bucket, so the Inbox stays the confident "ready to send" queue.
+    private var readyActions: [AgentAction] {
+        appState.agentActions.filter { !$0.isMaybe }
+    }
+
     private var hasContent: Bool {
-        !appState.agentActions.isEmpty ||
+        !readyActions.isEmpty ||
         !urgentCards.isEmpty ||
         !appState.contextSuggestions.isEmpty
     }
@@ -31,7 +37,7 @@ struct InboxView: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     // Agent actions first (most actionable)
-                    if !appState.agentActions.isEmpty {
+                    if !readyActions.isEmpty {
                         agentActionsSection
                     }
                     // Context suggestions
@@ -58,7 +64,7 @@ struct InboxView: View {
             HStack(spacing: 8) {
                 WireLabel("Ready to send", color: Theme.standby)
                 Spacer()
-                if appState.agentActions.contains(where: { $0.riskEnum == .low }) {
+                if readyActions.contains(where: { $0.riskEnum == .low }) {
                     Button("APPROVE LOW-RISK") {
                         appState.batchApproveLowRisk()
                     }
@@ -69,7 +75,7 @@ struct InboxView: View {
             .padding(.vertical, 10)
             .background(Theme.surfaceHigh.opacity(0.5))
 
-            ForEach(appState.agentActions) { action in
+            ForEach(readyActions) { action in
                 Rule()
                 ActionRow(action: action)
             }

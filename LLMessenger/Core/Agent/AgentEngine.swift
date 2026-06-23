@@ -339,8 +339,12 @@ actor AgentEngine {
 
         \(styleBlock.isEmpty ? "(no voice sample — use a neutral, casual register)" : styleBlock)
 
+        Also decide whether this message actually needs a reply from the user. Set needsReply
+        to "yes" if it clearly calls for a response, or "maybe" if it's ambiguous, optional, or
+        might not need a reply at all (a "maybe" is surfaced separately as the user's call).
+
         Respond with ONLY a JSON object (no markdown fences) with exactly these keys:
-        {"title": "<short label, max 8 words>", "draftText": "<the reply text, in the user's voice>", "reasoning": "<one sentence why this reply>", "confidence": <0.0-1.0>}
+        {"title": "<short label, max 8 words>", "draftText": "<the reply text, in the user's voice>", "reasoning": "<one sentence why this reply>", "confidence": <0.0-1.0>, "needsReply": "yes"|"maybe"}
         """
 
         let messages: [LLMMessage] = [
@@ -374,7 +378,8 @@ actor AgentEngine {
             riskLevel: risk.rawValue,
             status: AgentActionStatus.pending.rawValue,
             createdAt: Date(),
-            resolvedAt: nil
+            resolvedAt: nil,
+            isMaybe: draft.needsReply == "maybe"
         )
     }
 
@@ -385,6 +390,7 @@ actor AgentEngine {
         let draftText: String
         let reasoning: String
         let confidence: Double
+        let needsReply: String?
     }
 
     private func decodeAndValidateDraft(_ text: String) -> DraftJSON? {
@@ -398,7 +404,8 @@ actor AgentEngine {
             title: title.isEmpty ? "Reply" : title,
             draftText: draft,
             reasoning: parsed.reasoning,
-            confidence: min(max(parsed.confidence, 0), 1)
+            confidence: min(max(parsed.confidence, 0), 1),
+            needsReply: parsed.needsReply
         )
     }
 

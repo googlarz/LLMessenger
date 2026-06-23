@@ -60,17 +60,51 @@ final class DelegationPipelineTests: XCTestCase {
 
     @discardableResult
     private func insertAction(_ db: AppDatabase, kind: AgentActionKind, payload: String,
-                              confidence: Double = 0.95) throws -> AgentAction {
+                              confidence: Double = 0.95, isMaybe: Bool = false) throws -> AgentAction {
         let id: Int64 = try db.dbQueue.write { d in
             var a = AgentAction(
                 id: nil, kind: kind.rawValue, service: "signal", conversationId: "c1",
                 conversationName: "Coach", title: "Action", payload: payload, reasoning: "templated",
                 confidence: confidence, riskLevel: AgentActionRisk.low.rawValue,
-                status: AgentActionStatus.pending.rawValue, createdAt: Date(), resolvedAt: nil)
+                status: AgentActionStatus.pending.rawValue, createdAt: Date(), resolvedAt: nil,
+                isMaybe: isMaybe)
             try a.insert(d)
             return d.lastInsertedRowID
         }
         return try XCTUnwrap(BriefRepository(database: db).fetchAgentAction(id: id))
+    }
+
+    // MARK: - Maybe bucket (v25 migration + never-auto-send invariant)
+
+    func testIsMaybeRoundTripsThroughMigration() throws {
+        let db = try AppDatabase(inMemory: true)
+        let maybe = try insertAction(db, kind: .ack, payload: AgentAction.encodeReplyPayload("hm"), isMaybe: true)
+        let definite = try insertAction(db, kind: .ack, payload: AgentAction.encodeReplyPayload("yes"), isMaybe: false)
+        let repo = BriefRepository(database: db)
+        XCTAssertEqual(try repo.fetchAgentAction(id: maybe.id!)?.isMaybe, true)
+        XCTAssertEqual(try repo.fetchAgentAction(id: definite.id!)?.isMaybe, false,
+                       "the v25 column defaults to false for non-maybe rows")
+    }
+
+    func testMaybeActionIsNeverArmed() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        // Everything a normal ack needs to auto-send — but flagged maybe.
+        try seedDelegated(repo, kinds: [.ack])
+        let action = try insertAction(db, kind: .ack, payload: AgentAction.encodeReplyPayload("Got it"),
+                                      isMaybe: true)
+
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        let state = makeState(db)
+        state.adapters = ["signal": spy]
+        state.agentActions = [action]
+
+        state.evaluateDelegation()
+
+        XCTAssertEqual(try repo.fetchAgentAction(id: action.id!)?.statusEnum, .pending,
+                       "a maybe proposal is the user's call and must never arm an auto-send")
+        XCTAssertEqual(state.armedAutoSendCount, 0)
+        XCTAssertTrue(spy.sentMessages.isEmpty)
     }
 
     private func audits(_ db: AppDatabase) throws -> [ActionAuditRecord] {

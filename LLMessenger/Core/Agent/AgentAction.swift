@@ -51,6 +51,9 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
     /// P3: the commitment this follow_up was generated for. Used to dedupe one pending
     /// follow-up per commitment. nil for non-follow_up actions.
     var commitmentId: Int64? = nil
+    /// "Maybe": the agent drafted this but isn't sure the message actually needs action.
+    /// Routed to the Maybe surface ("your call") instead of the Ready queue. Default false.
+    var isMaybe: Bool = false
 
     static let databaseTableName = "agentActions"
 

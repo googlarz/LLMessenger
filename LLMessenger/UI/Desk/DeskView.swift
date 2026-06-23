@@ -17,6 +17,9 @@ struct DeskView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Persistent across every tab + brief: your open commitments, tasks, and "maybe"s.
+            ToDoStripView()
+
             tabBar
             Rule()
 
@@ -33,6 +36,9 @@ struct DeskView: View {
             .id(selectedTab)
             .transition(.opacity)
         }
+        // The strip is always on screen, so make sure its global incomplete-task list is loaded
+        // even when the brief-archive drawer (which also refreshes it) is never opened.
+        .onAppear { appState.refreshTasks() }
     }
 
     private var tabBar: some View {
