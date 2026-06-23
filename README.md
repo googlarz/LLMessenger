@@ -4,9 +4,9 @@
 
 # LLMessenger
 
-**Stop reading 200 messages. Read one brief — and let an agent handle the rest.**
+**Stop reading 200 messages. Read one digest — and let an agent handle the rest.**
 
-LLMessenger is a notification firewall *and a communications agent* for your Mac. It reads iMessage, Signal, Telegram, and Slack so you don't have to — silences the noise, interrupts you only when someone actually needs you, turns everything else into a 30-second brief, tracks who's still waiting on you, and **drafts the replies, follow-ups, and RSVPs you'd send — in your voice — and lines them up for one tap.**
+LLMessenger is a notification firewall *and a communications agent* for your Mac. It reads iMessage, Signal, Telegram, and Slack so you don't have to — silences the noise, interrupts you only when someone actually needs you, turns everything else into a 30-second digest, tracks who's still waiting on you, and **drafts the replies, follow-ups, and RSVPs you'd send — in your voice — and lines them up for one tap.**
 
 Free. Open source. On-device AI. Your messages never have to leave your Mac, and it never sends anything without your say-so.
 
@@ -62,7 +62,7 @@ The firewall protects you from what's coming *in*. **Owed Replies** protects the
 
 ![Owed Replies — who's waiting on you, ranked by who matters](docs/owed.png)
 
-It learns who matters from your own behavior, or you can just tell it: *"this is my son's basketball team — the coach posts about training and games, flag those, ignore the rest."* That per-conversation **context** then sharpens every triage decision and every brief. Conversations you mark private are never sent to a cloud model.
+It learns who matters from your own behavior, or you can just tell it: *"this is my son's basketball team — the coach posts about training and games, flag those, ignore the rest."* That per-conversation **context** then sharpens every triage decision and every digest. Conversations you mark private are never sent to a cloud model.
 
 <details>
 <summary>Light mode, too (follows your system, or set it manually)</summary>
@@ -79,7 +79,7 @@ It learns who matters from your own behavior, or you can just tell it: *"this is
    > The binary is unsigned — right-click → **Open** → **Open** on first launch (or System Settings → Privacy & Security → **Open Anyway**).
 2. **Connect your services** — iMessage is on by default. Toggle Telegram or Signal to add them inline. Grant Full Disk Access when prompted; the screen detects the grant live, no restart needed.
 3. **Choose your AI** — on macOS 26 with Apple Intelligence it auto-selects with zero config. Otherwise paste an Anthropic or OpenAI key, or point at a local Ollama instance.
-4. **Watch it sync** — LLMessenger reads your last 7 days in the background. Click the envelope in your menu bar when done → **New Brief**.
+4. **Watch it sync** — LLMessenger reads your last 7 days in the background. Click the envelope in your menu bar when done → **New Digest**.
 
 <details>
 <summary><strong>Build from source instead</strong></summary>
@@ -92,7 +92,7 @@ xcodegen generate
 open LLMessenger.xcodeproj   # ⌘R in Xcode 16+
 ```
 
-CI builds and runs all 571 tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
+CI builds and runs all tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
 
 </details>
 
@@ -102,7 +102,7 @@ CI builds and runs all 571 tests on every push. The [release workflow](.github/w
 |---|---|---|---|
 | **On-Device** (Apple Intelligence) | None — auto-selected | Free | Nothing leaves your Mac · macOS 26+ |
 | **Ollama** | `brew install ollama && ollama pull llama3.1` | Free | Nothing leaves your Mac · macOS 13+ |
-| **Anthropic Claude** | API key | Pay per use | Opt-in cloud — best brief quality |
+| **Anthropic Claude** | API key | Pay per use | Opt-in cloud — best digest quality |
 | **OpenAI** | API key | Pay per use | Opt-in cloud |
 
 Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) is a single toggle that guarantees no message content can leave your machine.
@@ -110,9 +110,9 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) i
 ## What it does
 
 **Attention protection**
-- **Notification firewall** (on by default) — routine briefs generate silently; only `REPLY NEEDED` breaks through. Held-back count surfaces in your next digest.
+- **Notification firewall** (on by default) — routine digests generate silently; only `REPLY NEEDED` breaks through. Held-back count surfaces in your next digest.
 - **Owed Replies** — a running, ranked list of people still waiting on your reply, so nothing important slips. Reply in place, snooze, or dismiss.
-- **Morning Digest** — one scheduled daily brief with everything the firewall held back, ordered by who matters to you.
+- **Morning Digest** — one scheduled daily digest with everything the firewall held back, ordered by who matters to you.
 - **Notification Center widget** — latest headline + priority counts at a glance (macOS 14+).
 
 **Acts for you**
@@ -123,15 +123,15 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) i
 - **Calendar holds** — proposes local calendar events and RSVPs from scheduling threads (EventKit, on your Mac).
 
 **Understands who matters**
-- **Per-conversation context** — tell it (or let it learn) who's a key sender, what's important, and what's noise; it sharpens every triage and brief. Teach it in plain language or accept its suggestions.
+- **Per-conversation context** — tell it (or let it learn) who's a key sender, what's important, and what's noise; it sharpens every triage and digest. Teach it in plain language or accept its suggestions.
 - **Learned suggestions** — "you always reply to Coach fast — prioritize him here?" from your own behavior, never nagging.
 - **Per-conversation privacy** — mark a conversation local-only (never touches the cloud) or never-draft. The relationship model stays entirely on your Mac.
 
-**Briefs**
+**Digests**
 - Unified inbox: iMessage, Signal, Telegram, Slack (multi-workspace).
 - Structured cards: headline, prose summary, action items, key quotes, priority.
 - **Source-grounded** — every card cites exact message IDs; quotes are validated against real messages. No hallucinated summaries.
-- Conversation memory: rolling per-conversation summaries and unresolved actions carry across brief cycles, and older briefs compress into episodic context.
+- Conversation memory: rolling per-conversation summaries and unresolved actions carry across digest cycles, and older digests compress into episodic context.
 - Your own replies are captured as context, so the AI knows when you've already responded.
 
 **Composing**
@@ -238,7 +238,7 @@ On the roadmap, pending a viable local API. The adapter protocol is designed for
 <details>
 <summary><strong>How accurate are the summaries?</strong></summary>
 
-Every card must cite real message IDs and quotes are validated against the actual messages — fabricated quotes are rejected before a brief is stored. Quality depends on the backend; Claude produces the strongest briefs, on-device models the most private ones.
+Every card must cite real message IDs and quotes are validated against the actual messages — fabricated quotes are rejected before a digest is stored. Quality depends on the backend; Claude produces the strongest digests, on-device models the most private ones.
 </details>
 
 <details>
@@ -259,11 +259,11 @@ Code signing requires a paid Apple Developer account, and this is a free communi
 
 PRs and issues welcome — this project is free and stays free.
 
-The highest-impact contribution is a **new service adapter**: implement the 6-method [`MessengerAdapter`](LLMessenger/Core/Adapters/MessengerAdapter.swift) protocol and your service plugs into polling, briefs, the firewall, and the composer automatically. [`SignalCLIAdapter.swift`](LLMessenger/Core/Adapters/SignalCLIAdapter.swift) is a good reference implementation.
+The highest-impact contribution is a **new service adapter**: implement the 6-method [`MessengerAdapter`](LLMessenger/Core/Adapters/MessengerAdapter.swift) protocol and your service plugs into polling, digests, the firewall, and the composer automatically. [`SignalCLIAdapter.swift`](LLMessenger/Core/Adapters/SignalCLIAdapter.swift) is a good reference implementation.
 
 ```bash
 xcodegen generate                      # project.yml is the source of truth
-xcodebuild -scheme LLMessenger test    # 571 tests — keep them green
+xcodebuild -scheme LLMessenger test    # keep them green
 ```
 
 ## Roadmap
@@ -273,7 +273,26 @@ xcodebuild -scheme LLMessenger test    # 571 tests — keep them green
 - [ ] WhatsApp adapter (pending viable local API)
 
 <details>
-<summary>Shipped (v1.4 – v2.1)</summary>
+<summary>Shipped (v1.4 – v2.2)</summary>
+
+**v2.2.1** — polish + accessibility pass:
+- ✅ **"Digest" rename** — all user-visible copy now says "digest" consistently (was mixed "brief" / "digest")
+- ✅ **Always-visible delegation kill switch** — a PAUSE/RESUME banner appears in the Desk sidebar whenever any conversation has auto-send configured; no more hunting through the menu bar
+- ✅ **Confirmation dialogs** on destructive actions: delete rule, remove Slack workspace
+- ✅ **Friendly error messages** — all 20+ error assignment sites now route through `friendly()`, mapping common failures (network, Ollama, config) to plain-English one-liners
+- ✅ **Accessibility**: labels on all unlabelled settings toggles and icon buttons; expand/collapse hints on digest entry rows and triage event rows; triage event rows declared as buttons for VoiceOver
+
+**v2.2 "Polish"** — quality-of-life and trust signals:
+- ✅ Plain-language onboarding for non-technical users (R1/R7)
+- ✅ Demo morphs into real account setup instead of wiping (R2)
+- ✅ Conservative/additive framing for delegation throughout onboarding and context editor
+- ✅ Card recency timestamps + "why NEEDS YOU" micro-line on urgent inbox cards
+- ✅ Action sweep-off animation, haptic feedback on Approve/Skip, friendly error messages
+- ✅ Cmd-F focuses search, local-only AI banner, reset-prompt confirmation
+- ✅ Visible "sent on your behalf" audit log in Activity tab
+- ✅ Trust/safety copy visible on first run (local-first promise)
+- ✅ WCAG-AA contrast pass; reduce-motion support
+- ✅ Persistent To-Do strip + "Maybe" bucket in Desk sidebar
 
 **v2.1 "Act"** — the app stops being a reader and becomes an agent:
 - ✅ **Action queue** — the agent drafts replies/follow-ups/RSVPs in your voice for one-tap Approve / Edit / Skip
