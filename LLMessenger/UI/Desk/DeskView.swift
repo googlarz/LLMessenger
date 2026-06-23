@@ -17,6 +17,10 @@ struct DeskView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if appState.hasDelegatedLanes {
+                DelegationKillSwitchBanner()
+                Rule()
+            }
             // Persistent across every tab + brief: your open commitments, tasks, and "maybe"s.
             ToDoStripView()
 
@@ -115,5 +119,34 @@ private struct DeskTabButton: View {
         .keyboardShortcut(keyEquivalent, modifiers: .command)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Delegation kill switch banner
+
+/// Always-visible safety bar when at least one conversation has auto-send delegation.
+/// Lets the user pause all auto-sends in one tap without hunting through the menu bar.
+private struct DelegationKillSwitchBanner: View {
+    @AppStorage(AgentDelegation.killSwitchKey) private var disabled = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(disabled ? Theme.textTertiary : Theme.standby)
+                .frame(width: 6, height: 6)
+            Text(disabled ? "Auto-send paused" : "Auto-send active")
+                .font(Theme.mono(10.5, weight: .semibold))
+                .tracking(0.7)
+                .foregroundStyle(disabled ? Theme.textTertiary : Theme.textSecondary)
+            Spacer(minLength: 0)
+            Button(disabled ? "RESUME" : "PAUSE") { disabled.toggle() }
+                .buttonStyle(WireActionStyle(tint: disabled ? Theme.standby : Theme.textSecondary))
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 8)
+        .background(disabled ? Color.clear : Theme.standby.opacity(0.06))
+        .animation(Theme.quick, value: disabled)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(disabled ? "Auto-send paused. Tap to resume." : "Auto-send active. Tap to pause.")
     }
 }
