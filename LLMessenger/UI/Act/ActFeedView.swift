@@ -120,7 +120,13 @@ struct ActFeedView: View {
                 feedContent
             }
         }
-        // Keyboard navigation — J/K move, Return = approve, S = skip, E = edit
+        .onAppear {
+            // Auto-select first item so keyboard nav is immediately active
+            if selectedIndex == nil && !items.isEmpty {
+                selectedIndex = 0
+            }
+        }
+        // Keyboard navigation — J/K move, Return = approve, S = skip, ⌘Z = undo staged
         .background(
             Group {
                 Button("") { moveSelection(by: 1) }
@@ -131,11 +137,13 @@ struct ActFeedView: View {
                     .keyboardShortcut(.return, modifiers: [])
                 Button("") { skipSelected() }
                     .keyboardShortcut("s", modifiers: [])
+                Button("") { undoLastStaged() }
+                    .keyboardShortcut("z", modifiers: .command)
             }
             .opacity(0)
         )
         .onChange(of: items.count) { newCount in
-            // Clamp selection when items shrink
+            // Clamp selection when items shrink; preserve as much as possible
             if let idx = selectedIndex, idx >= newCount {
                 selectedIndex = newCount > 0 ? newCount - 1 : nil
             }
@@ -148,30 +156,39 @@ struct ActFeedView: View {
         VStack(spacing: 0) {
             safetyNote
             Rule()
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    if appState.agentActions.contains(where: { $0.riskEnum == .low && !$0.isMaybe }) {
-                        batchBar
-                        Rule()
-                    }
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        VStack(spacing: 0) {
-                            ActCardRow(
-                                item: item,
-                                isSelected: selectedIndex == index,
-                                onTap: { selectedIndex = index },
-                                onResolved: { resolvedInSession += 1 }
-                            )
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if appState.agentActions.contains(where: { $0.riskEnum == .low && !$0.isMaybe }) {
+                            batchBar
                             Rule()
                         }
-                        .transition(.asymmetric(
-                            insertion: .opacity,
-                            removal: .move(edge: .trailing).combined(with: .opacity)
-                        ))
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            VStack(spacing: 0) {
+                                ActCardRow(
+                                    item: item,
+                                    isSelected: selectedIndex == index,
+                                    onTap: { selectedIndex = index },
+                                    onResolved: { resolvedInSession += 1 }
+                                )
+                                .id(item.id)
+                                Rule()
+                            }
+                            .transition(.asymmetric(
+                                insertion: .opacity,
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
+                        }
                     }
+                    .animation(Theme.spring, value: items.map { $0.id })
+                    .padding(.bottom, 24)
                 }
-                .animation(Theme.spring, value: items.map { $0.id })
-                .padding(.bottom, 24)
+                .onChange(of: selectedIndex, perform: { newIdx in
+                    guard let idx = newIdx, idx < items.count else { return }
+                    withAnimation(Theme.quick) {
+                        proxy.scrollTo(items[idx].id, anchor: .center)
+                    }
+                })
             }
         }
     }
@@ -278,6 +295,15 @@ struct ActFeedView: View {
             resolvedInSession += 1
         }
     }
+
+    private func undoLastStaged() {
+        // Find the most recently scheduled (staged) action and cancel it
+        if let staged = appState.agentActions.first(where: { $0.statusEnum == .scheduled }) {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+            appState.undoAutoSend(staged)
+            resolvedInSession = max(0, resolvedInSession - 1)
+        }
+    }
 }
 
 // MARK: - Card row
@@ -349,9 +375,13 @@ private struct ActCardRow: View {
                 .lineLimit(1)
             Spacer(minLength: 4)
             if item.isStale {
-                Text("going stale")
-                    .font(Theme.mono(9.5, weight: .semibold))
-                    .foregroundStyle(Theme.signal)
+                HStack(spacing: 3) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 8))
+                    Text("\(item.ageHours / 24)d waiting")
+                        .font(Theme.mono(9.5, weight: .semibold))
+                }
+                .foregroundStyle(Theme.signal)
             } else {
                 Text(relativeTime)
                     .font(Theme.mono(10))
@@ -500,23 +530,43 @@ private struct ActCardRow: View {
     }
 }
 
-// MARK: - Scheduled countdown (reused from ActionRow for delegation countdown)
+// MARK: - Scheduled countdown with visual progress bar
 
 private struct ScheduledCountdownBar: View {
     let action: AgentAction
     let onUndo: () -> Void
 
+    private static let window: TimeInterval = 5
+
     @State private var now = Date()
-    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    // 0.1s tick for smooth progress animation
+    private let ticker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text("SENDING IN \(secondsRemaining)s")
-                .font(Theme.mono(10.5, weight: .semibold))
-                .tracking(0.7)
-                .foregroundStyle(Theme.signal)
-            Button("UNDO", action: onUndo)
-                .buttonStyle(WireActionStyle())
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text("SENDING IN \(secondsRemaining)s")
+                    .font(Theme.mono(10.5, weight: .semibold))
+                    .tracking(0.7)
+                    .foregroundStyle(Theme.signal)
+                    .monospacedDigit()
+                Button("UNDO", action: onUndo)
+                    .buttonStyle(WireActionStyle())
+                    .accessibilityLabel("Undo — cancel this send")
+            }
+            // Draining progress bar: full → empty as time ticks down
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Theme.surfaceHigh)
+                        .frame(height: 2)
+                    Rectangle()
+                        .fill(Theme.standby.opacity(0.8))
+                        .frame(width: geo.size.width * CGFloat(progress), height: 2)
+                        .animation(.linear(duration: 0.1), value: progress)
+                }
+            }
+            .frame(height: 2)
         }
         .onReceive(ticker) { now = $0 }
     }
@@ -524,5 +574,12 @@ private struct ScheduledCountdownBar: View {
     private var secondsRemaining: Int {
         guard let fireAt = action.scheduledAt else { return 0 }
         return max(0, Int(fireAt.timeIntervalSince(now).rounded(.up)))
+    }
+
+    // 1.0 when just staged, drains toward 0
+    private var progress: Double {
+        guard let fireAt = action.scheduledAt else { return 0 }
+        let remaining = fireAt.timeIntervalSince(now)
+        return max(0, min(1, remaining / Self.window))
     }
 }
