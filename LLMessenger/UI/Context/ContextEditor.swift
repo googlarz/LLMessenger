@@ -118,8 +118,8 @@ struct ContextEditor: View {
                 Rule()
 
                 VStack(alignment: .leading, spacing: 10) {
-                    WireLabel("Delegation")
-                    Text("LLMessenger will send these without asking — only for this conversation.")
+                    WireLabel("Auto-send (optional)")
+                    Text("These low-risk action types will be sent automatically for this conversation, after a 30-second undo window. Everything else still requires your approval.")
                         .font(Theme.sans(11))
                         .foregroundStyle(Theme.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)

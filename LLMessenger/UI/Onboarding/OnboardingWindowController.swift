@@ -85,9 +85,10 @@ private struct OnboardingView: View {
     private let tips = [
         "Your first daily digest will be ready in a few minutes.",
         "Open the menu bar icon any time — it updates whenever new messages arrive.",
-        "LLMessenger spots what needs a reply and drafts one in your voice.",
+        "LLMessenger proposes replies in your voice — you approve each one before anything is sent.",
         "The Desk shows everything that needs your attention today.",
-        "LLMessenger learns your tone and the people you talk to over time."
+        "LLMessenger learns your tone and the people you talk to over time.",
+        "The Act tab queues draft replies and follow-ups. Approve, edit, or skip — you're always in control."
     ]
 
     private var repo: SettingsRepository { SettingsRepository(database: database) }
@@ -406,7 +407,12 @@ private struct OnboardingView: View {
                 whyCard(
                     icon: "person.2.fill",
                     title: "Sync your contacts",
-                    body: "We match phone numbers to names so briefs say \"Mom\" and \"Anna\" instead of \"+49 123 456 7890\"."
+                    body: "We match phone numbers to names so digests say \"Mom\" and \"Anna\" instead of \"+49 123 456 7890\"."
+                )
+                whyCard(
+                    icon: "checkmark.square",
+                    title: "You approve before anything is sent",
+                    body: "The Act tab queues proposed replies and follow-ups. Nothing goes out until you tap Approve — or edit it first."
                 )
             }
 
