@@ -61,15 +61,22 @@ struct InboxView: View {
 
     private var agentActionsSection: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                WireLabel("Ready to send", color: Theme.standby)
-                Spacer()
-                if readyActions.contains(where: { $0.riskEnum == .low }) {
-                    Button("APPROVE LOW-RISK") {
-                        appState.batchApproveLowRisk()
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    WireLabel("Ready for you to send", color: Theme.standby)
+                    Spacer()
+                    if readyActions.contains(where: { $0.riskEnum == .low }) {
+                        Button("APPROVE LOW-RISK") {
+                            appState.batchApproveLowRisk()
+                        }
+                        .buttonStyle(WireActionStyle())
                     }
-                    .buttonStyle(WireActionStyle())
                 }
+                // Every persona test flagged the fear that drafts send themselves. Say plainly,
+                // on the surface itself, that they don't.
+                Text("Drafted for you — nothing sends until you approve it.")
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.textTertiary)
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.vertical, 10)

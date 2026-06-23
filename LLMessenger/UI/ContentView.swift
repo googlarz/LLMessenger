@@ -195,6 +195,18 @@ private struct FirstBriefPreparingView: View {
                 .foregroundStyle(Theme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 26)
+
+            // The moment a user decides whether to trust this with their messages — say the
+            // local-first promise here, not just in PRIVACY.md.
+            HStack(spacing: 6) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Theme.ok)
+                Text("Everything stays on this Mac. Nothing is sent without your approval.")
+                    .font(Theme.sans(11.5))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.top, 12)
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.top, 30)
