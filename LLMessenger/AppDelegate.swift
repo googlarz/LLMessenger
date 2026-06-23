@@ -318,6 +318,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menuBarController?.setOwedCount(self.appState?.owedCount ?? 0)
                 self.menuBarController?.setActionsReady(self.appState?.actionsReadyCount ?? 0)
                 self.menuBarController?.setArmedAutoSendCount(self.appState?.armedAutoSendCount ?? 0)
+                self.menuBarController?.setHasDelegatedLanes(self.appState?.hasDelegatedLanes ?? false)
             }
             menuBar.onUndoAutoSends = { [weak self] in self?.appState?.undoAllAutoSends() }
 

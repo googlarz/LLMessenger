@@ -64,6 +64,7 @@ final class MenuBarController {
         didSet { proxy.onUndoAutoSends = onUndoAutoSends }
     }
     private var armedAutoSendCount: Int = 0
+    private var hasDelegatedLanes: Bool = false
     private var signalHealthWarning: String?
     private var availableUpdate: UpdateChecker.Update?
 
@@ -98,6 +99,11 @@ final class MenuBarController {
     func setArmedAutoSendCount(_ count: Int) {
         armedAutoSendCount = count
         updateButton()
+        rebuildMenu()
+    }
+
+    func setHasDelegatedLanes(_ value: Bool) {
+        hasDelegatedLanes = value
         rebuildMenu()
     }
 
@@ -292,13 +298,11 @@ final class MenuBarController {
             menu.addItem(restartItem)
         }
 
-        // P2: armed delegated auto-sends + kill switch.
-        // Only surface this section when delegation is actually active — armed
-        // sends pending, or the kill switch has been explicitly turned on. A
-        // fresh user with no delegation configured should not see "Pause auto-send"
-        // implying messages are being sent on their behalf.
+        // P2/R8: armed auto-sends + kill switch.
+        // Show whenever any lane is delegated — so the user always has access to
+        // the Pause control, not only when a send is actively armed.
         let disabled = UserDefaults.standard.bool(forKey: AgentDelegation.killSwitchKey)
-        let showDelegationSection = armedAutoSendCount > 0 || disabled
+        let showDelegationSection = armedAutoSendCount > 0 || disabled || hasDelegatedLanes
         if showDelegationSection {
             menu.addItem(.separator())
             if armedAutoSendCount > 0 {

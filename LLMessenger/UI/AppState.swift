@@ -131,6 +131,9 @@ final class AppState: ObservableObject {
     /// Pending agent-proposed actions (the Act queue) and their count.
     @Published var agentActions: [AgentAction] = []
     @Published var actionsReadyCount: Int = 0
+    /// True when at least one conversation has delegation configured.
+    /// Drives the always-visible kill switch in the menu bar.
+    @Published var hasDelegatedLanes: Bool = false
 
     /// Open commitments (the ledger) and their count.
     @Published var commitments: [Commitment] = []
@@ -281,10 +284,13 @@ final class AppState: ObservableObject {
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let actions = (try? self.repository.fetchPendingAgentActions()) ?? []
+            let contexts = (try? self.repository.fetchAllConversationContexts()) ?? []
+            let delegated = contexts.contains { !$0.delegationKinds.isEmpty }
             await MainActor.run {
                 self.agentActions = actions
                 // "Maybe" proposals are the user's call, not part of the ready-to-send count.
                 self.actionsReadyCount = actions.filter { !$0.isMaybe }.count
+                self.hasDelegatedLanes = delegated
                 self.onBriefsChanged?()
                 self.evaluateDelegation()
             }
