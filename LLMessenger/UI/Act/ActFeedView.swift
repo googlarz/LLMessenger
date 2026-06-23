@@ -110,6 +110,7 @@ struct ActFeedView: View {
 
     @State private var selectedIndex: Int? = nil
     @State private var resolvedInSession = 0
+    @State private var editingItemId: String? = nil
 
     private var items: [ActItem] {
         let all: [ActItem] = appState.agentActions.filter { !$0.isMaybe }.map { .agentAction($0) }
@@ -151,7 +152,7 @@ struct ActFeedView: View {
                 selectedIndex = 0
             }
         }
-        // Keyboard navigation — J/K move, Return = approve, S = skip, ⌘Z = undo staged
+        // Keyboard navigation — J/K move, Return = approve, S = skip, E = edit, ⌘Z = undo staged
         .background(
             Group {
                 Button("") { moveSelection(by: 1) }
@@ -162,6 +163,8 @@ struct ActFeedView: View {
                     .keyboardShortcut(.return, modifiers: [])
                 Button("") { skipSelected() }
                     .keyboardShortcut("s", modifiers: [])
+                Button("") { editSelected() }
+                    .keyboardShortcut("e", modifiers: [])
                 Button("") { undoLastStaged() }
                     .keyboardShortcut("z", modifiers: .command)
             }
@@ -189,10 +192,15 @@ struct ActFeedView: View {
                             Rule()
                         }
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            let isEditingThisCard = Binding<Bool>(
+                                get: { editingItemId == item.id },
+                                set: { if $0 { editingItemId = item.id } else if editingItemId == item.id { editingItemId = nil } }
+                            )
                             VStack(spacing: 0) {
                                 ActCardRow(
                                     item: item,
                                     isSelected: selectedIndex == index,
+                                    isEditingExternal: isEditingThisCard,
                                     onTap: { selectedIndex = index },
                                     onResolved: { resolvedInSession += 1 }
                                 )
@@ -321,6 +329,15 @@ struct ActFeedView: View {
         }
     }
 
+    // E key — enter inline edit mode on the selected AgentAction card
+    private func editSelected() {
+        guard let idx = selectedIndex, idx < items.count else { return }
+        let item = items[idx]
+        if case .agentAction = item {
+            editingItemId = (editingItemId == item.id) ? nil : item.id
+        }
+    }
+
     private func undoLastStaged() {
         // Find the most recently scheduled (staged) action and cancel it
         if let staged = appState.agentActions.first(where: { $0.statusEnum == .scheduled }) {
@@ -339,6 +356,7 @@ private struct ActCardRow: View {
 
     let item: ActItem
     let isSelected: Bool
+    @Binding var isEditingExternal: Bool
     let onTap: () -> Void
     var onResolved: (() -> Void)? = nil
 
@@ -391,6 +409,16 @@ private struct ActCardRow: View {
         .animation(Theme.quick, value: isSelected)
         .onHover { isHovered = $0 }
         .onTapGesture(perform: onTap)
+        // Sync the external "E key pressed" signal into the local edit state
+        .onChange(of: isEditingExternal, perform: { newVal in
+            if newVal && !isEditing {
+                if case .agentAction(let a) = item {
+                    editText = a.replyPayload?.draftText ?? a.title
+                    isEditing = true
+                }
+                isEditingExternal = false   // consume signal
+            }
+        })
         .sheet(isPresented: $showContextEditor) {
             contextEditorSheet
         }

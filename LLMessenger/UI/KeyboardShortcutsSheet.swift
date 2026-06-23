@@ -35,8 +35,10 @@ struct KeyboardShortcutsSheet: View {
             ("⌘2",             "Digest tab"),
             ("⌘3",             "Activity tab"),
             ("J / K",          "Next / previous action"),
-            ("↩ Return",       "Approve selected"),
+            ("↩ Return",       "Approve selected (5s undo)"),
             ("S",              "Skip selected"),
+            ("E",              "Edit selected reply"),
+            ("⌘Z",             "Undo staged send"),
         ]),
         ("Digest", [
             ("H",              "File the first unhandled card"),

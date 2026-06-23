@@ -540,6 +540,15 @@ final class AppState: ObservableObject {
             await self?.approveActionByID(id)
         }
         reloadAgentActions()
+        // Announce to VoiceOver so the user hears the 5-second undo window.
+        NSAccessibility.post(
+            element: NSApp,
+            notification: NSAccessibility.Notification(rawValue: "AXAnnouncementRequested"),
+            userInfo: [
+                .announcement: "Sending \(action.conversationName) reply in 5 seconds. Command Z to cancel." as NSString,
+                .priority: NSAccessibilityPriorityLevel.high.rawValue as NSNumber
+            ]
+        )
     }
 
     @MainActor
