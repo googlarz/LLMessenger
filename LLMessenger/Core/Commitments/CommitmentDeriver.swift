@@ -61,14 +61,21 @@ struct CommitmentDeriver {
             // local_only: only mine on a local model.
             if ctx?.privacyOverride == "local_only", !llmClient.isLocal { continue }
 
+            // Advance the watermark only after a SUCCESSFUL extraction. A thrown LLM error
+            // must leave the batch unscanned so the next run retries it instead of
+            // silently skipping these messages forever.
+            let extracted: [ExtractedCommitment]
+            do {
+                extracted = try await extract(
+                    messages: convMessages,
+                    service: service,
+                    conversationName: conversationName,
+                    llmClient: llmClient,
+                    llmModel: llmModel)
+            } catch {
+                continue
+            }
             watermarks[convKey] = latestTimestamp
-
-            let extracted = await extract(
-                messages: convMessages,
-                service: service,
-                conversationName: conversationName,
-                llmClient: llmClient,
-                llmModel: llmModel)
             guard !extracted.isEmpty else { continue }
 
             let existing = (try? repository.fetchOpenCommitments(
@@ -116,7 +123,7 @@ struct CommitmentDeriver {
                          service: String,
                          conversationName: String,
                          llmClient: any LLMClient,
-                         llmModel: String) async -> [ExtractedCommitment] {
+                         llmModel: String) async throws -> [ExtractedCommitment] {
         // Cap the transcript so a long thread can't blow the prompt budget.
         let recent = messages.suffix(40)
         let transcript = recent.map { msg in
@@ -148,13 +155,8 @@ struct CommitmentDeriver {
             LLMMessage(role: .user, content: userContent)
         ]
 
-        let response: LLMResponse
-        do {
-            response = try await llmClient.complete(model: llmModel, messages: llmMessages, maxTokens: 500)
-        } catch {
-            return []
-        }
-
+        // Let a network/LLM error propagate so the caller skips advancing the watermark.
+        let response = try await llmClient.complete(model: llmModel, messages: llmMessages, maxTokens: 500)
         return decodeAndValidate(response.text)
     }
 
@@ -217,16 +219,24 @@ struct CommitmentDeriver {
         guard !lower.isEmpty else { return nil }
         let startOfToday = calendar.startOfDay(for: now)
 
-        if lower.contains("today") { return startOfToday }
+        // Day-granularity hints carry no clock time, so treat the deadline as the END of
+        // the target day (its next midnight). Otherwise a commitment due "today" parses to
+        // this morning's midnight and is already overdue the instant it's derived, firing a
+        // premature "sorry for the delay" follow-up.
+        func endOfDay(_ dayStart: Date) -> Date? { calendar.date(byAdding: .day, value: 1, to: dayStart) }
+
+        if lower.contains("today") { return endOfDay(startOfToday) }
         if lower.contains("tomorrow") {
-            return calendar.date(byAdding: .day, value: 1, to: startOfToday)
+            guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: startOfToday) else { return nil }
+            return endOfDay(tomorrow)
         }
 
         for (name, weekday) in weekdays where lower.contains(name) {
             let todayWeekday = calendar.component(.weekday, from: startOfToday)
             var delta = weekday - todayWeekday
             if delta <= 0 { delta += 7 }   // always the next occurrence
-            return calendar.date(byAdding: .day, value: delta, to: startOfToday)
+            guard let target = calendar.date(byAdding: .day, value: delta, to: startOfToday) else { return nil }
+            return endOfDay(target)
         }
         return nil
     }

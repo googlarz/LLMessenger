@@ -73,7 +73,7 @@ actor AgentEngine {
             return
         }
 
-        let existingPending = (try? pendingActionKeys()) ?? []
+        let existingPending = (try? pendingActionKeys(kinds: [.reply])) ?? []
         var produced = false
 
         for reply in owed {
@@ -187,7 +187,9 @@ actor AgentEngine {
         var byKey: [String: [Message]] = [:]
         for msg in inbound { byKey["\(msg.service)|\(msg.conversationId)", default: []].append(msg) }
 
-        let existingKeys = (try? pendingActionKeys()) ?? []
+        // Dedupe against pending CALENDAR actions only — a pending reply must not hide a
+        // schedulable invite in the same conversation.
+        let existingKeys = (try? pendingActionKeys(kinds: [.calendarHold, .rsvp])) ?? []
         var produced = false
 
         let calWatermarkKey = "calendarProposalWatermarks"
@@ -201,14 +203,23 @@ actor AgentEngine {
             // Skip if no new messages since last calendar scan for this conversation.
             let latestTimestamp = msgs.map { $0.timestamp.timeIntervalSince1970 }.max() ?? 0
             if let seen = calWatermarks[key], seen >= latestTimestamp { continue }
-            calWatermarks[key] = latestTimestamp
 
             let ctx = (try? repository.fetchConversationContext(
                 service: last.service, conversationId: last.conversationId)) ?? nil
             if ctx?.privacyOverride == "never_draft" { continue }
             if ctx?.privacyOverride == "local_only", !llmClient.isLocal { continue }
 
-            for action in await detectSchedule(messages: msgs, last: last) {
+            // Advance the watermark only after a SUCCESSFUL detection call. A thrown LLM
+            // error must leave the batch unscanned so the next tick retries it instead
+            // of permanently skipping these messages.
+            let actions: [AgentAction]
+            do {
+                actions = try await detectSchedule(messages: msgs, last: last)
+            } catch {
+                continue
+            }
+            calWatermarks[key] = latestTimestamp
+            for action in actions {
                 if (try? persist(action)) != nil { produced = true }
             }
         }
@@ -216,7 +227,7 @@ actor AgentEngine {
         return produced
     }
 
-    private func detectSchedule(messages: [Message], last: Message) async -> [AgentAction] {
+    private func detectSchedule(messages: [Message], last: Message) async throws -> [AgentAction] {
         let recent = messages.suffix(30)
         let transcript = recent.map { "\($0.sender): \($0.text)" }.joined(separator: "\n")
         let conversationName = last.conversationName ?? last.conversationId
@@ -244,12 +255,8 @@ actor AgentEngine {
             LLMMessage(role: .user, content: userContent)
         ]
 
-        let response: LLMResponse
-        do {
-            response = try await llmClient.complete(model: llmModel, messages: llmMessages, maxTokens: 400)
-        } catch {
-            return []
-        }
+        // Let a network/LLM error propagate so the caller skips advancing the watermark.
+        let response = try await llmClient.complete(model: llmModel, messages: llmMessages, maxTokens: 400)
 
         let items = Self.decodeSchedule(response.text)
         return items.compactMap { item in
@@ -423,12 +430,16 @@ actor AgentEngine {
 
     // MARK: - Persistence
 
-    private func pendingActionKeys() throws -> Set<String> {
-        try db.dbQueue.read { grdb in
+    /// Conversation keys ("service|conversationId") that have a pending action of one
+    /// of the given kinds. Kind-scoped so a pending reply doesn't suppress a calendar
+    /// proposal in the same conversation (and vice-versa) — they are independent.
+    private func pendingActionKeys(kinds: Set<AgentActionKind>) throws -> Set<String> {
+        let raw = Set(kinds.map { $0.rawValue })
+        return try db.dbQueue.read { grdb in
             let rows = try AgentAction
                 .filter(Column("status") == AgentActionStatus.pending.rawValue)
                 .fetchAll(grdb)
-            return Set(rows.map { "\($0.service)|\($0.conversationId)" })
+            return Set(rows.filter { raw.contains($0.kind) }.map { "\($0.service)|\($0.conversationId)" })
         }
     }
 

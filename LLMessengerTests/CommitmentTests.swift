@@ -155,14 +155,30 @@ final class CommitmentTests: XCTestCase {
         cal.timeZone = TimeZone(identifier: "UTC")!
         // A fixed Wednesday: 2026-06-10 is a Wednesday.
         let wed = cal.date(from: DateComponents(year: 2026, month: 6, day: 10, hour: 9))!
-        XCTAssertEqual(CommitmentDeriver.parseDueDate("today", now: wed, calendar: cal),
-                       cal.startOfDay(for: wed))
-        XCTAssertEqual(CommitmentDeriver.parseDueDate("tomorrow", now: wed, calendar: cal),
-                       cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: wed)))
-        // "Friday" from Wednesday → +2 days.
-        XCTAssertEqual(CommitmentDeriver.parseDueDate("by Friday", now: wed, calendar: cal),
-                       cal.date(byAdding: .day, value: 2, to: cal.startOfDay(for: wed)))
+        let startOfToday = cal.startOfDay(for: wed)
+        func days(_ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: startOfToday)! }
+        // Day-granularity hints resolve to the END of the target day (next midnight) so a
+        // commitment due "today" is not already overdue the instant it is derived.
+        XCTAssertEqual(CommitmentDeriver.parseDueDate("today", now: wed, calendar: cal), days(1))
+        XCTAssertEqual(CommitmentDeriver.parseDueDate("tomorrow", now: wed, calendar: cal), days(2))
+        // "Friday" from Wednesday → end of Friday (+3 days from today's midnight).
+        XCTAssertEqual(CommitmentDeriver.parseDueDate("by Friday", now: wed, calendar: cal), days(3))
         XCTAssertNil(CommitmentDeriver.parseDueDate("soonish", now: wed, calendar: cal))
+    }
+
+    func testTodayCommitmentNotDueAtDerivation() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        // Mid-afternoon: with start-of-day parsing this would already be overdue.
+        let wed = cal.date(from: DateComponents(year: 2026, month: 6, day: 10, hour: 15))!
+        let due = CommitmentDeriver.parseDueDate("today", now: wed, calendar: cal)
+        XCTAssertNotNil(due)
+        let c = Commitment(id: 1, direction: CommitmentDirection.iOwe.rawValue,
+                           service: "signal", conversationId: "c1", conversationName: "C",
+                           what: "send the deck", dueAt: due, evidenceMessageId: nil,
+                           status: CommitmentStatus.open.rawValue, createdAt: wed)
+        XCTAssertFalse(AgentEngine.isDue(c, now: wed),
+                       "a commitment due 'today' must not be overdue the moment it is derived")
     }
 }
 

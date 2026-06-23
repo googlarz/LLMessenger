@@ -324,6 +324,28 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// When a follow_up action is sent, resolve the commitment it was generated for so the
+    /// agent stops re-proposing the same nudge every tick. `i_owe` → fulfilled (you delivered
+    /// it); `they_owe` → push the due date out so we don't immediately re-chase. No-op for
+    /// actions without a commitmentId. Without this, the action goes `.done`, the open
+    /// commitment is still due, and the next cycle queues another follow-up.
+    func resolveCommitmentForCompletedAction(_ action: AgentAction) {
+        guard let cid = action.commitmentId,
+              let commitment = try? repository.fetchCommitment(id: cid) else { return }
+        do {
+            switch commitment.directionEnum {
+            case .iOwe:
+                try repository.updateCommitmentStatus(id: cid, status: .fulfilled)
+            case .theyOwe, .none:
+                let next = Date().addingTimeInterval(AgentEngine.staleCommitmentDays * 86400)
+                try repository.bumpCommitmentDue(id: cid, to: next)
+            }
+            reloadCommitments()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
     /// Proposes a follow_up for a due commitment on demand (the "Draft follow-up"
     /// button) and surfaces it in the Act queue. Reuses the engine's pure builder.
     func draftFollowUp(for commitment: Commitment) {
@@ -406,17 +428,40 @@ final class AppState: ObservableObject {
             refreshArmedCount()
             return
         }
-        let draftText = action.replyPayload?.draftText ?? action.payload
+        // Re-validate immediately before sending. The kill switch, delegation settings, or
+        // privacy override may have changed during the 30s undo window — re-running the
+        // single decide() gate ensures nothing fires that is no longer authorized. On a
+        // failed re-check, revert to pending (manual approval) rather than dropping it.
+        let ctx = fetchConversationContext(service: action.service, conversationId: action.conversationId)
+        let known = isKnownRecipient(service: action.service, conversationId: action.conversationId)
+        let decision = AgentDelegation.decide(
+            action: action, context: ctx, isKnownRecipient: known, clientIsLocal: llmClient.isLocal)
+        guard decision.autoSend else {
+            try? repository.disarmAgentAction(id: actionID)
+            reloadAgentActions()
+            return
+        }
+        // Resolve the message text by action kind. An rsvp's payload is a CalendarPayload
+        // object, NOT a message — blindly falling back to the raw payload would transmit
+        // JSON. This mirrors approveRSVP's replyText resolution.
+        let sendText: String
+        switch action.kindEnum {
+        case .rsvp:
+            sendText = action.calendarPayload?.replyText ?? "Yes, that works for me."
+        case .ack, .reply, .followUp, .calendarHold, .none:
+            sendText = action.replyPayload?.draftText ?? action.payload
+        }
         do {
-            try await adapter.send(conversationID: action.conversationId, text: draftText)
+            try await adapter.send(conversationID: action.conversationId, text: sendText)
             try ActionAuditLog.record(
                 db: database,
                 kind: action.kind,
                 service: action.service,
                 conversationId: action.conversationId,
-                detail: draftText,
+                detail: sendText,
                 trigger: .delegated)
             try repository.updateAgentActionStatus(id: actionID, status: .done, resolvedAt: Date())
+            resolveCommitmentForCompletedAction(action)
             markCardHandledForConversation(service: action.service, conversationId: action.conversationId)
         } catch {
             try? repository.updateAgentActionStatus(id: actionID, status: .failed, resolvedAt: Date())
@@ -477,6 +522,7 @@ final class AppState: ObservableObject {
                     detail: draftText,
                     trigger: .approved)
                 try self.repository.updateAgentActionStatus(id: id, status: .done, resolvedAt: Date())
+                self.resolveCommitmentForCompletedAction(action)
                 self.markCardHandledForConversation(service: action.service, conversationId: action.conversationId)
                 self.reloadAgentActions()
             } catch {

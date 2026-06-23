@@ -724,6 +724,22 @@ struct BriefRepository {
         }
     }
 
+    func fetchCommitment(id: Int64) throws -> Commitment? {
+        try database.dbQueue.read { db in
+            try Commitment.filter(key: id).fetchOne(db)
+        }
+    }
+
+    /// Pushes a commitment's due date out — used after a `they_owe` chase is sent, so the
+    /// agent doesn't immediately re-propose the same nudge on the next tick.
+    func bumpCommitmentDue(id: Int64, to date: Date) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE commitments SET dueAt = ? WHERE id = ?",
+                arguments: [date, id])
+        }
+    }
+
     // MARK: - Priority Corrections
 
     func insertPriorityCorrection(_ correction: PriorityCorrection) throws {
