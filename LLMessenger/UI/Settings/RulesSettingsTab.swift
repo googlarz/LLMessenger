@@ -63,6 +63,8 @@ struct RulesSettingsTab: View {
                 ruleToDelete = nil
             }
             Button("Cancel", role: .cancel) { ruleToDelete = nil }
+        } message: {
+            Text("The rule will be permanently removed. You can add it back at any time.")
         }
         .sheet(isPresented: $showingAddRule) {
             AddRuleView { rule in

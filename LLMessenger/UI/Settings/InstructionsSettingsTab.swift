@@ -31,7 +31,7 @@ struct InstructionsSettingsTab: View {
                             )
 
                         HStack {
-                            Text("This prompt is prepended to every LLM request. Changes take effect on next launch.")
+                            Text("This instruction is added before every AI request to shape how it responds. Changes take effect on next launch.")
                                 .font(Theme.sans(11))
                                 .foregroundStyle(Theme.textTertiary)
                             Spacer()

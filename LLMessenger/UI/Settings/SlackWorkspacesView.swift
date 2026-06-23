@@ -80,6 +80,8 @@ struct SlackWorkspacesView: View {
                 workspaceToRemove = nil
             }
             Button("Cancel", role: .cancel) { workspaceToRemove = nil }
+        } message: {
+            Text("LLMessenger will no longer read messages from this workspace. You'll need to re-add the token to reconnect.")
         }
         .sheet(isPresented: $showingAdd, onDismiss: { reload() }) {
             AddSlackWorkspaceView()
