@@ -314,7 +314,9 @@ actor AgentEngine {
 
     // MARK: - Reply proposal
 
-    private func proposeReply(for reply: OwedReply) async -> AgentAction? {
+    // Internal (not private) so a unit test can verify the needsReply → isMaybe mapping
+    // without driving a full owed-reply cycle.
+    func proposeReply(for reply: OwedReply) async -> AgentAction? {
         let ctx = (try? repository.fetchConversationContext(
             service: reply.service, conversationId: reply.conversationId)) ?? nil
 

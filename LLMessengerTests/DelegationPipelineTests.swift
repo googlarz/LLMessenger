@@ -60,18 +60,29 @@ final class DelegationPipelineTests: XCTestCase {
 
     @discardableResult
     private func insertAction(_ db: AppDatabase, kind: AgentActionKind, payload: String,
-                              confidence: Double = 0.95, isMaybe: Bool = false) throws -> AgentAction {
+                              confidence: Double = 0.95, isMaybe: Bool = false,
+                              commitmentId: Int64? = nil) throws -> AgentAction {
         let id: Int64 = try db.dbQueue.write { d in
             var a = AgentAction(
                 id: nil, kind: kind.rawValue, service: "signal", conversationId: "c1",
                 conversationName: "Coach", title: "Action", payload: payload, reasoning: "templated",
                 confidence: confidence, riskLevel: AgentActionRisk.low.rawValue,
                 status: AgentActionStatus.pending.rawValue, createdAt: Date(), resolvedAt: nil,
-                isMaybe: isMaybe)
+                commitmentId: commitmentId, isMaybe: isMaybe)
             try a.insert(d)
             return d.lastInsertedRowID
         }
         return try XCTUnwrap(BriefRepository(database: db).fetchAgentAction(id: id))
+    }
+
+    /// Polls until a condition holds or a short timeout elapses — for the async (Task-based)
+    /// approve/reload paths whose side effects land after the call returns.
+    private func waitUntil(_ timeout: TimeInterval = 2, _ cond: @escaping () -> Bool) async {
+        let start = Date()
+        while !cond() {
+            if Date().timeIntervalSince(start) > timeout { return }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
     }
 
     // MARK: - Maybe bucket (v25 migration + never-auto-send invariant)
@@ -250,6 +261,141 @@ final class DelegationPipelineTests: XCTestCase {
         XCTAssertTrue(spy.sentMessages.isEmpty, "re-decide before send must abort once the kill switch is on")
         XCTAssertEqual(try repo.fetchAgentAction(id: action.id!)?.statusEnum, .pending,
                        "aborted fire reverts to pending for manual approval")
+        XCTAssertEqual(try audits(db).count, 0)
+    }
+
+    // MARK: - Maybe never auto-acts via the production paths
+
+    func testBatchApproveLowRiskExcludesMaybe() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        try seedDelegated(repo, kinds: [.ack])
+        let normal = try insertAction(db, kind: .reply, payload: AgentAction.encodeReplyPayload("on my way"))
+        let maybe = try insertAction(db, kind: .reply, payload: AgentAction.encodeReplyPayload("maybe later"), isMaybe: true)
+
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        let state = makeState(db)
+        state.adapters = ["signal": spy]
+        state.agentActions = [normal, maybe]
+
+        state.batchApproveLowRisk()
+        await waitUntil { (try? repo.fetchAgentAction(id: normal.id!))?.statusEnum == .done }
+
+        XCTAssertEqual(spy.sentMessages.map(\.text), ["on my way"], "only the non-maybe low-risk action is sent")
+        XCTAssertEqual(try repo.fetchAgentAction(id: maybe.id!)?.statusEnum, .pending,
+                       "a maybe is never bulk-approved — it stays the user's call")
+    }
+
+    func testReadyCountExcludesMaybeViaReload() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        _ = try insertAction(db, kind: .reply, payload: AgentAction.encodeReplyPayload("a"))
+        _ = try insertAction(db, kind: .reply, payload: AgentAction.encodeReplyPayload("b"))
+        _ = try insertAction(db, kind: .reply, payload: AgentAction.encodeReplyPayload("c"), isMaybe: true)
+        _ = repo
+
+        let state = makeState(db)
+        state.reloadAgentActions()
+        await waitUntil { state.agentActions.count == 3 }
+
+        XCTAssertEqual(state.agentActions.count, 3, "all pending actions load into the queue")
+        XCTAssertEqual(state.actionsReadyCount, 2, "the maybe is excluded from the ready-to-send count")
+    }
+
+    // MARK: - Commitment lifecycle through the send path (#3)
+
+    func testIOweCommitmentFulfilledOnDelegatedSend() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        try seedDelegated(repo, kinds: [.ack])
+        let cid = try repo.insertCommitment(Commitment(
+            id: nil, direction: CommitmentDirection.iOwe.rawValue, service: "signal",
+            conversationId: "c1", conversationName: "Coach", what: "send the form",
+            dueAt: Date().addingTimeInterval(-3600), evidenceMessageId: nil,
+            status: CommitmentStatus.open.rawValue, createdAt: Date().addingTimeInterval(-7200)))
+        let action = try insertAction(db, kind: .ack, payload: AgentAction.encodeReplyPayload("done, sending"),
+                                      commitmentId: cid)
+        try repo.armAgentActionForAutoSend(id: action.id!, scheduledAt: Date().addingTimeInterval(30))
+
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        let state = makeState(db)
+        state.adapters = ["signal": spy]
+        await state.fireDelegatedSend(actionID: action.id!)
+
+        XCTAssertEqual(try repo.fetchCommitment(id: cid)?.statusEnum, .fulfilled,
+                       "delivering an i_owe commitment marks it fulfilled")
+        XCTAssertFalse(try repo.fetchOpenCommitments().contains { $0.id == cid },
+                       "a fulfilled commitment no longer drives follow-ups")
+    }
+
+    func testTheyOweCommitmentDueDateBumpedOnChaseSend() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        try seedDelegated(repo, kinds: [.ack])
+        let pastDue = Date().addingTimeInterval(-3600)
+        let cid = try repo.insertCommitment(Commitment(
+            id: nil, direction: CommitmentDirection.theyOwe.rawValue, service: "signal",
+            conversationId: "c1", conversationName: "Coach", what: "the cap table",
+            dueAt: pastDue, evidenceMessageId: nil,
+            status: CommitmentStatus.open.rawValue, createdAt: Date().addingTimeInterval(-7200)))
+        let action = try insertAction(db, kind: .ack, payload: AgentAction.encodeReplyPayload("any update?"),
+                                      commitmentId: cid)
+        try repo.armAgentActionForAutoSend(id: action.id!, scheduledAt: Date().addingTimeInterval(30))
+
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        let state = makeState(db)
+        state.adapters = ["signal": spy]
+        await state.fireDelegatedSend(actionID: action.id!)
+
+        let c = try XCTUnwrap(repo.fetchCommitment(id: cid))
+        XCTAssertEqual(c.statusEnum, .open, "chasing a they_owe commitment does not fulfil it")
+        XCTAssertGreaterThan(c.dueAt ?? pastDue, Date(), "its due date is pushed out")
+        XCTAssertFalse(AgentEngine.isDue(c, now: Date()), "no longer due → no immediate re-chase")
+    }
+
+    // MARK: - rsvp text resolution by kind (#7)
+
+    func testFireDelegatedRSVPNilReplyTextFallsBackNotJSON() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        try seedDelegated(repo, kinds: [.rsvp])
+        let payload = AgentAction.encodeCalendarPayload(.init(
+            title: "Sync", startISO: "2026-06-24T10:00:00Z", endISO: "2026-06-24T11:00:00Z",
+            notes: nil, replyText: nil))
+        let action = try insertAction(db, kind: .rsvp, payload: payload)
+        try repo.armAgentActionForAutoSend(id: action.id!, scheduledAt: Date().addingTimeInterval(30))
+
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        let state = makeState(db)
+        state.adapters = ["signal": spy]
+        await state.fireDelegatedSend(actionID: action.id!)
+
+        XCTAssertEqual(spy.sentMessages.map(\.text), ["Yes, that works for me."],
+                       "an rsvp with no replyText falls back to a safe default, never the raw payload")
+        XCTAssertFalse(spy.sentMessages.first?.text.contains("startISO") ?? true)
+    }
+
+    func testFireAbortsWhenPrivacyFlipsToNeverDraftMidWindow() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        try seedDelegated(repo, kinds: [.ack])
+        let action = try insertAction(db, kind: .ack, payload: AgentAction.encodeReplyPayload("Got it"))
+        try repo.armAgentActionForAutoSend(id: action.id!, scheduledAt: Date().addingTimeInterval(30))
+
+        // User flips the conversation to never_draft DURING the undo window. The re-decide
+        // before sending must catch this (same mechanism as the kill switch).
+        var ctx = ConversationContext(service: "signal", conversationId: "c1", label: "",
+                                      priorityHint: "auto", updatedAt: Date(), privacyOverride: "never_draft")
+        ctx.delegationKinds = [AgentActionKind.ack.rawValue]
+        try repo.upsertConversationContext(ctx)
+
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        let state = makeState(db)
+        state.adapters = ["signal": spy]
+        await state.fireDelegatedSend(actionID: action.id!)
+
+        XCTAssertTrue(spy.sentMessages.isEmpty, "a mid-window never_draft flip must abort the send")
+        XCTAssertEqual(try repo.fetchAgentAction(id: action.id!)?.statusEnum, .pending)
         XCTAssertEqual(try audits(db).count, 0)
     }
 }
