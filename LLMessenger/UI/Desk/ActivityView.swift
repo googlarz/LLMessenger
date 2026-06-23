@@ -289,6 +289,9 @@ private struct ActivityEventRow: View {
         .onTapGesture { onTap() }
         .animation(Theme.quick, value: isHovered)
         .animation(Theme.spring, value: isExpanded)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(isExpanded ? "Collapse details" : "Expand details")
     }
 
     private func timeString(_ date: Date) -> String {
