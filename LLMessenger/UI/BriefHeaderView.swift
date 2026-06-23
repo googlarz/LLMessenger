@@ -25,11 +25,11 @@ struct BriefHeaderView: View {
                 Spacer()
                 HStack(spacing: 6) {
                     Button("What changed?") {
-                        chatViewModel.inputText = "What changed since the last brief?"
+                        chatViewModel.inputText = "What changed since the last digest?"
                         Task { await chatViewModel.send() }
                     }
                     .buttonStyle(WireActionStyle())
-                    .help("Ask what changed since the last brief")
+                    .help("Ask what changed since the last digest")
 
                     Button {
                         InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "header"])
@@ -39,7 +39,7 @@ struct BriefHeaderView: View {
                     }
                     .buttonStyle(PaperButtonStyle())
                     .disabled(isWorking)
-                    .help("Fetch new messages and rebuild the brief")
+                    .help("Fetch new messages and rebuild the digest")
                 }
             }
             .padding(.bottom, 14)
@@ -70,7 +70,7 @@ struct BriefHeaderView: View {
             if !failedServices.isEmpty {
                 noticeRow(
                     color: Theme.standby,
-                    label: "Partial brief",
+                    label: "Partial digest",
                     text: "Could not reach \(failedServices.map { Theme.serviceName($0) }.joined(separator: ", ")) — its threads are missing here."
                 )
                 .padding(.top, 16)
@@ -150,12 +150,12 @@ struct BriefHeaderView: View {
     }
 
     private var briefKind: String {
-        guard let start = brief.windowStart else { return "Hourly brief" }
+        guard let start = brief.windowStart else { return "Hourly digest" }
         let hours = Int(brief.createdAt.timeIntervalSince(start) / 3600)
-        if hours >= 24 * 6 { return "7-day brief" }
-        if hours >= 24 { return "\(hours / 24)-day brief" }
-        if hours >= 2  { return "\(hours)-hour brief" }
-        return "Hourly brief"
+        if hours >= 24 * 6 { return "7-day digest" }
+        if hours >= 24 { return "\(hours / 24)-day digest" }
+        if hours >= 2  { return "\(hours)-hour digest" }
+        return "Hourly digest"
     }
 
     private var timeRange: String {
