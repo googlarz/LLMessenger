@@ -11,6 +11,10 @@ import SwiftUI
 
 struct ToDoStripView: View {
     @EnvironmentObject var appState: AppState
+    @State private var contentHeight: CGFloat = 0
+
+    /// Hard ceiling: past this the strip scrolls so it can't swallow the tab panel below.
+    private let maxStripHeight: CGFloat = 248
 
     private var maybeActions: [AgentAction] { appState.agentActions.filter { $0.isMaybe } }
     private var hasToDo: Bool { !appState.commitments.isEmpty || !appState.tasks.isEmpty }
@@ -20,7 +24,7 @@ struct ToDoStripView: View {
         if hasContent {
             VStack(spacing: 0) {
                 ScrollView {
-                    LazyVStack(spacing: 0) {
+                    VStack(spacing: 0) {
                         if hasToDo {
                             sectionHeader("To do", color: Theme.signal)
                             ForEach(appState.commitments) { c in
@@ -40,8 +44,15 @@ struct ToDoStripView: View {
                             }
                         }
                     }
+                    .background(GeometryReader { g in
+                        Color.clear.preference(key: StripHeightKey.self, value: g.size.height)
+                    })
                 }
-                .frame(maxHeight: 248)
+                // Size to content when there are few items (no reserved empty space), but cap
+                // and scroll once it would crowd the tabs below. Avoids a greedy ScrollView
+                // reserving 248pt for a single commitment.
+                .frame(height: min(contentHeight == 0 ? maxStripHeight : contentHeight, maxStripHeight))
+                .onPreferenceChange(StripHeightKey.self) { contentHeight = $0 }
                 Rule()
             }
             .background(Theme.sidebar)
@@ -141,4 +152,10 @@ struct ToDoStripView: View {
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 10)
     }
+}
+
+/// Measures the strip's intrinsic content height so it can size-to-fit up to a cap.
+private struct StripHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
