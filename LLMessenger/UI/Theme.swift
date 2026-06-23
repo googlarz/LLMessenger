@@ -80,13 +80,25 @@ enum Theme {
 
     // MARK: - Signal — the only colour that means anything
 
+    // Appearance-adaptive: the bright RGBs read on the dark ground but fail WCAG AA as small
+    // text/labels on the warm-paper light ground, so light mode gets darker branches that the
+    // audit verified ≥4.5:1 on #F9F8F6. Dark mode unchanged.
     /// Vermilion. Urgency, unread, "needs you now". Use in small doses.
-    static let signal      = Color(red: 0.886, green: 0.310, blue: 0.196)   // #E24F32
+    static let signal = Color(
+        light: Color(red: 0.760, green: 0.227, blue: 0.122),   // #C23A1F
+        dark:  Color(red: 0.886, green: 0.310, blue: 0.196)    // #E24F32
+    )
     static let signalWash  = signal.opacity(0.10)
     /// Standby amber — partial states, warnings, "heads-up".
-    static let standby     = Color(red: 0.851, green: 0.647, blue: 0.302)   // #D9A54D
+    static let standby = Color(
+        light: Color(red: 0.604, green: 0.420, blue: 0.102),   // #9A6B1A
+        dark:  Color(red: 0.851, green: 0.647, blue: 0.302)    // #D9A54D
+    )
     /// Quiet sage — health OK, handled, success. Desaturated on purpose.
-    static let ok          = Color(red: 0.498, green: 0.651, blue: 0.467)   // #7FA677
+    static let ok = Color(
+        light: Color(red: 0.247, green: 0.478, blue: 0.259),   // #3F7A42
+        dark:  Color(red: 0.498, green: 0.651, blue: 0.467)    // #7FA677
+    )
 
     // Legacy aliases — `accent` now maps to the signal vermilion.
     static let accent      = signal

@@ -162,7 +162,11 @@ private struct NoBriefPlaceholder: View {
 /// of the real brief layout (masthead + two entries) so the moment feels alive and previews
 /// what's coming, rather than a black void with one line of text.
 private struct FirstBriefPreparingView: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
+
+    private var failed: Bool { appState.briefGenerationState == .failed }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -170,31 +174,50 @@ private struct FirstBriefPreparingView: View {
                 Circle()
                     .fill(Theme.signal)
                     .frame(width: 6, height: 6)
-                    .opacity(pulse ? 1 : 0.25)
-                WireLabel("Preparing your first brief", color: Theme.textSecondary)
+                    .opacity(failed ? 1 : (pulse ? 1 : 0.25))
+                WireLabel(failed ? "Couldn't build your first brief" : "Preparing your first brief",
+                          color: failed ? Theme.signal : Theme.textSecondary)
                 Spacer(minLength: 0)
             }
             .padding(.bottom, 22)
 
-            VStack(alignment: .leading, spacing: 0) {
-                bar(230, 24)
-                bar(300, 11).padding(.top, 12)
-                Rule().padding(.vertical, 20)
-                ForEach(0..<2, id: \.self) { i in
-                    bar(270, 14)
-                    bar(440, 10).padding(.top, 9)
-                    bar(360, 10).padding(.top, 5)
-                    if i == 0 { Rule().padding(.vertical, 18) }
+            if failed {
+                // Don't strand the user in an infinite shimmer when the build fails — show what
+                // went wrong and a way out.
+                Text(friendlyError)
+                    .font(Theme.bodyFont)
+                    .foregroundStyle(Theme.textPrimary.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    Button("Try again") { appState.onRequestRefresh?() }
+                        .buttonStyle(PaperButtonStyle())
+                    if looksLikeConfigError {
+                        Button("Open Settings") { appState.onOpenSettings?() }
+                            .buttonStyle(WireActionStyle())
+                    }
                 }
-            }
-            .opacity(pulse ? 1 : 0.5)
-            .animation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true), value: pulse)
+                .padding(.top, 16)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    bar(230, 24)
+                    bar(300, 11).padding(.top, 12)
+                    Rule().padding(.vertical, 20)
+                    ForEach(0..<2, id: \.self) { i in
+                        bar(270, 14)
+                        bar(440, 10).padding(.top, 9)
+                        bar(360, 10).padding(.top, 5)
+                        if i == 0 { Rule().padding(.vertical, 18) }
+                    }
+                }
+                .opacity(reduceMotion ? 0.9 : (pulse ? 1 : 0.5))
+                .animation(reduceMotion ? nil : .easeInOut(duration: 1.15).repeatForever(autoreverses: true), value: pulse)
 
-            Text("Reading your messages and writing your first brief. This usually takes a moment.")
-                .font(Theme.sans(12.5))
-                .foregroundStyle(Theme.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 26)
+                Text("Reading your messages and writing your first brief. This usually takes a moment.")
+                    .font(Theme.sans(12.5))
+                    .foregroundStyle(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 26)
+            }
 
             // The moment a user decides whether to trust this with their messages — say the
             // local-first promise here, not just in PRIVACY.md.
@@ -212,7 +235,18 @@ private struct FirstBriefPreparingView: View {
         .padding(.top, 30)
         .frame(maxWidth: 560, alignment: .leading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onAppear { pulse = true }
+        .onAppear { if !reduceMotion { pulse = true } }
+    }
+
+    private var friendlyError: String {
+        let e = (appState.lastError ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return e.isEmpty ? "Something went wrong building your first brief. You can try again." : e
+    }
+
+    private var looksLikeConfigError: Bool {
+        if !appState.isLLMConfigured { return true }
+        let e = (appState.lastError ?? "").lowercased()
+        return ["backend", "model", "provider", "api key", "ollama", "openai", "anthropic"].contains { e.contains($0) }
     }
 
     private func bar(_ width: CGFloat, _ height: CGFloat) -> some View {

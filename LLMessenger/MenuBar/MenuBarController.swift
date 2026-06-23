@@ -97,6 +97,7 @@ final class MenuBarController {
 
     func setArmedAutoSendCount(_ count: Int) {
         armedAutoSendCount = count
+        updateButton()
         rebuildMenu()
     }
 
@@ -189,7 +190,16 @@ final class MenuBarController {
 
     private func updateButton() {
         guard let button = statusItem.button else { return }
-        if nowNeedsAttention {
+        // Agent posture is part of the ambient glyph: paused (kill switch) and armed
+        // (auto-send about to fire) must not look identical to idle.
+        let paused = UserDefaults.standard.bool(forKey: AgentDelegation.killSwitchKey)
+        if paused {
+            button.image = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: "Auto-send paused")
+            button.image?.isTemplate = true
+        } else if armedAutoSendCount > 0 {
+            button.image = NSImage(systemSymbolName: "paperplane", accessibilityDescription: "Sending soon")
+            button.image?.isTemplate = true
+        } else if nowNeedsAttention {
             button.image = NSImage(systemSymbolName: "envelope.fill", accessibilityDescription: "Needs attention")
         } else {
             button.image = Self.briefGlyph
@@ -200,7 +210,10 @@ final class MenuBarController {
             && UserDefaults.standard.bool(forKey: "showActionsReadyInMenuBar")
         let showOwed = !nowNeedsAttention && unreadCount == 0 && !showActions && owedCount > 0
             && UserDefaults.standard.bool(forKey: "showOwedCountInMenuBar")
-        if unreadCount > 0 {
+        if armedAutoSendCount > 0 && !paused {
+            button.title = " \(armedAutoSendCount)"
+            button.imagePosition = .imageLeft
+        } else if unreadCount > 0 {
             button.title = " \(unreadCount)"
             button.imagePosition = .imageLeft
         } else if showActions {
@@ -299,6 +312,7 @@ final class MenuBarController {
                 let key = AgentDelegation.killSwitchKey
                 let now = UserDefaults.standard.bool(forKey: key)
                 UserDefaults.standard.set(!now, forKey: key)
+                self?.updateButton()
                 self?.rebuildMenu()
             }
             let toggleItem = NSMenuItem(
