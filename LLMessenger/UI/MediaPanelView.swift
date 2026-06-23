@@ -69,7 +69,7 @@ private struct EmptyMediaState: View {
 
     private var label: String {
         switch tab {
-        case "photos": return "No photos in this brief"
+        case "photos": return "No photos in this digest"
         case "voice":  return "No voice messages"
         case "videos": return "No videos"
         default:       return "No GIFs"
