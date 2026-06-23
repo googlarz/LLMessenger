@@ -281,10 +281,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let demoExitController = OnboardingWindowController(database: db)
                 demoExitController.onComplete = { [weak self, weak state] in
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                    try? DemoSeeder.wipe(from: db)
-                    state?.refreshBriefs()
                     self?.onboardingWindowController = nil
                     self?.didFinishOnboarding()
+                    // Show transitioning banner while real sync warms up, then swap out demo data.
+                    state?.isDemoTransitioning = true
+                    Task { @MainActor [weak state] in
+                        try? await Task.sleep(for: .seconds(4))
+                        try? DemoSeeder.wipe(from: db)
+                        state?.refreshBriefs()
+                        state?.isDemoTransitioning = false
+                    }
                 }
                 self.onboardingWindowController = demoExitController
                 demoExitController.show()

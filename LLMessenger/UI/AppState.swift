@@ -110,6 +110,7 @@ struct BriefListGrouper {
 
 @MainActor
 final class AppState: ObservableObject {
+    @Published var isDemoTransitioning = false   // true during demo→real morph window
     @Published var briefs: [Brief] = []
     @Published var tasks: [BriefTask] = []
     @Published var selectedBriefID: Int64?

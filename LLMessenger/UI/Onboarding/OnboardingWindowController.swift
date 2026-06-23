@@ -156,28 +156,22 @@ private struct OnboardingView: View {
 
     // MARK: - Step 1: Services
 
+    // State for collapsing the optional services section
+    @State private var optionalServicesExpanded = false
+
     private var servicesStep: some View {
         ScrollView {
             VStack(spacing: 20) {
                 stepHeader(
-                    title: "Connect your messages",
-                    subtitle: "LLMessenger reads your messages, writes a daily digest, and highlights what needs your reply — all on this Mac. Choose where to read from."
+                    title: "Start with iMessage",
+                    subtitle: "See who needs a reply, catch up faster, and let an AI draft responses in your voice. Nothing leaves your Mac without your OK."
                 )
 
-                serviceRow(title: "iMessage", icon: "message.fill",
-                           color: Theme.serviceIMessage, isEnabled: $imessageEnabled) {
-                    imessageInline
-                }
+                // iMessage hero — most Mac users start here, works today, no API key
+                imessageHeroSection
 
-                serviceRow(title: "Telegram", icon: "paperplane.fill",
-                           color: Theme.serviceTelegram, isEnabled: $telegramEnabled) {
-                    telegramInline
-                }
-
-                serviceRow(title: "Signal", icon: "lock.shield.fill",
-                           color: Theme.serviceSignal, isEnabled: $signalEnabled) {
-                    signalInline
-                }
+                // Optional add-ons, collapsed by default to avoid overwhelm
+                optionalServicesSection
 
                 VStack(spacing: 10) {
                     Button("Continue") {
@@ -188,7 +182,7 @@ private struct OnboardingView: View {
                     .disabled(!servicesReady)
 
                     if databaseIsEmpty {
-                        Button("Explore the demo instead") {
+                        Button("Explore with sample messages first") {
                             try? DemoSeeder.seed(into: database)
                             onComplete()
                         }
@@ -212,6 +206,85 @@ private struct OnboardingView: View {
             guard step == .services, !imessageGranted else { return }
             imessageGranted = Self.checkFullDiskAccess()
         }
+    }
+
+    // iMessage hero section — larger, prominent, "no extra setup" badge
+    private var imessageHeroSection: some View {
+        VStack(spacing: 8) {
+            // Header
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Theme.serviceIMessage.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "message.fill")
+                        .font(Theme.sans(20))
+                        .foregroundStyle(Theme.serviceIMessage)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("iMessage")
+                        .font(Theme.display(16))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text(imessageGranted ? "Access granted" : "Needs one permission")
+                        .font(Theme.sans(11))
+                        .foregroundStyle(imessageGranted ? Theme.ok : Theme.textTertiary)
+                }
+                Spacer()
+                // Always-on badge: iMessage can't be disabled in onboarding —
+                // it's the reason to be here.
+                Text("RECOMMENDED")
+                    .font(Theme.mono(9, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.serviceIMessage)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Theme.serviceIMessage.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Theme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.radius)
+                    .strokeBorder(Theme.serviceIMessage.opacity(0.4), lineWidth: Theme.hairline)
+            )
+
+            // Permission inline (shows setup steps or checkmark)
+            imessageInline
+        }
+    }
+
+    // Telegram + Signal behind an "Also connect (optional)" disclosure
+    private var optionalServicesSection: some View {
+        VStack(spacing: 8) {
+            Button {
+                withAnimation(Theme.quick) { optionalServicesExpanded.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: optionalServicesExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                    Text("Also connect Telegram or Signal (optional)")
+                        .font(Theme.sans(12, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+
+            if optionalServicesExpanded {
+                serviceRow(title: "Telegram", icon: "paperplane.fill",
+                           color: Theme.serviceTelegram, isEnabled: $telegramEnabled) {
+                    telegramInline
+                }
+                serviceRow(title: "Signal", icon: "lock.shield.fill",
+                           color: Theme.serviceSignal, isEnabled: $signalEnabled) {
+                    signalInline
+                }
+            }
+        }
+        .animation(Theme.quick, value: optionalServicesExpanded)
     }
 
     private var servicesReady: Bool {

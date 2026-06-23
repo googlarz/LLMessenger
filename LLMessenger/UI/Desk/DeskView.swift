@@ -19,7 +19,10 @@ struct DeskView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if appState.hasDelegatedLanes {
+            if appState.isDemoTransitioning {
+                DemoTransitionBanner()
+                Rule()
+            } else if appState.hasDelegatedLanes {
                 DelegationKillSwitchBanner()
                 Rule()
             }
@@ -128,6 +131,26 @@ private struct DeskTabButton: View {
         .keyboardShortcut(keyEquivalent, modifiers: .command)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Demo transition banner
+
+/// Shown for ~4 seconds while demo data is replaced by the first real sync.
+private struct DemoTransitionBanner: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView().scaleEffect(0.7).frame(width: 14)
+            Text("Getting your real messages…")
+                .font(Theme.mono(10.5, weight: .semibold))
+                .tracking(0.4)
+                .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 8)
+        .background(Theme.surface)
+        .transition(.opacity)
     }
 }
 
