@@ -121,34 +121,44 @@ struct InboxView: View {
         .padding(.vertical, 12)
     }
 
-    // MARK: - Brief section (urgent cards)
+    // MARK: - Brief section (urgent — compact links, NOT a second copy of the card)
 
+    /// The full card already lives in the brief reader. Here we show a compact link so the
+    /// Inbox points at urgent items without rendering a duplicate BriefCardView.
     private func briefSection(_ brief: Brief, cards: [BriefCard]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
-                let contexts = contextMap(for: brief)
-                BriefCardView(
-                    number: index + 1,
-                    card: card,
-                    briefID: brief.id,
-                    conversationContext: contexts["\(card.service)|\(card.conversationId)"],
-                    onShowTimeline: { _, _, _ in appState.selectedBriefID = brief.id }
-                )
-                Rule()
+            HStack(spacing: 8) {
+                WireLabel("Needs you in the brief", color: Theme.signal)
+                Spacer()
             }
-        }
-    }
+            .padding(.horizontal, Theme.gutter)
+            .padding(.vertical, 10)
+            .background(Theme.surfaceHigh.opacity(0.5))
 
-    private func contextMap(for brief: Brief) -> [String: ConversationContext] {
-        guard let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { return [:] }
-        var map: [String: ConversationContext] = [:]
-        for card in json.cards {
-            let key = "\(card.service)|\(card.conversationId)"
-            if let ctx = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId) {
-                map[key] = ctx
+            ForEach(cards, id: \.id) { card in
+                Rule()
+                Button { appState.selectedBriefID = brief.id } label: {
+                    HStack(spacing: 8) {
+                        ServiceStamp(service: card.service, size: 16)
+                        Text(card.headline)
+                            .font(Theme.bodyFont)
+                            .foregroundStyle(Theme.textPrimary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    .padding(.horizontal, Theme.gutter)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Urgent in the brief: \(card.headline). Opens it.")
             }
+            Rule()
         }
-        return map
     }
 
     // MARK: - Empty state

@@ -67,18 +67,18 @@ struct ActionRow: View {
                 if action.statusEnum == .scheduled {
                     armedBar
                 } else if isEditing {
-                    actionButton("Save") {
+                    actionButton("SAVE") {
                         appState.editAction(action, newText: editText)
                         isEditing = false
                     }
-                    actionButton("Cancel") { isEditing = false }
+                    actionButton("CANCEL") { isEditing = false }
                 } else {
-                    actionButton("Approve") { appState.approveAction(action) }
-                    actionButton("Edit") {
+                    actionButton("APPROVE") { appState.approveAction(action) }
+                    actionButton("EDIT") {
                         editText = draftText
                         isEditing = true
                     }
-                    actionButton("Skip") { appState.skipAction(action) }
+                    actionButton("SKIP") { appState.skipAction(action) }
                 }
                 Spacer()
             }

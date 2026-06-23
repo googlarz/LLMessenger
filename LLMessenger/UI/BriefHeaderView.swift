@@ -46,7 +46,9 @@ struct BriefHeaderView: View {
 
             Text(actionHeadline)
                 .font(Theme.display(27))
-                .foregroundStyle(highPriorityCount > 0 ? Theme.textPrimary : Theme.textSecondary)
+                // The all-clear ("Nothing needs you right now.") is an earned, definitive
+                // statement — give it full weight; only the truly-empty "No new messages." dims.
+                .foregroundStyle((highPriorityCount > 0 || briefCount > 0) ? Theme.textPrimary : Theme.textSecondary)
                 .kerning(0.2)
                 .padding(.bottom, 8)
 

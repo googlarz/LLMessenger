@@ -673,7 +673,7 @@ private struct WeekAtGlanceView: View {
                     Text("\(leadCount)")
                         .font(Theme.display(20, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
-                    Text("OF \(totalCards)")
+                    Text("OF \(totalCards) THREADS")
                         .font(Theme.mono(11))
                         .foregroundStyle(Theme.textTertiary)
                         .padding(.bottom, 1)

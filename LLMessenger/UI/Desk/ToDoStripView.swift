@@ -90,7 +90,7 @@ struct ToDoStripView: View {
             Spacer()
             // i_owe → "DONE" (you delivered); they_owe → "GOT IT" (they delivered) — same
             // action (mark fulfilled), but the label and VoiceOver text disambiguate which.
-            Button(c.directionEnum == .iOwe ? "DONE" : "GOT IT") { appState.markCommitmentFulfilled(c) }
+            Button(c.directionEnum == .iOwe ? "DONE" : "RECEIVED") { appState.markCommitmentFulfilled(c) }
                 .buttonStyle(WireActionStyle())
                 .accessibilityLabel(c.directionEnum == .iOwe
                     ? "Mark done, you delivered: \(c.what)"
