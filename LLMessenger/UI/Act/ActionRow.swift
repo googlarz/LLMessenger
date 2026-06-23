@@ -119,7 +119,7 @@ struct ActionRow: View {
                 .font(Theme.mono(11, weight: .semibold))
                 .tracking(0.9)
                 .foregroundStyle(Theme.signal)
-            actionButton("Undo") { appState.undoAutoSend(action) }
+            actionButton("UNDO") { appState.undoAutoSend(action) }
         }
         .onReceive(ticker) { now = $0 }
     }
