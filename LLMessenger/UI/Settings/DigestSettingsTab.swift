@@ -24,7 +24,7 @@ struct DigestSettingsTab: View {
                             Text("Daily digest")
                                 .font(Theme.sans(13, weight: .medium))
                                 .foregroundStyle(Theme.textPrimary)
-                            Text("Generate a brief at a scheduled time and deliver a notification.")
+                            Text("Generate a digest at a scheduled time and deliver a notification.")
                                 .font(Theme.sans(11))
                                 .foregroundStyle(Theme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -32,6 +32,7 @@ struct DigestSettingsTab: View {
                         Spacer()
                         Toggle("", isOn: $settings.enabled)
                             .labelsHidden()
+                            .accessibilityLabel("Schedule morning digest")
                             .toggleStyle(.switch)
                             .onChange(of: settings.enabled) { _ in save() }
                     }
@@ -110,6 +111,7 @@ struct DigestSettingsTab: View {
                         Spacer()
                         Toggle("", isOn: $firewallEnabled)
                             .labelsHidden()
+                            .accessibilityLabel("Only interrupt for what matters")
                             .toggleStyle(.switch)
                             .onChange(of: firewallEnabled) { enabled in
                                 settingsRepo.saveFirewallEnabled(enabled)

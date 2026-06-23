@@ -297,6 +297,7 @@ private struct ServiceCard: View {
             Spacer()
             Toggle("", isOn: $config.enabled)
                 .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                .accessibilityLabel("Enable \(displayName)")
                 .tint(Theme.ok)
         }
         .opacity(0.7)
@@ -344,6 +345,7 @@ private struct ServiceCard: View {
                 Spacer()
                 Toggle("", isOn: $config.enabled)
                     .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    .accessibilityLabel("Enable \(displayName)")
                     .tint(Theme.ok)
             }
             Rule()
@@ -493,6 +495,7 @@ private struct ServiceCard: View {
                 Spacer()
                 Toggle("", isOn: $config.enabled)
                     .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    .accessibilityLabel("Enable \(displayName)")
                     .tint(Theme.ok)
             }
 

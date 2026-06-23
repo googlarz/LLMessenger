@@ -115,6 +115,7 @@ private struct RuleRowView: View {
             }
             .buttonStyle(.plain)
             .help("Delete rule")
+            .accessibilityLabel("Delete rule")
             .animation(Theme.quick, value: deleteHovered)
             .onHover { deleteHovered = $0 }
         }

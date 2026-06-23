@@ -28,6 +28,7 @@ struct MediaPanelView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Close")
+                .accessibilityLabel("Close media panel")
                 .animation(Theme.quick, value: closeHovered)
                 .onHover { closeHovered = $0 }
             }

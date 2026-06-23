@@ -54,6 +54,7 @@ private struct TaskRowView: View {
             .buttonStyle(.plain)
             .padding(.top, 2)
             .help("Mark done")
+            .accessibilityLabel("Mark task complete")
             .animation(Theme.quick, value: checkHovered)
             .onHover { checkHovered = $0 }
 
