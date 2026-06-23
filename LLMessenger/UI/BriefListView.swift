@@ -130,11 +130,14 @@ struct BriefListView: View {
                         if !pinned.isEmpty {
                             SectionHeaderView(label: "Pinned")
                             ForEach(pinned, id: \.id) { brief in
-                                BriefRowView(brief: brief,
-                                             isSelected: appState.selectedBriefID == brief.id)
-                                    .onTapGesture { selectBrief(brief) }
-                                    .contextMenu { briefContextMenu(brief) }
-                                    .swipeActions(edge: .trailing) { briefSwipeActions(brief) }
+                                Button { selectBrief(brief) } label: {
+                                    BriefRowView(brief: brief,
+                                                 isSelected: appState.selectedBriefID == brief.id)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(brief.notificationText)
+                                .contextMenu { briefContextMenu(brief) }
+                                .swipeActions(edge: .trailing) { briefSwipeActions(brief) }
                             }
                         }
 
@@ -142,11 +145,14 @@ struct BriefListView: View {
                         ForEach(filteredGroups, id: \.id) { group in
                             SectionHeaderView(label: group.label)
                             ForEach(group.briefs, id: \.id) { brief in
-                                BriefRowView(brief: brief,
-                                             isSelected: appState.selectedBriefID == brief.id)
-                                    .onTapGesture { selectBrief(brief) }
-                                    .contextMenu { briefContextMenu(brief) }
-                                    .swipeActions(edge: .trailing) { briefSwipeActions(brief) }
+                                Button { selectBrief(brief) } label: {
+                                    BriefRowView(brief: brief,
+                                                 isSelected: appState.selectedBriefID == brief.id)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(brief.notificationText)
+                                .contextMenu { briefContextMenu(brief) }
+                                .swipeActions(edge: .trailing) { briefSwipeActions(brief) }
                             }
                         }
 
@@ -176,17 +182,20 @@ struct BriefListView: View {
 
                             if showArchivedSection {
                                 ForEach(archived, id: \.id) { brief in
-                                    BriefRowView(brief: brief,
-                                                 isSelected: appState.selectedBriefID == brief.id)
-                                        .onTapGesture { selectBrief(brief) }
-                                        .swipeActions(edge: .trailing) {
-                                            Button {
-                                                if let id = brief.id { appState.unarchiveBrief(id) }
-                                            } label: {
-                                                Label("Unarchive", systemImage: "arrow.uturn.backward")
-                                            }
-                                            .tint(Theme.ok)
+                                    Button { selectBrief(brief) } label: {
+                                        BriefRowView(brief: brief,
+                                                     isSelected: appState.selectedBriefID == brief.id)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(brief.notificationText)
+                                    .swipeActions(edge: .trailing) {
+                                        Button {
+                                            if let id = brief.id { appState.unarchiveBrief(id) }
+                                        } label: {
+                                            Label("Unarchive", systemImage: "arrow.uturn.backward")
                                         }
+                                        .tint(Theme.ok)
+                                    }
                                 }
                             }
                         }

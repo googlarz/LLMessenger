@@ -402,6 +402,11 @@ final class AppState: ObservableObject {
             lastError = error.localizedDescription
             return
         }
+        NotificationManager.postAutoSendArmedNotification(
+            conversationName: action.conversationName,
+            actionTitle: action.title,
+            actionID: id
+        )
         armedTimers[id] = Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.autoSendUndoWindow))
             guard !Task.isCancelled else { return }

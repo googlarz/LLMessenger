@@ -12,6 +12,7 @@ struct ActionRow: View {
     @State private var isEditing = false
     @State private var editText = ""
     @State private var isHovered = false
+    @State private var showContextEditor = false
 
     private var draftText: String {
         action.replyPayload?.draftText ?? action.payload
@@ -81,11 +82,22 @@ struct ActionRow: View {
                     actionButton("SKIP") { appState.skipAction(action) }
                 }
                 Spacer()
+                Button("Customize lane") { showContextEditor = true }
+                    .buttonStyle(WireActionStyle())
+                    .accessibilityLabel("Customize delegation settings for \(action.conversationName)")
             }
             .padding(.top, 2)
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 12)
+        .sheet(isPresented: $showContextEditor) {
+            ContextEditor(
+                service: action.service,
+                conversationId: action.conversationId,
+                conversationName: action.conversationName,
+                database: appState.database
+            )
+        }
         .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }

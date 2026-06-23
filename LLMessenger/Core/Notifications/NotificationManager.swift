@@ -59,6 +59,27 @@ final class NotificationManager: NSObject {
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
 
+    /// Fires the moment an action is armed for auto-send, giving the user an
+    /// OS-level Undo opportunity — the 30s countdown is only visible in the app
+    /// if it happens to be open, which is uncommon for a background delegation.
+    nonisolated static func postAutoSendArmedNotification(
+        conversationName: String,
+        actionTitle: String,
+        actionID: Int64
+    ) {
+        let content = UNMutableNotificationContent()
+        content.title = "Sending on your behalf in 30s"
+        content.body = "\(conversationName) — \(actionTitle). Open LLMessenger to undo."
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.5, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "autosend-armed-\(actionID)",
+            content: content,
+            trigger: trigger
+        )
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+
     nonisolated static func postDraftReadyNotification(senderName: String, briefID: Int64) {
         let content = UNMutableNotificationContent()
         content.title = "Draft ready"
