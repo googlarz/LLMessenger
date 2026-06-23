@@ -175,7 +175,23 @@ final class DesignSnapshotTests: XCTestCase {
                   "On it — sending the updated cap table by Wednesday EOD.", "Owed reply; commitment due Wed.",
                   risk: "normal", conf: 0.69),
         ]
-        state.actionsReadyCount = state.agentActions.count
+        // v2.2 — persistent to-do strip fixture: open commitments + tasks + one "maybe".
+        state.commitments = [
+            Commitment(id: 1, direction: CommitmentDirection.iOwe.rawValue, service: "signal",
+                       conversationId: "ts-1", conversationName: "Anna — Meridian",
+                       what: "send the revised cap table", dueAt: at(18, 0), evidenceMessageId: nil,
+                       status: CommitmentStatus.open.rawValue, createdAt: at(8, 44)),
+            Commitment(id: 2, direction: CommitmentDirection.theyOwe.rawValue, service: "slack",
+                       conversationId: "ops-1", conversationName: "#launch-room",
+                       what: "post the incident postmortem", dueAt: nil, evidenceMessageId: nil,
+                       status: CommitmentStatus.open.rawValue, createdAt: at(7, 16)),
+        ]
+        state.commitmentsCount = state.commitments.count
+        // Flip the lowest-confidence reply to a "maybe" so the strip's Maybe bucket renders.
+        if let last = state.agentActions.indices.last {
+            state.agentActions[last].isMaybe = true
+        }
+        state.actionsReadyCount = state.agentActions.filter { !$0.isMaybe }.count
         return state
     }
 
