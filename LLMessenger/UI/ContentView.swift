@@ -186,7 +186,7 @@ private struct FirstBriefPreparingView: View {
                     .fill(Theme.signal)
                     .frame(width: 6, height: 6)
                     .opacity(failed ? 1 : (pulse ? 1 : 0.25))
-                WireLabel(failed ? "Couldn't build your first brief" : "Preparing your first brief",
+                WireLabel(failed ? "Couldn't build your first digest" : "Preparing your first digest",
                           color: failed ? Theme.signal : Theme.textSecondary)
                 Spacer(minLength: 0)
             }
@@ -223,7 +223,7 @@ private struct FirstBriefPreparingView: View {
                 .opacity(reduceMotion ? 0.9 : (pulse ? 1 : 0.5))
                 .animation(reduceMotion ? nil : .easeInOut(duration: 1.15).repeatForever(autoreverses: true), value: pulse)
 
-                Text("Reading your messages and writing your first brief. This usually takes a moment.")
+                Text("Reading your messages and writing your first digest. This usually takes a moment.")
                     .font(Theme.sans(12.5))
                     .foregroundStyle(Theme.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -251,7 +251,7 @@ private struct FirstBriefPreparingView: View {
 
     private var friendlyError: String {
         let e = (appState.lastError ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return e.isEmpty ? "Something went wrong building your first brief. You can try again." : e
+        return e.isEmpty ? "Something went wrong building your first digest. You can try again." : e
     }
 
     private var looksLikeConfigError: Bool {

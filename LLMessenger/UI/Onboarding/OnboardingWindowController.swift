@@ -83,11 +83,11 @@ private struct OnboardingView: View {
     @State private var tipIndex = 0
     @State private var firstBriefReady = false
     private let tips = [
-        "Your first brief will be ready in a few minutes.",
-        "Open the menu bar icon any time to check for new briefs.",
-        "Reply directly from your brief — LLMessenger drafts in your voice.",
+        "Your first daily digest will be ready in a few minutes.",
+        "Open the menu bar icon any time — it updates whenever new messages arrive.",
+        "LLMessenger spots what needs a reply and drafts one in your voice.",
         "The Desk shows everything that needs your attention today.",
-        "LLMessenger learns your tone and relationships over time."
+        "LLMessenger learns your tone and the people you talk to over time."
     ]
 
     private var repo: SettingsRepository { SettingsRepository(database: database) }
@@ -160,7 +160,7 @@ private struct OnboardingView: View {
             VStack(spacing: 20) {
                 stepHeader(
                     title: "Connect your messages",
-                    subtitle: "Choose which services to include in your briefs. You can change this any time."
+                    subtitle: "LLMessenger reads your messages, writes a daily digest, and highlights what needs your reply — all on this Mac. Choose where to read from."
                 )
 
                 serviceRow(title: "iMessage", icon: "message.fill",
@@ -394,14 +394,14 @@ private struct OnboardingView: View {
 
             stepHeader(
                 title: "Almost ready",
-                subtitle: "Before your first brief, we'll do two things in the background."
+                subtitle: "Before your first digest, we'll do two things in the background."
             )
 
             VStack(spacing: 12) {
                 whyCard(
                     icon: "calendar.badge.clock",
                     title: "Build your 7-day history",
-                    body: "We read your last week of messages so your first brief has full context — not just what arrives from today forward."
+                    body: "We read your last week of messages so your first digest has full context — not just what arrives from today forward."
                 )
                 whyCard(
                     icon: "person.2.fill",
@@ -433,14 +433,14 @@ private struct OnboardingView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 36))
                         .foregroundStyle(Theme.ok)
-                    Text("Your first brief is ready.")
+                    Text("Your first digest is ready.")
                         .font(Theme.sans(13, weight: .medium))
                         .foregroundStyle(Theme.textPrimary)
                 } else {
                     ProgressView()
                         .scaleEffect(1.3)
                         .tint(Theme.textSecondary)
-                    Text("Reading your messages…")
+                    Text("Reading your messages and writing your first digest…")
                         .font(Theme.sans(13, weight: .medium))
                         .foregroundStyle(Theme.textSecondary)
                 }
