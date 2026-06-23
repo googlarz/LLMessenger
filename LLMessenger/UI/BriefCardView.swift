@@ -55,6 +55,8 @@ struct BriefCardView: View {
     /// hover transition (PERF-2026-06-12 #1).
     let conversationContext: ConversationContext?
     let onShowTimeline: (String, String, String) -> Void
+    /// When the brief was created — shown as a relative recency label in the stamp row.
+    var briefCreatedAt: Date? = nil
     /// When true, the card renders expanded by default even if not high priority.
     /// Used to promote the lead med card when no high cards exist in the brief.
     var promoted: Bool = false
@@ -189,6 +191,13 @@ struct BriefCardView: View {
 
             Spacer(minLength: 8)
 
+            if let t = briefCreatedAt {
+                Text(t.relativeLabel)
+                    .font(Theme.mono(10))
+                    .foregroundStyle(Theme.textTertiary.opacity(0.7))
+                    .help("Brief generated \(t.relativeLabel)")
+            }
+
             if card.counts.messages > 1 {
                 Text("\(card.counts.messages)M · \(card.counts.people)P")
                     .font(Theme.mono(11))
@@ -259,6 +268,17 @@ struct BriefCardView: View {
 
     @ViewBuilder
     private var expandedBody: some View {
+        // #13 — for high cards, float the callback above the prose so "why NEEDS YOU"
+        // is answered before the reader has to parse the full summary.
+        if isHigh, let reason = card.callback, !reason.isEmpty {
+            Text(reason)
+                .font(Theme.sans(12))
+                .italic()
+                .foregroundStyle(isHandled ? Theme.textTertiary : Theme.signal.opacity(0.75))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
         Text(card.summary)
             .font(Theme.bodyFont)
             .foregroundStyle(Theme.textPrimary.opacity(isHandled ? 0.55 : 0.88))
@@ -266,7 +286,7 @@ struct BriefCardView: View {
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
 
-        if let callback = card.callback, !callback.isEmpty {
+        if let callback = card.callback, !callback.isEmpty, !isHigh {
             HStack(alignment: .top, spacing: 8) {
                 Text("↩")
                     .font(Theme.mono(11))
@@ -639,5 +659,18 @@ struct LabelEditorPopover: View {
         }
         .padding(20)
         .frame(width: 320)
+    }
+}
+
+// MARK: - Date helper
+
+private extension Date {
+    /// Compact relative label: "just now", "5m ago", "2h ago", "3d ago".
+    var relativeLabel: String {
+        let secs = Int(Date().timeIntervalSince(self))
+        if secs < 60  { return "just now" }
+        if secs < 3600 { return "\(secs / 60)m ago" }
+        if secs < 86400 { return "\(secs / 3600)h ago" }
+        return "\(secs / 86400)d ago"
     }
 }

@@ -230,6 +230,7 @@ struct BriefProseView: View {
                     onShowTimeline: { service, convId, name in
                         showingTimeline = TimelineTarget(service: service, conversationId: convId, displayName: name)
                     },
+                    briefCreatedAt: brief.createdAt,
                     promoted: idx < promotedCount
                 )
                 .opacity(appeared ? 1 : 0)
