@@ -128,7 +128,7 @@ struct InboxView: View {
     private func briefSection(_ brief: Brief, cards: [BriefCard]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                WireLabel("Needs you in the brief", color: Theme.signal)
+                WireLabel("Needs you in the digest", color: Theme.signal)
                 Spacer()
             }
             .padding(.horizontal, Theme.gutter)
