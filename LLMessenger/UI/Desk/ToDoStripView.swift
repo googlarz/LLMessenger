@@ -77,8 +77,13 @@ struct ToDoStripView: View {
                     .lineLimit(1)
             }
             Spacer()
-            Button("DONE") { appState.markCommitmentFulfilled(c) }
+            // i_owe → "DONE" (you delivered); they_owe → "GOT IT" (they delivered) — same
+            // action (mark fulfilled), but the label and VoiceOver text disambiguate which.
+            Button(c.directionEnum == .iOwe ? "DONE" : "GOT IT") { appState.markCommitmentFulfilled(c) }
                 .buttonStyle(WireActionStyle())
+                .accessibilityLabel(c.directionEnum == .iOwe
+                    ? "Mark done, you delivered: \(c.what)"
+                    : "Mark received, they delivered: \(c.what)")
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 9)
@@ -96,6 +101,7 @@ struct ToDoStripView: View {
             Spacer()
             Button("DONE") { if let id = t.id { appState.completeTask(id) } }
                 .buttonStyle(WireActionStyle())
+                .accessibilityLabel("Complete task: \(t.text)")
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 9)
@@ -125,8 +131,10 @@ struct ToDoStripView: View {
             HStack(spacing: 8) {
                 Button("APPROVE") { appState.approveAction(a) }
                     .buttonStyle(WireActionStyle())
+                    .accessibilityLabel("Approve and send: \(a.title)")
                 Button("SKIP") { appState.skipAction(a) }
                     .buttonStyle(WireActionStyle())
+                    .accessibilityLabel("Skip: \(a.title)")
                 Spacer()
             }
         }
