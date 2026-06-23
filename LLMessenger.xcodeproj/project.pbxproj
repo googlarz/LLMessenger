@@ -125,6 +125,7 @@
 		8F6EFC69ED3C075B0263B502 /* AdversarialResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2001BAFBE6E8EB71D5EEDEAB /* AdversarialResponseTests.swift */; };
 		94D87E437489209C34A52596 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD49D8511186D6C7D97DCE1 /* ChatViewModel.swift */; };
 		95A2593B4891EC65019E1568 /* SignalCLIAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4B8C1E7C4BDF5C7E5490F0 /* SignalCLIAdapter.swift */; };
+		971400B9159EBF05EFC2A79C /* DelegationPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5230D262494DD38D07479380 /* DelegationPipelineTests.swift */; };
 		99DF7C943776ACA97E3BEBFE /* PollEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD35DAA3149EDABD48268EB /* PollEngineTests.swift */; };
 		9B30345F5A5A20571E4BE12D /* AboutSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 792419D090E0BA27E26988ED /* AboutSettingsTab.swift */; };
 		9B4FFF06B4321D79BA7FBDB7 /* CommitmentDeriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EB0B279B88D95171226FE1 /* CommitmentDeriver.swift */; };
@@ -301,6 +302,7 @@
 		4DEDA8ED7C4E649DCBD9BEE7 /* DatabaseIntegrityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseIntegrityTests.swift; sourceTree = "<group>"; };
 		4DF82DF450F3BE04F68ACE24 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		507F825E0D249E971E451E12 /* ConversationTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTimelineView.swift; sourceTree = "<group>"; };
+		5230D262494DD38D07479380 /* DelegationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelegationPipelineTests.swift; sourceTree = "<group>"; };
 		5505C31BEA21DA121B801309 /* AnthropicClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicClient.swift; sourceTree = "<group>"; };
 		582B11F8D5DBBF872D8DDAF0 /* ConversationToneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationToneTests.swift; sourceTree = "<group>"; };
 		595169617BDF071C68E4B357 /* LLMessenger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LLMessenger.entitlements; sourceTree = "<group>"; };
@@ -645,6 +647,7 @@
 				4DEDA8ED7C4E649DCBD9BEE7 /* DatabaseIntegrityTests.swift */,
 				276519F649E84201C4C1D365 /* DeepIntegrationTests.swift */,
 				D8C2EEA87E1CE3CFC017BF0B /* DeepValidationTests.swift */,
+				5230D262494DD38D07479380 /* DelegationPipelineTests.swift */,
 				2064C24212405ABF70C71637 /* DelegationTests.swift */,
 				6F00D8EE5FC549230BFB281E /* DemoSeederTests.swift */,
 				E82D9B6A89CA7BF31CBF04C4 /* DesignSnapshotTests.swift */,
@@ -1221,6 +1224,7 @@
 				A7678C24739CB1709B5418C1 /* DatabaseIntegrityTests.swift in Sources */,
 				051BE19FFE796E11D9312A4E /* DeepIntegrationTests.swift in Sources */,
 				55D5BEFF888909CDB585F8F2 /* DeepValidationTests.swift in Sources */,
+				971400B9159EBF05EFC2A79C /* DelegationPipelineTests.swift in Sources */,
 				EC4191319C9F98C5C2FB639C /* DelegationTests.swift in Sources */,
 				459AB2A9F7BF53BA569C6C52 /* DemoSeederTests.swift in Sources */,
 				263ED076DF242164549F4679 /* DesignSnapshotTests.swift in Sources */,

@@ -420,7 +420,9 @@ final class AppState: ObservableObject {
     /// Fires after the Undo window elapses. Re-reads the row and re-checks it is still
     /// scheduled before sending (defends against a race with Undo). Sends via the SAME
     /// adapter.send path as approveAction and writes a "delegated" audit row.
-    private func fireDelegatedSend(actionID: Int64) async {
+    // Internal (not private) so the delegation pipeline integration test can drive the
+    // fire path directly instead of waiting out the real 30s undo timer.
+    func fireDelegatedSend(actionID: Int64) async {
         armedTimers[actionID] = nil
         guard let action = try? repository.fetchAgentAction(id: actionID),
               action.statusEnum == .scheduled,
