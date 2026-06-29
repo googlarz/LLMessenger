@@ -13,7 +13,7 @@ Free. Open source. On-device AI. Your messages never have to leave your Mac, and
 [![CI](https://github.com/googlarz/LLMessenger/actions/workflows/ci.yml/badge.svg)](https://github.com/googlarz/LLMessenger/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/googlarz/LLMessenger)](https://github.com/googlarz/LLMessenger/releases/latest)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](https://github.com/googlarz/LLMessenger/releases/latest)
+[![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)](https://github.com/googlarz/LLMessenger/releases/latest)
 [![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)](project.yml)
 
 [**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [Quick start](#quick-start) · [The agent](#it-doesnt-just-tell-you--it-acts) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
@@ -60,6 +60,8 @@ Older versions *told you* what needed doing. Now an agent runs quietly in the ba
 
 The firewall protects you from what's coming *in*. **Owed Replies** protects the relationships going *out* — it surfaces the people still waiting on you, ranked by who counts, so a question from Mum or your kid's coach never gets buried under work chatter.
 
+Digest cards separate **urgency** from **actionability**: a low-stakes family question can still be marked reply-needed without being inflated into an emergency.
+
 ![Owed Replies — who's waiting on you, ranked by who matters](docs/owed.png)
 
 It learns who matters from your own behavior, or you can just tell it: *"this is my son's basketball team — the coach posts about training and games, flag those, ignore the rest."* That per-conversation **context** then sharpens every triage decision and every digest. Conversations you mark private are never sent to a cloud model.
@@ -101,7 +103,7 @@ CI builds and runs all tests on every push. The [release workflow](.github/workf
 | Backend | Setup | Cost | Privacy |
 |---|---|---|---|
 | **On-Device** (Apple Intelligence) | None — auto-selected | Free | Nothing leaves your Mac · macOS 26+ |
-| **Ollama** | `brew install ollama && ollama pull llama3.1` | Free | Nothing leaves your Mac · macOS 13+ |
+| **Ollama** | `brew install ollama && ollama pull llama3.1` | Free | Nothing leaves your Mac · macOS 14+ |
 | **Anthropic Claude** | API key | Pay per use | Opt-in cloud — best digest quality |
 | **OpenAI** | API key | Pay per use | Opt-in cloud |
 
@@ -129,7 +131,9 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) i
 
 **Digests**
 - Unified inbox: iMessage, Signal, Telegram, Slack (multi-workspace).
-- Structured cards: headline, prose summary, action items, key quotes, priority.
+- Structured cards: headline, prose summary, action items, key quotes, priority, reply-needed state, and the reason it matters.
+- Actionability is explicit: `needsReply`, reason, and grounding chips separate "urgent" from "you should answer this."
+- One conversation can produce multiple cards when a thread contains distinct asks, decisions, and FYIs.
 - **Source-grounded** — every card cites exact message IDs; quotes are validated against real messages. No hallucinated summaries.
 - Conversation memory: rolling per-conversation summaries and unresolved actions carry across digest cycles, and older digests compress into episodic context.
 - Your own replies are captured as context, so the AI knows when you've already responded.
@@ -226,7 +230,7 @@ iMessage history lives in `~/Library/Messages/chat.db`, which macOS protects beh
 <details>
 <summary><strong>Will it ever auto-send a message?</strong></summary>
 
-No. Quick replies and AI drafts only populate the composer. Every send is a click you make.
+By default, no. Quick replies and AI drafts wait for your tap. If you explicitly enable scoped delegation for one conversation and one low-risk action type, the app can auto-send that narrow class only after the same safety checks described above: known recipient, no links or money, 30-second Undo, audit log, and global kill switch.
 </details>
 
 <details>
@@ -249,7 +253,7 @@ Code signing requires a paid Apple Developer account, and this is a free communi
 
 ## Requirements
 
-- macOS 13 Ventura or later (widget needs 14+, On-Device AI needs 26+ with Apple Intelligence)
+- macOS 14 Sonoma or later (On-Device AI needs macOS 26+ with Apple Intelligence)
 - **iMessage** — works out of the box with Full Disk Access
 - **Signal** *(optional)* — [signal-mcp](https://github.com/googlarz/signal-mcp) running locally
 - **Telegram** *(optional)* — bundled adapter, interactive sign-in from Settings
@@ -273,7 +277,20 @@ xcodebuild -scheme LLMessenger test    # keep them green
 - [ ] WhatsApp adapter (pending viable local API)
 
 <details>
-<summary>Shipped (v1.4 – v2.2)</summary>
+<summary>Shipped (v1.4 – v2.2.3)</summary>
+
+**v2.2.3** — brief quality + actionability:
+- ✅ Explicit `needsReply`, `reason`, and `grounding` fields on digest cards
+- ✅ Reply-needed is separate from urgency: low-priority questions can still surface without becoming high priority
+- ✅ Reason and grounding chips explain why a card matters and whether it is direct, contextual, or inferred
+- ✅ One conversation can produce multiple cards when it contains distinct asks, decisions, or FYIs
+- ✅ Priority rules now transform the visible stored digest JSON, so rule outcomes match what the user sees
+
+**v2.2.2** — action-first UX + large-inbox safety:
+- ✅ Unified Act feed with keyboard navigation, staged sends, undo, editable drafts, and source-aware action flow
+- ✅ Large-inbox bounded loading, targeted context/card fetches, and "Load older digests"
+- ✅ Local-only mode stops cloud-only adapters immediately; Slack 429 retry handling is capped
+- ✅ Stronger prompt, source, and reply-draft guardrails for multi-conversation digests
 
 **v2.2.1** — polish + accessibility pass:
 - ✅ **"Digest" rename** — all user-visible copy now says "digest" consistently (was mixed "brief" / "digest")
