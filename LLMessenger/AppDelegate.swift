@@ -16,6 +16,8 @@ extension Notification.Name {
     /// Posted after any health-record write (retry, poll completion, error). The
     /// Settings tab listens to re-read the health dict and repaint cards.
     static let serviceHealthDidChange = Notification.Name("com.llmessenger.serviceHealthDidChange")
+    /// Posted when privacy mode changes require runtime adapter/provider reconciliation.
+    static let privacyModeDidChange = Notification.Name("com.llmessenger.privacyModeDidChange")
 }
 
 @MainActor
@@ -459,6 +461,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     guard let self else { return }
                     let llm = self.resolvedProvider()
                     self.briefEngine?.client = llm.client
+                }
+            }
+
+            NotificationCenter.default.addObserver(
+                forName: .privacyModeDidChange, object: nil, queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor [weak self] in
+                    guard let self, let db = self.database,
+                          let engine = self.pollEngine, let state = self.appState
+                    else { return }
+                    let llm = self.resolvedProvider()
+                    self.briefEngine?.client = llm.client
+
+                    if SettingsRepository().loadLocalOnlyMode() {
+                        engine.unregister(serviceID: "slack")
+                        state.adapters.removeValue(forKey: "slack")?.stop()
+                    } else {
+                        self.registerAdapter(serviceID: "slack", engine: engine, db: db, state: state)
+                    }
+                    state.lastError = nil
+                    NotificationCenter.default.post(name: .serviceHealthDidChange, object: nil)
                 }
             }
 

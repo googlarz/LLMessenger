@@ -20,8 +20,16 @@ enum KeychainError: Error, LocalizedError {
 // macOS only prompts once (and after "Always Allow", never again).
 // Legacy per-account items are migrated automatically on first read/write.
 struct KeychainStore {
-    static let service = "LLMessenger"
-    static let account = "credentials"
+    static let defaultService = "LLMessenger"
+    static let defaultAccount = "credentials"
+
+    let service: String
+    let account: String
+
+    init(service: String = Self.defaultService, account: String = Self.defaultAccount) {
+        self.service = service
+        self.account = account
+    }
 
     // MARK: - Public interface (same as before — callers unchanged)
 
@@ -42,6 +50,10 @@ struct KeychainStore {
         guard bag[key] != nil else { return }
         bag.removeValue(forKey: key)
         try save(bag)
+    }
+
+    func deleteStore() {
+        SecItemDelete(searchQuery() as CFDictionary)
     }
 
     // MARK: - Migration from individual items
@@ -78,8 +90,8 @@ struct KeychainStore {
     private func load() -> [String: String] {
         let query: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
-            kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: Self.account,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
             kSecReturnData as String:  true,
             kSecMatchLimit as String:  kSecMatchLimitOne
         ]
@@ -98,8 +110,8 @@ struct KeychainStore {
         }
         let searchQuery: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
-            kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: Self.account
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
         ]
         let updateStatus = SecItemUpdate(
             searchQuery as CFDictionary,
@@ -117,5 +129,13 @@ struct KeychainStore {
             return
         }
         throw KeychainError.unexpectedStatus(updateStatus)
+    }
+
+    private func searchQuery() -> [String: Any] {
+        [
+            kSecClass as String:       kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
     }
 }

@@ -266,6 +266,36 @@ struct BriefRepository {
         }
     }
 
+    func fetchRecentBriefs(limit: Int = 500, including selectedID: Int64? = nil) throws -> [Brief] {
+        try database.dbQueue.read { db in
+            var briefs = try Brief
+                .order(Column("createdAt").desc)
+                .limit(limit)
+                .fetchAll(db)
+
+            if let selectedID,
+               !briefs.contains(where: { $0.id == selectedID }),
+               let selected = try Brief.fetchOne(db, key: selectedID) {
+                briefs.append(selected)
+                briefs.sort { $0.createdAt > $1.createdAt }
+            }
+            return briefs
+        }
+    }
+
+    func fetchRecentBriefCards(service: String,
+                               conversationId: String,
+                               limit: Int = 5) throws -> [BriefCardRecord] {
+        try database.dbQueue.read { db in
+            try BriefCardRecord
+                .filter(Column("service") == service)
+                .filter(Column("conversationId") == conversationId)
+                .order(Column("createdAt").desc)
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
     func setPinned(briefID: Int64, pinned: Bool) throws {
         try database.dbQueue.write { db in
             try db.execute(
@@ -614,9 +644,32 @@ struct BriefRepository {
         }
     }
 
+    func fetchConversationContexts(for pairs: [(service: String, conversationId: String)]) throws -> [ConversationContext] {
+        let unique = Array(Set(pairs.map { "\($0.service)|\($0.conversationId)" }))
+        guard !unique.isEmpty else { return [] }
+
+        return try database.dbQueue.read { db in
+            var contexts: [ConversationContext] = []
+            for batchStart in stride(from: 0, to: unique.count, by: 250) {
+                let batch = Array(unique[batchStart..<min(batchStart + 250, unique.count)])
+                let placeholders = batch.map { _ in "(service = ? AND conversationId = ?)" }.joined(separator: " OR ")
+                let args = StatementArguments(batch.flatMap { key -> [String] in
+                    let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
+                    return [parts.first ?? "", parts.count > 1 ? parts[1] : ""]
+                })
+                contexts.append(contentsOf: try ConversationContext.fetchAll(
+                    db,
+                    sql: "SELECT * FROM conversationContexts WHERE \(placeholders)",
+                    arguments: args
+                ))
+            }
+            return contexts
+        }
+    }
+
     // MARK: - Agent Actions
 
-    /// The Act queue: pending proposals plus armed (scheduled) delegated auto-sends.
+    /// The Act queue: pending proposals plus armed scheduled sends.
     func fetchPendingAgentActions() throws -> [AgentAction] {
         let active = [AgentActionStatus.pending.rawValue, AgentActionStatus.scheduled.rawValue]
         return try database.dbQueue.read { db in
@@ -627,21 +680,64 @@ struct BriefRepository {
         }
     }
 
-    /// Arms an action for delegated auto-send: status "scheduled" + fire time.
-    func armAgentActionForAutoSend(id: Int64, scheduledAt: Date) throws {
+    /// Arms an action behind an Undo window: status "scheduled" + fire time + schedule origin.
+    @discardableResult
+    func armAgentActionForAutoSend(id: Int64,
+                                   scheduledAt: Date,
+                                   kind: AgentActionScheduleKind = .delegated,
+                                   undoWindow: TimeInterval = AgentAction.delegatedUndoWindow) throws -> Bool {
         try database.dbQueue.write { db in
             try db.execute(
-                sql: "UPDATE agentActions SET status = ?, scheduledAt = ? WHERE id = ?",
-                arguments: [AgentActionStatus.scheduled.rawValue, scheduledAt, id])
+                sql: """
+                UPDATE agentActions
+                SET status = ?, scheduledAt = ?, scheduledKind = ?, scheduledWindow = ?
+                WHERE id = ? AND status = ?
+                """,
+                arguments: [
+                    AgentActionStatus.scheduled.rawValue,
+                    scheduledAt,
+                    kind.rawValue,
+                    undoWindow,
+                    id,
+                    AgentActionStatus.pending.rawValue
+                ])
+            return db.changesCount > 0
         }
     }
 
-    /// Cancels an armed auto-send (user tapped Undo): back to pending, no fire time.
+    /// Cancels an armed scheduled send (user tapped Undo): back to pending, no fire time.
     func disarmAgentAction(id: Int64) throws {
         try database.dbQueue.write { db in
             try db.execute(
-                sql: "UPDATE agentActions SET status = ?, scheduledAt = NULL WHERE id = ?",
-                arguments: [AgentActionStatus.pending.rawValue, id])
+                sql: """
+                UPDATE agentActions
+                SET status = ?, scheduledAt = NULL, scheduledKind = NULL, scheduledWindow = NULL
+                WHERE id = ? AND status = ?
+                """,
+                arguments: [
+                    AgentActionStatus.pending.rawValue,
+                    id,
+                    AgentActionStatus.scheduled.rawValue
+                ])
+        }
+    }
+
+    /// Claims a still-scheduled action for execution. Returns false if Undo or another
+    /// timer already changed the row, preventing duplicate sends from duplicate timers.
+    func claimScheduledActionForExecution(id: Int64) throws -> Bool {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                UPDATE agentActions
+                SET status = ?, scheduledAt = NULL, scheduledKind = NULL, scheduledWindow = NULL
+                WHERE id = ? AND status = ?
+                """,
+                arguments: [
+                    AgentActionStatus.executing.rawValue,
+                    id,
+                    AgentActionStatus.scheduled.rawValue
+                ])
+            return db.changesCount > 0
         }
     }
 
@@ -670,9 +766,20 @@ struct BriefRepository {
 
     func updateAgentActionStatus(id: Int64, status: AgentActionStatus, resolvedAt: Date?) throws {
         try database.dbQueue.write { db in
-            try db.execute(
-                sql: "UPDATE agentActions SET status = ?, resolvedAt = ? WHERE id = ?",
-                arguments: [status.rawValue, resolvedAt, id])
+            if status == .scheduled {
+                try db.execute(
+                    sql: "UPDATE agentActions SET status = ?, resolvedAt = ? WHERE id = ?",
+                    arguments: [status.rawValue, resolvedAt, id])
+            } else {
+                try db.execute(
+                    sql: """
+                    UPDATE agentActions
+                    SET status = ?, resolvedAt = ?, scheduledAt = NULL,
+                        scheduledKind = NULL, scheduledWindow = NULL
+                    WHERE id = ?
+                    """,
+                    arguments: [status.rawValue, resolvedAt, id])
+            }
         }
     }
 

@@ -30,15 +30,21 @@ struct SearchResultsView: View {
                     if !briefResults.isEmpty {
                         SectionLabel(text: "BRIEFS")
                         ForEach(briefResults, id: \.id) { brief in
-                            BriefSearchResultRow(brief: brief)
-                                .onTapGesture { selectBrief(brief) }
+                            Button { selectBrief(brief) } label: {
+                                BriefSearchResultRow(brief: brief)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Open brief, \(brief.notificationText)")
                         }
                     }
                     if !messageResults.isEmpty {
                         SectionLabel(text: "MESSAGES")
                         ForEach(messageResults, id: \.messageRowId) { result in
-                            MessageSearchResultRow(result: result)
-                                .onTapGesture { openConversation(result) }
+                            Button { openConversation(result) } label: {
+                                MessageSearchResultRow(result: result)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Open conversation, \(result.conversationName ?? result.conversationId)")
                         }
                     }
                 }
@@ -98,6 +104,7 @@ private struct BriefSearchResultRow: View {
         .contentShape(Rectangle())
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -132,6 +139,7 @@ private struct MessageSearchResultRow: View {
         .contentShape(Rectangle())
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var plainSnippet: String {

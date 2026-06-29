@@ -16,6 +16,7 @@ import Foundation
 import GRDB
 
 struct CommitmentDeriver {
+    private static let maxMessagesPerRun = 2_000
 
     func derive(db: AppDatabase,
                 llmClient: any LLMClient,
@@ -29,6 +30,7 @@ struct CommitmentDeriver {
             try Message
                 .filter(Column("timestamp") >= cutoff)
                 .order(Column("timestamp").asc)
+                .limit(Self.maxMessagesPerRun)
                 .fetchAll(grdb)
         }
 

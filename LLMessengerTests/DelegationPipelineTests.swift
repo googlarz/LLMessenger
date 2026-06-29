@@ -212,6 +212,23 @@ final class DelegationPipelineTests: XCTestCase {
         XCTAssertEqual(try audits(db).count, 0)
     }
 
+    func testDelegatedFireWithoutAdapterReturnsToPending() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        try seedDelegated(repo, kinds: [.ack])
+        let action = try insertAction(db, kind: .ack, payload: AgentAction.encodeReplyPayload("Got it"))
+        try repo.armAgentActionForAutoSend(id: action.id!, scheduledAt: Date().addingTimeInterval(30))
+
+        let state = makeState(db)
+        state.adapters = [:]
+        await state.fireDelegatedSend(actionID: action.id!)
+
+        let row = try XCTUnwrap(repo.fetchAgentAction(id: action.id!))
+        XCTAssertEqual(row.statusEnum, .pending,
+                       "a disconnected adapter must not leave an un-timered scheduled row behind")
+        XCTAssertNil(row.scheduledAt)
+    }
+
     // MARK: - injected instruction in message content cannot arm a send
 
     func testInjectedInstructionCannotArmSend() throws {
@@ -279,11 +296,93 @@ final class DelegationPipelineTests: XCTestCase {
         state.agentActions = [normal, maybe]
 
         state.batchApproveLowRisk()
-        await waitUntil { (try? repo.fetchAgentAction(id: normal.id!))?.statusEnum == .done }
+        await waitUntil { (try? repo.fetchAgentAction(id: normal.id!))?.statusEnum == .scheduled }
 
-        XCTAssertEqual(spy.sentMessages.map(\.text), ["on my way"], "only the non-maybe low-risk action is sent")
+        XCTAssertTrue(spy.sentMessages.isEmpty, "bulk low-risk approval must stage the send behind the undo window")
+        XCTAssertEqual(try repo.fetchAgentAction(id: normal.id!)?.statusEnum, .scheduled,
+                       "the non-maybe low-risk action enters the undo window")
         XCTAssertEqual(try repo.fetchAgentAction(id: maybe.id!)?.statusEnum, .pending,
-                       "a maybe is never bulk-approved — it stays the user's call")
+                       "a maybe is never bulk-staged — it stays the user's call")
+    }
+
+    func testManualStageIsIdempotentAndSendsOnce() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let action = try insertAction(db, kind: .reply, payload: AgentAction.encodeReplyPayload("on my way"))
+
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        let state = makeState(db)
+        state.adapters = ["signal": spy]
+        state.agentActions = [action]
+
+        state.stageManualApprove(action)
+        state.stageManualApprove(action)
+        await state.fireManualApprovedSend(actionID: action.id!)
+        await waitUntil { (try? repo.fetchAgentAction(id: action.id!))?.statusEnum == .done }
+
+        XCTAssertEqual(spy.sentMessages.map(\.text), ["on my way"],
+                       "double-clicking Approve must not create duplicate sends")
+        XCTAssertEqual(try repo.fetchAgentAction(id: action.id!)?.statusEnum, .done)
+    }
+
+    func testManualFireUsesLatestPayloadAfterEditDuringUndoWindow() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let action = try insertAction(db, kind: .reply, payload: AgentAction.encodeReplyPayload("old"))
+
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        let state = makeState(db)
+        state.adapters = ["signal": spy]
+        state.agentActions = [action]
+
+        state.stageManualApprove(action)
+        try repo.updateAgentActionPayload(id: action.id!, payload: AgentAction.encodeReplyPayload("new"))
+        await state.fireManualApprovedSend(actionID: action.id!)
+        await waitUntil { (try? repo.fetchAgentAction(id: action.id!))?.statusEnum == .done }
+
+        XCTAssertEqual(spy.sentMessages.map(\.text), ["new"],
+                       "manual staged sends must re-read the row before sending")
+    }
+
+    func testReloadRearmsFutureManualScheduledAction() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let action = try insertAction(db, kind: .reply, payload: AgentAction.encodeReplyPayload("later"))
+        try repo.armAgentActionForAutoSend(
+            id: action.id!,
+            scheduledAt: Date().addingTimeInterval(60),
+            kind: .manual,
+            undoWindow: AgentAction.manualApproveUndoWindow)
+
+        let state = makeState(db)
+        state.reloadAgentActions()
+        await waitUntil { state.armedAutoSendCount == 1 }
+
+        let row = try XCTUnwrap(repo.fetchAgentAction(id: action.id!))
+        XCTAssertEqual(row.statusEnum, .scheduled)
+        XCTAssertEqual(row.scheduledKindEnum, .manual)
+        state.undoAutoSend(row)
+    }
+
+    func testReloadDisarmsExpiredScheduledActionInsteadOfSendingOnLaunch() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let action = try insertAction(db, kind: .reply, payload: AgentAction.encodeReplyPayload("expired"))
+        try repo.armAgentActionForAutoSend(
+            id: action.id!,
+            scheduledAt: Date().addingTimeInterval(-1),
+            kind: .manual,
+            undoWindow: AgentAction.manualApproveUndoWindow)
+
+        let spy = SendTestSpyAdapter(serviceID: "signal")
+        let state = makeState(db)
+        state.adapters = ["signal": spy]
+        state.reloadAgentActions()
+        await waitUntil { (try? repo.fetchAgentAction(id: action.id!))?.statusEnum == .pending }
+
+        XCTAssertEqual(try repo.fetchAgentAction(id: action.id!)?.statusEnum, .pending,
+                       "missed undo windows should return to manual review, not fire on launch")
+        XCTAssertTrue(spy.sentMessages.isEmpty)
     }
 
     func testReadyCountExcludesMaybeViaReload() async throws {

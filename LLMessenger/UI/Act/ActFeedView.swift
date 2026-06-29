@@ -14,7 +14,19 @@ enum ActItem: Identifiable {
 
     var id: String {
         switch self {
-        case .agentAction(let a): return "action-\(a.id ?? 0)"
+        case .agentAction(let a):
+            if let id = a.id { return "action-\(id)" }
+            // Snapshot fixtures and newly-created in-memory actions may not have a
+            // database id yet. Use stable content fields instead of collapsing to 0.
+            return [
+                "action-new",
+                a.service,
+                a.conversationId,
+                a.kind,
+                a.title,
+                "\(a.createdAt.timeIntervalSinceReferenceDate)",
+                a.payload
+            ].joined(separator: "|")
         case .owedReply(let r):   return "owed-\(r.id)"
         }
     }
@@ -100,6 +112,10 @@ enum ActItem: Identifiable {
             return "arrow.turn.up.left"
         }
     }
+
+    var accessibilitySummary: String {
+        "\(name), \(preview)"
+    }
 }
 
 // MARK: - Feed view
@@ -107,10 +123,15 @@ enum ActItem: Identifiable {
 struct ActFeedView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
+    let layout: DeskLayout
 
     @State private var selectedIndex: Int? = nil
     @State private var resolvedInSession = 0
     @State private var editingItemId: String? = nil
+
+    init(layout: DeskLayout = .regular) {
+        self.layout = layout
+    }
 
     private var items: [ActItem] {
         let all: [ActItem] = appState.agentActions.filter { !$0.isMaybe }.map { .agentAction($0) }
@@ -118,24 +139,23 @@ struct ActFeedView: View {
 
         // Precompute context-boosted priority to avoid repeated DB reads in sort comparator.
         // Per-conversation priorityHint ("high" / "low") overrides the AI confidence score.
-        let scores: [String: Int] = Dictionary(uniqueKeysWithValues: all.map { item in
-            let ctx = appState.fetchConversationContext(service: item.service, conversationId: item.conversationId)
+        let scored = all.map { item in
+            let ctx = appState.cachedConversationContext(service: item.service, conversationId: item.conversationId)
             let boost: Int
             switch ctx?.priorityHint {
             case "high": boost = 100
             case "low":  boost = -50
             default:     boost = 0
             }
-            return (item.id, item.priorityScore + boost)
-        })
-
-        return all.sorted {
-            if $0.isStale != $1.isStale { return $0.isStale }
-            let s0 = scores[$0.id, default: 0], s1 = scores[$1.id, default: 0]
-            if s0 != s1 { return s0 > s1 }
-            if $0.isPersonWaiting != $1.isPersonWaiting { return $0.isPersonWaiting }
-            return $0.ageHours > $1.ageHours
+            return (item: item, score: item.priorityScore + boost)
         }
+
+        return scored.sorted { lhs, rhs in
+            if lhs.item.isStale != rhs.item.isStale { return lhs.item.isStale }
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            if lhs.item.isPersonWaiting != rhs.item.isPersonWaiting { return lhs.item.isPersonWaiting }
+            return lhs.item.ageHours > rhs.item.ageHours
+        }.map(\.item)
     }
 
     var body: some View {
@@ -152,24 +172,38 @@ struct ActFeedView: View {
                 selectedIndex = 0
             }
         }
-        // Keyboard navigation — J/K move, Return = approve, S = skip, E = edit, ⌘Z = undo staged
-        .background(
-            Group {
-                Button("") { moveSelection(by: 1) }
-                    .keyboardShortcut("j", modifiers: [])
-                Button("") { moveSelection(by: -1) }
-                    .keyboardShortcut("k", modifiers: [])
-                Button("") { approveSelected() }
-                    .keyboardShortcut(.return, modifiers: [])
-                Button("") { skipSelected() }
-                    .keyboardShortcut("s", modifiers: [])
-                Button("") { editSelected() }
-                    .keyboardShortcut("e", modifiers: [])
-                Button("") { undoLastStaged() }
-                    .keyboardShortcut("z", modifiers: .command)
+        // Keyboard navigation — J/K move, Return = stage, S = skip, E = edit, ⌘Z = undo staged.
+        .background {
+            KeyboardShortcutMonitor(isEnabled: editingItemId == nil) { event in
+                if event.hasCommandOnly, event.normalizedKey == "z" {
+                    undoLastStaged()
+                    return true
+                }
+                guard event.hasNoCommandOptionControl else { return false }
+                switch event.keyCode {
+                case 36:
+                    approveSelected()
+                    return true
+                default:
+                    break
+                }
+                switch event.normalizedKey {
+                case "j":
+                    moveSelection(by: 1)
+                case "k":
+                    moveSelection(by: -1)
+                case "s":
+                    skipSelected()
+                case "e":
+                    editSelected()
+                default:
+                    return false
+                }
+                return true
             }
-            .opacity(0)
-        )
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+        }
         .onChange(of: items.count) { newCount in
             // Clamp selection when items shrink; preserve as much as possible
             if let idx = selectedIndex, idx >= newCount {
@@ -187,7 +221,7 @@ struct ActFeedView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        if appState.agentActions.contains(where: { $0.riskEnum == .low && !$0.isMaybe }) {
+                        if pendingLowRiskActionsCount > 0 {
                             batchBar
                             Rule()
                         }
@@ -197,14 +231,18 @@ struct ActFeedView: View {
                                 set: { if $0 { editingItemId = item.id } else if editingItemId == item.id { editingItemId = nil } }
                             )
                             VStack(spacing: 0) {
-                                ActCardRow(
-                                    item: item,
-                                    isSelected: selectedIndex == index,
-                                    isEditingExternal: isEditingThisCard,
-                                    onTap: { selectedIndex = index },
-                                    onResolved: { resolvedInSession += 1 }
-                                )
-                                .id(item.id)
+                                Button { selectedIndex = index } label: {
+                                    ActCardRow(
+                                        item: item,
+                                        layout: layout,
+                                        isSelected: selectedIndex == index,
+                                        isEditingExternal: isEditingThisCard,
+                                        onResolved: { resolvedInSession += 1 }
+                                    )
+                                    .id(item.id)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(item.accessibilitySummary)
                                 Rule()
                             }
                             .transition(.asymmetric(
@@ -231,31 +269,48 @@ struct ActFeedView: View {
             Image(systemName: "lock.shield")
                 .font(.system(size: 10))
                 .foregroundStyle(Theme.textTertiary)
-            Text("Nothing sends until you approve it.")
+            Text(safetyLine)
                 .font(Theme.sans(11))
                 .foregroundStyle(Theme.textTertiary)
+                .lineLimit(layout == .compact ? 2 : 1)
             Spacer()
         }
-        .padding(.horizontal, Theme.gutter)
+        .padding(.horizontal, layout.gutter)
         .padding(.vertical, 7)
         .background(Theme.surfaceHigh.opacity(0.35))
     }
 
     private var batchBar: some View {
-        let lowRiskCount = appState.agentActions.filter { $0.riskEnum == .low && !$0.isMaybe }.count
+        let lowRiskCount = pendingLowRiskActionsCount
         return HStack {
-            Text("AI confidence: high on \(lowRiskCount)")
+            Text("\(lowRiskCount) low-risk send\(lowRiskCount == 1 ? "" : "s") ready")
                 .font(Theme.mono(10))
                 .foregroundStyle(Theme.textTertiary)
+                .lineLimit(layout == .compact ? 2 : 1)
             Spacer()
-            Button("Stage all safe") {
+            Button("Stage \(lowRiskCount)") {
                 appState.batchApproveLowRisk()
                 resolvedInSession += lowRiskCount
             }
             .buttonStyle(WireActionStyle(tint: Theme.standby))
+            .accessibilityLabel("Stage \(lowRiskCount) low-risk send\(lowRiskCount == 1 ? "" : "s")")
+            .accessibilityHint("Each send waits 5 seconds and can be undone before it sends.")
         }
-        .padding(.horizontal, Theme.gutter)
+        .padding(.horizontal, layout.gutter)
         .padding(.vertical, 8)
+    }
+
+    private var pendingLowRiskActionsCount: Int {
+        appState.agentActions.filter {
+            $0.statusEnum == .pending && $0.riskEnum == .low && !$0.isMaybe
+        }.count
+    }
+
+    private var safetyLine: String {
+        if appState.hasDelegatedLanes {
+            return "Manual sends wait 5s. Delegated lanes wait 30s and can be paused."
+        }
+        return "Manual sends stage for 5s before sending."
     }
 
     // MARK: - Empty state
@@ -355,9 +410,9 @@ private struct ActCardRow: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
 
     let item: ActItem
+    let layout: DeskLayout
     let isSelected: Bool
     @Binding var isEditingExternal: Bool
-    let onTap: () -> Void
     var onResolved: (() -> Void)? = nil
 
     @State private var isHovered = false
@@ -408,7 +463,6 @@ private struct ActCardRow: View {
         .animation(Theme.quick, value: isHovered)
         .animation(Theme.quick, value: isSelected)
         .onHover { isHovered = $0 }
-        .onTapGesture(perform: onTap)
         // Sync the external "E key pressed" signal into the local edit state
         .onChange(of: isEditingExternal, perform: { newVal in
             if newVal && !isEditing {
@@ -416,15 +470,18 @@ private struct ActCardRow: View {
                     editText = a.replyPayload?.draftText ?? a.title
                     isEditing = true
                 }
-                isEditingExternal = false   // consume signal
+            } else if !newVal && isEditing {
+                isEditing = false
             }
         })
         .sheet(isPresented: $showContextEditor) {
             contextEditorSheet
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityAction(named: primaryAccessibilityActionName) {
+            performPrimaryAccessibilityAction()
+        }
     }
 
     @ViewBuilder
@@ -474,7 +531,7 @@ private struct ActCardRow: View {
                 .frame(width: 13)
                 .padding(.top, 2)
 
-            if isEditing, case .agentAction(let a) = item {
+            if isEditing, case .agentAction = item {
                 TextEditor(text: $editText)
                     .font(Theme.bodyFont)
                     .foregroundStyle(Theme.textPrimary)
@@ -530,7 +587,7 @@ private struct ActCardRow: View {
             }
 
             // Chat-to-customize button (only for conversations that support drafting)
-            HStack(spacing: 6) {
+            Group {
                 customizeButton
             }
         }
@@ -542,36 +599,37 @@ private struct ActCardRow: View {
         switch item {
         case .agentAction(let a)
             where a.kindEnum == .reply || a.kindEnum == .followUp || a.kindEnum == .ack:
-            Button("Chat to customize →") {
-                chatViewModel.prepareReply(
-                    service: a.service,
-                    conversationID: a.conversationId,
-                    displayName: a.conversationName
-                )
-            }
-            .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
-            .accessibilityLabel("Open chat to write a custom reply for \(a.conversationName)")
-            Button("Customize lane") { showContextEditor = true }
-                .buttonStyle(WireActionStyle())
-                .accessibilityLabel("Edit priority and delegation settings for \(a.conversationName)")
-        case .owedReply(let r):
-            if !isDraftingDisabled(r) {
-                Button("Chat to compose →") {
-                    chatViewModel.prepareReply(
-                        service: r.service,
-                        conversationID: r.conversationId,
-                        displayName: r.conversationName
-                    )
+            if layout == .compact {
+                VStack(alignment: .leading, spacing: 4) {
+                    customizeReplyButton(service: a.service, conversationID: a.conversationId, displayName: a.conversationName)
+                    customizeLaneButton(name: a.conversationName)
                 }
-                .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
-                .accessibilityLabel("Open chat to compose a reply for \(r.conversationName)")
+            } else {
+                HStack(spacing: 6) {
+                    customizeReplyButton(service: a.service, conversationID: a.conversationId, displayName: a.conversationName)
+                    customizeLaneButton(name: a.conversationName)
+                }
             }
-            Button("Customize lane") { showContextEditor = true }
-                .buttonStyle(WireActionStyle())
-                .accessibilityLabel("Edit priority and delegation settings for \(r.conversationName)")
+        case .owedReply(let r):
+            if layout == .compact {
+                VStack(alignment: .leading, spacing: 4) {
+                    if !isDraftingDisabled(r) {
+                        customizeReplyButton(service: r.service, conversationID: r.conversationId, displayName: r.conversationName,
+                                             title: "Chat to compose →")
+                    }
+                    customizeLaneButton(name: r.conversationName)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    if !isDraftingDisabled(r) {
+                        customizeReplyButton(service: r.service, conversationID: r.conversationId, displayName: r.conversationName,
+                                             title: "Chat to compose →")
+                    }
+                    customizeLaneButton(name: r.conversationName)
+                }
+            }
         default:
-            Button("Customize lane") { showContextEditor = true }
-                .buttonStyle(WireActionStyle())
+            customizeLaneButton(name: item.name)
         }
     }
 
@@ -579,59 +637,83 @@ private struct ActCardRow: View {
 
     @ViewBuilder
     private var actionRow: some View {
-        HStack(spacing: 6) {
-            switch item {
-            case .agentAction(let a):
-                if a.statusEnum == .scheduled {
-                    scheduledBar(a)
-                } else if isEditing {
+        if layout == .compact {
+            VStack(alignment: .leading, spacing: 6) {
+                actionControls
+            }
+            .padding(.top, 2)
+        } else {
+            HStack(spacing: 6) {
+                actionControls
+                Spacer()
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    @ViewBuilder
+    private var actionControls: some View {
+        switch item {
+        case .agentAction(let a):
+            if a.statusEnum == .scheduled {
+                scheduledBar(a)
+            } else if isEditing {
+                HStack(spacing: 6) {
                     actionButton("SAVE", tint: Theme.standby) {
                         appState.editAction(a, newText: editText)
                         isEditing = false
+                        isEditingExternal = false
                     }
-                    actionButton("CANCEL") { isEditing = false }
-                } else {
-                    approveButton(a)
-                    actionButton("EDIT") {
-                        editText = a.replyPayload?.draftText ?? a.payload
-                        isEditing = true
-                    }
-                    actionButton("SKIP") {
-                        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-                        appState.skipAction(a)
-                        onResolved?()
+                    actionButton("CANCEL") {
+                        isEditing = false
+                        isEditingExternal = false
                     }
                 }
-            case .owedReply(let r):
+            } else if layout == .compact {
+                VStack(alignment: .leading, spacing: 6) {
+                    approveButton(a)
+                    HStack(spacing: 6) {
+                        editButton(a)
+                        skipButton(a)
+                    }
+                }
+            } else {
+                approveButton(a)
+                editButton(a)
+                skipButton(a)
+            }
+        case .owedReply(let r):
+            if layout == .compact {
+                VStack(alignment: .leading, spacing: 6) {
+                    if !isDraftingDisabled(r) {
+                        replyButton(r)
+                    }
+                    HStack(spacing: 6) {
+                        snoozeButton(r)
+                        dismissButton(r)
+                    }
+                }
+            } else {
                 if !isDraftingDisabled(r) {
                     replyButton(r)
                 }
-                actionButton("SNOOZE") {
-                    OwedReplyStore.snooze(r.id, until: Date().addingTimeInterval(86400))
-                    appState.reloadOwedReplies()
-                    onResolved?()
-                }
-                actionButton("DISMISS") {
-                    OwedReplyStore.dismiss(r.id)
-                    appState.reloadOwedReplies()
-                    onResolved?()
-                }
+                snoozeButton(r)
+                dismissButton(r)
             }
-            Spacer()
         }
-        .padding(.top, 2)
     }
 
     // MARK: - Button sub-components
 
     private func approveButton(_ action: AgentAction) -> some View {
-        Button("APPROVE") {
+        Button("STAGE SEND") {
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
             appState.stageManualApprove(action)
             onResolved?()
         }
         .buttonStyle(PrimaryActionStyle(tint: Theme.standby))
-        .accessibilityLabel("Approve and send suggested reply to \(action.conversationName) — 5 second undo window")
+        .accessibilityLabel("Stage suggested send to \(action.conversationName)")
+        .accessibilityHint("Sends in 5 seconds unless undone.")
     }
 
     private func replyButton(_ reply: OwedReply) -> some View {
@@ -652,6 +734,59 @@ private struct ActCardRow: View {
         ScheduledCountdownBar(action: action) {
             appState.undoAutoSend(action)
         }
+    }
+
+    private func editButton(_ action: AgentAction) -> some View {
+        actionButton("EDIT") {
+            editText = action.replyPayload?.draftText ?? action.payload
+            isEditing = true
+            isEditingExternal = true
+        }
+    }
+
+    private func skipButton(_ action: AgentAction) -> some View {
+        actionButton("SKIP") {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+            appState.skipAction(action)
+            onResolved?()
+        }
+    }
+
+    private func snoozeButton(_ reply: OwedReply) -> some View {
+        actionButton("SNOOZE") {
+            OwedReplyStore.snooze(reply.id, until: Date().addingTimeInterval(86400))
+            appState.reloadOwedReplies()
+            onResolved?()
+        }
+    }
+
+    private func dismissButton(_ reply: OwedReply) -> some View {
+        actionButton("DISMISS") {
+            OwedReplyStore.dismiss(reply.id)
+            appState.reloadOwedReplies()
+            onResolved?()
+        }
+    }
+
+    private func customizeReplyButton(service: String,
+                                      conversationID: String,
+                                      displayName: String,
+                                      title: String = "Chat to customize →") -> some View {
+        Button(title) {
+            chatViewModel.prepareReply(
+                service: service,
+                conversationID: conversationID,
+                displayName: displayName
+            )
+        }
+        .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
+        .accessibilityLabel("Open chat to draft a reply for \(displayName)")
+    }
+
+    private func customizeLaneButton(name: String) -> some View {
+        Button("Customize lane") { showContextEditor = true }
+            .buttonStyle(WireActionStyle())
+            .accessibilityLabel("Edit priority and delegation settings for \(name)")
     }
 
     private func actionButton(_ title: String, tint: Color = Theme.textTertiary, action: @escaping () -> Void) -> some View {
@@ -682,6 +817,30 @@ private struct ActCardRow: View {
             return "Reply owed to \(r.conversationName). \(r.triggerText)"
         }
     }
+
+    private var primaryAccessibilityActionName: String {
+        switch item {
+        case .agentAction(let a):
+            return a.statusEnum == .scheduled ? "Undo scheduled send" : "Stage send"
+        case .owedReply:
+            return "Compose reply"
+        }
+    }
+
+    private func performPrimaryAccessibilityAction() {
+        switch item {
+        case .agentAction(let a):
+            if a.statusEnum == .scheduled {
+                appState.undoAutoSend(a)
+            } else {
+                appState.stageManualApprove(a)
+                onResolved?()
+            }
+        case .owedReply(let r):
+            guard !isDraftingDisabled(r) else { return }
+            chatViewModel.prepareReply(service: r.service, conversationID: r.conversationId, displayName: r.conversationName)
+        }
+    }
 }
 
 // MARK: - Scheduled countdown with visual progress bar
@@ -690,11 +849,8 @@ private struct ScheduledCountdownBar: View {
     let action: AgentAction
     let onUndo: () -> Void
 
-    private static let window: TimeInterval = 5
-
     @State private var now = Date()
-    // 0.1s tick for smooth progress animation
-    private let ticker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -717,12 +873,16 @@ private struct ScheduledCountdownBar: View {
                     Rectangle()
                         .fill(Theme.standby.opacity(0.8))
                         .frame(width: geo.size.width * CGFloat(progress), height: 2)
-                        .animation(.linear(duration: 0.1), value: progress)
+                        .animation(.linear(duration: 1), value: progress)
                 }
             }
             .frame(height: 2)
+            .accessibilityHidden(true)
         }
         .onReceive(ticker) { now = $0 }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Scheduled send")
+        .accessibilityValue("\(secondsRemaining) seconds remaining")
     }
 
     private var secondsRemaining: Int {
@@ -734,6 +894,6 @@ private struct ScheduledCountdownBar: View {
     private var progress: Double {
         guard let fireAt = action.scheduledAt else { return 0 }
         let remaining = fireAt.timeIntervalSince(now)
-        return max(0, min(1, remaining / Self.window))
+        return max(0, min(1, remaining / action.scheduledUndoWindow))
     }
 }

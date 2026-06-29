@@ -37,6 +37,39 @@ final class FrontendRobustnessTests: XCTestCase {
         XCTAssertTrue(behavior.contains(.fullScreenAuxiliary), "Onboarding window must be a fullscreen auxiliary")
     }
 
+    // MARK: - Act queue identity
+
+    func testActItemIDsStayUniqueBeforeDatabaseInsert() {
+        let now = Date()
+        func action(title: String, draft: String) -> AgentAction {
+            AgentAction(
+                id: nil,
+                kind: AgentActionKind.reply.rawValue,
+                service: "imessage",
+                conversationId: "c1",
+                conversationName: "Alice",
+                title: title,
+                payload: AgentAction.encodeReplyPayload(draft),
+                reasoning: "fixture",
+                confidence: 0.8,
+                riskLevel: AgentActionRisk.low.rawValue,
+                status: AgentActionStatus.pending.rawValue,
+                createdAt: now,
+                resolvedAt: nil
+            )
+        }
+
+        let ids = [
+            ActItem.agentAction(action(title: "Reply one", draft: "one")).id,
+            ActItem.agentAction(action(title: "Reply two", draft: "two")).id
+        ]
+
+        XCTAssertEqual(Set(ids).count, ids.count,
+                       "Act items without database ids must still have distinct SwiftUI identities")
+        XCTAssertFalse(ids.contains("action-0"),
+                       "Nil database ids must not collapse to action-0; snapshot fixtures can contain several")
+    }
+
     /// Inserts a Brief using only the fields accepted by the existing memberwise init.
     private func insertBrief(db: AppDatabase,
                              status: String = "ready",

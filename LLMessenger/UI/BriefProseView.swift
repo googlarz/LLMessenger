@@ -27,6 +27,7 @@ struct BriefProseView: View {
     /// decoding the full brief JSON on every body evaluation cost ~8-10
     /// decodes per render (PERF-2026-06-12 #2).
     @State private var parsedCache: (briefID: Int64?, json: BriefJSON?) = (nil, nil)
+    @State private var messageCache: (briefID: Int64?, messageCount: Int, all: [Message], byService: [String: [Message]]) = (nil, 0, [], [:])
     /// Conversation labels batch-fetched per brief — the per-card synchronous
     /// DB read in the stamp row ran on every hover (PERF-2026-06-12 #1).
     @State private var contextCache: [String: ConversationContext] = [:]
@@ -58,6 +59,8 @@ struct BriefProseView: View {
     private func refreshCaches() {
         let json = Self.decodeBriefJSON(brief)
         parsedCache = (brief.id, json)
+        let sortedMessages = messages.sorted { $0.timestamp < $1.timestamp }
+        messageCache = (brief.id, messages.count, sortedMessages, Dictionary(grouping: sortedMessages, by: \.service))
         var contexts: [String: ConversationContext] = [:]
         for card in json?.cards ?? [] {
             let key = "\(card.service)|\(card.conversationId)"
@@ -119,8 +122,11 @@ struct BriefProseView: View {
     }
 
     private var visibleMessages: [Message] {
-        let sorted = messages.sorted { $0.timestamp < $1.timestamp }
-        return filter == "all" ? sorted : sorted.filter { $0.service == filter }
+        let cacheMatches = messageCache.briefID == brief.id && messageCache.messageCount == messages.count
+        let sorted = cacheMatches ? messageCache.all : messages.sorted { $0.timestamp < $1.timestamp }
+        if filter == "all" { return sorted }
+        if cacheMatches, let cached = messageCache.byService[filter] { return cached }
+        return sorted.filter { $0.service == filter }
     }
 
     // MARK: - Body
@@ -133,7 +139,7 @@ struct BriefProseView: View {
                     .padding(.bottom, 14)
             }
 
-            if let json = parsedJSON {
+            if parsedJSON != nil {
                 WeekAtGlanceView(
                     messages: visibleMessages,
                     cards: numberedVisibleCards.map(\.card),
@@ -193,16 +199,17 @@ struct BriefProseView: View {
         }
         // H key: file the first unhandled card visible in the current filter.
         .background {
-            if let briefID = brief.id,
-               let firstUnhandled = numberedVisibleCards.first(where: {
-                   !appState.isCardHandled(briefID: briefID, cardID: $0.card.id)
-               }) {
-                Button("") {
-                    appState.markCardHandled(briefID: briefID, cardID: firstUnhandled.card.id)
-                }
-                .keyboardShortcut("h", modifiers: [])
-                .hidden()
+            KeyboardShortcutMonitor(isEnabled: true) { event in
+                guard event.hasNoCommandOptionControl, event.normalizedKey == "h",
+                      let briefID = brief.id,
+                      let firstUnhandled = numberedVisibleCards.first(where: {
+                          !appState.isCardHandled(briefID: briefID, cardID: $0.card.id)
+                      }) else { return false }
+                appState.markCardHandled(briefID: briefID, cardID: firstUnhandled.card.id)
+                return true
             }
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
         }
     }
 
@@ -628,68 +635,95 @@ private struct WeekAtGlanceView: View {
         let leadCount  = hasHigh ? needsYouCount : activeCount
 
         VStack(alignment: .leading, spacing: 7) {
-        HStack(alignment: .bottom, spacing: 0) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .bottom, spacing: 0) {
+                    histogram(data)
 
-            // Left: volume histogram
-            Chart(data) { day in
-                BarMark(
-                    x: .value("Day", day.label),
-                    y: .value("Messages", appeared ? day.count : 0)
-                )
-                .foregroundStyle(day.barColor)
-                .cornerRadius(2, style: .continuous)
-                .accessibilityLabel(Text(day.label))
-                .accessibilityValue(
-                    Text("\(day.count) message\(day.count == 1 ? "" : "s")"
-                         + (day.hasHighCard ? ", high priority" : ""))
-                )
+                    // Hairline column rule — visually separates volume from count
+                    Rectangle()
+                        .fill(Theme.border)
+                        .frame(width: Theme.hairline, height: 40)
+                        .padding(.horizontal, 16)
+
+                    countReadout(leadCount: leadCount, totalCards: totalCards, character: character)
+                }
+
+                VStack(alignment: .leading, spacing: 9) {
+                    histogram(data)
+                    countReadout(leadCount: leadCount, totalCards: totalCards, character: character)
+                }
             }
-            .chartXAxis {
-                AxisMarks { value in
-                    AxisValueLabel {
-                        if let label = value.as(String.self) {
-                            // data is captured from the outer body scope.
-                            // 7 consecutive days → each 3-letter label is unique.
-                            let isToday = data.first(where: { $0.label == label })?.isToday ?? false
-                            Text(label)
-                                .font(Theme.mono(8, weight: isToday ? .semibold : .medium))
-                                .foregroundStyle(isToday
-                                    ? Theme.textSecondary
-                                    : Theme.textTertiary.opacity(0.55))
-                        }
+
+            legend
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.bottom, 12)
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.82).delay(0.1)) {
+                appeared = true
+            }
+        }
+    }
+
+    private func histogram(_ data: [DayData]) -> some View {
+        Chart(data) { day in
+            BarMark(
+                x: .value("Day", day.label),
+                y: .value("Messages", appeared ? day.count : 0)
+            )
+            .foregroundStyle(day.barColor)
+            .cornerRadius(2, style: .continuous)
+            .accessibilityLabel(Text(day.label))
+            .accessibilityValue(
+                Text("\(day.count) message\(day.count == 1 ? "" : "s")"
+                     + (day.hasHighCard ? ", high priority" : ""))
+            )
+        }
+        .chartXAxis {
+            AxisMarks { value in
+                AxisValueLabel {
+                    if let label = value.as(String.self) {
+                        // data is captured from the outer body scope.
+                        // 7 consecutive days → each 3-letter label is unique.
+                        let isToday = data.first(where: { $0.label == label })?.isToday ?? false
+                        Text(label)
+                            .font(Theme.mono(8, weight: isToday ? .semibold : .medium))
+                            .foregroundStyle(isToday
+                                ? Theme.textSecondary
+                                : Theme.textTertiary.opacity(0.55))
                     }
                 }
             }
-            .chartYAxis(.hidden)
-            .frame(height: 52)
-            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: appeared)
-
-            // Hairline column rule — visually separates volume from count
-            Rectangle()
-                .fill(Theme.border)
-                .frame(width: Theme.hairline, height: 40)
-                .padding(.horizontal, 16)
-
-            // Right: active-thread count
-            VStack(alignment: .trailing, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text("\(leadCount)")
-                        .font(Theme.display(20, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("OF \(totalCards) THREADS")
-                        .font(Theme.mono(11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .padding(.bottom, 1)
-                }
-                Text(character.text)
-                    .font(Theme.mono(11))
-                    .tracking(0.8)
-                    .foregroundStyle(character.color)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(leadCount) of \(totalCards) threads, \(character.text)")
         }
+        .chartYAxis(.hidden)
+        .frame(height: 52)
+        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: appeared)
+    }
 
+    private func countReadout(leadCount: Int,
+                              totalCards: Int,
+                              character: (text: String, color: Color)) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text("\(leadCount)")
+                    .font(Theme.display(20, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("OF \(totalCards) THREADS")
+                    .font(Theme.mono(11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .padding(.bottom, 1)
+            }
+            Text(character.text)
+                .font(Theme.mono(11))
+                .tracking(0.8)
+                .foregroundStyle(character.color)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(leadCount) of \(totalCards) threads, \(character.text)")
+    }
+
+    private var legend: some View {
         // Legend — names the bars (weekly message volume) and the red "needs-you"
         // days, so the pulse reads as data instead of decoration.
         HStack(spacing: 12) {
@@ -707,14 +741,6 @@ private struct WeekAtGlanceView: View {
                 }
             }
             Spacer(minLength: 0)
-        }
-        }
-        .padding(.horizontal, Theme.gutter)
-        .padding(.bottom, 12)
-        .onAppear {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.82).delay(0.1)) {
-                appeared = true
-            }
         }
     }
 }

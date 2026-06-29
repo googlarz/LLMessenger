@@ -2,7 +2,7 @@
 //
 // P5: the command bar classifies the USER's typed/spoken command into an agent
 // operation and executes it against the queue. These tests prove:
-//   - classification → operation mapping (handle_easy approves low-risk only)
+//   - classification → operation mapping (handle_easy stages low-risk only)
 //   - "what do I owe" surfaces commitments + owed
 //   - "catch me up" runs an agent cycle
 //   - SECURITY: message content never reaches the classifier; an injected
@@ -136,9 +136,9 @@ final class CommandRouterTests: XCTestCase {
         XCTAssertEqual(CommandRouter.decode(#"{"intent":"approve_everything"}"#).intent, .unknown)
     }
 
-    // MARK: - 1. "handle the easy ones" approves low-risk only
+    // MARK: - 1. "handle the easy ones" stages low-risk only
 
-    func testHandleEasyApprovesLowRiskOnly() async throws {
+    func testHandleEasyStagesLowRiskOnly() async throws {
         let db = try makeDB()
         try seedAction(db, conversationId: "low1", risk: .low)
         try seedAction(db, conversationId: "low2", risk: .low)
@@ -153,20 +153,22 @@ final class CommandRouterTests: XCTestCase {
         let parsed = await router.classify(command: "handle the easy ones")
         XCTAssertEqual(parsed.intent, .handleEasy)
         let result = await state.runCommand(parsed)
-        XCTAssertTrue(result.contains("2"), "Expected to approve 2 low-risk actions: \(result)")
+        XCTAssertTrue(result.contains("2"), "Expected to stage 2 low-risk actions: \(result)")
+        XCTAssertTrue(result.contains("Staged"), "Result should describe the undo window staging: \(result)")
 
-        try await waitForResolutionOfLowRisk(db)
+        try await waitForStagingOfLowRisk(db)
         let s = try await statuses(db)
-        XCTAssertEqual(s["low1"], .done)
-        XCTAssertEqual(s["low2"], .done)
+        XCTAssertEqual(s["low1"], .scheduled)
+        XCTAssertEqual(s["low2"], .scheduled)
         XCTAssertEqual(s["high1"], .pending, "High-risk must be untouched")
     }
 
-    /// Polls until the low-risk rows leave `pending`. Approval runs through detached Tasks.
-    private func waitForResolutionOfLowRisk(_ db: AppDatabase) async throws {
+    /// Polls until the low-risk rows enter the 5-second undo window.
+    private func waitForStagingOfLowRisk(_ db: AppDatabase) async throws {
         for _ in 0..<50 {
             let s = try await statuses(db)
-            if s["low1"] != .pending && s["low2"] != .pending { return }
+            let low2Ready = s["low2"].map { $0 == .scheduled } ?? true
+            if s["low1"] == .scheduled && low2Ready { return }
             try await Task.sleep(nanoseconds: 20_000_000)
         }
     }
@@ -232,10 +234,10 @@ final class CommandRouterTests: XCTestCase {
         XCTAssertEqual(parsed.intent, .unknown)
         _ = await state.runCommand(parsed)
 
-        // Nothing should have been approved.
+        // Nothing should have been staged.
         try await Task.sleep(nanoseconds: 80_000_000)
         let s = try await statuses(db)
-        XCTAssertEqual(s["low1"], .pending, "Injected instruction must NOT approve anything")
+        XCTAssertEqual(s["low1"], .pending, "Injected instruction must NOT stage anything")
 
         // The classifier saw ONLY the user's command text — never message content.
         XCTAssertEqual(llm.seenUserContents.count, 1)
@@ -258,9 +260,9 @@ final class CommandRouterTests: XCTestCase {
         let router = CommandRouter(llmClient: llm, llmModel: "test")
         let parsed = await router.classify(command: "handle the easy ones")
         _ = await state.runCommand(parsed)
-        try await waitForResolutionOfLowRisk(db)
+        try await waitForStagingOfLowRisk(db)
         let s = try await statuses(db)
-        XCTAssertEqual(s["low1"], .done)
+        XCTAssertEqual(s["low1"], .scheduled)
     }
 
     // MARK: - Speech: no audio in tests

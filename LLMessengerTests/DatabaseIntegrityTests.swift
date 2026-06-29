@@ -156,7 +156,7 @@ final class DatabaseIntegrityTests: XCTestCase {
         XCTAssertEqual(cardsBefore, 1)
 
         // Delete the brief
-        try await db.dbQueue.write { d in
+        _ = try await db.dbQueue.write { d in
             try Brief.deleteOne(d, key: briefId)
         }
 

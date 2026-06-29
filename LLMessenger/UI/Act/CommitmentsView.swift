@@ -2,7 +2,7 @@
 //
 // The commitments ledger — promises in both directions. "You owe" (i_owe) and
 // "They owe" (they_owe), each a row with the service, conversation, the promise,
-// due/age, and Mark done / Drop / Draft follow-up. Mirrors OwedView styling.
+// due/age, and Mark done / Drop / Draft follow-up.
 
 import SwiftUI
 

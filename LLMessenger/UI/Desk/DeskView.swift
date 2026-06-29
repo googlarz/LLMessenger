@@ -6,10 +6,27 @@
 
 import SwiftUI
 
+enum DeskLayout {
+    case compact
+    case regular
+
+    var gutter: CGFloat {
+        switch self {
+        case .compact: return 18
+        case .regular: return Theme.gutter
+        }
+    }
+}
+
 struct DeskView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
+    let layout: DeskLayout
     @State private var selectedTab: DeskTab = .act
+
+    init(layout: DeskLayout = .regular) {
+        self.layout = layout
+    }
 
     enum DeskTab: String, CaseIterable {
         case act      = "Act"
@@ -27,7 +44,7 @@ struct DeskView: View {
                 Rule()
             }
             // Persistent across every tab + brief: your open commitments, tasks, and "maybe"s.
-            ToDoStripView()
+            ToDoStripView(layout: layout)
 
             tabBar
             Rule()
@@ -35,7 +52,7 @@ struct DeskView: View {
             Group {
                 switch selectedTab {
                 case .act:
-                    ActFeedView()
+                    ActFeedView(layout: layout)
                 case .digest:
                     BriefListView()
                 case .activity:
@@ -62,7 +79,7 @@ struct DeskView: View {
             }
             Spacer()
         }
-        .padding(.horizontal, Theme.gutter)
+        .padding(.horizontal, layout.gutter)
         .padding(.top, 12)
         .padding(.bottom, 0)
         .background(Theme.sidebar)
@@ -173,12 +190,14 @@ private struct DelegationKillSwitchBanner: View {
             Spacer(minLength: 0)
             Button(disabled ? "RESUME" : "PAUSE") { disabled.toggle() }
                 .buttonStyle(WireActionStyle(tint: disabled ? Theme.standby : Theme.textSecondary))
+                .accessibilityLabel(disabled ? "Resume auto-send for delegated lanes" : "Pause all delegated auto-sends")
+                .accessibilityHint(disabled ? "Auto-send will resume for conversations where you enabled delegation." : "Stops delegated sends until you resume them.")
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 8)
         .background(disabled ? Color.clear : Theme.standby.opacity(0.06))
         .animation(Theme.quick, value: disabled)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(disabled ? "Auto-send paused. Tap to resume." : "Auto-send active. Tap to pause.")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(disabled ? "Auto-send paused" : "Auto-send active")
     }
 }

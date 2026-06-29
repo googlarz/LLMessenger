@@ -32,7 +32,15 @@ enum AgentActionStatus: String, Codable {
     case scheduled
 }
 
+enum AgentActionScheduleKind: String, Codable {
+    case manual
+    case delegated
+}
+
 struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+    static let manualApproveUndoWindow: TimeInterval = 5
+    static let delegatedUndoWindow: TimeInterval = 30
+
     var id: Int64?
     var kind: String
     var service: String
@@ -46,8 +54,12 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
     var status: String
     var createdAt: Date
     var resolvedAt: Date?
-    /// P2: when status == "scheduled", the instant the delegated auto-send fires.
+    /// When status == "scheduled", the instant the send leaves the Undo window.
     var scheduledAt: Date? = nil
+    /// Distinguishes a user-staged approve from a delegated auto-send.
+    var scheduledKind: String? = nil
+    /// The original Undo window duration, used by UI progress and timer recovery.
+    var scheduledWindow: Double? = nil
     /// P3: the commitment this follow_up was generated for. Used to dedupe one pending
     /// follow-up per commitment. nil for non-follow_up actions.
     var commitmentId: Int64? = nil
@@ -64,6 +76,19 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
     var kindEnum: AgentActionKind? { AgentActionKind(rawValue: kind) }
     var riskEnum: AgentActionRisk { AgentActionRisk(rawValue: riskLevel) ?? .normal }
     var statusEnum: AgentActionStatus { AgentActionStatus(rawValue: status) ?? .pending }
+    var scheduledKindEnum: AgentActionScheduleKind? {
+        guard let scheduledKind else { return nil }
+        return AgentActionScheduleKind(rawValue: scheduledKind)
+    }
+    var scheduledUndoWindow: TimeInterval {
+        if let scheduledWindow, scheduledWindow > 0 { return scheduledWindow }
+        switch scheduledKindEnum {
+        case .manual:
+            return Self.manualApproveUndoWindow
+        case .delegated, .none:
+            return Self.delegatedUndoWindow
+        }
+    }
 
     // MARK: - Reply payload
 

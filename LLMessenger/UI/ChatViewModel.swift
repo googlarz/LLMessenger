@@ -47,8 +47,13 @@ final class ChatViewModel: ObservableObject {
     }
 
     func loadBrief(_ brief: Brief) async throws {
+        guard let briefID = brief.id else {
+            threadItems = []
+            briefConvs = []
+            return
+        }
         currentBrief = brief
-        let messages = try appState.repository.fetchMessages(forBriefID: brief.id!)
+        let messages = try appState.repository.fetchMessages(forBriefID: briefID)
         threadItems = messages.map { .message($0) }
         briefConvs = buildConvList(from: messages, brief: brief)
         quickReplies = [:]

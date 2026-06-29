@@ -19,18 +19,18 @@ final class MemoryCompressorTests: XCTestCase {
 
     func testCompressFillsEpisodicSummary() async throws {
         let db = try AppDatabase(inMemory: true)
-        var briefId: Int64 = 0
-        try await db.dbQueue.write { db in
+        let briefId = try await db.dbQueue.write { db in
             var b = Brief(createdAt: Date(), status: "idle", services: "[]",
                           openingSummary: "Today", notificationText: "x",
                           episodicSummary: nil)
             try b.insert(db)
-            briefId = b.id!
+            let briefId = b.id!
             var msg = Message(briefId: briefId, service: "telegram",
                               conversationId: "c1", messageId: "m1",
                               sender: "Alice", text: "Hello",
                               timestamp: Date(), isSent: false)
             try msg.insert(db)
+            return briefId
         }
 
         let mock = MockLLMClient()
@@ -47,13 +47,12 @@ final class MemoryCompressorTests: XCTestCase {
 
     func testCompressSkipsBriefWithExistingSummary() async throws {
         let db = try AppDatabase(inMemory: true)
-        var briefId: Int64 = 0
-        try await db.dbQueue.write { db in
+        let briefId = try await db.dbQueue.write { db in
             var b = Brief(createdAt: Date(), status: "idle", services: "[]",
                           openingSummary: nil, notificationText: "x",
                           episodicSummary: "already done")
             try b.insert(db)
-            briefId = b.id!
+            return b.id!
         }
 
         let mock = MockLLMClient()

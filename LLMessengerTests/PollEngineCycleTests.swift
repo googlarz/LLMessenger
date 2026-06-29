@@ -258,7 +258,7 @@ final class PollEngineCycleTests: XCTestCase {
         // Two simultaneous pollAll calls
         async let first  = engine.pollAll()
         async let second = engine.pollAll()
-        await (first, second)
+        _ = await (first, second)
 
         // In-flight guard must prevent double-fetch
         XCTAssertEqual(adapter.fetchConfigs.count, 1,

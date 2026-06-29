@@ -225,8 +225,6 @@ final class ContextWindowTests: XCTestCase {
     func testRecentContextAppearsBeforeNewMessages() async throws {
         let db = try makeDB()
         let now = Date()
-        let repo = BriefRepository(database: db)
-
         // Old brief with an attached message (recent context candidate)
         try await db.dbQueue.write { d in
             var brief = Brief(createdAt: now.addingTimeInterval(-3600), status: "ready",

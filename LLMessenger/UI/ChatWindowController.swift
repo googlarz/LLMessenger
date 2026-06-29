@@ -28,7 +28,7 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("LLMessengerMain")
-        window.minSize = NSSize(width: 600, height: 420)
+        window.minSize = NSSize(width: 860, height: 520)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.hasShadow = true
 

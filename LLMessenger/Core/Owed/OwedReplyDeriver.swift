@@ -48,6 +48,7 @@ enum OwedReplyStore {
 }
 
 struct OwedReplyDeriver {
+    private static let maxMessagesPerRun = 3_000
 
     private static let interrogativeOpeners: Set<String> = [
         "who", "what", "when", "where", "why", "how",
@@ -64,6 +65,7 @@ struct OwedReplyDeriver {
             try Message
                 .filter(Column("timestamp") >= cutoff)
                 .order(Column("timestamp").asc)
+                .limit(Self.maxMessagesPerRun)
                 .fetchAll(grdb)
         }
 

@@ -26,7 +26,7 @@ struct KeyboardShortcutsSheet: View {
 
     private let sections: [(title: String, shortcuts: [(key: String, description: String)])] = [
         ("Navigation", [
-            ("J / K",          "Older / newer digest"),
+            ("J / K",          "Older / newer digest when Desk is hidden"),
             ("⌘[ / ⌘]",        "Older / newer digest"),
             ("⌘F",             "Search messages"),
         ]),
@@ -35,7 +35,7 @@ struct KeyboardShortcutsSheet: View {
             ("⌘2",             "Digest tab"),
             ("⌘3",             "Activity tab"),
             ("J / K",          "Next / previous action"),
-            ("↩ Return",       "Approve selected (5s undo)"),
+            ("↩ Return",       "Stage selected send (5s undo)"),
             ("S",              "Skip selected"),
             ("E",              "Edit selected reply"),
             ("⌘Z",             "Undo staged send"),

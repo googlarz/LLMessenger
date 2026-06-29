@@ -6,7 +6,7 @@ struct ContentView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
     // Brief archive sidebar — toggled by hamburger / ⌥⌘S.
     @State private var sidebarCollapsed = true
-    // Desk panel (Now/Waiting/Activity) — shown on the left alongside the brief.
+    // Desk panel (Act/Digest/Activity) — shown on the left alongside the brief.
     @State private var deskCollapsed = false
     @State private var showMedia = false
     @State private var showSearch = false
@@ -35,47 +35,52 @@ struct ContentView: View {
                 Rule()
             }
 
-            HStack(spacing: 0) {
-                // Brief archive (power-user drawer, collapsed by default)
-                if !sidebarCollapsed {
-                    BriefListView(showSearch: showSearch)
-                        .frame(width: 248)
-                        .background(Theme.sidebar)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+            GeometryReader { proxy in
+                let layout = deskLayout(for: proxy.size.width)
+                let deskWidth = deskWidth(for: proxy.size.width, layout: layout)
+                HStack(spacing: 0) {
+                    // Brief archive (power-user drawer, collapsed by default)
+                    if !sidebarCollapsed {
+                        BriefListView(showSearch: showSearch)
+                            .frame(width: archiveWidth(for: proxy.size.width))
+                            .background(Theme.sidebar)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
 
-                    Theme.border.frame(width: Theme.hairline)
-                        .transition(.opacity)
+                        Theme.border.frame(width: Theme.hairline)
+                            .transition(.opacity)
+                    }
+
+                // Desk panel — persistent left sidebar (Act/Digest/Activity)
+                    if !deskCollapsed {
+                        DeskView(layout: layout)
+                            .frame(width: deskWidth)
+                            .background(Theme.sidebar)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+
+                        Theme.border.frame(width: Theme.hairline)
+                            .transition(.opacity)
+                    }
+
+                    // Main content — brief reader (always visible)
+                    if appState.selectedBrief != nil {
+                        ChatPanelView()
+                            .background(Theme.bg)
+                    } else {
+                        NoBriefPlaceholder(deskCollapsed: $deskCollapsed)
+                            .background(Theme.bg)
+                    }
+
+                    if showMedia {
+                        Theme.border.frame(width: Theme.hairline)
+                            .transition(.opacity)
+
+                        MediaPanelView(onClose: { withAnimation(Theme.spring) { showMedia = false } })
+                            .frame(width: mediaWidth(for: proxy.size.width))
+                            .background(Theme.sidebar)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
-
-                // Desk panel — persistent left sidebar (Inbox/Waiting/Activity)
-                if !deskCollapsed {
-                    DeskView()
-                        .frame(width: 272)
-                        .background(Theme.sidebar)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-
-                    Theme.border.frame(width: Theme.hairline)
-                        .transition(.opacity)
-                }
-
-                // Main content — brief reader (always visible)
-                if appState.selectedBrief != nil {
-                    ChatPanelView()
-                        .background(Theme.bg)
-                } else {
-                    NoBriefPlaceholder(deskCollapsed: $deskCollapsed)
-                        .background(Theme.bg)
-                }
-
-                if showMedia {
-                    Theme.border.frame(width: Theme.hairline)
-                        .transition(.opacity)
-
-                    MediaPanelView(onClose: { withAnimation(Theme.spring) { showMedia = false } })
-                        .frame(width: 260)
-                        .background(Theme.sidebar)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
             }
         }
         .background(Theme.bg)
@@ -83,19 +88,28 @@ struct ContentView: View {
         .onChange(of: showSearch) { searching in
             if searching { withAnimation(Theme.spring) { sidebarCollapsed = false } }
         }
-        // J/K brief navigation + ? shortcuts overlay
+        // Scoped document shortcuts. J/K belongs to the Act feed while Desk is open;
+        // when Desk is hidden, the reader owns J/K for digest navigation.
         .background {
-            Group {
-                Button("") { navigateBriefs(offset: 1) }
-                    .keyboardShortcut("j", modifiers: [])
-                    .hidden()
-                Button("") { navigateBriefs(offset: -1) }
-                    .keyboardShortcut("k", modifiers: [])
-                    .hidden()
-                Button("") { showShortcuts.toggle() }
-                    .keyboardShortcut("/", modifiers: .shift)
-                    .hidden()
+            KeyboardShortcutMonitor(isEnabled: true) { event in
+                let key = event.normalizedKey
+                if key == "?" || (key == "/" && event.modifierFlags.contains(.shift)) {
+                    showShortcuts.toggle()
+                    return true
+                }
+                guard deskCollapsed, event.hasNoCommandOptionControl else { return false }
+                if key == "j" {
+                    navigateBriefs(offset: 1)
+                    return true
+                }
+                if key == "k" {
+                    navigateBriefs(offset: -1)
+                    return true
+                }
+                return false
             }
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
         }
         .sheet(isPresented: $showShortcuts) {
             KeyboardShortcutsSheet(isPresented: $showShortcuts)
@@ -125,6 +139,27 @@ struct ContentView: View {
         let idx = briefs.firstIndex { $0.id == appState.selectedBriefID } ?? 0
         let target = (idx + offset + briefs.count) % briefs.count
         withAnimation(Theme.quick) { appState.selectedBriefID = briefs[target].id }
+    }
+
+    private func deskLayout(for width: CGFloat) -> DeskLayout {
+        width < 980 ? .compact : .regular
+    }
+
+    private func deskWidth(for width: CGFloat, layout: DeskLayout) -> CGFloat {
+        switch layout {
+        case .compact:
+            return min(300, max(272, width * 0.30))
+        case .regular:
+            return min(380, max(320, width * 0.28))
+        }
+    }
+
+    private func archiveWidth(for width: CGFloat) -> CGFloat {
+        min(300, max(232, width * 0.22))
+    }
+
+    private func mediaWidth(for width: CGFloat) -> CGFloat {
+        min(300, max(240, width * 0.22))
     }
 }
 
@@ -236,7 +271,7 @@ private struct FirstBriefPreparingView: View {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 9))
                     .foregroundStyle(Theme.ok)
-                Text("Everything stays on this Mac. Nothing is sent without your approval.")
+                Text(safetyLine)
                     .font(Theme.sans(11.5))
                     .foregroundStyle(Theme.textTertiary)
             }
@@ -258,6 +293,20 @@ private struct FirstBriefPreparingView: View {
         if !appState.isLLMConfigured { return true }
         let e = (appState.lastError ?? "").lowercased()
         return ["backend", "model", "provider", "api key", "ollama", "openai", "anthropic"].contains { e.contains($0) }
+    }
+
+    private var safetyLine: String {
+        guard appState.isLLMConfigured else {
+            return "Connect a local model to keep summaries on this Mac, or choose a cloud provider explicitly."
+        }
+        if appState.llmClient.isLocal {
+            return appState.hasDelegatedLanes
+                ? "Summaries run on this Mac. Delegated sends still show an undo window."
+                : "Summaries run on this Mac. Manual sends stage with undo."
+        }
+        return appState.hasDelegatedLanes
+            ? "Cloud summaries use your selected provider. Delegated sends still show an undo window."
+            : "Cloud summaries use your selected provider. Manual sends stage with undo."
     }
 
     private func bar(_ width: CGFloat, _ height: CGFloat) -> some View {

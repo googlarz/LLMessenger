@@ -11,7 +11,7 @@ final class SettingsRepositoryTests: XCTestCase {
 
     override func setUp() {
         prefix = "_test_\(UUID().uuidString.prefix(8))_"
-        store = KeychainStore()
+        store = KeychainStore(service: "LLMessengerSettingsTests-\(UUID().uuidString)", account: "credentials")
     }
 
     override func tearDown() {
@@ -20,6 +20,8 @@ final class SettingsRepositoryTests: XCTestCase {
                        "telegram_api_id", "telegram_api_hash"] {
             try? store.delete(account: "\(prefix)\(suffix)")
         }
+        store.deleteStore()
+        store = nil
     }
 
     func testSaveAndLoadLLMProvider() throws {

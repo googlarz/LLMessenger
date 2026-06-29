@@ -202,6 +202,27 @@ struct BriefListView: View {
                                 }
                             }
                         }
+
+                        if shouldShowLoadOlderButton {
+                            Rule()
+                                .padding(.top, 4)
+                            Button {
+                                appState.loadOlderBriefs()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "clock.arrow.circlepath")
+                                        .font(.system(size: 11, weight: .medium))
+                                    Text("Load older briefs")
+                                        .font(Theme.sans(11, weight: .medium))
+                                }
+                                .foregroundStyle(Theme.textSecondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Load older briefs")
+                            .accessibilityHint("Loads 500 more archived and recent briefs into the sidebar.")
+                        }
                     }
                 }
             }
@@ -219,6 +240,13 @@ struct BriefListView: View {
     }
 
     // MARK: - Helpers
+
+    private var shouldShowLoadOlderButton: Bool {
+        searchQuery.isEmpty
+            && dateFrom == nil
+            && dateTo == nil
+            && appState.briefs.count >= appState.briefFetchLimit
+    }
 
     private func refreshNeedsReply() {
         let raw = appState.fetchNeedsReplyCards()

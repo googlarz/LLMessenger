@@ -558,7 +558,7 @@ final class BackendWorkflowE2ETests: XCTestCase {
 
         // Write a recent lastCheck (5 seconds ago, interval is 30 minutes)
         try await db.dbQueue.write { d in
-            var health = ServiceHealth(service: "signal", status: "ok",
+            let health = ServiceHealth(service: "signal", status: "ok",
                                        lastCheck: Date().addingTimeInterval(-5),
                                        lastError: nil, retryAfter: nil)
             try health.save(d)

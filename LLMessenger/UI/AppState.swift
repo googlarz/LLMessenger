@@ -142,6 +142,8 @@ final class AppState: ObservableObject {
 
     @Published var contextSuggestions: [ContextSuggestion] = []
     private let contextSuggestionEngine = RuleSuggestionEngine()
+    @Published private(set) var conversationContextsByKey: [String: ConversationContext] = [:]
+    @Published private(set) var briefFetchLimit = 500
 
     @Published private(set) var handledCardKeys: Set<String> = {
         let saved = UserDefaults.standard.stringArray(forKey: "handledCardKeys") ?? []
@@ -241,10 +243,12 @@ final class AppState: ObservableObject {
     @discardableResult
     func refreshBriefs() -> Task<Void, Never> {
         let settingsRepo = makeSettingsRepository()
+        let selectedID = selectedBriefID
+        let limit = briefFetchLimit
         return Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             do {
-                let fetched = try self.repository.fetchAllBriefs()
+                let fetched = try self.repository.fetchRecentBriefs(limit: limit, including: selectedID)
                 let healthMap = (try? settingsRepo.loadAllServiceHealth()) ?? [:]
                 let heldBack = settingsRepo.loadFirewallHeldBack()
                 await MainActor.run {
@@ -264,6 +268,12 @@ final class AppState: ObservableObject {
         }
     }
 
+    @discardableResult
+    func loadOlderBriefs() -> Task<Void, Never> {
+        briefFetchLimit += 500
+        return refreshBriefs()
+    }
+
     func reloadOwedReplies() {
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
@@ -271,6 +281,7 @@ final class AppState: ObservableObject {
                 let contexts = try self.repository.fetchAllConversationContexts()
                 let owed = try OwedReplyDeriver().derive(db: self.database, contexts: contexts)
                 await MainActor.run {
+                    self.mergeConversationContexts(contexts)
                     self.owedReplies = owed
                     self.owedCount = owed.count
                     self.onBriefsChanged?()
@@ -285,15 +296,20 @@ final class AppState: ObservableObject {
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let actions = (try? self.repository.fetchPendingAgentActions()) ?? []
-            let contexts = (try? self.repository.fetchAllConversationContexts()) ?? []
+            let pairs = actions.map { (service: $0.service, conversationId: $0.conversationId) }
+            let contexts = (try? self.repository.fetchConversationContexts(for: pairs)) ?? []
             let delegated = contexts.contains { !$0.delegationKinds.isEmpty }
             await MainActor.run {
                 self.agentActions = actions
+                self.mergeConversationContexts(contexts)
                 // "Maybe" proposals are the user's call, not part of the ready-to-send count.
                 self.actionsReadyCount = actions.filter { !$0.isMaybe }.count
                 self.hasDelegatedLanes = delegated
                 self.onBriefsChanged?()
-                self.evaluateDelegation()
+                let changedDuringRecovery = self.reconcileScheduledActions()
+                if !changedDuringRecovery {
+                    self.evaluateDelegation()
+                }
             }
         }
     }
@@ -369,13 +385,13 @@ final class AppState: ObservableObject {
     // MARK: - P2 Scoped delegation (gated auto-send)
 
     /// Seconds a delegated auto-send stays armed before firing — the Undo window.
-    static let autoSendUndoWindow: TimeInterval = 30
+    static let autoSendUndoWindow: TimeInterval = AgentAction.delegatedUndoWindow
 
-    /// Cancellable per-action timers for armed auto-sends. The timer IS the undo
+    /// Cancellable per-action timers for scheduled sends. The timer IS the undo
     /// window: cancelling the task before it fires aborts the send. Keyed by action id.
     private var armedTimers: [Int64: Task<Void, Never>] = [:]
 
-    /// Number of currently armed (scheduled) auto-sends — surfaced in the menu bar.
+    /// Number of currently armed scheduled sends — surfaced in the menu bar.
     @Published var armedAutoSendCount: Int = 0
 
     /// For every pending action, ask AgentDelegation whether it may auto-send. If so,
@@ -402,9 +418,18 @@ final class AppState: ObservableObject {
 
     private func armAutoSend(_ action: AgentAction) {
         guard let id = action.id else { return }
+        guard armedTimers[id] == nil else { return }
         let fireAt = Date().addingTimeInterval(Self.autoSendUndoWindow)
         do {
-            try repository.armAgentActionForAutoSend(id: id, scheduledAt: fireAt)
+            let armed = try repository.armAgentActionForAutoSend(
+                id: id,
+                scheduledAt: fireAt,
+                kind: .delegated,
+                undoWindow: Self.autoSendUndoWindow)
+            guard armed else {
+                reloadAgentActions()
+                return
+            }
         } catch {
             lastError = friendly(error)
             return
@@ -414,11 +439,7 @@ final class AppState: ObservableObject {
             actionTitle: action.title,
             actionID: id
         )
-        armedTimers[id] = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.autoSendUndoWindow))
-            guard !Task.isCancelled else { return }
-            await self?.fireDelegatedSend(actionID: id)
-        }
+        armScheduledTimer(actionID: id, kind: .delegated, delay: Self.autoSendUndoWindow)
         reloadAgentActions()
     }
 
@@ -432,6 +453,51 @@ final class AppState: ObservableObject {
         reloadAgentActions()
     }
 
+    @discardableResult
+    private func reconcileScheduledActions() -> Bool {
+        var changed = false
+        for action in agentActions where action.statusEnum == .scheduled {
+            guard let id = action.id,
+                  let kind = action.scheduledKindEnum,
+                  let fireAt = action.scheduledAt else {
+                if let id = action.id {
+                    try? repository.disarmAgentAction(id: id)
+                    changed = true
+                }
+                continue
+            }
+            guard armedTimers[id] == nil else { continue }
+            let remaining = fireAt.timeIntervalSinceNow
+            if remaining <= 0 {
+                // If the app was not running for the Undo window, prefer safety: put
+                // the proposal back in the queue instead of sending immediately.
+                try? repository.disarmAgentAction(id: id)
+                changed = true
+                continue
+            }
+            armScheduledTimer(actionID: id, kind: kind, delay: remaining)
+        }
+        refreshArmedCount()
+        if changed {
+            reloadAgentActions()
+        }
+        return changed
+    }
+
+    private func armScheduledTimer(actionID id: Int64, kind: AgentActionScheduleKind, delay: TimeInterval) {
+        guard armedTimers[id] == nil else { return }
+        armedTimers[id] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, delay)))
+            guard !Task.isCancelled else { return }
+            switch kind {
+            case .delegated:
+                await self?.fireDelegatedSend(actionID: id)
+            case .manual:
+                await self?.fireManualApprovedSend(actionID: id)
+            }
+        }
+    }
+
     /// Fires after the Undo window elapses. Re-reads the row and re-checks it is still
     /// scheduled before sending (defends against a race with Undo). Sends via the SAME
     /// adapter.send path as approveAction and writes a "delegated" audit row.
@@ -439,23 +505,42 @@ final class AppState: ObservableObject {
     // fire path directly instead of waiting out the real 30s undo timer.
     func fireDelegatedSend(actionID: Int64) async {
         armedTimers[actionID] = nil
-        guard let action = try? repository.fetchAgentAction(id: actionID),
-              action.statusEnum == .scheduled,
-              let adapter = adapters[action.service] else {
+        guard let scheduledAction = try? repository.fetchAgentAction(id: actionID),
+              scheduledAction.statusEnum == .scheduled,
+              scheduledAction.scheduledKindEnum == .delegated else {
             refreshArmedCount()
+            return
+        }
+        guard let adapter = adapters[scheduledAction.service] else {
+            try? repository.disarmAgentAction(id: actionID)
+            reloadAgentActions()
             return
         }
         // Re-validate immediately before sending. The kill switch, delegation settings, or
         // privacy override may have changed during the 30s undo window — re-running the
         // single decide() gate ensures nothing fires that is no longer authorized. On a
         // failed re-check, revert to pending (manual approval) rather than dropping it.
-        let ctx = fetchConversationContext(service: action.service, conversationId: action.conversationId)
-        let known = isKnownRecipient(service: action.service, conversationId: action.conversationId)
+        let ctx = fetchConversationContext(service: scheduledAction.service, conversationId: scheduledAction.conversationId)
+        let known = isKnownRecipient(service: scheduledAction.service, conversationId: scheduledAction.conversationId)
         let decision = AgentDelegation.decide(
-            action: action, context: ctx, isKnownRecipient: known, clientIsLocal: llmClient.isLocal)
+            action: scheduledAction, context: ctx, isKnownRecipient: known, clientIsLocal: llmClient.isLocal)
         guard decision.autoSend else {
             try? repository.disarmAgentAction(id: actionID)
             reloadAgentActions()
+            return
+        }
+        do {
+            guard try repository.claimScheduledActionForExecution(id: actionID) else {
+                refreshArmedCount()
+                return
+            }
+        } catch {
+            lastError = friendly(error)
+            refreshArmedCount()
+            return
+        }
+        guard let action = try? repository.fetchAgentAction(id: actionID) else {
+            refreshArmedCount()
             return
         }
         // Resolve the message text by action kind. An rsvp's payload is a CalendarPayload
@@ -522,28 +607,39 @@ final class AppState: ObservableObject {
     }
 
     // 5-second staging window for manual approves. The action transitions to
-    // .scheduled and the card shows a countdown + UNDO. After 5s, approveAction fires.
+    // .scheduled and the card shows a countdown + UNDO. After 5s, the row is
+    // re-read and claimed before sending.
     // This gives the user a fast "whoops" escape without requiring a separate confirm step.
-    private static let manualApproveWindow: TimeInterval = 5
+    private static let manualApproveWindow: TimeInterval = AgentAction.manualApproveUndoWindow
 
     func stageManualApprove(_ action: AgentAction) {
         guard let id = action.id else { return }
+        guard armedTimers[id] == nil else { return }
+        guard let current = try? repository.fetchAgentAction(id: id),
+              current.statusEnum == .pending else {
+            reloadAgentActions()
+            return
+        }
         let fireAt = Date().addingTimeInterval(Self.manualApproveWindow)
         do {
-            try repository.armAgentActionForAutoSend(id: id, scheduledAt: fireAt)
+            let armed = try repository.armAgentActionForAutoSend(
+                id: id,
+                scheduledAt: fireAt,
+                kind: .manual,
+                undoWindow: Self.manualApproveWindow)
+            guard armed else {
+                reloadAgentActions()
+                return
+            }
         } catch {
             lastError = friendly(error)
             return
         }
-        armedTimers[id] = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.manualApproveWindow))
-            guard !Task.isCancelled else { return }
-            await self?.approveActionByID(id)
-        }
+        armScheduledTimer(actionID: id, kind: .manual, delay: Self.manualApproveWindow)
         reloadAgentActions()
         // Announce to VoiceOver so the user hears the 5-second undo window.
         NSAccessibility.post(
-            element: NSApp,
+            element: NSApp as Any,
             notification: NSAccessibility.Notification(rawValue: "AXAnnouncementRequested"),
             userInfo: [
                 .announcement: "Sending \(action.conversationName) reply in 5 seconds. Command Z to cancel." as NSString,
@@ -552,16 +648,40 @@ final class AppState: ObservableObject {
         )
     }
 
-    @MainActor
-    private func approveActionByID(_ id: Int64) {
-        guard let action = agentActions.first(where: { $0.id == id }) else { return }
+    func fireManualApprovedSend(actionID: Int64) async {
+        armedTimers[actionID] = nil
+        guard let scheduledAction = try? repository.fetchAgentAction(id: actionID),
+              scheduledAction.statusEnum == .scheduled,
+              scheduledAction.scheduledKindEnum == .manual else {
+            refreshArmedCount()
+            return
+        }
+        do {
+            guard try repository.claimScheduledActionForExecution(id: actionID) else {
+                refreshArmedCount()
+                return
+            }
+        } catch {
+            lastError = friendly(error)
+            refreshArmedCount()
+            return
+        }
+        guard let action = try? repository.fetchAgentAction(id: actionID) else {
+            refreshArmedCount()
+            return
+        }
         approveAction(action)
     }
 
     private func approveReplyAction(_ action: AgentAction, id: Int64) {
-        guard let draftText = action.replyPayload?.draftText,
-              let adapter = adapters[action.service] else {
+        guard let draftText = action.replyPayload?.draftText else {
+            lastError = "Reply text is missing."
+            failIfExecuting(action, id: id)
+            return
+        }
+        guard let adapter = adapters[action.service] else {
             lastError = "\(Theme.serviceName(action.service)) is not connected."
+            returnToPendingIfExecuting(action, id: id)
             return
         }
         Task { [weak self] in
@@ -594,6 +714,7 @@ final class AppState: ObservableObject {
         guard let payload = action.calendarPayload,
               let start = payload.start, let end = payload.end else {
             lastError = "Calendar event details are missing or invalid."
+            failIfExecuting(action, id: id)
             return
         }
         Task { [weak self] in
@@ -602,6 +723,7 @@ final class AppState: ObservableObject {
             guard granted else {
                 // Leave the action pending so the user can retry after granting access.
                 self.lastError = "Calendar access is required to create this event."
+                self.returnToPendingIfExecuting(action, id: id)
                 return
             }
             do {
@@ -619,6 +741,7 @@ final class AppState: ObservableObject {
             } catch {
                 self.lastError = self.friendly(error)
                 // Leave pending; do not mark failed for an access/save issue the user can fix.
+                self.returnToPendingIfExecuting(action, id: id)
             }
         }
     }
@@ -626,10 +749,12 @@ final class AppState: ObservableObject {
     private func approveRSVP(_ action: AgentAction, id: Int64) {
         guard let payload = action.calendarPayload else {
             lastError = "RSVP details are missing."
+            failIfExecuting(action, id: id)
             return
         }
         guard let adapter = adapters[action.service] else {
             lastError = "\(Theme.serviceName(action.service)) is not connected."
+            returnToPendingIfExecuting(action, id: id)
             return
         }
         let replyText = payload.replyText ?? "Yes, that works for me."
@@ -659,6 +784,18 @@ final class AppState: ObservableObject {
                 self.reloadAgentActions()
             }
         }
+    }
+
+    private func returnToPendingIfExecuting(_ action: AgentAction, id: Int64) {
+        guard action.statusEnum == .executing else { return }
+        try? repository.updateAgentActionStatus(id: id, status: .pending, resolvedAt: nil)
+        reloadAgentActions()
+    }
+
+    private func failIfExecuting(_ action: AgentAction, id: Int64) {
+        guard action.statusEnum == .executing else { return }
+        try? repository.updateAgentActionStatus(id: id, status: .failed, resolvedAt: Date())
+        reloadAgentActions()
     }
 
     /// Test hook: when set, bypasses real EventKit and forces the access result
@@ -700,11 +837,12 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Batch-approves every pending low-risk action. Only touches "low" risk rows.
+    /// Stages every pending low-risk action behind the same 5-second undo window
+    /// as a single manual Approve. Only touches "low" risk rows.
     func batchApproveLowRisk() {
         // Never bulk-approve a "maybe" — it stays the user's individual call.
-        for action in agentActions where action.riskEnum == .low && !action.isMaybe {
-            approveAction(action)
+        for action in agentActions where action.statusEnum == .pending && action.riskEnum == .low && !action.isMaybe {
+            stageManualApprove(action)
         }
     }
 
@@ -726,10 +864,12 @@ final class AppState: ObservableObject {
             return "Caught up — \(pending) pending action\(pending == 1 ? "" : "s"), \(owed) reply\(owed == 1 ? "" : "ies") owed."
 
         case .handleEasy:
-            let n = agentActions.filter { $0.riskEnum == .low }.count
+            let n = agentActions.filter {
+                $0.statusEnum == .pending && $0.riskEnum == .low && !$0.isMaybe
+            }.count
             batchApproveLowRisk()
             if n == 0 { return "No low-risk actions to approve." }
-            return "Approved \(n) low-risk action\(n == 1 ? "" : "s")."
+            return "Staged \(n) low-risk action\(n == 1 ? "" : "s") with 5-second undo."
 
         case .whatDoIOwe:
             let iOwe = commitments.filter { $0.directionEnum == .iOwe }.count
@@ -789,6 +929,7 @@ final class AppState: ObservableObject {
         ctx.updatedAt = Date()
         do {
             try repository.upsertConversationContext(ctx)
+            mergeConversationContexts([ctx])
         } catch {
             lastError = friendly(error)
         }
@@ -936,13 +1077,36 @@ final class AppState: ObservableObject {
         )
         do {
             try repository.upsertConversationContext(ctx)
+            mergeConversationContexts([ctx])
         } catch {
             lastError = friendly(error)
         }
     }
 
+    func conversationContextKey(service: String, conversationId: String) -> String {
+        "\(service)|\(conversationId)"
+    }
+
+    func cachedConversationContext(service: String, conversationId: String) -> ConversationContext? {
+        conversationContextsByKey[conversationContextKey(service: service, conversationId: conversationId)]
+    }
+
+    func mergeConversationContexts(_ contexts: [ConversationContext]) {
+        guard !contexts.isEmpty else { return }
+        for context in contexts {
+            conversationContextsByKey[conversationContextKey(service: context.service, conversationId: context.conversationId)] = context
+        }
+    }
+
     func fetchConversationContext(service: String, conversationId: String) -> ConversationContext? {
-        try? repository.fetchConversationContext(service: service, conversationId: conversationId)
+        if let cached = cachedConversationContext(service: service, conversationId: conversationId) {
+            return cached
+        }
+        guard let fetched = try? repository.fetchConversationContext(service: service, conversationId: conversationId) else {
+            return nil
+        }
+        mergeConversationContexts([fetched])
+        return fetched
     }
 
     // MARK: - Priority Corrections

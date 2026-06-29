@@ -38,14 +38,12 @@ final class ChatViewModelSendTests: XCTestCase {
     private func insertBrief(db: AppDatabase,
                              services: String = #"["signal"]"#,
                              openingSummary: String? = nil) async throws -> Int64 {
-        var briefId: Int64 = 0
         try await db.dbQueue.write { d in
             var b = Brief(createdAt: Date(), status: "ready", services: services,
                           openingSummary: openingSummary, notificationText: "x", episodicSummary: nil)
             try b.insert(d)
-            briefId = b.id!
+            return b.id!
         }
-        return briefId
     }
 
     private func insertMessage(db: AppDatabase,

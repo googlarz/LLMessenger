@@ -7,7 +7,7 @@ struct ContactProfileView: View {
     let displayName: String
     @EnvironmentObject var appState: AppState
     @State private var profile: ContactProfile?
-    @State private var recentCards: [BriefCard] = []
+    @State private var recentCards: [BriefCardRecord] = []
 
     var body: some View {
         ScrollView {
@@ -67,25 +67,19 @@ struct ContactProfileView: View {
         recentCards = await loadRecentCards()
     }
 
-    private func loadRecentCards() async -> [BriefCard] {
-        let allBriefs = (try? appState.repository.fetchAllBriefs()) ?? []
-        var cards: [BriefCard] = []
-        for brief in allBriefs {
-            guard let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { continue }
-            let matching = json.cards.filter {
-                $0.service == service && $0.conversationId == conversationId
-            }
-            cards.append(contentsOf: matching)
-            if cards.count >= 5 { break }
-        }
-        return Array(cards.prefix(5))
+    private func loadRecentCards() async -> [BriefCardRecord] {
+        (try? appState.repository.fetchRecentBriefCards(
+            service: service,
+            conversationId: conversationId,
+            limit: 5
+        )) ?? []
     }
 }
 
 // MARK: - Compact card row
 
 private struct ContactBriefCardRow: View {
-    let card: BriefCard
+    let card: BriefCardRecord
 
     var body: some View {
         HStack(spacing: 8) {

@@ -339,81 +339,111 @@ struct BriefCardView: View {
     // MARK: - Action bar
 
     private var actionBar: some View {
+        ViewThatFits(in: .horizontal) {
+            fullActionBar
+            compactActionBar
+        }
+    }
+
+    private var fullActionBar: some View {
         HStack(spacing: 2) {
-            Button {
-                withAnimation(Theme.spring) {
-                    evidenceExpanded.toggle()
-                    if evidenceExpanded {
-                        InstrumentationManager.shared.track(event: .sourceExpanded,
-                            metadata: ["cardID": card.id, "conversationID": card.conversationId])
-                    }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Text("\(card.sourceMessageIds.count) \(card.sourceMessageIds.count == 1 ? "SOURCE" : "SOURCES")")
-                    if !card.quotes.isEmpty {
-                        Text("· \(card.quotes.count) QUOTED")
-                    }
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
-                        .rotationEffect(.degrees(evidenceExpanded ? 180 : 0))
+            evidenceButton
+            divider
+            detailButton
+            divider
+            replyButton
+            Spacer(minLength: 0)
+            fileButton
+        }
+    }
+
+    private var compactActionBar: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 2) {
+                replyButton
+                divider
+                detailButton
+                Spacer(minLength: 0)
+                fileButton
+            }
+            evidenceButton
+        }
+    }
+
+    private var evidenceButton: some View {
+        Button {
+            withAnimation(Theme.spring) {
+                evidenceExpanded.toggle()
+                if evidenceExpanded {
+                    InstrumentationManager.shared.track(event: .sourceExpanded,
+                        metadata: ["cardID": card.id, "conversationID": card.conversationId])
                 }
             }
-            .buttonStyle(WireActionStyle(tint: evidenceExpanded ? Theme.textPrimary : Theme.textTertiary))
-            .help(evidenceExpanded ? "Hide the source messages" : "Show the source messages behind this card")
-
-            divider
-
-            Button(card.counts.messages > 20 ? "CATCH ME UP" : "DETAIL") {
-                Task {
-                    await chatViewModel.askForDetails(
-                        service: card.service,
-                        conversationID: card.conversationId,
-                        displayName: card.conversation ?? "",
-                        headline: card.counts.messages > 20
-                            ? "Give me the full arc — what's been going on in this thread?"
-                            : card.headline
-                    )
+        } label: {
+            HStack(spacing: 5) {
+                Text("\(card.sourceMessageIds.count) \(card.sourceMessageIds.count == 1 ? "SOURCE" : "SOURCES")")
+                if !card.quotes.isEmpty {
+                    Text("· \(card.quotes.count) QUOTED")
                 }
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+                    .rotationEffect(.degrees(evidenceExpanded ? 180 : 0))
             }
-            .buttonStyle(WireActionStyle())
-            .help(card.counts.messages > 20 ? "Deeper summary of this long thread" : "Ask for more detail")
+        }
+        .buttonStyle(WireActionStyle(tint: evidenceExpanded ? Theme.textPrimary : Theme.textTertiary))
+        .help(evidenceExpanded ? "Hide the source messages" : "Show the source messages behind this card")
+    }
 
-            divider
-
-            Button("REPLY") {
-                chatViewModel.prepareReply(
+    private var detailButton: some View {
+        Button(card.counts.messages > 20 ? "CATCH ME UP" : "DETAIL") {
+            Task {
+                await chatViewModel.askForDetails(
                     service: card.service,
                     conversationID: card.conversationId,
-                    displayName: card.conversation ?? ""
+                    displayName: card.conversation ?? "",
+                    headline: card.counts.messages > 20
+                        ? "Give me the full arc — what's been going on in this thread?"
+                        : card.headline
                 )
             }
-            // The one thing you usually came here to do — tint it the signal colour so it
-            // reads as the primary action among the grey secondaries (sources/detail/file).
-            .buttonStyle(WireActionStyle(tint: Theme.signal))
-            .help("Draft a reply")
+        }
+        .buttonStyle(WireActionStyle())
+        .help(card.counts.messages > 20 ? "Deeper summary of this long thread" : "Ask for more detail")
+    }
 
-            Spacer(minLength: 0)
+    private var replyButton: some View {
+        Button("REPLY") {
+            chatViewModel.prepareReply(
+                service: card.service,
+                conversationID: card.conversationId,
+                displayName: card.conversation ?? ""
+            )
+        }
+        // The one thing you usually came here to do — tint it the signal colour so it
+        // reads as the primary action among the grey secondaries (sources/detail/file).
+        .buttonStyle(WireActionStyle(tint: Theme.signal))
+        .help("Draft a reply")
+    }
 
-            Button {
-                guard let briefID else { return }
-                withAnimation(Theme.quick) {
-                    if isHandled {
-                        appState.unmarkCardHandled(briefID: briefID, cardID: card.id)
-                    } else {
-                        appState.markCardHandled(briefID: briefID, cardID: card.id)
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: isHandled ? "arrow.uturn.left" : "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                    Text(isHandled ? "REOPEN" : "FILE")
+    private var fileButton: some View {
+        Button {
+            guard let briefID else { return }
+            withAnimation(Theme.quick) {
+                if isHandled {
+                    appState.unmarkCardHandled(briefID: briefID, cardID: card.id)
+                } else {
+                    appState.markCardHandled(briefID: briefID, cardID: card.id)
                 }
             }
-            .buttonStyle(WireActionStyle(tint: isHandled ? Theme.textTertiary : Theme.ok))
-            .help(isHandled ? "Mark as not handled" : "Mark as handled")
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isHandled ? "arrow.uturn.left" : "checkmark")
+                    .font(.system(size: 9, weight: .bold))
+                Text(isHandled ? "REOPEN" : "FILE")
+            }
         }
+        .buttonStyle(WireActionStyle(tint: isHandled ? Theme.textTertiary : Theme.ok))
+        .help(isHandled ? "Mark as not handled" : "Mark as handled")
     }
 
     private var divider: some View {

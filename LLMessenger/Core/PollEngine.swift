@@ -29,6 +29,16 @@ final class PollEngine {
         configs[adapter.serviceID] = config
     }
 
+    func unregister(serviceID: String) {
+        timers[serviceID]?.invalidate()
+        timers[serviceID] = nil
+        nextFireDates.removeValue(forKey: serviceID)
+        configs.removeValue(forKey: serviceID)
+        if let adapter = adapters.removeValue(forKey: serviceID) {
+            adapter.stop()
+        }
+    }
+
     // Apply updated config for a running service without restarting the engine.
     func reload(config: ServiceConfig) {
         let serviceID = config.service

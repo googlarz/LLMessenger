@@ -19,7 +19,7 @@ final class BriefJSONTests: XCTestCase {
         XCTAssertEqual(card.priority, "low")
         XCTAssertEqual(card.actionItems, [])
         XCTAssertEqual(card.sourceMessageIds, [])
-        XCTAssertEqual(card.quotes, [])
+        XCTAssertTrue(card.quotes.isEmpty)
         XCTAssertNil(card.callback)
         XCTAssertNil(card.conversationTitle)
     }
@@ -256,13 +256,5 @@ final class BriefJSONTests: XCTestCase {
         let brief = BriefJSON.decodeLenient(from: json)
         XCTAssertNotNil(brief, "Valid brief with stray [ in headline should decode successfully")
         XCTAssertEqual(brief?.cards.first?.headline, "see list [item")
-    }
-}
-
-// Make BriefQuote Equatable for XCTAssertEqual
-extension BriefQuote: Equatable {
-    public static func == (lhs: BriefQuote, rhs: BriefQuote) -> Bool {
-        lhs.messageId == rhs.messageId && lhs.from == rhs.from
-        && lhs.time == rhs.time && lhs.text == rhs.text
     }
 }

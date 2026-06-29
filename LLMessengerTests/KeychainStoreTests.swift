@@ -4,14 +4,20 @@ import XCTest
 
 final class KeychainStoreTests: XCTestCase {
 
-    let store = KeychainStore()
+    private var store: KeychainStore!
     // Keys used by tests — cleaned up in tearDown.
     let testKeys = ["_test_anthropic", "_test_openai", "_test_nonexistent"]
+
+    override func setUp() {
+        store = KeychainStore(service: "LLMessengerTests-\(UUID().uuidString)", account: "credentials")
+    }
 
     override func tearDown() {
         for key in testKeys {
             try? store.delete(account: key)
         }
+        store.deleteStore()
+        store = nil
     }
 
     func testWriteAndReadKey() throws {

@@ -478,6 +478,39 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "isMaybe", .boolean).notNull().defaults(to: false)
             }
         }
+        migrator.registerMigration("v26_agent_schedule_metadata") { db in
+            // Scheduled rows can come from either a user-staged approve or delegated auto-send.
+            // Persisting that origin lets restart recovery route the send through the right gate.
+            try db.alter(table: "agentActions") { t in
+                t.add(column: "scheduledKind", .text)
+                t.add(column: "scheduledWindow", .double)
+            }
+            try db.execute(
+                sql: """
+                UPDATE agentActions
+                SET scheduledKind = ?, scheduledWindow = ?
+                WHERE status = ? AND scheduledAt IS NOT NULL
+                """,
+                arguments: [
+                    AgentActionScheduleKind.delegated.rawValue,
+                    AgentAction.delegatedUndoWindow,
+                    AgentActionStatus.scheduled.rawValue
+                ])
+        }
+        migrator.registerMigration("v27_large_inbox_indexes") { db in
+            try db.create(index: "messages_on_isSent_timestamp",
+                          on: "messages", columns: ["isSent", "timestamp"],
+                          ifNotExists: true)
+            try db.create(index: "messages_on_service_conversation_timestamp",
+                          on: "messages", columns: ["service", "conversationId", "timestamp"],
+                          ifNotExists: true)
+            try db.create(index: "commitments_on_status_createdAt",
+                          on: "commitments", columns: ["status", "createdAt"],
+                          ifNotExists: true)
+            try db.create(index: "agentActions_on_status_scheduledAt",
+                          on: "agentActions", columns: ["status", "scheduledAt"],
+                          ifNotExists: true)
+        }
         try migrator.migrate(dbQueue)
     }
 }

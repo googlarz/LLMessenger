@@ -20,7 +20,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.minSize = NSSize(width: 640, height: 480)
+        window.minSize = NSSize(width: 640, height: 520)
         window.title = "LLMessenger Settings"
         window.titlebarAppearsTransparent = true
         // Follow NSApp.appearance (set from saved theme in AppDelegate).

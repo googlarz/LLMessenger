@@ -7,18 +7,18 @@ final class ChatViewModelTests: XCTestCase {
 
     func testLoadBriefPopulatesMessages() async throws {
         let db = try AppDatabase(inMemory: true)
-        var briefId: Int64 = 0
-        try await db.dbQueue.write { db in
+        let briefId = try await db.dbQueue.write { db in
             var b = Brief(createdAt: Date(), status: "ready", services: "[]",
                           openingSummary: "Summary", notificationText: "x",
                           episodicSummary: nil)
             try b.insert(db)
-            briefId = b.id!
+            let briefId = b.id!
             var msg = Message(briefId: briefId, service: "telegram",
                               conversationId: "c1", messageId: "m1",
                               sender: "Alice", text: "Hello",
                               timestamp: Date(), isSent: false)
             try msg.insert(db)
+            return briefId
         }
         let mock = MockLLMClient()
         let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
@@ -37,18 +37,18 @@ final class ChatViewModelTests: XCTestCase {
 
     func testSendAddsAssistantResponse() async throws {
         let db = try AppDatabase(inMemory: true)
-        var briefId: Int64 = 0
-        try await db.dbQueue.write { db in
+        let briefId = try await db.dbQueue.write { db in
             var b = Brief(createdAt: Date(), status: "ready", services: "[]",
                           openingSummary: "Summary", notificationText: "x",
                           episodicSummary: nil)
             try b.insert(db)
-            briefId = b.id!
+            let briefId = b.id!
             var msg = Message(briefId: briefId, service: "telegram",
                               conversationId: "c1", messageId: "m1",
                               sender: "Alice", text: "Hello",
                               timestamp: Date(), isSent: false)
             try msg.insert(db)
+            return briefId
         }
         let mock = MockLLMClient()
         mock.response = LLMResponse(text: "Alice said hello.", inputTokens: 5, outputTokens: 3)
@@ -86,18 +86,18 @@ final class ChatViewModelTests: XCTestCase {
 
     func testNamedDraftShortcutCreatesDraftWithoutSending() async throws {
         let db = try AppDatabase(inMemory: true)
-        var briefId: Int64 = 0
-        try await db.dbQueue.write { db in
+        let briefId = try await db.dbQueue.write { db in
             var b = Brief(createdAt: Date(), status: "ready", services: #"["telegram"]"#,
                           openingSummary: "Summary", notificationText: "x",
                           episodicSummary: nil)
             try b.insert(db)
-            briefId = b.id!
+            let briefId = b.id!
             var msg = Message(briefId: briefId, service: "telegram",
                               conversationId: "c1", conversationName: "Joanna",
                               messageId: "m1", sender: "Joanna", text: "Where are you?",
                               timestamp: Date(), isSent: false)
             try msg.insert(db)
+            return briefId
         }
         let mock = MockLLMClient()
         mock.response = LLMResponse(text: "running 10 min late", inputTokens: 5, outputTokens: 4)

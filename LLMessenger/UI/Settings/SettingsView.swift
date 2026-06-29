@@ -17,11 +17,17 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             // Wire tab bar: paper text + underline for the selected section,
             // margin-note gray for the rest. No filled pills.
-            HStack(spacing: 22) {
-                ForEach(Array(Self.tabTitles.enumerated()), id: \.offset) { index, title in
-                    tabButton(index, title)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 22) {
+                    tabButtons
+                    Spacer()
                 }
-                Spacer()
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 18) {
+                        tabButtons
+                    }
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 14)
@@ -35,8 +41,15 @@ struct SettingsView: View {
         }
         // 720pt comfortably fits six wire tabs at the top — at 540pt the tab
         // content gets cramped, especially on the AI tab with three provider blocks.
-        .frame(width: 720, height: 560)
+        .frame(minWidth: 640, idealWidth: 720, minHeight: 520, idealHeight: 560)
         .background(Theme.bg)
+    }
+
+    @ViewBuilder
+    private var tabButtons: some View {
+        ForEach(Array(Self.tabTitles.enumerated()), id: \.offset) { index, title in
+            tabButton(index, title)
+        }
     }
 
     @ViewBuilder
@@ -94,6 +107,8 @@ private struct SettingsTabButton: View {
         }
         .buttonStyle(.plain)
         .help("\(title) settings")
+        .accessibilityLabel("\(title) settings")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }

@@ -2,6 +2,7 @@
 import XCTest
 @testable import LLMessenger
 
+@MainActor
 final class NotificationManagerTests: XCTestCase {
 
     func testBriefIDRoundTripsViaUserInfo() {

@@ -11,7 +11,12 @@ import SwiftUI
 
 struct ToDoStripView: View {
     @EnvironmentObject var appState: AppState
+    let layout: DeskLayout
     @State private var contentHeight: CGFloat = 0
+
+    init(layout: DeskLayout = .regular) {
+        self.layout = layout
+    }
 
     /// Hard ceiling: past this the strip scrolls so it can't swallow the tab panel below.
     private let maxStripHeight: CGFloat = 248
@@ -64,7 +69,7 @@ struct ToDoStripView: View {
             WireLabel(title, color: color)
             Spacer()
         }
-        .padding(.horizontal, Theme.gutter)
+        .padding(.horizontal, layout.gutter)
         .padding(.vertical, 9)
         .background(Theme.surfaceHigh.opacity(0.5))
     }
@@ -75,18 +80,20 @@ struct ToDoStripView: View {
                 .font(Theme.mono(9, weight: .bold))
                 .tracking(0.8)
                 .foregroundStyle(Theme.textTertiary)
-                .frame(width: 36, alignment: .leading)
+                .frame(width: layout == .compact ? 42 : 36, alignment: .leading)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(c.what)
                     .font(Theme.bodyFont)
                     .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(layout == .compact ? 2 : nil)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(c.conversationName)
                     .font(Theme.mono(10))
                     .foregroundStyle(Theme.textTertiary)
                     .lineLimit(1)
             }
+            .layoutPriority(1)
             Spacer()
             // i_owe → "DONE" (you delivered); they_owe → "GOT IT" (they delivered) — same
             // action (mark fulfilled), but the label and VoiceOver text disambiguate which.
@@ -96,7 +103,7 @@ struct ToDoStripView: View {
                     ? "Mark done, you delivered: \(c.what)"
                     : "Mark received, they delivered: \(c.what)")
         }
-        .padding(.horizontal, Theme.gutter)
+        .padding(.horizontal, layout.gutter)
         .padding(.vertical, 9)
     }
 
@@ -108,13 +115,15 @@ struct ToDoStripView: View {
             Text(t.text)
                 .font(Theme.bodyFont)
                 .foregroundStyle(Theme.textPrimary)
+                .lineLimit(layout == .compact ? 2 : nil)
                 .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
             Spacer()
             Button("DONE") { if let id = t.id { appState.completeTask(id) } }
                 .buttonStyle(WireActionStyle())
                 .accessibilityLabel("Complete task: \(t.text)")
         }
-        .padding(.horizontal, Theme.gutter)
+        .padding(.horizontal, layout.gutter)
         .padding(.vertical, 9)
     }
 
@@ -140,16 +149,21 @@ struct ToDoStripView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 8) {
-                Button("APPROVE") { appState.approveAction(a) }
-                    .buttonStyle(WireActionStyle())
-                    .accessibilityLabel("Approve and send: \(a.title)")
-                Button("SKIP") { appState.skipAction(a) }
-                    .buttonStyle(WireActionStyle())
-                    .accessibilityLabel("Skip: \(a.title)")
+                if a.statusEnum == .scheduled {
+                    MaybeScheduledSendBar(action: a)
+                } else {
+                    Button("STAGE SEND") { appState.stageManualApprove(a) }
+                        .buttonStyle(WireActionStyle(tint: Theme.standby))
+                        .accessibilityLabel("Stage suggested send to \(a.conversationName)")
+                        .accessibilityHint("Sends in 5 seconds unless undone.")
+                    Button("SKIP") { appState.skipAction(a) }
+                        .buttonStyle(WireActionStyle())
+                        .accessibilityLabel("Skip: \(a.title)")
+                }
                 Spacer()
             }
         }
-        .padding(.horizontal, Theme.gutter)
+        .padding(.horizontal, layout.gutter)
         .padding(.vertical, 10)
     }
 }
@@ -158,4 +172,32 @@ struct ToDoStripView: View {
 private struct StripHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+private struct MaybeScheduledSendBar: View {
+    @EnvironmentObject var appState: AppState
+    let action: AgentAction
+    @State private var now = Date()
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("SENDING IN \(secondsRemaining)s")
+                .font(Theme.mono(10.5, weight: .semibold))
+                .tracking(0.7)
+                .foregroundStyle(Theme.signal)
+                .monospacedDigit()
+            Button("UNDO") { appState.undoAutoSend(action) }
+                .buttonStyle(WireActionStyle())
+        }
+        .onReceive(ticker) { now = $0 }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Scheduled send")
+        .accessibilityValue("\(secondsRemaining) seconds remaining")
+    }
+
+    private var secondsRemaining: Int {
+        guard let fireAt = action.scheduledAt else { return 0 }
+        return max(0, Int(fireAt.timeIntervalSince(now).rounded(.up)))
+    }
 }

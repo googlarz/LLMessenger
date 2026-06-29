@@ -161,7 +161,6 @@ struct DigestSettingsTab: View {
 
     private func nextLabel(for date: Date) -> String {
         let cal = Calendar.current
-        let now = Date()
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         let timeStr = formatter.string(from: date)

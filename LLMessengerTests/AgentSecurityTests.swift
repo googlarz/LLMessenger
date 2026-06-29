@@ -111,12 +111,16 @@ final class AgentSecurityTests: XCTestCase {
         var row = try repo.fetchAgentAction(id: id)
         XCTAssertEqual(row?.statusEnum, .scheduled)
         XCTAssertNotNil(row?.scheduledAt)
+        XCTAssertEqual(row?.scheduledKindEnum, .delegated)
+        XCTAssertEqual(row?.scheduledUndoWindow, AgentAction.delegatedUndoWindow)
 
         // User taps Undo within the window.
         try repo.disarmAgentAction(id: id)
         row = try repo.fetchAgentAction(id: id)
         XCTAssertEqual(row?.statusEnum, .pending, "undo reverts to pending for manual approval")
         XCTAssertNil(row?.scheduledAt)
+        XCTAssertNil(row?.scheduledKind)
+        XCTAssertNil(row?.scheduledWindow)
 
         // No send happened → no audit row at all.
         let audits = try db.dbQueue.read { d in try ActionAuditRecord.fetchAll(d) }

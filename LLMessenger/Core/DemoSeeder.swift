@@ -166,7 +166,7 @@ enum DemoSeeder {
 
         // A pending task from the high-priority card's action item.
         try database.dbQueue.write { db in
-            var task = BriefTask(id: nil, briefCardId: "demo-signal-demo-meridian-\(morningID)",
+            let task = BriefTask(id: nil, briefCardId: "demo-signal-demo-meridian-\(morningID)",
                                  text: "Send revised cap table to Anna",
                                  completedAt: nil, createdAt: morningDate)
             try task.insert(db)

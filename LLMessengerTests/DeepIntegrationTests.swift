@@ -25,7 +25,7 @@ final class DeepIntegrationTests: XCTestCase {
         
         // 1. Prepare previous state with unresolved actions for Signal
         try await db.dbQueue.write { db in
-            var state = ConversationState(
+            let state = ConversationState(
                 service: "signal",
                 conversationId: "s1",
                 lastSeenMessageId: "m-old",

@@ -113,6 +113,8 @@ struct ChatInputView: View {
                 .onHover { sendHovered = $0 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .help("Send (⌘↩)")
+                .accessibilityLabel(sendAccessibilityLabel)
+                .accessibilityHint("Press Command Return to send.")
             }
         }
         .padding(.horizontal, 16)
@@ -132,6 +134,13 @@ struct ChatInputView: View {
     private var canSend: Bool {
         !chatViewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !chatViewModel.isLoading
+    }
+
+    private var sendAccessibilityLabel: String {
+        if let target = chatViewModel.pendingTarget {
+            return "Create reply draft for \(target.displayName)"
+        }
+        return "Ask AI about this digest"
     }
 
     private var toneSuffix: String {

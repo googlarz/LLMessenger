@@ -318,20 +318,20 @@ final class BriefEngineTests: XCTestCase {
 
     func testCompressesPreviousBriefBeforeCreatingNewOne() async throws {
         let db = try setupDB()
-        var prevId: Int64 = 0
-        try await db.dbQueue.write { db in
+        let prevId = try await db.dbQueue.write { db in
             var prev = Brief(createdAt: Date(timeIntervalSinceNow: -3600),
                              status: "idle", services: "[\"telegram\"]",
                              openingSummary: nil, notificationText: "x",
                              episodicSummary: nil)
             try prev.insert(db)
-            prevId = prev.id!
+            let prevId = prev.id!
             var msg = Message(briefId: prevId, service: "telegram",
                               conversationId: "c0", messageId: "m_old",
                               sender: "Bob", text: "old message",
                               timestamp: Date(timeIntervalSinceNow: -3600),
                               isSent: false)
             try msg.insert(db)
+            return prevId
         }
         try insertUnattachedMessages(db, count: 1)
 
@@ -504,19 +504,19 @@ final class BriefEngineTests: XCTestCase {
     func testProcessNewMessagesAcceptsContextMessageIdInSourceMessageIds() async throws {
         let db = try setupDB()
         // Insert a previously-briefed context message (briefId set → not unattached).
-        var contextMsgBriefId: Int64 = 0
-        try await db.dbQueue.write { db in
+        _ = try await db.dbQueue.write { db in
             var brief = Brief(createdAt: Date(timeIntervalSinceNow: -7200),
                               status: "ready", services: "[\"telegram\"]",
                               openingSummary: nil, notificationText: "old",
                               episodicSummary: nil)
             try brief.insert(db)
-            contextMsgBriefId = brief.id!
+            let contextMsgBriefId = brief.id!
             var ctxMsg = Message(briefId: contextMsgBriefId, service: "telegram",
                                  conversationId: "c1", messageId: "ctx_msg_id",
                                  sender: "Alice", text: "Earlier message (context)",
                                  timestamp: Date(timeIntervalSinceNow: -3600), isSent: false)
             try ctxMsg.insert(db)
+            return contextMsgBriefId
         }
         // Insert the new unattached message in the same conversation.
         try await db.dbQueue.write { db in

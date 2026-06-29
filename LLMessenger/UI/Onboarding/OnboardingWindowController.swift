@@ -24,6 +24,7 @@ final class OnboardingWindowController: NSWindowController {
         // Follow NSApp.appearance (set from saved theme in AppDelegate).
         window.backgroundColor = NSColor(Theme.bg)
         window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 480, height: 520)
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
@@ -133,11 +134,14 @@ private struct OnboardingView: View {
                         .fill(step == s ? Theme.textPrimary : Theme.border)
                         .frame(width: 6, height: 6)
                         .animation(Theme.quick, value: step)
+                        .accessibilityLabel(stepLabel(s))
+                        .accessibilityValue(step == s ? "Current step" : "Not current")
                 }
             }
             .padding(.bottom, 24)
+            .accessibilityElement(children: .contain)
         }
-        .frame(width: 520, height: 600)
+        .frame(minWidth: 480, idealWidth: 520, minHeight: 520, idealHeight: 600)
         .background(Theme.bg)
         .foregroundStyle(Theme.textPrimary)
     }
@@ -154,6 +158,15 @@ private struct OnboardingView: View {
         }
     }
 
+    private func stepLabel(_ step: Step) -> String {
+        switch step {
+        case .services: return "Services"
+        case .aiSetup: return "AI setup"
+        case .prepareSync: return "Prepare sync"
+        case .syncing: return "Syncing"
+        }
+    }
+
     // MARK: - Step 1: Services
 
     // State for collapsing the optional services section
@@ -164,7 +177,7 @@ private struct OnboardingView: View {
             VStack(spacing: 20) {
                 stepHeader(
                     title: "Start with iMessage",
-                    subtitle: "See who needs a reply, catch up faster, and let an AI draft responses in your voice. Nothing leaves your Mac without your OK."
+                    subtitle: "See who needs a reply, catch up faster, and let an AI draft responses in your voice. Nothing sends without approval or a lane you explicitly delegate."
                 )
 
                 // iMessage hero — most Mac users start here, works today, no API key
@@ -484,8 +497,8 @@ private struct OnboardingView: View {
                 )
                 whyCard(
                     icon: "checkmark.square",
-                    title: "You approve before anything is sent",
-                    body: "The Act tab queues proposed replies and follow-ups. Nothing goes out until you tap Approve — or edit it first."
+                    title: "You control what gets sent",
+                    body: "The Act tab queues proposed replies and follow-ups. Manual sends stage with undo; delegated lanes are always explicit."
                 )
             }
 

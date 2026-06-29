@@ -108,6 +108,54 @@ final class BriefRepositoryTests: XCTestCase {
         XCTAssertEqual(fetched?.status, "open")
     }
 
+    func testFetchRecentBriefsHonorsLimitNewestFirst() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let base = Date(timeIntervalSinceReferenceDate: 1_000)
+
+        try db.dbQueue.write { db in
+            for i in 0..<5 {
+                var brief = Brief(
+                    createdAt: base.addingTimeInterval(TimeInterval(i)),
+                    status: "ready",
+                    services: "[]",
+                    openingSummary: nil,
+                    notificationText: "brief \(i)",
+                    episodicSummary: nil
+                )
+                try brief.insert(db)
+            }
+        }
+
+        let recent = try repo.fetchRecentBriefs(limit: 2)
+        XCTAssertEqual(recent.map(\.notificationText), ["brief 4", "brief 3"])
+    }
+
+    func testFetchRecentBriefsIncludesSelectedOutsideLimit() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let base = Date(timeIntervalSinceReferenceDate: 2_000)
+        var oldestID: Int64 = 0
+
+        try db.dbQueue.write { db in
+            for i in 0..<5 {
+                var brief = Brief(
+                    createdAt: base.addingTimeInterval(TimeInterval(i)),
+                    status: "ready",
+                    services: "[]",
+                    openingSummary: nil,
+                    notificationText: "brief \(i)",
+                    episodicSummary: nil
+                )
+                try brief.insert(db)
+                if i == 0 { oldestID = brief.id! }
+            }
+        }
+
+        let recent = try repo.fetchRecentBriefs(limit: 2, including: oldestID)
+        XCTAssertEqual(recent.map(\.notificationText), ["brief 4", "brief 3", "brief 0"])
+    }
+
     private func makeBrief(status: String) -> Brief {
         Brief(id: nil, createdAt: Date(), status: status, services: "[]",
               openingSummary: nil, notificationText: "test", episodicSummary: nil)

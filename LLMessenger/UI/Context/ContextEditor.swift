@@ -26,6 +26,9 @@ struct ContextEditor: View {
     @State private var privacyOverride = "none"
     @State private var autoAck = false
     @State private var autoRSVP = false
+    @State private var isLoadingContext = true
+    @State private var pendingAutoSendKind: AutoSendKind?
+    @State private var showAutoSendConfirmation = false
 
     private var repository: BriefRepository { BriefRepository(database: database) }
 
@@ -126,9 +129,15 @@ struct ContextEditor: View {
                     Toggle("Auto-acknowledge (\u{201C}got it\u{201D} / \u{201C}thanks\u{201D})", isOn: $autoAck)
                         .font(Theme.sans(13))
                         .foregroundStyle(Theme.textPrimary)
+                        .onChange(of: autoAck) { enabled in
+                            if enabled { requestAutoSendConfirmation(.ack) }
+                        }
                     Toggle("Auto-RSVP (yes / no to invites)", isOn: $autoRSVP)
                         .font(Theme.sans(13))
                         .foregroundStyle(Theme.textPrimary)
+                        .onChange(of: autoRSVP) { enabled in
+                            if enabled { requestAutoSendConfirmation(.rsvp) }
+                        }
                 }
                 .padding(.vertical, 14)
 
@@ -149,9 +158,20 @@ struct ContextEditor: View {
         .frame(width: 420)
         .background(Theme.surface)
         .task { load() }
+        .alert("Enable auto-send?", isPresented: $showAutoSendConfirmation, presenting: pendingAutoSendKind) { kind in
+            Button("Enable auto-send") {
+                pendingAutoSendKind = nil
+            }
+            Button("Cancel", role: .cancel) {
+                cancelAutoSendConfirmation(kind)
+            }
+        } message: { kind in
+            Text("\(kind.label) for \(conversationName) will send automatically after a 30-second undo window. You can pause all delegated sends from the Desk banner.")
+        }
     }
 
     private func load() {
+        defer { isLoadingContext = false }
         guard let ctx = try? repository.fetchConversationContext(service: service, conversationId: conversationId)
         else { return }
         relationship = ctx.relationship ?? ""
@@ -167,6 +187,22 @@ struct ContextEditor: View {
         let delegated = ctx.delegationKinds
         autoAck = delegated.contains(AgentActionKind.ack.rawValue)
         autoRSVP = delegated.contains(AgentActionKind.rsvp.rawValue)
+    }
+
+    private func requestAutoSendConfirmation(_ kind: AutoSendKind) {
+        guard !isLoadingContext else { return }
+        pendingAutoSendKind = kind
+        showAutoSendConfirmation = true
+    }
+
+    private func cancelAutoSendConfirmation(_ kind: AutoSendKind) {
+        switch kind {
+        case .ack:
+            autoAck = false
+        case .rsvp:
+            autoRSVP = false
+        }
+        pendingAutoSendKind = nil
     }
 
     private func save() {
@@ -203,5 +239,24 @@ struct ContextEditor: View {
 
     private func splitCSV(_ s: String) -> [String] {
         s.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+}
+
+private enum AutoSendKind: Identifiable {
+    case ack
+    case rsvp
+
+    var id: String {
+        switch self {
+        case .ack: return "ack"
+        case .rsvp: return "rsvp"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .ack: return "Acknowledgements"
+        case .rsvp: return "RSVPs"
+        }
     }
 }

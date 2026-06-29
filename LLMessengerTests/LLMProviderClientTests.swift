@@ -274,14 +274,12 @@ final class LLMProviderClientTests: XCTestCase {
     }
 
     func testOpenAIConcurrentRequestsDoNotCrossTalk() async throws {
-        let lock = NSLock()
+        let counterQueue = DispatchQueue(label: "OpenAIConcurrentRequestsCounter")
         var requestCount = 0
         ProviderMockURLProtocol.handler = { request in
             let body = try self.requestBody(from: request)
             let model = try XCTUnwrap(body["model"] as? String)
-            lock.lock()
-            requestCount += 1
-            lock.unlock()
+            counterQueue.sync { requestCount += 1 }
             return self.ok(
                 url: "https://api.openai.com/v1/chat/completions",
                 #"{"choices":[{"message":{"content":"\#(model)"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}"#
@@ -308,9 +306,7 @@ final class LLMProviderClientTests: XCTestCase {
             XCTAssertEqual(seen.count, 50)
         }
 
-        lock.lock()
-        let finalRequestCount = requestCount
-        lock.unlock()
+        let finalRequestCount = counterQueue.sync { requestCount }
         XCTAssertEqual(finalRequestCount, 50)
     }
 
@@ -497,14 +493,12 @@ final class LLMProviderClientTests: XCTestCase {
     }
 
     func testAnthropicConcurrentRequestsDoNotCrossTalk() async throws {
-        let lock = NSLock()
+        let counterQueue = DispatchQueue(label: "AnthropicConcurrentRequestsCounter")
         var requestCount = 0
         ProviderMockURLProtocol.handler = { request in
             let body = try self.requestBody(from: request)
             let model = try XCTUnwrap(body["model"] as? String)
-            lock.lock()
-            requestCount += 1
-            lock.unlock()
+            counterQueue.sync { requestCount += 1 }
             return self.ok(
                 url: "https://api.anthropic.com/v1/messages",
                 #"{"content":[{"type":"text","text":"\#(model)"}],"usage":{"input_tokens":1,"output_tokens":1}}"#
@@ -531,9 +525,7 @@ final class LLMProviderClientTests: XCTestCase {
             XCTAssertEqual(seen.count, 50)
         }
 
-        lock.lock()
-        let finalRequestCount = requestCount
-        lock.unlock()
+        let finalRequestCount = counterQueue.sync { requestCount }
         XCTAssertEqual(finalRequestCount, 50)
     }
 }

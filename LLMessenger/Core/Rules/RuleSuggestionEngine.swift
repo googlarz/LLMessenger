@@ -24,6 +24,7 @@ actor RuleSuggestionEngine {
     private static let defaultsKey = "dismissedRuleSuggestions"
     private static let fastReplyThreshold: TimeInterval = 5 * 60   // 5 minutes
     private static let minConversations = 5
+    private static let maxHistoryRows = 10_000
 
     func computeSuggestions(db: AppDatabase) async throws -> [RuleSuggestion] {
         // Fetch all sent messages joined with the preceding received message in
@@ -35,6 +36,7 @@ actor RuleSuggestionEngine {
                 FROM messages
                 WHERE isSent = 1
                 ORDER BY timestamp ASC
+                LIMIT \(Self.maxHistoryRows)
             """)
             // Fetch received messages
             let received = try Row.fetchAll(grdb, sql: """
@@ -42,22 +44,25 @@ actor RuleSuggestionEngine {
                 FROM messages
                 WHERE isSent = 0
                 ORDER BY timestamp ASC
+                LIMIT \(Self.maxHistoryRows)
             """)
 
             // Build lookup: last received timestamp per (service, conversationId) before a given sent time
             // Group received by (service, conversationId)
             var receivedByConv: [String: [Date]] = [:]
             for row in received {
-                let key = "\(row["service"] as! String)|\(row["conversationId"] as! String)"
-                let ts = row["timestamp"] as! Date
+                guard let service = row["service"] as String?,
+                      let conversationId = row["conversationId"] as String?,
+                      let ts = row["timestamp"] as Date? else { continue }
+                let key = "\(service)|\(conversationId)"
                 receivedByConv[key, default: []].append(ts)
             }
 
-            return sent.map { row in
-                let service = row["service"] as! String
-                let convId = row["conversationId"] as! String
+            return sent.compactMap { row in
+                guard let service = row["service"] as String?,
+                      let convId = row["conversationId"] as String?,
+                      let sentTime = row["timestamp"] as Date? else { return nil }
                 let convName = row["conversationName"] as? String
-                let sentTime = row["timestamp"] as! Date
                 let key = "\(service)|\(convId)"
                 let prevReceived = receivedByConv[key]?
                     .filter { $0 < sentTime }
@@ -136,12 +141,14 @@ actor RuleSuggestionEngine {
                 FROM messages
                 WHERE isSent = 0
                 ORDER BY timestamp ASC
+                LIMIT \(Self.maxHistoryRows)
             """)
             let sent = try Row.fetchAll(grdb, sql: """
                 SELECT service, conversationId, timestamp
                 FROM messages
                 WHERE isSent = 1
                 ORDER BY timestamp ASC
+                LIMIT \(Self.maxHistoryRows)
             """)
 
             // Sent timestamps grouped per conversation, for fast-reply lookup.
@@ -184,6 +191,8 @@ actor RuleSuggestionEngine {
                 SELECT service, conversationId, conversationName, text
                 FROM messages
                 WHERE isSent = 1
+                ORDER BY timestamp ASC
+                LIMIT \(Self.maxHistoryRows)
             """)
             var existingTone: [String: Bool] = [:]
             let ctxRows = try Row.fetchAll(grdb, sql: """

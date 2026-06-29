@@ -31,7 +31,7 @@ struct PrivacySettingsTab: View {
                     Text("Local-only mode")
                         .font(Theme.sans(13, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
-                    Text("Forces Ollama as the LLM and skips the Slack adapter. With this on, no message content leaves your Mac. Requires app restart to take effect for adapter registration.")
+                    Text("Forces Ollama as the LLM and stops cloud-only adapters such as Slack immediately. Existing in-flight requests may finish, but new cloud message processing is blocked.")
                         .font(Theme.sans(11))
                         .foregroundStyle(Theme.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -39,7 +39,11 @@ struct PrivacySettingsTab: View {
             }
             .toggleStyle(.switch)
             .tint(Theme.ok)
-            .onChange(of: localOnlyMode) { repo.saveLocalOnlyMode($0) }
+            .onChange(of: localOnlyMode) {
+                repo.saveLocalOnlyMode($0)
+                NotificationCenter.default.post(name: .privacyModeDidChange, object: nil)
+                NotificationCenter.default.post(name: .llmProviderDidChange, object: nil)
+            }
 
             Rule()
 

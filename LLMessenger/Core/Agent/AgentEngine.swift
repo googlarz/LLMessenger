@@ -5,9 +5,9 @@
 // reply in the user's per-conversation voice (validated-JSON LLM output, same
 // manual pattern as BriefEngine), and persists each as a PENDING AgentAction.
 //
-// P1 has NO auto-send. A proposed action is just a suggestion; the user approves
-// it from the Act surface, and approval routes through the existing confirmed-send
-// path. The engine proposes; it never sends.
+// A proposed action is just a suggestion. The user can stage it from the Act
+// surface, or explicitly delegate narrow low-risk lanes. The engine proposes;
+// sending remains gated by AppState's approval/delegation paths.
 
 import Foundation
 import GRDB
@@ -180,6 +180,7 @@ actor AgentEngine {
                 .filter(Column("timestamp") >= cutoff)
                 .filter(Column("isSent") == false)
                 .order(Column("timestamp").asc)
+                .limit(2_000)
                 .fetchAll(grdb)
         }) ?? []
         guard !inbound.isEmpty else { return false }

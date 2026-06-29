@@ -20,28 +20,7 @@ struct BriefHeaderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                WireLabel("\(briefKind) · \(timeRange)\(stateSuffix)", color: stateColor)
-                Spacer()
-                HStack(spacing: 6) {
-                    Button("What changed?") {
-                        chatViewModel.inputText = "What changed since the last digest?"
-                        Task { await chatViewModel.send() }
-                    }
-                    .buttonStyle(WireActionStyle())
-                    .help("Ask what changed since the last digest")
-
-                    Button {
-                        InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "header"])
-                        onRefresh?()
-                    } label: {
-                        Text(isWorking ? "Working…" : "Refresh")
-                    }
-                    .buttonStyle(PaperButtonStyle())
-                    .disabled(isWorking)
-                    .help("Fetch new messages and rebuild the digest")
-                }
-            }
+            mastheadRow
             .padding(.bottom, 14)
 
             Text(actionHeadline)
@@ -52,20 +31,7 @@ struct BriefHeaderView: View {
                 .kerning(0.2)
                 .padding(.bottom, 8)
 
-            HStack(spacing: 0) {
-                datelineItem("\(briefCount)", briefCount == 1 ? "thread" : "threads")
-                datelineDot
-                datelineItem("\(messageCount)", messageCount == 1 ? "message" : "messages")
-                datelineDot
-                datelineItem("\(peopleCount)", peopleCount == 1 ? "person" : "people")
-                if !failedServices.isEmpty {
-                    datelineDot
-                    Text("\(failedServices.count) unreachable".uppercased())
-                        .font(Theme.labelFont)
-                        .tracking(Theme.labelTracking)
-                        .foregroundStyle(Theme.standby)
-                }
-            }
+            datelineRow
 
             if !failedServices.isEmpty {
                 noticeRow(
@@ -87,6 +53,90 @@ struct BriefHeaderView: View {
     }
 
     // MARK: - Pieces
+
+    private var mastheadRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline) {
+                mastheadLabel
+                Spacer()
+                headerActions
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                mastheadLabel
+                headerActions
+            }
+        }
+    }
+
+    private var mastheadLabel: some View {
+        WireLabel("\(briefKind) · \(timeRange)\(stateSuffix)", color: stateColor)
+            .lineLimit(1)
+    }
+
+    private var headerActions: some View {
+        HStack(spacing: 6) {
+            Button("What changed?") {
+                chatViewModel.inputText = "What changed since the last digest?"
+                Task { await chatViewModel.send() }
+            }
+            .buttonStyle(WireActionStyle())
+            .help("Ask what changed since the last digest")
+
+            Button {
+                InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "header"])
+                onRefresh?()
+            } label: {
+                Text(isWorking ? "Working…" : "Refresh")
+            }
+            .buttonStyle(PaperButtonStyle())
+            .disabled(isWorking)
+            .help("Fetch new messages and rebuild the digest")
+        }
+    }
+
+    private var datelineRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                datelineContents
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 0) {
+                    datelineItem("\(briefCount)", briefCount == 1 ? "thread" : "threads")
+                    datelineDot
+                    datelineItem("\(messageCount)", messageCount == 1 ? "message" : "messages")
+                }
+                HStack(spacing: 0) {
+                    datelineItem("\(peopleCount)", peopleCount == 1 ? "person" : "people")
+                    if !failedServices.isEmpty {
+                        datelineDot
+                        unreachableLabel
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var datelineContents: some View {
+        datelineItem("\(briefCount)", briefCount == 1 ? "thread" : "threads")
+        datelineDot
+        datelineItem("\(messageCount)", messageCount == 1 ? "message" : "messages")
+        datelineDot
+        datelineItem("\(peopleCount)", peopleCount == 1 ? "person" : "people")
+        if !failedServices.isEmpty {
+            datelineDot
+            unreachableLabel
+        }
+    }
+
+    private var unreachableLabel: some View {
+        Text("\(failedServices.count) unreachable".uppercased())
+            .font(Theme.labelFont)
+            .tracking(Theme.labelTracking)
+            .foregroundStyle(Theme.standby)
+    }
 
     private func datelineItem(_ value: String, _ unit: String) -> some View {
         HStack(spacing: 4) {

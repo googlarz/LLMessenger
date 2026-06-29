@@ -169,7 +169,10 @@ final class SlackAPIClient {
 
     // MARK: - Low level
 
-    private func call<T: Decodable>(_ method: String, params: [String: String], decode: T.Type) async throws -> T {
+    private func call<T: Decodable>(_ method: String,
+                                    params: [String: String],
+                                    decode: T.Type,
+                                    attempt: Int = 0) async throws -> T {
         try await pace(method: method)
         var req = URLRequest(url: baseURL.appendingPathComponent(method))
         req.httpMethod = "POST"
@@ -196,10 +199,12 @@ final class SlackAPIClient {
         NetworkAuditLog.shared.record(provider: "Slack", request: req,
                                       status: http.statusCode, durationMs: durationMs, error: nil)
         if http.statusCode == 429 {
+            guard attempt < 3 else { throw AdapterError.invalidResponse }
             // Honor Retry-After if present, otherwise wait 2s.
             let retry = Int(http.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 2
             try await Task.sleep(nanoseconds: UInt64(retry) * 1_000_000_000)
-            return try await self.call(method, params: params, decode: decode)
+            try Task.checkCancellation()
+            return try await self.call(method, params: params, decode: decode, attempt: attempt + 1)
         }
         guard (200..<300).contains(http.statusCode) else {
             throw AdapterError.invalidResponse
