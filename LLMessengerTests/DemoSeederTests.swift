@@ -34,7 +34,9 @@ final class DemoSeederTests: XCTestCase {
         XCTAssertEqual(newest.briefStatus, .ready, "Morning brief arrives unread so the badge shows")
         let json = try JSONDecoder().decode(BriefJSON.self, from: Data(newest.openingSummary!.utf8))
         XCTAssertEqual(json.cards.filter { $0.priority == "high" }.count, 1,
-                       "Exactly one card needs the user — the demo's focal point")
+                       "Exactly one card is urgent — the demo's focal point")
+        XCTAssertEqual(json.cards.filter(\.needsReply).count, 3,
+                       "Actionability is separate from urgency in the demo")
         XCTAssertEqual(Set(json.cards.map(\.service)).count, 4,
                        "Morning brief shows all four services")
     }
@@ -65,11 +67,11 @@ final class DemoSeederTests: XCTestCase {
 
         let repo = BriefRepository(database: db)
         let needsReply = try repo.fetchRecentHighPriorityCards(limit: 30)
-        XCTAssertEqual(needsReply.count, 1, "The cap-table card drives the Needs Reply section")
+        XCTAssertEqual(needsReply.count, 3, "Reply-needed triage includes urgent and lightweight actionable cards")
 
         let tasks = try repo.fetchPendingTasks()
         XCTAssertEqual(tasks.count, 1)
-        XCTAssertTrue(tasks[0].text.contains("cap table"))
+        XCTAssertTrue(tasks.contains { $0.text.contains("cap table") })
     }
 
     func testServicesAreDisabledWhileDemoActive() throws {

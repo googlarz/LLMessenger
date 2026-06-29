@@ -37,6 +37,9 @@ final class DesignSnapshotTests: XCTestCase {
           "counts": {"messages": 12, "threads": 1, "people": 3},
           "summary": "Anna confirmed the partner meeting moved up to Thursday 10:00. She asked for the cap table with the option-pool change and flagged that Marcus still hasn't received data-room access. Tone is positive — she called the metrics deck 'the strongest in this batch'.",
           "callback": "Last brief: you promised the updated deck by Friday — it shipped Thursday night.",
+          "needsReply": true,
+          "reason": "Deadline Wednesday EOD",
+          "grounding": "context",
           "actionItems": ["Send revised cap table to Anna", "Grant Marcus data-room access"],
           "quotes": [
             {"messageId": "m101", "from": "Anna Keller", "time": "08:42", "text": "Partner meeting moved to Thu 10:00 — can you get me the updated cap table by Wed EOD?"},
@@ -54,6 +57,9 @@ final class DesignSnapshotTests: XCTestCase {
           "counts": {"messages": 23, "threads": 3, "people": 7},
           "summary": "The 40-minute staging outage traced to a misconfigured rate limit on the new ingest service. Priya rolled it back at 07:15 and owns the postmortem. No customer impact; launch timeline unaffected.",
           "callback": null,
+          "needsReply": true,
+          "reason": "Postmortem review expected today",
+          "grounding": "direct",
           "actionItems": ["Review Priya's postmortem when it lands"],
           "quotes": [
             {"messageId": "m201", "from": "Priya Sharma", "time": "07:16", "text": "Rolled back. Root cause: rate limiter config, not the migration. Postmortem by EOD."}
@@ -70,7 +76,10 @@ final class DesignSnapshotTests: XCTestCase {
           "counts": {"messages": 4, "threads": 1, "people": 2},
           "summary": "Sunday lunch is on. He suggested 1pm at the usual place and mentioned he fixed the boat trailer.",
           "callback": null,
-          "actionItems": [],
+          "needsReply": true,
+          "reason": "Direct question about Sunday lunch",
+          "grounding": "direct",
+          "actionItems": ["Confirm whether 1pm works for Sunday lunch"],
           "quotes": [],
           "sourceMessageIds": ["m301"]
         },
@@ -84,6 +93,9 @@ final class DesignSnapshotTests: XCTestCase {
           "counts": {"messages": 8, "threads": 1, "people": 5},
           "summary": "Race committee moved the regatta a week out due to the harbour dredging schedule. Crew assignments unchanged.",
           "callback": null,
+          "needsReply": false,
+          "reason": "FYI announcement only",
+          "grounding": "direct",
           "actionItems": [],
           "quotes": [],
           "sourceMessageIds": ["m401"]

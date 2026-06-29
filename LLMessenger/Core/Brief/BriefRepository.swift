@@ -498,7 +498,7 @@ struct BriefRepository {
                 SELECT bc.*, b.createdAt AS briefCreatedAt
                 FROM briefCards bc
                 JOIN briefs b ON bc.briefId = b.id
-                WHERE bc.priority = 'high'
+                WHERE bc.needsReply = 1 OR bc.priority = 'high'
                 ORDER BY bc.createdAt DESC
                 LIMIT ?
             """, arguments: [limit])

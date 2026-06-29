@@ -168,6 +168,9 @@ struct PromptBuilder {
                   "counts": {"messages": <int>, "threads": <int>, "people": <int>},
                   "summary": "<2-3 sentence English prose — no markdown, no bullet points>",
                   "callback": null,
+                  "needsReply": <true|false>,
+                  "reason": "<why this card is actionable or safe to ignore>",
+                  "grounding": "<direct|context|inferred>",
                   "actionItems": ["<user's next physical action>"],
                   "quotes": [
                     {"messageId": "<id>", "from": "<sender>", "time": "<HH:mm>", "text": "<quote>"}
@@ -184,18 +187,32 @@ struct PromptBuilder {
             - Every quote.messageId must be an exact id from the sourceMessageIds of that card.
 
             Content rules:
-            - One card per conversationId
+            - Create one card per distinct ask, decision, deadline, or meaningful FYI.
+              A single conversation may produce 1-3 cards when it contains unrelated items.
+              Do not split tiny variations of the same ask; merge them into one card.
             - Messages marked [YOU] are your own sent messages. Use them to detect who has the conversational ball.
             - priority:
               • high: unanswered direct question addressed to you; you're explicitly named with a deadline; time-sensitive (meeting today, offer expires, confirmation needed before a specific time); thread where the last message is NOT from [YOU]
               • med: awaiting your input but not urgent; open question you haven't addressed; you're mentioned but not blocking anyone
               • low: group announcements; banter; one-way FYI; farewells; threads where [YOU] sent the last message
               • If [YOU] sent the last message in a thread, default to low or med — almost never high.
+            - needsReply:
+              • true when the user should send any reply, even a lightweight yes/no or family/social reply.
+              • false for pure FYI, announcements, resolved items, or threads where [YOU] already answered.
+              • This is independent of priority: a low-priority family question can still needsReply=true.
+            - reason: one short concrete reason, e.g. "Direct question about Sunday lunch",
+              "Deadline Wednesday EOD", "You already replied", "FYI announcement only",
+              "Inferred from prior unresolved action".
+            - grounding:
+              • direct: the card is supported by new source messages.
+              • context: it depends materially on previous summary/recent context/unresolved actions.
+              • inferred: it is a cautious inference from indirect language. Use sparingly.
             - headline: state the ask or decision, not the topic. Write "Alice asks if you're free Thursday at 3pm" not "Alice has a question about Thursday's meeting". Always name the person and state their concrete ask or fact.
             - time-sensitivity: if any message contains a deadline, meeting time, expiry, or "reply by", elevate priority to high and include the specific time or date in the headline or summary.
             - actionItems: must be specific enough to act on without re-reading the thread.
               • Bad: "Follow up with Alice"
               • Good: "Send Alice your Thursday availability before 6pm"
+              • If needsReply=true, include at least one action item unless [YOU] already sent the answer.
               Max 3. Empty [] for announcements, farewells, banter, FYI, or threads where [YOU] sent the last message.
             - quotes: choose the sentence that most clearly states what you need to respond to — the specific ask, deadline, or decision point. Never quote greetings, pleasantries, or scene-setting. Always prefer the most actionable sentence.
             - callback: null unless the episodic context section contains a directly relevant prior thread

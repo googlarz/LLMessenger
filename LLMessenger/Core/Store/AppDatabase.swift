@@ -511,6 +511,13 @@ final class AppDatabase: @unchecked Sendable {
                           on: "agentActions", columns: ["status", "scheduledAt"],
                           ifNotExists: true)
         }
+        migrator.registerMigration("v28_brief_card_actionability") { db in
+            try db.alter(table: "briefCards") { t in
+                t.add(column: "needsReply", .boolean).notNull().defaults(to: false)
+                t.add(column: "reason", .text)
+                t.add(column: "grounding", .text).notNull().defaults(to: "direct")
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

@@ -132,6 +132,38 @@ final class BriefEngineTests: XCTestCase {
         XCTAssertTrue(brief.notificationText.contains("3"))
     }
 
+    func testPriorityRulesAreAppliedToVisibleBriefJSON() async throws {
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 3)
+        try await db.dbQueue.write { db in
+            let rule = PriorityRule(
+                id: nil,
+                contactPattern: nil,
+                keywordPattern: "Test headline",
+                service: "telegram",
+                setPriority: nil,
+                suppress: true,
+                alwaysNotify: false,
+                sortOrder: 0,
+                createdAt: Date(),
+                quietStart: nil,
+                quietEnd: nil
+            )
+            try rule.insert(db)
+        }
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let id = try await engine.processNewMessages()
+
+        let brief = try XCTUnwrap(BriefRepository(database: db).fetchBrief(id: try XCTUnwrap(id)))
+        let card = try XCTUnwrap(BriefJSON.decodeLenient(from: brief.openingSummary)?.cards.first)
+        XCTAssertEqual(card.priority, "low")
+        XCTAssertFalse(card.needsReply)
+        XCTAssertEqual(card.reason, "Rule: suppressed")
+    }
+
     func testProcessNewMessagesIncludesMessageIdsInPrompt() async throws {
         let db = try setupDB()
         try insertUnattachedMessages(db, count: 2)

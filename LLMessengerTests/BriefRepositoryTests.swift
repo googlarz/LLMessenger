@@ -289,6 +289,34 @@ final class BriefRepositoryTests: XCTestCase {
         XCTAssertEqual(sources[0].sourceRole, BriefCardSourceRole.newMessage.rawValue)
     }
 
+    func testNeedsReplyCardsAreReturnedEvenWhenLowPriority() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let briefID = try repo.insertBrief(makeBrief(status: "ready"))
+        let card = BriefCardRecord(
+            id: "card-needs-reply",
+            briefId: briefID,
+            service: "imessage",
+            conversationId: "dad",
+            conversationTitle: "Dad",
+            headline: "Dad asks if 1pm works",
+            priority: "low",
+            summary: "Sunday lunch is on, and Dad asked whether 1pm works.",
+            needsReply: true,
+            reason: "Direct question about Sunday lunch",
+            grounding: "direct",
+            actionItems: #"["Confirm whether 1pm works"]"#,
+            callbackText: nil,
+            sourceMessageIds: #"["m1"]"#,
+            createdAt: Date()
+        )
+        try repo.insertBriefCard(card)
+
+        let cards = try repo.fetchRecentHighPriorityCards(limit: 10)
+
+        XCTAssertEqual(cards.map(\.card.id), ["card-needs-reply"])
+    }
+
     func testFetchRecentContextMessagesReturnsChronologicalSlice() throws {
         let db = try AppDatabase(inMemory: true)
         try db.dbQueue.write { db in

@@ -118,7 +118,7 @@ struct BriefProseView: View {
     private func isNoise(_ card: BriefCard) -> Bool {
         // A high-priority card is never folded into the noise strip — otherwise it
         // would render in both "Needs you" and the FYI strip and be double-counted.
-        card.priority != "high" && (card.collapsed || card.priority == "low")
+        !card.needsReply && card.priority != "high" && (card.collapsed || card.priority == "low")
     }
 
     private var visibleMessages: [Message] {

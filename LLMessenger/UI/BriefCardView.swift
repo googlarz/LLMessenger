@@ -109,6 +109,7 @@ struct BriefCardView: View {
             VStack(alignment: .leading, spacing: 9) {
                 stampRow
                 headline
+                actionabilityRow
 
                 if isBodyExpanded {
                     expandedBody
@@ -262,6 +263,50 @@ struct BriefCardView: View {
                 guard !isHigh && !promoted else { return }
                 withAnimation(Theme.spring) { bodyExpanded.toggle() }
             }
+    }
+
+    @ViewBuilder
+    private var actionabilityRow: some View {
+        let chips = actionabilityChips
+        if !chips.isEmpty {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(chips, id: \.label) { chip in
+                        ActionabilityChip(label: chip.label, color: chip.color)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(chips, id: \.label) { chip in
+                        ActionabilityChip(label: chip.label, color: chip.color)
+                    }
+                }
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private var actionabilityChips: [(label: String, color: Color)] {
+        var chips: [(String, Color)] = []
+        if card.needsReply {
+            chips.append(("Reply needed", Theme.signal))
+        } else if isHigh {
+            chips.append(("Review needed", Theme.signal))
+        }
+        if let reason = card.reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty {
+            chips.append((reason, Theme.textSecondary))
+        }
+        switch card.grounding {
+        case "context":
+            chips.append(("Uses prior context", Theme.standby))
+        case "inferred":
+            chips.append(("Inference", Theme.standby))
+        default:
+            break
+        }
+        if chips.isEmpty && !card.sourceMessageIds.isEmpty {
+            chips.append(("Directly sourced", Theme.textTertiary))
+        }
+        return chips
     }
 
     // MARK: - Expanded body
@@ -634,6 +679,25 @@ private struct QuickReplyChip: View {
         .help(reply.draft)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
+    }
+}
+
+private struct ActionabilityChip: View {
+    let label: String
+    let color: Color
+
+    var body: some View {
+        Text(label)
+            .font(Theme.mono(9.5, weight: .semibold))
+            .tracking(0.6)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .overlay(
+                RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(color.opacity(0.45), lineWidth: Theme.hairline)
+            )
     }
 }
 

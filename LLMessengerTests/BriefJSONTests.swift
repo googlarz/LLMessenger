@@ -21,6 +21,9 @@ final class BriefJSONTests: XCTestCase {
         XCTAssertEqual(card.sourceMessageIds, [])
         XCTAssertTrue(card.quotes.isEmpty)
         XCTAssertNil(card.callback)
+        XCTAssertFalse(card.needsReply)
+        XCTAssertNil(card.reason)
+        XCTAssertEqual(card.grounding, "direct")
         XCTAssertNil(card.conversationTitle)
     }
 
@@ -129,6 +132,9 @@ final class BriefJSONTests: XCTestCase {
             counts: BriefCardCounts(messages: 3, threads: 1, people: 2),
             summary: "Alice confirmed Thursday.",
             callback: nil,
+            needsReply: true,
+            reason: "Direct question",
+            grounding: "direct",
             actionItems: ["Send agenda"],
             quotes: [BriefQuote(messageId: "m1", from: "Alice", time: "09:00", text: "Can you send it?")],
             sourceMessageIds: ["m1", "m2"]
@@ -144,6 +150,9 @@ final class BriefJSONTests: XCTestCase {
         XCTAssertEqual(c.conversationId, card.conversationId)
         XCTAssertEqual(c.headline, card.headline)
         XCTAssertEqual(c.priority, card.priority)
+        XCTAssertEqual(c.needsReply, card.needsReply)
+        XCTAssertEqual(c.reason, card.reason)
+        XCTAssertEqual(c.grounding, card.grounding)
         XCTAssertEqual(c.actionItems, card.actionItems)
         XCTAssertEqual(c.sourceMessageIds, card.sourceMessageIds)
         XCTAssertEqual(c.quotes.first?.text, card.quotes.first?.text)

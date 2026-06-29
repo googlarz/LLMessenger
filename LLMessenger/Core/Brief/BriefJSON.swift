@@ -28,6 +28,9 @@ struct BriefCard: Codable, Identifiable {
     let counts: BriefCardCounts
     let summary: String
     let callback: String?
+    let needsReply: Bool
+    let reason: String?
+    let grounding: String
     let actionItems: [String]
     let quotes: [BriefQuote]
     let sourceMessageIds: [String]
@@ -49,6 +52,9 @@ struct BriefCard: Codable, Identifiable {
         case counts
         case summary
         case callback
+        case needsReply
+        case reason
+        case grounding
         case actionItems
         case legacyActions = "actions"
         case quotes
@@ -66,6 +72,9 @@ struct BriefCard: Codable, Identifiable {
         counts: BriefCardCounts,
         summary: String,
         callback: String?,
+        needsReply: Bool = false,
+        reason: String? = nil,
+        grounding: String = "direct",
         actionItems: [String],
         quotes: [BriefQuote],
         sourceMessageIds: [String],
@@ -80,6 +89,9 @@ struct BriefCard: Codable, Identifiable {
         self.counts = counts
         self.summary = summary
         self.callback = callback
+        self.needsReply = needsReply
+        self.reason = reason
+        self.grounding = grounding
         self.actionItems = actionItems
         self.quotes = quotes
         self.sourceMessageIds = sourceMessageIds
@@ -90,8 +102,22 @@ struct BriefCard: Codable, Identifiable {
         BriefCard(id: id, service: service, conversationId: conversationId,
                   conversationTitle: conversationTitle, headline: headline,
                   priority: priority, counts: counts, summary: summary,
-                  callback: callback, actionItems: actionItems, quotes: quotes,
+                  callback: callback, needsReply: needsReply, reason: reason,
+                  grounding: grounding, actionItems: actionItems, quotes: quotes,
                   sourceMessageIds: sourceMessageIds, collapsed: value)
+    }
+
+    func withActionability(priority: String? = nil,
+                           needsReply: Bool? = nil,
+                           reason: String? = nil,
+                           grounding: String? = nil) -> BriefCard {
+        BriefCard(id: id, service: service, conversationId: conversationId,
+                  conversationTitle: conversationTitle, headline: headline,
+                  priority: priority ?? self.priority, counts: counts, summary: summary,
+                  callback: callback, needsReply: needsReply ?? self.needsReply,
+                  reason: reason ?? self.reason, grounding: grounding ?? self.grounding,
+                  actionItems: actionItems, quotes: quotes,
+                  sourceMessageIds: sourceMessageIds, collapsed: collapsed)
     }
 
     init(from decoder: Decoder) throws {
@@ -110,6 +136,9 @@ struct BriefCard: Codable, Identifiable {
         // The LLM occasionally emits a bool or other non-string value for callback;
         // tolerate it as nil rather than failing the whole brief.
         callback = (try? container.decodeIfPresent(String.self, forKey: .callback)) ?? nil
+        needsReply = (try? container.decodeIfPresent(Bool.self, forKey: .needsReply)) ?? false
+        reason = (try? container.decodeIfPresent(String.self, forKey: .reason)) ?? nil
+        grounding = try container.decodeIfPresent(String.self, forKey: .grounding) ?? "direct"
         actionItems = try container.decodeIfPresent([String].self, forKey: .actionItems)
             ?? (try container.decodeIfPresent([String].self, forKey: .legacyActions))
             ?? []
@@ -133,6 +162,9 @@ struct BriefCard: Codable, Identifiable {
         try container.encode(counts, forKey: .counts)
         try container.encode(summary, forKey: .summary)
         try container.encodeIfPresent(callback, forKey: .callback)
+        try container.encode(needsReply, forKey: .needsReply)
+        try container.encodeIfPresent(reason, forKey: .reason)
+        try container.encode(grounding, forKey: .grounding)
         try container.encode(actionItems, forKey: .actionItems)
         try container.encode(quotes, forKey: .quotes)
         try container.encode(sourceMessageIds, forKey: .sourceMessageIds)

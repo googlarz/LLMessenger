@@ -215,6 +215,8 @@ final class BriefEngine {
         // Step 4: Guard against blank briefs — messages stay unattached if LLM returned nothing.
         guard !allCards.isEmpty else { return nil }
 
+        allCards = applyPriorityRules(to: allCards)
+
         // Context-aware ordering: surface high-priority-context conversations first and push
         // low/noise-dominated ones to the end. Pure helper; falls back to LLM priority when no
         // context overrides exist.
@@ -278,7 +280,6 @@ final class BriefEngine {
         }
 
         try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
-        applyPriorityRules(to: allCards)
         updateContactProfiles(from: allCards)
 
         return briefID
@@ -542,6 +543,8 @@ final class BriefEngine {
 
         guard !allCards.isEmpty else { return nil }
 
+        allCards = applyPriorityRules(to: allCards)
+
         let merged = BriefJSON(
             totalMessages: totalMessages,
             totalThreads: totalThreads,
@@ -589,7 +592,6 @@ final class BriefEngine {
         }
 
         try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
-        applyPriorityRules(to: allCards)
         updateContactProfiles(from: allCards)
 
         return briefID
@@ -639,6 +641,9 @@ final class BriefEngine {
                 counts: card.counts,
                 summary: card.summary,
                 callback: card.callback,
+                needsReply: card.needsReply,
+                reason: card.reason,
+                grounding: card.grounding,
                 actionItems: card.actionItems,
                 quotes: validQuotes,
                 sourceMessageIds: validSourceIDs
@@ -685,6 +690,9 @@ final class BriefEngine {
                 headline: card.headline,
                 priority: card.priority,
                 summary: card.summary,
+                needsReply: card.needsReply,
+                reason: card.reason,
+                grounding: card.grounding,
                 actionItems: try encodeStringArray(card.actionItems),
                 callbackText: card.callback,
                 sourceMessageIds: try encodeStringArray(card.sourceMessageIds),
@@ -916,10 +924,10 @@ final class BriefEngine {
 
     // MARK: - Priority Rules
 
-    private func applyPriorityRules(to cards: [BriefCard]) {
+    private func applyPriorityRules(to cards: [BriefCard]) -> [BriefCard] {
         let rules = (try? database.dbQueue.read { db in try PriorityRule.fetchAll(db) }) ?? []
-        guard !rules.isEmpty else { return }
-        for card in cards {
+        guard !rules.isEmpty else { return cards }
+        return cards.map { card in
             let contactName = card.conversationTitle ?? card.conversationId
             let messageText = card.headline + " " + card.summary
             guard let match = RuleEvaluator.evaluate(
@@ -927,27 +935,31 @@ final class BriefEngine {
                 service: card.service,
                 messageText: messageText,
                 rules: rules
-            ) else { continue }
+            ) else { return card }
 
             let newPriority: String
+            let needsReply: Bool
+            let reason: String
             switch match.action {
             case .alwaysNotify:
                 newPriority = "high"
+                needsReply = true
+                reason = "Rule: always notify"
                 print("[BriefEngine] rule overrides card \(card.id) → high (alwaysNotify)")
             case .suppress:
                 newPriority = "low"
+                needsReply = false
+                reason = "Rule: suppressed"
                 print("[BriefEngine] rule overrides card \(card.id) → low (suppress)")
             case .setPriority(let p):
                 newPriority = p
+                needsReply = card.needsReply
+                reason = "Rule: priority set to \(p)"
                 print("[BriefEngine] rule sets card \(card.id) → \(p)")
             }
-
-            try? database.dbQueue.write { db in
-                try db.execute(
-                    sql: "UPDATE briefCards SET priority = ? WHERE id = ?",
-                    arguments: [newPriority, card.id]
-                )
-            }
+            return card.withActionability(priority: newPriority,
+                                          needsReply: needsReply,
+                                          reason: reason)
         }
     }
 
