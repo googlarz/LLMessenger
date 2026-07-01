@@ -87,7 +87,7 @@ final class ContactDirectory: ObservableObject {
                 grouped[key] = (c.displayName, c.handles)
                 order.append(key)
             } else {
-                grouped[key]!.handles.append(contentsOf: c.handles)
+                grouped[key]?.handles.append(contentsOf: c.handles)
             }
         }
         return order.compactMap { key in

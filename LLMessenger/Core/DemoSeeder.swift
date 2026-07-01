@@ -340,7 +340,9 @@ enum DemoSeeder {
             "cards": jsonCards,
         ]
         let data = try JSONSerialization.data(withJSONObject: briefJSON)
-        var brief = try repo.fetchBrief(id: briefID)!
+        guard var brief = try repo.fetchBrief(id: briefID) else {
+            throw DatabaseError(message: "demo brief \(briefID) missing after insert")
+        }
         brief.openingSummary = String(data: data, encoding: .utf8)
         try repo.update(brief: brief)
 

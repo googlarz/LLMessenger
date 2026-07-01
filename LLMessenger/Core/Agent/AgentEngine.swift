@@ -62,7 +62,7 @@ actor AgentEngine {
 
     /// Run one planning cycle now. Honors the kill switch.
     func trigger() async {
-        guard !UserDefaults.standard.bool(forKey: "agentDisabled") else { return }
+        guard !UserDefaults.standard.bool(forKey: AgentDelegation.agentDisabledKey) else { return }
         guard !UserDefaults.standard.bool(forKey: DemoSeeder.demoFlagKey) else { return }
 
         let owed: [OwedReply]

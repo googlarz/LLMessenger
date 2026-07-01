@@ -30,6 +30,10 @@ enum AgentDelegation {
     /// Global kill switch. When set, `decide` always returns autoSend=false.
     static let killSwitchKey = "agentDelegationDisabled"
 
+    /// Broader switch: disables the whole agent engine (proposals AND sends),
+    /// not just delegation. Distinct from `killSwitchKey` — do not merge them.
+    static let agentDisabledKey = "agentDisabled"
+
     /// Returns autoSend=true ONLY if EVERY guard passes. Any single failing guard
     /// blocks the send and reports which guard blocked it.
     static func decide(action: AgentAction,
@@ -41,7 +45,7 @@ enum AgentDelegation {
         if defaults.bool(forKey: killSwitchKey) {
             return DelegationDecision(autoSend: false, reason: "delegation disabled (kill switch)")
         }
-        if defaults.bool(forKey: "agentDisabled") {
+        if defaults.bool(forKey: agentDisabledKey) {
             return DelegationDecision(autoSend: false, reason: "agent disabled")
         }
 

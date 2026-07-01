@@ -128,7 +128,7 @@ final class BriefEngine {
                         // the allowlist, otherwise every card in an active conversation gets rejected.
                         var allPromptMessages: [Message] = serviceMessages
                         for convId in rankedConvIds {
-                            let convMessages = byConversation[convId]!.sorted { $0.timestamp < $1.timestamp }
+                            let convMessages = (byConversation[convId] ?? []).sorted { $0.timestamp < $1.timestamp }
                             let capped = convMessages.count > 100 ? Array(convMessages.suffix(100)) : convMessages
                             let firstDate = capped.first?.timestamp ?? Date()
                             let contextMessages = (try? self.repository.fetchRecentContextMessages(

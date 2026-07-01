@@ -55,9 +55,9 @@ actor RealtimeMonitor {
         if let iMessageAdapter = adapters["imessage"],
            FileManager.default.fileExists(atPath: Self.walPath) {
             startFSWatch(adapter: iMessageAdapter)
-        } else if adapters["imessage"] != nil {
+        } else if let iMessageAdapter = adapters["imessage"] {
             // FDA not granted — fall back to 30s poll
-            startPollTask(serviceID: "imessage", adapter: adapters["imessage"]!)
+            startPollTask(serviceID: "imessage", adapter: iMessageAdapter)
         }
 
         // Non-iMessage adapters: 30s poll
