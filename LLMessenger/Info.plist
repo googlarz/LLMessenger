@@ -7,9 +7,9 @@
 	<key>CFBundleName</key>
 	<string>LLMessenger</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.2.4</string>
+	<string>2.2.5</string>
 	<key>CFBundleVersion</key>
-	<string>2.2.4</string>
+	<string>2.2.5</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
