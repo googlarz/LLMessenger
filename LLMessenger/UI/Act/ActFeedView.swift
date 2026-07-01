@@ -170,11 +170,29 @@ struct ActFeedView: View {
     }
 
     var body: some View {
-        Group {
-            if items.isEmpty {
-                emptyState
-            } else {
-                feedContent
+        VStack(spacing: 0) {
+            // "What needs my attention now?" — moved here from DeskView's shared
+            // header so it only shows on the Act tab, not on Digest/Activity too.
+            TodaySummaryView(layout: layout)
+            Rule()
+
+            if appState.productLoveMetrics.shouldShowFirstWeekGuide(suggestionCount: appState.contextSuggestions.count) {
+                FirstWeekGuideView(
+                    metrics: appState.productLoveMetrics,
+                    suggestions: appState.contextSuggestions,
+                    onAcceptSuggestion: { appState.acceptContextSuggestion($0) },
+                    onDismissSuggestion: { appState.dismissContextSuggestion($0) },
+                    onPermanentDismiss: { appState.dismissFirstWeekGuide() }
+                )
+                Rule()
+            }
+
+            Group {
+                if items.isEmpty {
+                    emptyState
+                } else {
+                    feedContent
+                }
             }
         }
         .onAppear {

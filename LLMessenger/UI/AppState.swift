@@ -978,6 +978,10 @@ final class AppState: ObservableObject {
         Task { await contextSuggestionEngine.dismissContext(suggestion: suggestion) }
     }
 
+    func dismissFirstWeekGuide() {
+        productLoveMetrics = ProductLoveMetricStore.dismissFirstWeekGuide()
+    }
+
     func refreshTasks() {
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }

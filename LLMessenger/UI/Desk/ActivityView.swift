@@ -45,6 +45,17 @@ struct ActivityView: View {
                 )
                 Rule()
 
+                // Retrospective proof-of-value — "what happened," not "what should I do."
+                OutcomeStripView(stats: appState.productOutcomeStats, layout: .regular)
+                if appState.productOutcomeStats.hasSignal {
+                    Rule()
+                }
+
+                if appState.productLoveMetrics.shouldShowLearningReceipt {
+                    LearningReceiptsView(metrics: appState.productLoveMetrics)
+                    Rule()
+                }
+
                 // What the agent actually sent for you — the "what did it do?" answer.
                 if !audits.isEmpty {
                     sentSection

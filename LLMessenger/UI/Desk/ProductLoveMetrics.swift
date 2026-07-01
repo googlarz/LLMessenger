@@ -7,6 +7,7 @@ struct ProductLoveMetrics: Equatable {
     var priorityCorrections: Int
     var quietedThreads: Int
     var openedDigests: Int
+    var guideDismissed: Bool
 
     var firstWeekDay: Int {
         guard let firstSeenAt else { return 1 }
@@ -19,7 +20,7 @@ struct ProductLoveMetrics: Equatable {
     }
 
     func shouldShowFirstWeekGuide(suggestionCount: Int) -> Bool {
-        firstWeekDay <= 7 && (
+        !guideDismissed && firstWeekDay <= 7 && (
             openedDigests == 0 ||
             handledCards == 0 ||
             !hasLearningSignal ||
@@ -64,7 +65,8 @@ struct ProductLoveMetrics: Equatable {
         handledCards: 0,
         priorityCorrections: 0,
         quietedThreads: 0,
-        openedDigests: 0
+        openedDigests: 0,
+        guideDismissed: false
     )
 }
 
@@ -75,6 +77,7 @@ enum ProductLoveMetricStore {
     private static let priorityCorrectionsKey = "loveMetrics.priorityCorrections"
     private static let quietedThreadsKey = "loveMetrics.quietedThreads"
     private static let openedDigestsKey = "loveMetrics.openedDigests"
+    private static let guideDismissedKey = "loveMetrics.guideDismissed"
     private static let activeDayPrefix = "loveMetrics.activeDay."
 
     static func markActiveToday(defaults: UserDefaults = .standard, now: Date = Date()) -> ProductLoveMetrics {
@@ -105,6 +108,11 @@ enum ProductLoveMetricStore {
         increment(openedDigestsKey, defaults: defaults)
     }
 
+    static func dismissFirstWeekGuide(defaults: UserDefaults = .standard) -> ProductLoveMetrics {
+        defaults.set(true, forKey: guideDismissedKey)
+        return load(defaults: defaults)
+    }
+
     static func load(defaults: UserDefaults = .standard) -> ProductLoveMetrics {
         ProductLoveMetrics(
             activeDays: defaults.integer(forKey: activeDaysKey),
@@ -112,7 +120,8 @@ enum ProductLoveMetricStore {
             handledCards: defaults.integer(forKey: handledCardsKey),
             priorityCorrections: defaults.integer(forKey: priorityCorrectionsKey),
             quietedThreads: defaults.integer(forKey: quietedThreadsKey),
-            openedDigests: defaults.integer(forKey: openedDigestsKey)
+            openedDigests: defaults.integer(forKey: openedDigestsKey),
+            guideDismissed: defaults.bool(forKey: guideDismissedKey)
         )
     }
 

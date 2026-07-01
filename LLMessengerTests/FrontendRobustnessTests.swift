@@ -205,7 +205,8 @@ final class FrontendRobustnessTests: XCTestCase {
             handledCards: 3,
             priorityCorrections: 1,
             quietedThreads: 1,
-            openedDigests: 4
+            openedDigests: 4,
+            guideDismissed: false
         )
         let newUser = ProductLoveMetrics.empty
 
@@ -215,6 +216,17 @@ final class FrontendRobustnessTests: XCTestCase {
         XCTAssertTrue(formed.shouldShowLearningReceipt)
         XCTAssertFalse(newUser.shouldShowLearningReceipt)
         XCTAssertTrue(formed.learningNextStep.contains("Next digest"))
+    }
+
+    func testFirstWeekGuideStaysHiddenOnceDismissedEvenWithinFirstWeek() {
+        let newUser = ProductLoveMetrics.empty
+        XCTAssertTrue(newUser.shouldShowFirstWeekGuide(suggestionCount: 0))
+
+        var dismissed = newUser
+        dismissed.guideDismissed = true
+        // Even with a fresh suggestion arriving (the OR-gate condition that would
+        // otherwise resurrect the guide), a user dismiss must win.
+        XCTAssertFalse(dismissed.shouldShowFirstWeekGuide(suggestionCount: 1))
     }
 
     /// Inserts a Brief using only the fields accepted by the existing memberwise init.

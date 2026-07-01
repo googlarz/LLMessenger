@@ -5,6 +5,7 @@ struct FirstWeekGuideView: View {
     let suggestions: [ContextSuggestion]
     let onAcceptSuggestion: (ContextSuggestion) -> Void
     let onDismissSuggestion: (ContextSuggestion) -> Void
+    let onPermanentDismiss: () -> Void
 
     private var topSuggestion: ContextSuggestion? {
         suggestions.first { $0.kind == "prioritize" || $0.kind == "keySender" } ?? suggestions.first
@@ -16,6 +17,15 @@ struct FirstWeekGuideView: View {
                 WireLabel("First week", color: Theme.textSecondary)
                 Spacer()
                 WireLabel("Day \(metrics.firstWeekDay)", color: Theme.standby)
+                Button {
+                    onPermanentDismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss first week guide")
             }
 
             Text(stepLine)
