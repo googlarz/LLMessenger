@@ -79,10 +79,10 @@ struct CommandBar<Recognizer: SpeechRecognizing>: View {
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 10)
-        .onChange(of: speech.transcript) { newValue in
+        .onChange(of: speech.transcript) { _, newValue in
             if speech.isListening { commandText = newValue }
         }
-        .onChange(of: speech.isListening) { listening in
+        .onChange(of: speech.isListening) { _, listening in
             // When dictation finishes with a transcript, run the command.
             if !listening && !commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 run()

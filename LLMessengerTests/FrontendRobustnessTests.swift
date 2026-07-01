@@ -70,6 +70,153 @@ final class FrontendRobustnessTests: XCTestCase {
                        "Nil database ids must not collapse to action-0; snapshot fixtures can contain several")
     }
 
+    func testActItemSorterKeepsFreshItemsAheadOfStaleItems() {
+        func action(title: String, createdAt: Date) -> AgentAction {
+            AgentAction(
+                id: nil,
+                kind: AgentActionKind.reply.rawValue,
+                service: "imessage",
+                conversationId: title,
+                conversationName: title,
+                title: title,
+                payload: AgentAction.encodeReplyPayload(title),
+                reasoning: "fixture",
+                confidence: 0.8,
+                riskLevel: AgentActionRisk.low.rawValue,
+                status: AgentActionStatus.pending.rawValue,
+                createdAt: createdAt,
+                resolvedAt: nil
+            )
+        }
+
+        let fresh = ActItem.agentAction(action(title: "fresh", createdAt: Date().addingTimeInterval(-3600)))
+        let stale = ActItem.agentAction(action(title: "stale", createdAt: Date().addingTimeInterval(-72 * 3600)))
+
+        let sorted = ActItemSorter.sort([stale, fresh]) { _, _ in nil }
+
+        XCTAssertEqual(sorted.map(\.name), ["fresh", "stale"])
+    }
+
+    func testProductOutcomeStatsCountsRecentBriefsHandledCardsAndAudits() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let recentID: Int64 = 42
+        let oldID: Int64 = 7
+        let json = """
+        {
+          "total_messages": 3,
+          "total_threads": 2,
+          "total_people": 2,
+          "cards": [
+            {
+              "id": "c1",
+              "service": "signal",
+              "conversationId": "vip",
+              "headline": "Anna needs reply",
+              "priority": "high",
+              "counts": { "messages": 2, "threads": 1, "people": 1 },
+              "summary": "Needs a reply.",
+              "needsReply": true,
+              "sourceMessageIds": ["m1"]
+            },
+            {
+              "id": "c2",
+              "service": "telegram",
+              "conversationId": "noise",
+              "headline": "FYI only",
+              "priority": "low",
+              "counts": { "messages": 1, "threads": 1, "people": 1 },
+              "summary": "No action.",
+              "needsReply": false,
+              "sourceMessageIds": ["m2"]
+            }
+          ]
+        }
+        """
+        let briefs = [
+            Brief(id: recentID, createdAt: now.addingTimeInterval(-3600), status: "ready",
+                  services: #"["signal"]"#, openingSummary: json, notificationText: "x"),
+            Brief(id: oldID, createdAt: now.addingTimeInterval(-9 * 86400), status: "open",
+                  services: #"["signal"]"#, openingSummary: json, notificationText: "x")
+        ]
+        let audits = [
+            ActionAuditRecord(id: 1, actionKind: "reply", service: "signal", conversationId: "vip",
+                              detail: "Sent", trigger: "approved", createdAt: now.addingTimeInterval(-120)),
+            ActionAuditRecord(id: 2, actionKind: "reply", service: "signal", conversationId: "vip",
+                              detail: "Auto", trigger: "delegated", createdAt: now.addingTimeInterval(-60)),
+            ActionAuditRecord(id: 3, actionKind: "reply", service: "signal", conversationId: "old",
+                              detail: "Old", trigger: "approved", createdAt: now.addingTimeInterval(-9 * 86400))
+        ]
+
+        let stats = ProductOutcomeStats.lastSevenDays(
+            briefs: briefs,
+            handledCardKeys: ["\(recentID):c1", "\(oldID):c1", "bad-key"],
+            auditRows: audits,
+            openCommitmentCount: 3,
+            heldBackCount: 5,
+            now: now
+        )
+
+        XCTAssertEqual(stats.digestCount, 1)
+        XCTAssertEqual(stats.threadsSummarized, 2)
+        XCTAssertEqual(stats.sourceBackedCardCount, 2)
+        XCTAssertEqual(stats.replyNeededCount, 1)
+        XCTAssertEqual(stats.quietThreadCount, 1)
+        XCTAssertEqual(stats.handledCount, 1)
+        XCTAssertEqual(stats.queuedSendCount, 1)
+        XCTAssertEqual(stats.autoSentCount, 1)
+        XCTAssertEqual(stats.auditCount, 2)
+        XCTAssertEqual(stats.openCommitmentCount, 3)
+        XCTAssertEqual(stats.heldBackCount, 5)
+    }
+
+    func testProductLoveMetricStoreCountsActiveDaysAndActionsLocally() throws {
+        let suiteName = "ProductLoveMetricStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let day1 = Date(timeIntervalSince1970: 1_800_000_000)
+        let day2 = day1.addingTimeInterval(86400)
+
+        var metrics = ProductLoveMetricStore.markActiveToday(defaults: defaults, now: day1)
+        metrics = ProductLoveMetricStore.markActiveToday(defaults: defaults, now: day1.addingTimeInterval(3600))
+        XCTAssertEqual(metrics.activeDays, 1)
+        XCTAssertEqual(metrics.firstWeekDay, 1)
+
+        metrics = ProductLoveMetricStore.markActiveToday(defaults: defaults, now: day2)
+        XCTAssertEqual(metrics.activeDays, 2)
+
+        metrics = ProductLoveMetricStore.recordOpenedDigest(defaults: defaults)
+        metrics = ProductLoveMetricStore.recordHandledCard(defaults: defaults)
+        metrics = ProductLoveMetricStore.recordPriorityCorrection(defaults: defaults)
+        metrics = ProductLoveMetricStore.recordQuietedThread(defaults: defaults)
+
+        XCTAssertEqual(metrics.openedDigests, 1)
+        XCTAssertEqual(metrics.handledCards, 1)
+        XCTAssertEqual(metrics.priorityCorrections, 1)
+        XCTAssertEqual(metrics.quietedThreads, 1)
+        XCTAssertTrue(metrics.hasLearningSignal)
+        XCTAssertTrue(metrics.learningReceipt.contains("quieted"))
+    }
+
+    func testProductLoveMetricsHidesFirstWeekGuideAfterHabitLoopCompletes() {
+        let formed = ProductLoveMetrics(
+            activeDays: 2,
+            firstSeenAt: Date().addingTimeInterval(-2 * 86400),
+            handledCards: 3,
+            priorityCorrections: 1,
+            quietedThreads: 1,
+            openedDigests: 4
+        )
+        let newUser = ProductLoveMetrics.empty
+
+        XCTAssertFalse(formed.shouldShowFirstWeekGuide(suggestionCount: 0))
+        XCTAssertTrue(formed.shouldShowFirstWeekGuide(suggestionCount: 1))
+        XCTAssertTrue(newUser.shouldShowFirstWeekGuide(suggestionCount: 0))
+        XCTAssertTrue(formed.shouldShowLearningReceipt)
+        XCTAssertFalse(newUser.shouldShowLearningReceipt)
+        XCTAssertTrue(formed.learningNextStep.contains("Next digest"))
+    }
+
     /// Inserts a Brief using only the fields accepted by the existing memberwise init.
     private func insertBrief(db: AppDatabase,
                              status: String = "ready",
@@ -266,6 +413,80 @@ final class FrontendRobustnessTests: XCTestCase {
                        "markAsOpen must set the target brief's status to open")
         XCTAssertEqual(byID[id2], .ready,
                        "markAsOpen must not affect other briefs — SQL WHERE id = ? must be scoped correctly")
+    }
+
+    func testSaveConversationContextPreservesRichContextFields() throws {
+        let db = try makeDB()
+        let repo = BriefRepository(database: db)
+        var existing = ConversationContext(
+            service: "signal",
+            conversationId: "c1",
+            label: "client",
+            priorityHint: "auto",
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            relationship: "client",
+            importantTopics: #"["launch"]"#,
+            noiseTopics: #"["memes"]"#,
+            keySenders: #"["Ari"]"#,
+            contextNote: "Prefers short updates.",
+            responseExpectation: "same day",
+            privacyOverride: "never_draft",
+            aliases: #"["ACME = Acme Corp"]"#,
+            tone: "concise",
+            delegation: #"["calendar"]"#
+        )
+        existing.noiseTopicsList.append("old low-signal thread")
+        try repo.upsertConversationContext(existing)
+
+        let appState = makeAppState(db: db)
+        appState.saveConversationContext(service: "signal", conversationId: "c1", label: "vip client", priorityHint: "low")
+
+        let saved = try XCTUnwrap(repo.fetchConversationContext(service: "signal", conversationId: "c1"))
+        XCTAssertEqual(saved.label, "vip client")
+        XCTAssertEqual(saved.priorityHint, "low")
+        XCTAssertEqual(saved.relationship, "client")
+        XCTAssertEqual(saved.importantTopicsList, ["launch"])
+        XCTAssertEqual(saved.noiseTopicsList, ["memes", "old low-signal thread"])
+        XCTAssertEqual(saved.keySendersList, ["Ari"])
+        XCTAssertEqual(saved.contextNote, "Prefers short updates.")
+        XCTAssertEqual(saved.responseExpectation, "same day")
+        XCTAssertEqual(saved.privacyOverride, "never_draft")
+        XCTAssertEqual(saved.aliasesList, ["ACME = Acme Corp"])
+        XCTAssertEqual(saved.tone, "concise")
+        XCTAssertEqual(saved.delegationKinds, ["calendar"])
+    }
+
+    func testSaveConversationPrivacyOverridePreservesContextAndCanClear() throws {
+        let db = try makeDB()
+        let repo = BriefRepository(database: db)
+        let existing = ConversationContext(
+            service: "signal",
+            conversationId: "c1",
+            label: "client",
+            priorityHint: "high",
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            relationship: "client",
+            importantTopics: #"["launch"]"#,
+            privacyOverride: "never_draft",
+            tone: "concise"
+        )
+        try repo.upsertConversationContext(existing)
+
+        let appState = makeAppState(db: db)
+        appState.saveConversationPrivacyOverride(service: "signal", conversationId: "c1", privacyOverride: "local_only")
+
+        var saved = try XCTUnwrap(repo.fetchConversationContext(service: "signal", conversationId: "c1"))
+        XCTAssertEqual(saved.label, "client")
+        XCTAssertEqual(saved.priorityHint, "high")
+        XCTAssertEqual(saved.importantTopicsList, ["launch"])
+        XCTAssertEqual(saved.privacyOverride, "local_only")
+        XCTAssertEqual(saved.tone, "concise")
+
+        appState.saveConversationPrivacyOverride(service: "signal", conversationId: "c1", privacyOverride: nil)
+        saved = try XCTUnwrap(repo.fetchConversationContext(service: "signal", conversationId: "c1"))
+        XCTAssertNil(saved.privacyOverride)
+        XCTAssertEqual(saved.label, "client")
+        XCTAssertEqual(saved.tone, "concise")
     }
 
     // MARK: - Chaos test: corrupt JSON in every nullable field

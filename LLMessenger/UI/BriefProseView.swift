@@ -31,6 +31,7 @@ struct BriefProseView: View {
     /// Conversation labels batch-fetched per brief — the per-card synchronous
     /// DB read in the stamp row ran on every hover (PERF-2026-06-12 #1).
     @State private var contextCache: [String: ConversationContext] = [:]
+    @State private var contextLoadTask: Task<Void, Never>? = nil
 
     struct TimelineTarget: Identifiable {
         let service: String
@@ -62,14 +63,44 @@ struct BriefProseView: View {
         let sortedMessages = messages.sorted { $0.timestamp < $1.timestamp }
         messageCache = (brief.id, messages.count, sortedMessages, Dictionary(grouping: sortedMessages, by: \.service))
         var contexts: [String: ConversationContext] = [:]
+        var missingPairs: [(service: String, conversationId: String)] = []
         for card in json?.cards ?? [] {
             let key = "\(card.service)|\(card.conversationId)"
-            if contexts[key] == nil,
-               let ctx = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId) {
+            if contexts[key] != nil { continue }
+            if let ctx = appState.cachedConversationContext(service: card.service, conversationId: card.conversationId) {
                 contexts[key] = ctx
+            } else {
+                missingPairs.append((service: card.service, conversationId: card.conversationId))
             }
         }
         contextCache = contexts
+        loadMissingContexts(missingPairs)
+    }
+
+    private func loadMissingContexts(_ pairs: [(service: String, conversationId: String)]) {
+        contextLoadTask?.cancel()
+        var seen = Set<String>()
+        var uniquePairs: [(service: String, conversationId: String)] = []
+        for pair in pairs {
+            let key = "\(pair.service)|\(pair.conversationId)"
+            if seen.insert(key).inserted {
+                uniquePairs.append(pair)
+            }
+        }
+        guard !uniquePairs.isEmpty else { return }
+        let repository = appState.repository
+        contextLoadTask = Task {
+            let loaded = await Task.detached(priority: .userInitiated) {
+                (try? repository.fetchConversationContexts(for: uniquePairs)) ?? []
+            }.value
+            guard !Task.isCancelled, !loaded.isEmpty else { return }
+            appState.mergeConversationContexts(loaded)
+            var merged = contextCache
+            for context in loaded {
+                merged["\(context.service)|\(context.conversationId)"] = context
+            }
+            contextCache = merged
+        }
     }
 
     private var services: [String] {
@@ -99,12 +130,16 @@ struct BriefProseView: View {
         }
     }
 
-    private var highPriorityCards: [NumberedBriefCard] {
-        numberedVisibleCards.filter { $0.card.priority == "high" }
+    private var replyNeededCards: [NumberedBriefCard] {
+        numberedVisibleCards.filter { $0.card.needsReply }
+    }
+
+    private var reviewCards: [NumberedBriefCard] {
+        numberedVisibleCards.filter { !$0.card.needsReply && $0.card.priority == "high" }
     }
 
     private var otherCards: [NumberedBriefCard] {
-        numberedVisibleCards.filter { $0.card.priority != "high" && !isNoise($0.card) }
+        numberedVisibleCards.filter { !$0.card.needsReply && $0.card.priority != "high" && !isNoise($0.card) }
     }
 
     private var noiseCards: [NumberedBriefCard] {
@@ -143,34 +178,42 @@ struct BriefProseView: View {
                 WeekAtGlanceView(
                     messages: visibleMessages,
                     cards: numberedVisibleCards.map(\.card),
-                    activeCount: highPriorityCards.count + otherCards.count,
-                    needsYouCount: highPriorityCards.count
+                    activeCount: replyNeededCards.count + reviewCards.count + otherCards.count,
+                    needsYouCount: replyNeededCards.count + reviewCards.count
                 )
 
                 stillBrokenNotice
 
-                if !highPriorityCards.isEmpty {
+                if !replyNeededCards.isEmpty {
                     let total = numberedVisibleCards.count
                     let labelText = noiseCards.isEmpty
-                        ? "Needs you"
-                        : "Needs you · \(highPriorityCards.count) of \(total)"
+                        ? "Needs reply"
+                        : "Needs reply · \(replyNeededCards.count) of \(total)"
                     sectionLabel(labelText, color: Theme.signal)
-                    entries(highPriorityCards, startIndex: 0)
+                    entries(replyNeededCards, startIndex: 0)
+                }
+
+                if !reviewCards.isEmpty {
+                    let topPadding: CGFloat = replyNeededCards.isEmpty ? 0 : 18
+                    sectionLabel("Needs review", color: Theme.signal)
+                        .padding(.top, topPadding)
+                    entries(reviewCards, startIndex: replyNeededCards.count)
                 }
 
                 if !otherCards.isEmpty {
-                    let otherLabel = highPriorityCards.isEmpty ? "This round" : "The rest"
+                    let leadCount = replyNeededCards.count + reviewCards.count
+                    let otherLabel = leadCount == 0 ? "This round" : "The rest"
                     sectionLabel(otherLabel, color: Theme.textTertiary)
-                        .padding(.top, highPriorityCards.isEmpty ? 0 : 18)
-                    // Promote the lead card to lede weight when there are no high-priority cards.
-                    entries(otherCards, startIndex: highPriorityCards.count,
-                            promotedCount: highPriorityCards.isEmpty ? 1 : 0)
+                        .padding(.top, leadCount == 0 ? 0 : 18)
+                    // Promote the lead card to lede weight when there are no action-required cards.
+                    entries(otherCards, startIndex: leadCount,
+                            promotedCount: leadCount == 0 ? 1 : 0)
                 }
 
                 if !noiseCards.isEmpty {
                     NoiseStripView(cards: noiseCards,
-                                   startNumber: highPriorityCards.count + otherCards.count)
-                        .padding(.top, (highPriorityCards.isEmpty && otherCards.isEmpty) ? 4 : 10)
+                                   startNumber: replyNeededCards.count + reviewCards.count + otherCards.count)
+                        .padding(.top, (replyNeededCards.isEmpty && reviewCards.isEmpty && otherCards.isEmpty) ? 4 : 10)
                 }
 
                 markAllRow
@@ -192,7 +235,7 @@ struct BriefProseView: View {
             refreshCaches()
             withAnimation { appeared = true }
         }
-        .onChange(of: brief.id) { _ in
+        .onChange(of: brief.id) {
             refreshCaches()
             appeared = false
             withAnimation { appeared = true }
@@ -259,11 +302,11 @@ struct BriefProseView: View {
                 if unhandledCount > 0 {
                     HStack {
                         Spacer()
-                        Button("FILE ALL (\(unhandledCount))") {
+                        Button("MARK DONE (\(unhandledCount))") {
                             withAnimation(Theme.quick) { appState.markAllHandled(briefID: briefID) }
                         }
                         .buttonStyle(WireActionStyle())
-                        .help("Mark every card in this brief as handled")
+                        .help("Mark every visible card in this digest as handled")
                     }
                     .padding(.horizontal, Theme.gutter)
                     .padding(.top, 10)

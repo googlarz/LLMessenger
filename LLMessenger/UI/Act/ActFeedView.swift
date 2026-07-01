@@ -118,6 +118,31 @@ enum ActItem: Identifiable {
     }
 }
 
+enum ActItemSorter {
+    static func sort(
+        _ items: [ActItem],
+        contextFor: (String, String) -> ConversationContext?
+    ) -> [ActItem] {
+        let scored = items.map { item in
+            let ctx = contextFor(item.service, item.conversationId)
+            let boost: Int
+            switch ctx?.priorityHint {
+            case "high": boost = 100
+            case "low":  boost = -50
+            default:     boost = 0
+            }
+            return (item: item, score: item.priorityScore + boost)
+        }
+
+        return scored.sorted { lhs, rhs in
+            if lhs.item.isStale != rhs.item.isStale { return !lhs.item.isStale }
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            if lhs.item.isPersonWaiting != rhs.item.isPersonWaiting { return lhs.item.isPersonWaiting }
+            return lhs.item.ageHours > rhs.item.ageHours
+        }.map(\.item)
+    }
+}
+
 // MARK: - Feed view
 
 struct ActFeedView: View {
@@ -139,23 +164,9 @@ struct ActFeedView: View {
 
         // Precompute context-boosted priority to avoid repeated DB reads in sort comparator.
         // Per-conversation priorityHint ("high" / "low") overrides the AI confidence score.
-        let scored = all.map { item in
-            let ctx = appState.cachedConversationContext(service: item.service, conversationId: item.conversationId)
-            let boost: Int
-            switch ctx?.priorityHint {
-            case "high": boost = 100
-            case "low":  boost = -50
-            default:     boost = 0
-            }
-            return (item: item, score: item.priorityScore + boost)
+        return ActItemSorter.sort(all) { service, conversationId in
+            appState.cachedConversationContext(service: service, conversationId: conversationId)
         }
-
-        return scored.sorted { lhs, rhs in
-            if lhs.item.isStale != rhs.item.isStale { return lhs.item.isStale }
-            if lhs.score != rhs.score { return lhs.score > rhs.score }
-            if lhs.item.isPersonWaiting != rhs.item.isPersonWaiting { return lhs.item.isPersonWaiting }
-            return lhs.item.ageHours > rhs.item.ageHours
-        }.map(\.item)
     }
 
     var body: some View {
@@ -204,7 +215,7 @@ struct ActFeedView: View {
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
         }
-        .onChange(of: items.count) { newCount in
+        .onChange(of: items.count) { _, newCount in
             // Clamp selection when items shrink; preserve as much as possible
             if let idx = selectedIndex, idx >= newCount {
                 selectedIndex = newCount > 0 ? newCount - 1 : nil
@@ -254,12 +265,12 @@ struct ActFeedView: View {
                     .animation(Theme.spring, value: items.map { $0.id })
                     .padding(.bottom, 24)
                 }
-                .onChange(of: selectedIndex, perform: { newIdx in
+                .onChange(of: selectedIndex) { _, newIdx in
                     guard let idx = newIdx, idx < items.count else { return }
                     withAnimation(Theme.quick) {
                         proxy.scrollTo(items[idx].id, anchor: .center)
                     }
-                })
+                }
             }
         }
     }
@@ -288,12 +299,12 @@ struct ActFeedView: View {
                 .foregroundStyle(Theme.textTertiary)
                 .lineLimit(layout == .compact ? 2 : 1)
             Spacer()
-            Button("Stage \(lowRiskCount)") {
+            Button("Queue \(lowRiskCount)") {
                 appState.batchApproveLowRisk()
                 resolvedInSession += lowRiskCount
             }
             .buttonStyle(WireActionStyle(tint: Theme.standby))
-            .accessibilityLabel("Stage \(lowRiskCount) low-risk send\(lowRiskCount == 1 ? "" : "s")")
+            .accessibilityLabel("Queue \(lowRiskCount) low-risk send\(lowRiskCount == 1 ? "" : "s")")
             .accessibilityHint("Each send waits 5 seconds and can be undone before it sends.")
         }
         .padding(.horizontal, layout.gutter)
@@ -327,9 +338,9 @@ struct ActFeedView: View {
                 .foregroundStyle(Theme.textPrimary)
             Group {
                 if resolvedInSession > 0 {
-                    Text("\(resolvedInSession) handled this session.")
+                    Text(sessionClearDetail)
                 } else {
-                    Text("Nothing needs you right now.")
+                    Text(emptyDetail)
                 }
             }
             .font(Theme.sans(12.5))
@@ -348,6 +359,25 @@ struct ActFeedView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 20)
         .background(Theme.sidebar)
+    }
+
+    private var emptyDetail: String {
+        if let next = appState.nextPollDate {
+            return "Nothing needs you right now. Leave it here; next check \(next.actRelativeLabel)."
+        }
+        return "Nothing needs you right now. We'll interrupt only for likely important items."
+    }
+
+    private var sessionClearDetail: String {
+        var parts = ["\(resolvedInSession) handled this session", "no tracked reply is waiting"]
+        let metrics = appState.productLoveMetrics
+        if metrics.handledCards > resolvedInSession {
+            parts.append("\(metrics.handledCards) handled all-time")
+        }
+        if let next = appState.nextPollDate {
+            parts.append("next check \(next.actRelativeLabel)")
+        }
+        return parts.joined(separator: " · ") + "."
     }
 
     // MARK: - Keyboard helpers
@@ -464,7 +494,7 @@ private struct ActCardRow: View {
         .animation(Theme.quick, value: isSelected)
         .onHover { isHovered = $0 }
         // Sync the external "E key pressed" signal into the local edit state
-        .onChange(of: isEditingExternal, perform: { newVal in
+        .onChange(of: isEditingExternal) { _, newVal in
             if newVal && !isEditing {
                 if case .agentAction(let a) = item {
                     editText = a.replyPayload?.draftText ?? a.title
@@ -473,7 +503,7 @@ private struct ActCardRow: View {
             } else if !newVal && isEditing {
                 isEditing = false
             }
-        })
+        }
         .sheet(isPresented: $showContextEditor) {
             contextEditorSheet
         }
@@ -706,13 +736,13 @@ private struct ActCardRow: View {
     // MARK: - Button sub-components
 
     private func approveButton(_ action: AgentAction) -> some View {
-        Button("STAGE SEND") {
+        Button("QUEUE SEND") {
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
             appState.stageManualApprove(action)
             onResolved?()
         }
         .buttonStyle(PrimaryActionStyle(tint: Theme.standby))
-        .accessibilityLabel("Stage suggested send to \(action.conversationName)")
+        .accessibilityLabel("Queue suggested send to \(action.conversationName)")
         .accessibilityHint("Sends in 5 seconds unless undone.")
     }
 
@@ -821,7 +851,7 @@ private struct ActCardRow: View {
     private var primaryAccessibilityActionName: String {
         switch item {
         case .agentAction(let a):
-            return a.statusEnum == .scheduled ? "Undo scheduled send" : "Stage send"
+            return a.statusEnum == .scheduled ? "Undo scheduled send" : "Queue send"
         case .owedReply:
             return "Compose reply"
         }
@@ -895,5 +925,23 @@ private struct ScheduledCountdownBar: View {
         guard let fireAt = action.scheduledAt else { return 0 }
         let remaining = fireAt.timeIntervalSince(now)
         return max(0, min(1, remaining / action.scheduledUndoWindow))
+    }
+}
+
+private extension Date {
+    var actRelativeLabel: String {
+        let seconds = Date().timeIntervalSince(self)
+        let absSeconds = abs(seconds)
+        if absSeconds < 60 { return seconds < 0 ? "soon" : "just now" }
+        if absSeconds < 3600 {
+            let minutes = Int(absSeconds / 60)
+            return seconds < 0 ? "in \(minutes)m" : "\(minutes)m ago"
+        }
+        if absSeconds < 86400 {
+            let hours = Int(absSeconds / 3600)
+            return seconds < 0 ? "in \(hours)h" : "\(hours)h ago"
+        }
+        let days = Int(absSeconds / 86400)
+        return seconds < 0 ? "in \(days)d" : "\(days)d ago"
     }
 }

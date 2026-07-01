@@ -43,7 +43,7 @@ struct BriefListView: View {
                 NextRefreshLine()
                 HStack(spacing: 6) {
                     SearchBarView(query: $searchQuery, isFocused: $searchFocused)
-                        .onChange(of: searchQuery) { q in performSearch(q) }
+                        .onChange(of: searchQuery) { _, q in performSearch(q) }
                     DateFilterButton(isActive: dateFrom != nil || dateTo != nil,
                                      showPopover: $showDateFilter)
                         .popover(isPresented: $showDateFilter, arrowEdge: .bottom) {
@@ -233,10 +233,10 @@ struct BriefListView: View {
                 .padding(.vertical, 4)
         }
         .onAppear { refreshNeedsReply(); appState.refreshTasks() }
-        .onChange(of: appState.briefs.map { $0.id }) { _ in refreshNeedsReply(); appState.refreshTasks() }
-        .onChange(of: appState.handledCardKeys) { _ in refreshNeedsReply() }
+        .onChange(of: appState.briefs.map { $0.id }) { refreshNeedsReply(); appState.refreshTasks() }
+        .onChange(of: appState.handledCardKeys) { refreshNeedsReply() }
         // When Cmd-F opens the sidebar, immediately focus the search field.
-        .onChange(of: showSearch) { if $0 { searchFocused = true } }
+        .onChange(of: showSearch) { _, searching in if searching { searchFocused = true } }
     }
 
     // MARK: - Helpers

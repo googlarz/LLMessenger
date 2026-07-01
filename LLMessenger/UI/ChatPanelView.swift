@@ -106,13 +106,13 @@ struct ChatPanelView: View {
                     }
                 }
                 .background(Theme.bg)
-                .onChange(of: appState.selectedBriefID) { _ in
+                .onChange(of: appState.selectedBriefID) {
                     // Reset scroll position when navigating to a different brief.
                     DispatchQueue.main.async {
                         proxy.scrollTo("brief-top", anchor: .top)
                     }
                 }
-                .onChange(of: chatViewModel.threadItems.count) { _ in
+                .onChange(of: chatViewModel.threadItems.count) {
                     // Delay one run-loop so the new item finishes rendering before scrollTo.
                     DispatchQueue.main.async {
                         if let last = chatViewModel.threadItems.last {
@@ -125,7 +125,7 @@ struct ChatPanelView: View {
                         }
                     }
                 }
-                .onChange(of: chatViewModel.isLoading) { loading in
+                .onChange(of: chatViewModel.isLoading) { _, loading in
                     if loading {
                         withAnimation { proxy.scrollTo("loading", anchor: .bottom) }
                     }

@@ -89,8 +89,7 @@ struct RulesSettingsTab: View {
         guard let db = database else { return }
         Task {
             do {
-                var r = rule
-                try await db.dbQueue.write { db in try r.insert(db) }
+                try await db.dbQueue.write { db in try rule.insert(db) }
                 await loadRules()
             } catch {}
         }
@@ -100,7 +99,7 @@ struct RulesSettingsTab: View {
         guard let db = database, let id = rule.id else { return }
         Task {
             do {
-                try await db.dbQueue.write { db in
+                _ = try await db.dbQueue.write { db in
                     try PriorityRule.deleteOne(db, key: id)
                 }
                 await loadRules()

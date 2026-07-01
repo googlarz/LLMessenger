@@ -77,10 +77,10 @@ struct ChatInputView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .focused($isFocused)
                         .tint(Theme.textPrimary)
-                        .onChange(of: chatViewModel.inputFocusRequest) { _ in
+                        .onChange(of: chatViewModel.inputFocusRequest) {
                             isFocused = true
                         }
-                        .onChange(of: chatViewModel.inputText) { newValue in
+                        .onChange(of: chatViewModel.inputText) { _, newValue in
                             updateMentionState(for: newValue)
                         }
                         .popover(isPresented: $showMentionPicker, arrowEdge: .bottom) {

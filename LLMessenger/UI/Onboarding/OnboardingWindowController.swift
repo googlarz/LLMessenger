@@ -177,7 +177,7 @@ private struct OnboardingView: View {
             VStack(spacing: 20) {
                 stepHeader(
                     title: "Start with iMessage",
-                    subtitle: "See who needs a reply, catch up faster, and let an AI draft responses in your voice. Nothing sends without approval or a lane you explicitly delegate."
+                    subtitle: "Open once, clear what matters, and leave. Nothing sends without approval or a lane you explicitly delegate."
                 )
 
                 // iMessage hero — most Mac users start here, works today, no API key
@@ -186,24 +186,36 @@ private struct OnboardingView: View {
                 // Optional add-ons, collapsed by default to avoid overwhelm
                 optionalServicesSection
 
-                VStack(spacing: 10) {
-                    Button("Continue") {
-                        saveAllServices()
-                        withAnimation(Theme.quick) { step = .aiSetup }
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(!servicesReady)
+                if databaseIsEmpty {
+                    sampleDigestPreview
+                }
 
+                VStack(spacing: 10) {
                     if databaseIsEmpty {
-                        Button("Explore with sample messages first") {
+                        Button("Open demo first") {
                             try? DemoSeeder.seed(into: database)
                             onComplete()
                         }
-                        .buttonStyle(.plain)
-                        .font(Theme.sans(12))
-                        .foregroundStyle(demoLinkHovered ? Theme.textSecondary : Theme.textTertiary)
+                        .buttonStyle(PrimaryButtonStyle())
+                        .help("Try LLMessenger with realistic sample messages before connecting accounts")
                         .animation(Theme.quick, value: demoLinkHovered)
                         .onHover { demoLinkHovered = $0 }
+                    }
+
+                    if databaseIsEmpty {
+                        Button("Continue with real setup") {
+                            saveAllServices()
+                            withAnimation(Theme.quick) { step = .aiSetup }
+                        }
+                        .buttonStyle(PaperButtonStyle())
+                        .disabled(!servicesReady)
+                    } else {
+                        Button("Continue") {
+                            saveAllServices()
+                            withAnimation(Theme.quick) { step = .aiSetup }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(!servicesReady)
                     }
                 }
             }
@@ -219,6 +231,42 @@ private struct OnboardingView: View {
             guard step == .services, !imessageGranted else { return }
             imessageGranted = Self.checkFullDiskAccess()
         }
+    }
+
+    private var sampleDigestPreview: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                WireLabel("Try the real loop", color: Theme.textSecondary)
+                Spacer()
+                WireLabel("Recommended", color: Theme.ok)
+            }
+            HStack(spacing: 10) {
+                previewStep("1", "See who needs you")
+                previewStep("2", "Open sources")
+                previewStep("3", "Queue or quiet")
+            }
+            Text("A realistic investor thread, family plan, launch room, and low-signal group appear instantly. Nothing connects, sends, or leaves your Mac.")
+                .font(Theme.sans(11.5))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .surfaceCard()
+    }
+
+    private func previewStep(_ number: String, _ text: String) -> some View {
+        HStack(spacing: 6) {
+            Text(number)
+                .font(Theme.mono(10, weight: .bold))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: 18, height: 18)
+                .overlay(Circle().strokeBorder(Theme.border, lineWidth: 1))
+            Text(text)
+                .font(Theme.sans(11.5, weight: .medium))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // iMessage hero section — larger, prominent, "no extra setup" badge
@@ -371,7 +419,9 @@ private struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("+1 (555) 000-0000", text: $signalNumber)
                 .textFieldStyle(DarkTextFieldStyle())
-                .onChange(of: signalEnabled) { if $0 { checkSignalDaemon() } }
+                .onChange(of: signalEnabled) { _, enabled in
+                    if enabled { checkSignalDaemon() }
+                }
 
             if signalEnabled {
                 if signalDaemonUp {
@@ -590,7 +640,12 @@ private struct OnboardingView: View {
                 }
                 Text(title).font(Theme.display(15))
                 Spacer()
-                Toggle("", isOn: isEnabled).toggleStyle(.switch).labelsHidden()
+                Toggle("", isOn: isEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .accessibilityLabel("\(title) service")
+                    .accessibilityValue(isEnabled.wrappedValue ? "Enabled" : "Disabled")
+                    .accessibilityHint(isEnabled.wrappedValue ? "Disables \(title) setup." : "Enables \(title) setup.")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 11)

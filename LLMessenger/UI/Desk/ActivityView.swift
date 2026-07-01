@@ -15,6 +15,36 @@ struct ActivityView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
+                WeeklyRecapView(
+                    briefs: appState.briefs,
+                    owedCount: appState.owedCount,
+                    commitmentsCount: appState.commitmentsCount
+                )
+                Rule()
+
+                ExecutiveQueuesView(
+                    owedReplies: appState.owedReplies,
+                    commitments: appState.commitments,
+                    tasks: appState.tasks,
+                    actions: appState.agentActions
+                )
+                Rule()
+
+                TrustCockpitView(
+                    isLLMConfigured: appState.isLLMConfigured,
+                    isLocalLLM: appState.llmClient.isLocal,
+                    sourceBackedCards: appState.productOutcomeStats.sourceBackedCardCount,
+                    auditCount: appState.productOutcomeStats.auditCount,
+                    queuedSendCount: appState.armedAutoSendCount + appState.actionsReadyCount
+                )
+                Rule()
+
+                ProductHealthView(
+                    metrics: appState.productLoveMetrics,
+                    stats: appState.productOutcomeStats
+                )
+                Rule()
+
                 // What the agent actually sent for you — the "what did it do?" answer.
                 if !audits.isEmpty {
                     sentSection
@@ -42,7 +72,7 @@ struct ActivityView: View {
         }
         .background(Theme.sidebar)
         .task { await loadEvents() }
-        .onChange(of: appState.briefs.count) { _ in Task { await loadEvents() } }
+        .onChange(of: appState.briefs.count) { Task { await loadEvents() } }
     }
 
     // MARK: - Sent-on-your-behalf section

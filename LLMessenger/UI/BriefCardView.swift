@@ -66,12 +66,14 @@ struct BriefCardView: View {
     @State private var showLabelEditor = false
     @State private var labelEditText = ""
     @State private var labelEditHint = "auto"
+    @State private var labelEditPrivacy = "none"
     @State private var hovering = false
     @State private var labelHovered = false
     @State private var chevronHovered = false
     /// Set on save so the stamp updates immediately; the parent's batch
     /// cache refreshes on the next brief change.
     @State private var savedContextOverride: ConversationContext?
+    @State private var learnedHint: String?
 
     private var effectiveContext: ConversationContext? {
         savedContextOverride ?? conversationContext
@@ -110,6 +112,9 @@ struct BriefCardView: View {
                 stampRow
                 headline
                 actionabilityRow
+                if !isBodyExpanded {
+                    trustInlineLine
+                }
 
                 if isBodyExpanded {
                     expandedBody
@@ -138,6 +143,7 @@ struct BriefCardView: View {
             Button {
                 labelEditText = effectiveContext?.label ?? ""
                 labelEditHint = effectiveContext?.priorityHint ?? "auto"
+                labelEditPrivacy = effectiveContext?.privacyOverride ?? "none"
                 showLabelEditor = true
             } label: {
                 HStack(spacing: 6) {
@@ -163,17 +169,25 @@ struct BriefCardView: View {
                     convName: convName,
                     label: $labelEditText,
                     priorityHint: $labelEditHint,
+                    privacyOverride: $labelEditPrivacy,
                     onSave: {
                         let label = labelEditText.trimmingCharacters(in: .whitespaces)
-                        appState.saveConversationContext(
-                            service: card.service,
-                            conversationId: card.conversationId,
-                            label: label,
-                            priorityHint: labelEditHint
-                        )
-                        savedContextOverride = ConversationContext(
-                            service: card.service, conversationId: card.conversationId,
-                            label: label, priorityHint: labelEditHint, updatedAt: Date())
+                        saveContext(label: label, priorityHint: labelEditHint, privacyOverride: labelEditPrivacy)
+                        showLabelEditor = false
+                    },
+                    onMarkVIP: {
+                        saveContext(label: labelEditText.isEmpty ? "VIP" : labelEditText,
+                                    priorityHint: "high",
+                                    privacyOverride: labelEditPrivacy)
+                        learnedHint = "Future briefs will treat this conversation as high priority."
+                        showLabelEditor = false
+                    },
+                    onQuiet: {
+                        saveContext(label: labelEditText.isEmpty ? "quiet" : labelEditText,
+                                    priorityHint: "low",
+                                    privacyOverride: labelEditPrivacy)
+                        appState.recordQuietedThread()
+                        learnedHint = "We'll keep this conversation quieter."
                         showLabelEditor = false
                     },
                     onCancel: { showLabelEditor = false }
@@ -309,6 +323,33 @@ struct BriefCardView: View {
         return chips
     }
 
+    private var trustInlineLine: some View {
+        Text(trustSentence)
+            .font(Theme.sans(11.5))
+            .foregroundStyle(Theme.textTertiary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .accessibilityLabel(trustSentence)
+    }
+
+    private var trustSentence: String {
+        var parts: [String] = []
+        if let reason = card.reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty {
+            parts.append(reason)
+        } else if card.needsReply {
+            parts.append("Direct reply likely needed")
+        } else {
+            parts.append("Included for awareness")
+        }
+        if !card.sourceMessageIds.isEmpty {
+            parts.append("\(card.sourceMessageIds.count) local source\(card.sourceMessageIds.count == 1 ? "" : "s")")
+        }
+        if card.grounding == "context" {
+            parts.append("uses your context")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     // MARK: - Expanded body
 
     @ViewBuilder
@@ -362,8 +403,26 @@ struct BriefCardView: View {
             .padding(.top, 3)
         }
 
+        TrustExplanationView(
+            reason: trustReason,
+            sourceCount: card.sourceMessageIds.count,
+            quoteCount: card.quotes.count,
+            grounding: card.grounding,
+            context: effectiveContext
+        )
+
         actionBar
             .padding(.top, 4)
+
+        if hovering || evidenceExpanded || learnedHint != nil {
+            BriefLearningRow(
+                learnedHint: learnedHint,
+                onMoreLikeThis: { teachFutureBriefs(priority: "high", label: "We'll surface threads like this.") },
+                onLessLikeThis: { teachFutureBriefs(priority: "low", label: "We'll lower items like this.") },
+                onQuietThread: { quietThread() }
+            )
+            .transition(.opacity)
+        }
 
         if evidenceExpanded {
             if let briefID {
@@ -384,117 +443,183 @@ struct BriefCardView: View {
     // MARK: - Action bar
 
     private var actionBar: some View {
-        ViewThatFits(in: .horizontal) {
-            fullActionBar
-            compactActionBar
-        }
+        BriefCardActionBar(
+            sourceCount: card.sourceMessageIds.count,
+            quoteCount: card.quotes.count,
+            messageCount: card.counts.messages,
+            evidenceExpanded: evidenceExpanded,
+            isHandled: isHandled,
+            onToggleEvidence: toggleEvidence,
+            onAskDetail: askForDetails,
+            onReply: prepareReply,
+            onToggleHandled: toggleHandled
+        )
     }
 
-    private var fullActionBar: some View {
-        HStack(spacing: 2) {
-            evidenceButton
-            divider
-            detailButton
-            divider
-            replyButton
-            Spacer(minLength: 0)
-            fileButton
-        }
-    }
-
-    private var compactActionBar: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 2) {
-                replyButton
-                divider
-                detailButton
-                Spacer(minLength: 0)
-                fileButton
-            }
-            evidenceButton
-        }
-    }
-
-    private var evidenceButton: some View {
-        Button {
-            withAnimation(Theme.spring) {
-                evidenceExpanded.toggle()
-                if evidenceExpanded {
-                    InstrumentationManager.shared.track(event: .sourceExpanded,
-                        metadata: ["cardID": card.id, "conversationID": card.conversationId])
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Text("\(card.sourceMessageIds.count) \(card.sourceMessageIds.count == 1 ? "SOURCE" : "SOURCES")")
-                if !card.quotes.isEmpty {
-                    Text("· \(card.quotes.count) QUOTED")
-                }
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 7, weight: .bold))
-                    .rotationEffect(.degrees(evidenceExpanded ? 180 : 0))
+    private func toggleEvidence() {
+        withAnimation(Theme.spring) {
+            evidenceExpanded.toggle()
+            if evidenceExpanded {
+                InstrumentationManager.shared.track(event: .sourceExpanded,
+                    metadata: ["cardID": card.id, "conversationID": card.conversationId])
             }
         }
-        .buttonStyle(WireActionStyle(tint: evidenceExpanded ? Theme.textPrimary : Theme.textTertiary))
-        .help(evidenceExpanded ? "Hide the source messages" : "Show the source messages behind this card")
     }
 
-    private var detailButton: some View {
-        Button(card.counts.messages > 20 ? "CATCH ME UP" : "DETAIL") {
-            Task {
-                await chatViewModel.askForDetails(
-                    service: card.service,
-                    conversationID: card.conversationId,
-                    displayName: card.conversation ?? "",
-                    headline: card.counts.messages > 20
-                        ? "Give me the full arc — what's been going on in this thread?"
-                        : card.headline
-                )
-            }
-        }
-        .buttonStyle(WireActionStyle())
-        .help(card.counts.messages > 20 ? "Deeper summary of this long thread" : "Ask for more detail")
-    }
-
-    private var replyButton: some View {
-        Button("REPLY") {
-            chatViewModel.prepareReply(
+    private func askForDetails() {
+        Task {
+            await chatViewModel.askForDetails(
                 service: card.service,
                 conversationID: card.conversationId,
-                displayName: card.conversation ?? ""
+                displayName: card.conversation ?? "",
+                headline: card.counts.messages > 20
+                    ? "Give me the full arc — what's been going on in this thread?"
+                    : card.headline
             )
         }
-        // The one thing you usually came here to do — tint it the signal colour so it
-        // reads as the primary action among the grey secondaries (sources/detail/file).
-        .buttonStyle(WireActionStyle(tint: Theme.signal))
-        .help("Draft a reply")
     }
 
-    private var fileButton: some View {
-        Button {
-            guard let briefID else { return }
-            withAnimation(Theme.quick) {
-                if isHandled {
-                    appState.unmarkCardHandled(briefID: briefID, cardID: card.id)
-                } else {
-                    appState.markCardHandled(briefID: briefID, cardID: card.id)
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: isHandled ? "arrow.uturn.left" : "checkmark")
-                    .font(.system(size: 9, weight: .bold))
-                Text(isHandled ? "REOPEN" : "FILE")
+    private func prepareReply() {
+        chatViewModel.prepareReply(
+            service: card.service,
+            conversationID: card.conversationId,
+            displayName: card.conversation ?? ""
+        )
+    }
+
+    private func toggleHandled() {
+        guard let briefID else { return }
+        withAnimation(Theme.quick) {
+            if isHandled {
+                appState.unmarkCardHandled(briefID: briefID, cardID: card.id)
+            } else {
+                appState.markCardHandled(briefID: briefID, cardID: card.id)
             }
         }
-        .buttonStyle(WireActionStyle(tint: isHandled ? Theme.textTertiary : Theme.ok))
-        .help(isHandled ? "Mark as not handled" : "Mark as handled")
     }
 
-    private var divider: some View {
-        Text("·")
-            .font(Theme.mono(11))
-            .foregroundStyle(Theme.textTertiary.opacity(0.5))
+    private func teachFutureBriefs(priority: String, label: String) {
+        appState.savePriorityCorrection(
+            service: card.service,
+            conversationId: card.conversationId,
+            headline: card.headline,
+            llmPriority: card.priority,
+            userPriority: priority
+        )
+        saveContext(label: effectiveContext?.label ?? "", priorityHint: priority)
+        learnedHint = label
+    }
+
+    private func quietThread() {
+        saveContext(label: effectiveContext?.label ?? "", priorityHint: "low")
+        appState.recordQuietedThread()
+        if let briefID, !isHandled {
+            appState.markCardHandled(briefID: briefID, cardID: card.id)
+        }
+        learnedHint = "We'll keep this thread quiet."
+    }
+
+    private var trustReason: String {
+        if let reason = card.reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty {
+            return reason
+        }
+        return card.needsReply ? "The thread contains a likely ask." : "The thread changed since the last digest."
+    }
+
+    private func saveContext(label: String, priorityHint: String, privacyOverride: String? = nil) {
+        appState.saveConversationContext(
+            service: card.service,
+            conversationId: card.conversationId,
+            label: label,
+            priorityHint: priorityHint
+        )
+        let normalizedPrivacy = privacyOverride == "none" ? nil : privacyOverride
+        if privacyOverride != nil {
+            appState.saveConversationPrivacyOverride(
+                service: card.service,
+                conversationId: card.conversationId,
+                privacyOverride: normalizedPrivacy
+            )
+        }
+        savedContextOverride = ConversationContext(
+            service: card.service,
+            conversationId: card.conversationId,
+            label: label,
+            priorityHint: priorityHint,
+            updatedAt: Date(),
+            privacyOverride: privacyOverride == nil ? effectiveContext?.privacyOverride : normalizedPrivacy
+        )
+    }
+}
+
+private struct TrustExplanationView: View {
+    let reason: String
+    let sourceCount: Int
+    let quoteCount: Int
+    let grounding: String?
+    let context: ConversationContext?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                WireLabel("Why this card", color: Theme.textSecondary)
+                Rule()
+            }
+            trustRow("Reason", reason)
+            trustRow("Evidence", evidenceText)
+            trustRow("Memory", memoryText)
+            trustRow("Privacy", privacyText)
+        }
+        .padding(.top, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Why this card. \(reason). \(evidenceText). \(memoryText). \(privacyText).")
+    }
+
+    private var evidenceText: String {
+        if sourceCount == 0 { return "No direct source messages were attached." }
+        var text = "\(sourceCount) local source \(sourceCount == 1 ? "message" : "messages")"
+        if quoteCount > 0 {
+            text += ", \(quoteCount) validated \(quoteCount == 1 ? "quote" : "quotes")"
+        }
+        return text
+    }
+
+    private var memoryText: String {
+        switch grounding {
+        case "context":
+            if let label = context?.label, !label.isEmpty {
+                return "Uses your \(label) context for this conversation."
+            }
+            return "Uses prior context for this conversation."
+        case "inferred":
+            return "Includes an inference; check sources before acting."
+        default:
+            return "Directly grounded in new messages."
+        }
+    }
+
+    private var privacyText: String {
+        switch context?.privacyOverride {
+        case "local_only":
+            return "Marked local-only."
+        case "never_draft":
+            return "Drafting disabled for this conversation."
+        default:
+            return "Uses your current provider privacy setting."
+        }
+    }
+
+    private func trustRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label.uppercased())
+                .font(Theme.mono(9.5, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: 62, alignment: .leading)
+            Text(value)
+                .font(Theme.sans(11.5))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -575,7 +700,12 @@ struct BriefCardEvidenceView: View {
         isLoading = true
         loadError = nil
         do {
-            sources = try repository.fetchSourcesWithMessages(briefID: briefID, service: card.service, conversationID: card.conversationId)
+            sources = try repository.fetchSourcesWithMessages(
+                briefID: briefID,
+                service: card.service,
+                conversationID: card.conversationId,
+                sourceMessageIds: card.sourceMessageIds
+            )
         } catch {
             loadError = error.localizedDescription
         }
@@ -619,7 +749,7 @@ private struct QuickReplyRow: View {
         } else if !replies.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    WireLabel("Send:")
+                    WireLabel("Use draft:")
                     ForEach(replies) { reply in
                         QuickReplyChip(reply: reply) {
                             chatViewModel.applyQuickReply(reply,
@@ -634,8 +764,8 @@ private struct QuickReplyRow: View {
             }
             .padding(.top, 2)
         } else if card.priority == "high" || card.priority == "med" || !card.actions.isEmpty {
-            // "DRAFT REPLIES" (AI writes options) vs the card's "REPLY" (you compose) — the
-            // old "QUICK REPLY" read as a near-synonym of REPLY. Distinct verbs, distinct jobs.
+            // "DRAFT REPLIES" (AI writes options) vs the card's "REPLY" (you compose).
+            // The chips above say "Use draft" because they fill the composer, not send.
             Button(isFailed ? "RETRY DRAFTS" : "DRAFT REPLIES") {
                 Task {
                     await chatViewModel.generateQuickReplies(
@@ -707,7 +837,10 @@ struct LabelEditorPopover: View {
     let convName: String
     @Binding var label: String
     @Binding var priorityHint: String
+    @Binding var privacyOverride: String
     let onSave: () -> Void
+    let onMarkVIP: () -> Void
+    let onQuiet: () -> Void
     let onCancel: () -> Void
 
     var body: some View {
@@ -738,7 +871,28 @@ struct LabelEditorPopover: View {
                 .labelsHidden()
             }
 
-            Text("Saved context is injected into every future brief for this conversation.")
+            VStack(alignment: .leading, spacing: 6) {
+                WireLabel("Privacy")
+                Picker("", selection: $privacyOverride) {
+                    Text("Normal").tag("none")
+                    Text("Local-only").tag("local_only")
+                    Text("Never draft").tag("never_draft")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                WireLabel("Fast setup")
+                HStack(spacing: 8) {
+                    Button("MARK VIP", action: onMarkVIP)
+                        .buttonStyle(WireActionStyle(tint: Theme.standby))
+                    Button("QUIET", action: onQuiet)
+                        .buttonStyle(WireActionStyle())
+                }
+            }
+
+            Text("Saved context changes future briefs for this conversation.")
                 .font(Theme.sans(11))
                 .foregroundStyle(Theme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)

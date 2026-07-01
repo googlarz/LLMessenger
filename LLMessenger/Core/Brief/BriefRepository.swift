@@ -578,13 +578,20 @@ struct BriefRepository {
 
     /// Evidence lookup by brief + service + conversation — used when only the LLM card ID is
     /// available in the UI, which doesn't match the UUID stored in BriefCardSource.briefCardId.
-    func fetchSourcesWithMessages(briefID: Int64, service: String, conversationID: String) throws -> [(source: BriefCardSource, message: Message?)] {
+    func fetchSourcesWithMessages(
+        briefID: Int64,
+        service: String,
+        conversationID: String,
+        sourceMessageIds: [String] = []
+    ) throws -> [(source: BriefCardSource, message: Message?)] {
         try database.dbQueue.read { db in
-            guard let card = try BriefCardRecord
+            let cards = try BriefCardRecord
                 .filter(Column("briefId") == briefID)
                 .filter(Column("service") == service)
                 .filter(Column("conversationId") == conversationID)
-                .fetchOne(db) else { return [] }
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+            guard let card = matchingCard(in: cards, sourceMessageIds: sourceMessageIds) else { return [] }
 
             let sources = try BriefCardSource
                 .filter(Column("briefCardId") == card.id)
@@ -593,6 +600,17 @@ struct BriefRepository {
 
             return try Self.attachMessages(to: sources, db: db)
         }
+    }
+
+    private func matchingCard(
+        in cards: [BriefCardRecord],
+        sourceMessageIds: [String]
+    ) -> BriefCardRecord? {
+        let requested = sourceMessageIds.filter { !$0.isEmpty }
+        guard !requested.isEmpty else { return cards.first }
+        return cards.first { decodedStringArray($0.sourceMessageIds) == requested }
+            ?? cards.first { Set(decodedStringArray($0.sourceMessageIds)) == Set(requested) }
+            ?? cards.first
     }
 
     // Batch-fetches all messages referenced by `sources` in a single DB round-trip
@@ -913,7 +931,7 @@ struct BriefRepository {
             guard let data = card.actionItems.data(using: .utf8),
                   let items = try? decoder.decode([String].self, from: data) else { continue }
             for item in items where !item.isEmpty {
-                var task = BriefTask(briefCardId: card.id, text: item, completedAt: nil, createdAt: Date())
+                let task = BriefTask(briefCardId: card.id, text: item, completedAt: nil, createdAt: Date())
                 try task.insert(db)
             }
         }

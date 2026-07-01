@@ -107,7 +107,7 @@ struct AISettingsTab: View {
                             .toggleStyle(.switch).controlSize(.small)
                             .font(Theme.sans(13))
                             .tint(Theme.ok)
-                            .onChange(of: launchAtLogin) { enabled in
+                            .onChange(of: launchAtLogin) { _, enabled in
                                 try? AutoLaunchManager.setEnabled(enabled)
                             }
                     }

@@ -172,6 +172,40 @@ enum DemoSeeder {
             try task.insert(db)
         }
 
+        let repo = BriefRepository(database: database)
+        try repo.upsertConversationContext(ConversationContext(
+            service: "signal",
+            conversationId: "demo-meridian",
+            label: "investor",
+            priorityHint: "high",
+            updatedAt: morningDate,
+            relationship: "lead investor",
+            importantTopics: try jsonString(["fundraise", "data room", "partner meeting"]),
+            contextNote: "Always surface time-sensitive fundraising requests.",
+            responseExpectation: "same day",
+            tone: "precise and warm"
+        ))
+        try repo.upsertConversationContext(ConversationContext(
+            service: "telegram",
+            conversationId: "demo-sailing",
+            label: "club",
+            priorityHint: "low",
+            updatedAt: morningDate,
+            relationship: "hobby group",
+            noiseTopics: try jsonString(["schedule announcements", "crew chatter"]),
+            contextNote: "Usually FYI unless a direct question names me."
+        ))
+        try repo.upsertConversationContext(ConversationContext(
+            service: "imessage",
+            conversationId: "demo-dad",
+            label: "family",
+            priorityHint: "auto",
+            updatedAt: morningDate,
+            relationship: "family",
+            importantTopics: try jsonString(["plans", "travel", "health"]),
+            tone: "casual"
+        ))
+
         // Keep every service quiet while the demo is active.
         let settings = SettingsRepository(database: database)
         for service in ["imessage", "signal", "telegram", "slack"] {
@@ -192,6 +226,7 @@ enum DemoSeeder {
             try db.execute(sql: "DELETE FROM briefCards")
             try db.execute(sql: "DELETE FROM messages")
             try db.execute(sql: "DELETE FROM briefs")
+            try db.execute(sql: "DELETE FROM conversationContexts")
             try db.execute(sql: "DELETE FROM serviceConfig")
         }
         UserDefaults.standard.removeObject(forKey: demoFlagKey)

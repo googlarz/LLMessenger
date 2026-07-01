@@ -85,6 +85,23 @@ final class DemoSeederTests: XCTestCase {
         }
     }
 
+    func testDemoSeedsPersonalizationContext() throws {
+        let db = try AppDatabase(inMemory: true)
+        try DemoSeeder.seed(into: db)
+
+        let repo = BriefRepository(database: db)
+        let investor = try XCTUnwrap(repo.fetchConversationContext(service: "signal", conversationId: "demo-meridian"))
+        XCTAssertEqual(investor.label, "investor")
+        XCTAssertEqual(investor.priorityHint, "high")
+        XCTAssertEqual(investor.relationship, "lead investor")
+        XCTAssertEqual(investor.importantTopicsList, ["fundraise", "data room", "partner meeting"])
+        XCTAssertEqual(investor.responseExpectation, "same day")
+
+        let lowSignal = try XCTUnwrap(repo.fetchConversationContext(service: "telegram", conversationId: "demo-sailing"))
+        XCTAssertEqual(lowSignal.priorityHint, "low")
+        XCTAssertEqual(lowSignal.noiseTopicsList, ["schedule announcements", "crew chatter"])
+    }
+
     func testWipeRemovesEverything() throws {
         let db = try AppDatabase(inMemory: true)
         try DemoSeeder.seed(into: db)
@@ -95,14 +112,14 @@ final class DemoSeederTests: XCTestCase {
         XCTAssertTrue(try repo.fetchAllBriefs().isEmpty)
         XCTAssertTrue(try repo.fetchPendingTasks().isEmpty)
         let counts = try db.dbQueue.read { d in
-            (try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM messages") ?? -1,
-             try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM briefCards") ?? -1,
-             try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM briefCardSources") ?? -1,
-             try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM serviceConfig") ?? -1)
+            [
+                try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM messages") ?? -1,
+                try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM briefCards") ?? -1,
+                try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM briefCardSources") ?? -1,
+                try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM conversationContexts") ?? -1,
+                try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM serviceConfig") ?? -1
+            ]
         }
-        XCTAssertEqual(counts.0, 0)
-        XCTAssertEqual(counts.1, 0)
-        XCTAssertEqual(counts.2, 0)
-        XCTAssertEqual(counts.3, 0)
+        XCTAssertEqual(counts, [0, 0, 0, 0, 0])
     }
 }

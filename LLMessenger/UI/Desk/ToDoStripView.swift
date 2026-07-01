@@ -152,9 +152,9 @@ struct ToDoStripView: View {
                 if a.statusEnum == .scheduled {
                     MaybeScheduledSendBar(action: a)
                 } else {
-                    Button("STAGE SEND") { appState.stageManualApprove(a) }
+                    Button("QUEUE SEND") { appState.stageManualApprove(a) }
                         .buttonStyle(WireActionStyle(tint: Theme.standby))
-                        .accessibilityLabel("Stage suggested send to \(a.conversationName)")
+                        .accessibilityLabel("Queue suggested send to \(a.conversationName)")
                         .accessibilityHint("Sends in 5 seconds unless undone.")
                     Button("SKIP") { appState.skipAction(a) }
                         .buttonStyle(WireActionStyle())

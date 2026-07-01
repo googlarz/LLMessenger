@@ -845,12 +845,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Builds a high-priority-aware notification title and body for a brief.
-    /// When the brief contains at least one high-priority card, the title names
-    /// the count and the body is the top high-priority headline.
-    /// Falls back to the generic "New messages" / notificationText pair.
+    /// Builds an interruption-worthy notification. The copy explains why the app broke
+    /// silence: direct reply needed first, then high-priority review. Routine digests fall
+    /// back to the generic title/body and may be held by the firewall.
     private func highPriorityCardCount(brief: Brief?) -> Int {
-        (BriefJSON.decodeLenient(from: brief?.openingSummary)?.cards.filter { $0.priority == "high" }.count) ?? 0
+        guard let cards = BriefJSON.decodeLenient(from: brief?.openingSummary)?.cards else { return 0 }
+        return cards.filter { $0.needsReply || $0.priority == "high" }.count
     }
 
     private func highPriorityNotification(brief: Brief?, defaultTitle: String) -> (title: String, body: String) {
@@ -859,12 +859,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         else {
             return (defaultTitle, defaultBody)
         }
-        let highCards = parsed.cards.filter { $0.priority == "high" }
-        guard !highCards.isEmpty, let topHeadline = highCards.first?.headline else {
+        let replyCards = parsed.cards.filter(\.needsReply)
+        let reviewCards = parsed.cards.filter { !$0.needsReply && $0.priority == "high" }
+        let interruptingCards = replyCards + reviewCards
+        guard !interruptingCards.isEmpty, let topCard = interruptingCards.first else {
             return (defaultTitle, defaultBody)
         }
-        let title = highCards.count == 1 ? "1 item needs your reply" : "\(highCards.count) items need your reply"
-        return (title, topHeadline)
+        let replyCount = replyCards.count
+        let reviewCount = reviewCards.count
+        let title: String
+        if replyCount > 0 {
+            title = replyCount == 1 ? "1 reply needs you" : "\(replyCount) replies need you"
+        } else {
+            title = reviewCount == 1 ? "1 item needs review" : "\(reviewCount) items need review"
+        }
+        let reason = notificationReason(for: topCard)
+        return (title, "\(topCard.headline) · \(reason)")
+    }
+
+    private func notificationReason(for card: BriefCard) -> String {
+        if let reason = card.reason?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !reason.isEmpty {
+            return "Because \(reason.lowercasedFirstLetter())"
+        }
+        if card.needsReply {
+            return "Because this is waiting for your reply"
+        }
+        if card.grounding == "context" {
+            return "Because it matches what you marked important"
+        }
+        if card.grounding == "inferred" {
+            return "Because it looks important"
+        }
+        return "Because it was marked high priority"
     }
 
     private func telegramAdapterPath() -> String? {
@@ -889,5 +916,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "api_hash":     apiHash,
             "session_path": sessionPath
         ]
+    }
+}
+
+private extension String {
+    func lowercasedFirstLetter() -> String {
+        guard let first else { return self }
+        return first.lowercased() + dropFirst()
     }
 }

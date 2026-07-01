@@ -258,11 +258,32 @@ private struct FirstBriefPreparingView: View {
                 .opacity(reduceMotion ? 0.9 : (pulse ? 1 : 0.5))
                 .animation(reduceMotion ? nil : .easeInOut(duration: 1.15).repeatForever(autoreverses: true), value: pulse)
 
-                Text("Reading your messages and writing your first digest. This usually takes a moment.")
+                Text(preparingLine)
                     .font(Theme.sans(12.5))
                     .foregroundStyle(Theme.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 26)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    setupRow("AI", appState.isLLMConfigured ? "Ready" : "Choose local, Anthropic, or OpenAI")
+                    setupRow("Messages", appState.briefs.isEmpty ? "Waiting for the first sync" : "Digest ready")
+                    setupRow("Privacy", appState.llmClient.isLocal ? "Local model selected" : "Uses your selected provider")
+                }
+                .padding(.top, 14)
+
+                if appState.briefs.isEmpty && !DemoSeeder.isActive {
+                    HStack(spacing: 10) {
+                        Button("Open sample command center") {
+                            appState.startDemoMode()
+                        }
+                        .buttonStyle(PaperButtonStyle(prominent: true))
+                        Button("Open Settings") {
+                            appState.onOpenSettings?()
+                        }
+                        .buttonStyle(WireActionStyle())
+                    }
+                    .padding(.top, 18)
+                }
             }
 
             // The moment a user decides whether to trust this with their messages — say the
@@ -309,10 +330,29 @@ private struct FirstBriefPreparingView: View {
             : "Cloud summaries use your selected provider. Manual sends stage with undo."
     }
 
+    private var preparingLine: String {
+        if !appState.isLLMConfigured {
+            return "Choose an AI backend to build your first digest. Local models keep message content on this Mac."
+        }
+        return "Reading your messages and writing your first digest. This usually takes a moment."
+    }
+
     private func bar(_ width: CGFloat, _ height: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: 4)
             .fill(Theme.surfaceHigh)
             .frame(width: width, height: height)
+    }
+
+    private func setupRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label.uppercased())
+                .font(Theme.mono(9.5, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: 62, alignment: .leading)
+            Text(value)
+                .font(Theme.sans(11.5))
+                .foregroundStyle(Theme.textSecondary)
+        }
     }
 }
 

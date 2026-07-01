@@ -43,6 +43,29 @@ struct DeskView: View {
                 DelegationKillSwitchBanner()
                 Rule()
             }
+            TodaySummaryView(layout: layout)
+            Rule()
+
+            if appState.productLoveMetrics.shouldShowFirstWeekGuide(suggestionCount: appState.contextSuggestions.count) {
+                FirstWeekGuideView(
+                    metrics: appState.productLoveMetrics,
+                    suggestions: appState.contextSuggestions,
+                    onAcceptSuggestion: { appState.acceptContextSuggestion($0) },
+                    onDismissSuggestion: { appState.dismissContextSuggestion($0) }
+                )
+                Rule()
+            }
+
+            OutcomeStripView(stats: appState.productOutcomeStats, layout: layout)
+            if appState.productOutcomeStats.hasSignal {
+                Rule()
+            }
+
+            if appState.productLoveMetrics.shouldShowLearningReceipt {
+                LearningReceiptsView(metrics: appState.productLoveMetrics)
+                Rule()
+            }
+
             // Persistent across every tab + brief: your open commitments, tasks, and "maybe"s.
             ToDoStripView(layout: layout)
 

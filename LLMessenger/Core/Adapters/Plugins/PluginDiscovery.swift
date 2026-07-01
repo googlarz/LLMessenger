@@ -68,14 +68,8 @@ struct PluginDiscovery {
 
         // Resolve the binary path so symlinks and relative components are
         // normalised before we check containment.
-        let resolvedBinary: String
-        do {
-            resolvedBinary = try URL(fileURLWithPath: manifest.binary)
-                .resolvingSymlinksInPath().path
-        } catch {
-            resolvedBinary = (manifest.binary as NSString)
-                .standardizingPath
-        }
+        let resolvedBinary = URL(fileURLWithPath: manifest.binary)
+            .resolvingSymlinksInPath().path
 
         // Path traversal guard: binary must be inside the user's home directory.
         let homeCanonical = (home as NSString).standardizingPath

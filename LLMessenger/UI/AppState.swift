@@ -1,6 +1,7 @@
 // LLMessenger/UI/AppState.swift
 import Foundation
 import AppKit
+import GRDB
 
 // MARK: - Shared Value Types
 
@@ -143,6 +144,8 @@ final class AppState: ObservableObject {
     @Published var contextSuggestions: [ContextSuggestion] = []
     private let contextSuggestionEngine = RuleSuggestionEngine()
     @Published private(set) var conversationContextsByKey: [String: ConversationContext] = [:]
+    @Published private(set) var productOutcomeStats: ProductOutcomeStats = .empty
+    @Published private(set) var productLoveMetrics: ProductLoveMetrics = ProductLoveMetricStore.load()
     @Published private(set) var briefFetchLimit = 500
 
     @Published private(set) var handledCardKeys: Set<String> = {
@@ -198,6 +201,7 @@ final class AppState: ObservableObject {
         self.llmProvider = llmProvider
         self.isLLMConfigured = isLLMConfigured
         self.basePrompt = basePrompt
+        self.productLoveMetrics = ProductLoveMetricStore.markActiveToday()
     }
 
     var briefGroups: [BriefListGroup] {
@@ -233,6 +237,7 @@ final class AppState: ObservableObject {
         do {
             try repository.markAsOpen(briefID: briefID)
             InstrumentationManager.shared.track(event: .briefOpened, metadata: ["briefID": briefID])
+            productLoveMetrics = ProductLoveMetricStore.recordOpenedDigest()
             return refreshBriefs()
         } catch {
             lastError = friendly(error)
@@ -261,6 +266,7 @@ final class AppState: ObservableObject {
                     self.reloadAgentActions()
                     self.reloadCommitments()
                     self.reloadContextSuggestions()
+                    self.reloadProductOutcomeStats()
                 }
             } catch {
                 await MainActor.run { self.lastError = self.friendly(error) }
@@ -305,6 +311,7 @@ final class AppState: ObservableObject {
                 // "Maybe" proposals are the user's call, not part of the ready-to-send count.
                 self.actionsReadyCount = actions.filter { !$0.isMaybe }.count
                 self.hasDelegatedLanes = delegated
+                self.reloadProductOutcomeStats()
                 self.onBriefsChanged?()
                 let changedDuringRecovery = self.reconcileScheduledActions()
                 if !changedDuringRecovery {
@@ -323,7 +330,35 @@ final class AppState: ObservableObject {
             await MainActor.run {
                 self.commitments = open
                 self.commitmentsCount = open.count
+                self.reloadProductOutcomeStats()
                 self.onBriefsChanged?()
+            }
+        }
+    }
+
+    func reloadProductOutcomeStats() {
+        let briefs = self.briefs
+        let handled = self.handledCardKeys
+        let openCommitments = self.commitmentsCount
+        let heldBack = self.heldBackCount
+        let database = self.database
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            let cutoff = Date().addingTimeInterval(-7 * 86400)
+            let audits = (try? await database.dbQueue.read { db in
+                try ActionAuditRecord
+                    .filter(Column("createdAt") >= cutoff)
+                    .fetchAll(db)
+            }) ?? []
+            let stats = ProductOutcomeStats.lastSevenDays(
+                briefs: briefs,
+                handledCardKeys: handled,
+                auditRows: audits,
+                openCommitmentCount: openCommitments,
+                heldBackCount: heldBack
+            )
+            await MainActor.run {
+                self.productOutcomeStats = stats
             }
         }
     }
@@ -961,8 +996,12 @@ final class AppState: ObservableObject {
     }
 
     func markCardHandled(briefID: Int64, cardID: String) {
-        handledCardKeys.insert("\(briefID):\(cardID)")
+        let inserted = handledCardKeys.insert("\(briefID):\(cardID)").inserted
         UserDefaults.standard.set(Array(handledCardKeys), forKey: "handledCardKeys")
+        if inserted {
+            productLoveMetrics = ProductLoveMetricStore.recordHandledCard()
+            reloadProductOutcomeStats()
+        }
     }
 
     func unmarkCardHandled(briefID: Int64, cardID: String) {
@@ -1065,22 +1104,63 @@ final class AppState: ObservableObject {
         SettingsRepository(database: database)
     }
 
+    func startDemoMode() {
+        do {
+            try DemoSeeder.seed(into: database)
+            let task = refreshBriefs()
+            Task { @MainActor in
+                await task.value
+                selectedBriefID = try? repository.latestBriefID()
+            }
+        } catch {
+            lastError = friendly(error)
+        }
+    }
+
     // MARK: - Conversation Context
 
     func saveConversationContext(service: String, conversationId: String, label: String, priorityHint: String) {
-        let ctx = ConversationContext(
-            service: service,
-            conversationId: conversationId,
-            label: label,
-            priorityHint: priorityHint,
-            updatedAt: Date()
-        )
+        var ctx = (try? repository.fetchConversationContext(service: service, conversationId: conversationId))
+            ?? ConversationContext(
+                service: service,
+                conversationId: conversationId,
+                label: label,
+                priorityHint: priorityHint,
+                updatedAt: Date()
+            )
+        ctx.label = label
+        ctx.priorityHint = priorityHint
+        ctx.updatedAt = Date()
         do {
             try repository.upsertConversationContext(ctx)
             mergeConversationContexts([ctx])
         } catch {
             lastError = friendly(error)
         }
+    }
+
+    func saveConversationPrivacyOverride(service: String, conversationId: String, privacyOverride: String?) {
+        var ctx = (try? repository.fetchConversationContext(service: service, conversationId: conversationId))
+            ?? ConversationContext(
+                service: service,
+                conversationId: conversationId,
+                label: "",
+                priorityHint: "auto",
+                updatedAt: Date()
+            )
+        ctx.privacyOverride = privacyOverride
+        ctx.updatedAt = Date()
+        do {
+            try repository.upsertConversationContext(ctx)
+            mergeConversationContexts([ctx])
+        } catch {
+            lastError = friendly(error)
+        }
+    }
+
+    func recordQuietedThread() {
+        productLoveMetrics = ProductLoveMetricStore.recordQuietedThread()
+        reloadProductOutcomeStats()
     }
 
     func conversationContextKey(service: String, conversationId: String) -> String {
@@ -1131,6 +1211,11 @@ final class AppState: ObservableObject {
                 to: userPriority,
                 cardHeadline: headline
             )
+            productLoveMetrics = ProductLoveMetricStore.recordPriorityCorrection()
+            if userPriority == "low" {
+                productLoveMetrics = ProductLoveMetricStore.recordQuietedThread()
+            }
+            reloadProductOutcomeStats()
         } catch {
             lastError = friendly(error)
         }

@@ -36,7 +36,7 @@ Record in **Demo Mode** (fresh install → "Explore the demo desk") at 1280×800
 | 3 | 16–28 | Click "3 SOURCES" on the Meridian card — evidence drawer opens, citations in serif italic. | "Every claim shows its sources. No black-box AI." |
 | 4 | 28–38 | Click REPLY → type "tell her the cap table lands Wednesday morning" → AI draft appears → confirm-send screen with "Nothing sends until you confirm." | "Draft replies in your voice. Nothing sends without you." |
 | 5 | 38–48 | Open Settings → AI tab: Ollama / Anthropic / OpenAI picker. Then Privacy tab → network audit log. | "Run it on your own model. Audit every byte that leaves." |
-| 6 | 48–60 | Back to the brief. Press H — card files itself. Final card: "FILE ALL". Empty desk: "The desk is clear." | "Inbox zero, for everything. — LLMessenger" |
+| 6 | 48–60 | Back to the brief. Press H — card marks done. Final card: "MARK DONE". Empty desk: "The desk is clear." | "Inbox zero, for everything. — LLMessenger" |
 
 GIF export (for HN): shots 1–3 only, 15s loop.
 

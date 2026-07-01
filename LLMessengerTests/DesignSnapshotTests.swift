@@ -340,6 +340,39 @@ final class DesignSnapshotTests: XCTestCase {
         try render(view, size: NSSize(width: 760, height: 560), name: "owed")
     }
 
+    /// Source-grounding proof for README: rendered from DemoSeeder data, showing
+    /// validated source messages without touching the user's real message stores.
+    func testSnapshotSources() throws {
+        defer { UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey) }
+        let db = try AppDatabase(inMemory: true)
+        try DemoSeeder.seed(into: db)
+        let repo = BriefRepository(database: db)
+        let briefID = try XCTUnwrap(repo.latestBriefID())
+        let brief = try XCTUnwrap(repo.fetchBrief(id: briefID))
+        let json = try XCTUnwrap(BriefJSON.decodeLenient(from: brief.openingSummary))
+        let card = try XCTUnwrap(json.cards.first)
+
+        let view = VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                WireLabel("Sources")
+                Text(card.headline)
+                    .font(Theme.display(18, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("This card is backed by \(card.sourceMessageIds.count) local messages. Quotes below are linked to stored message rows.")
+                    .font(Theme.sans(12.5))
+                    .foregroundStyle(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            BriefCardEvidenceView(card: card, briefID: briefID, repository: repo)
+        }
+        .padding(24)
+        .frame(width: 720, height: 340, alignment: .topLeading)
+        .background(Theme.bg)
+
+        try render(view, size: NSSize(width: 720, height: 340), name: "sources")
+    }
+
     /// Light mode (new since the last screenshots) — same reading surface.
     func testSnapshotLightMode() throws {
         let state = try makeFixtureState()

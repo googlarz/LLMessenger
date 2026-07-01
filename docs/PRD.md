@@ -175,7 +175,7 @@ Anthropic takes priority over OpenAI when both keys are set.
 ## 7. Constraints & Non-Goals
 
 **Constraints:**
-- macOS only (13 Ventura+) — no iOS, no web app
+- macOS only (14 Sonoma+) — no iOS, no web app
 - Requires external daemons for Signal (signal-mcp) and Telegram adapter binary
 - LLM quality is bounded by chosen backend; local models may produce lower-quality briefs
 

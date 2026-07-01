@@ -317,6 +317,96 @@ final class BriefRepositoryTests: XCTestCase {
         XCTAssertEqual(cards.map(\.card.id), ["card-needs-reply"])
     }
 
+    func testFetchSourcesWithMessagesDisambiguatesCardsInSameConversation() throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let briefID = try repo.insertBrief(makeBrief(status: "ready"))
+        var rowIDs: [String: Int64] = [:]
+
+        try db.dbQueue.write { db in
+            for (messageID, text) in [("m1", "Can you bring wine?"), ("m2", "Also, are we still on for 1pm?")] {
+                var msg = Message(
+                    briefId: briefID,
+                    service: "imessage",
+                    conversationId: "family",
+                    conversationName: "Family",
+                    messageId: messageID,
+                    sender: "Dad",
+                    text: text,
+                    timestamp: Date(),
+                    isSent: false
+                )
+                try msg.insert(db)
+                rowIDs[messageID] = msg.id!
+            }
+        }
+
+        try repo.insertBriefCardsBatch([
+            BriefCardRecord(
+                id: "card-wine",
+                briefId: briefID,
+                service: "imessage",
+                conversationId: "family",
+                conversationTitle: "Family",
+                headline: "Dad asked you to bring wine.",
+                priority: "med",
+                summary: "Dad asked whether you can bring wine.",
+                actionItems: #"["Pick up wine."]"#,
+                callbackText: nil,
+                sourceMessageIds: #"["m1"]"#,
+                createdAt: Date()
+            ),
+            BriefCardRecord(
+                id: "card-time",
+                briefId: briefID,
+                service: "imessage",
+                conversationId: "family",
+                conversationTitle: "Family",
+                headline: "Dad asked whether 1pm still works.",
+                priority: "low",
+                summary: "Dad asked whether Sunday lunch is still on for 1pm.",
+                needsReply: true,
+                reason: "Direct question about timing",
+                grounding: "direct",
+                actionItems: #"["Confirm 1pm."]"#,
+                callbackText: nil,
+                sourceMessageIds: #"["m2"]"#,
+                createdAt: Date()
+            )
+        ])
+        try repo.insertBriefCardSources([
+            BriefCardSource(
+                briefCardId: "card-wine",
+                messageRowId: rowIDs["m1"],
+                service: "imessage",
+                messageId: "m1",
+                sourceRole: BriefCardSourceRole.newMessage.rawValue,
+                quoteText: "Can you bring wine?",
+                createdAt: Date()
+            ),
+            BriefCardSource(
+                briefCardId: "card-time",
+                messageRowId: rowIDs["m2"],
+                service: "imessage",
+                messageId: "m2",
+                sourceRole: BriefCardSourceRole.newMessage.rawValue,
+                quoteText: "Also, are we still on for 1pm?",
+                createdAt: Date()
+            )
+        ])
+
+        let sources = try repo.fetchSourcesWithMessages(
+            briefID: briefID,
+            service: "imessage",
+            conversationID: "family",
+            sourceMessageIds: ["m2"]
+        )
+
+        XCTAssertEqual(sources.map(\.source.briefCardId), ["card-time"])
+        XCTAssertEqual(sources.map(\.source.messageId), ["m2"])
+        XCTAssertEqual(sources.first?.message?.text, "Also, are we still on for 1pm?")
+    }
+
     func testFetchRecentContextMessagesReturnsChronologicalSlice() throws {
         let db = try AppDatabase(inMemory: true)
         try db.dbQueue.write { db in

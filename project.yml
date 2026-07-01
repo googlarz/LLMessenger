@@ -2,7 +2,7 @@ name: LLMessenger
 options:
   bundleIdPrefix: com.llmessenger
   deploymentTarget:
-    macOS: "13.0"
+    macOS: "14.0"
   defaultConfig: Debug
 packages:
   GRDB:
@@ -18,13 +18,13 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.llmessenger.app
         SWIFT_VERSION: "5.9"
-        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
         INFOPLIST_FILE: LLMessenger/Info.plist
         CODE_SIGN_ENTITLEMENTS: LLMessenger/LLMessenger.entitlements
         ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # FoundationModels only exists on macOS 26+; weak-link so the app
-        # still launches on the 13.0 deployment target.
+        # still launches on the 14.0 deployment target.
         OTHER_LDFLAGS: ["-weak_framework", "FoundationModels"]
     dependencies:
       - package: GRDB

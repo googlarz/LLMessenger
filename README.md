@@ -20,6 +20,8 @@ Free. Open source. On-device AI. Your messages never have to leave your Mac, and
 
 ![LLMessenger screenshot](docs/screenshot.png)
 
+<sub>Screenshots in this README use synthetic demo conversations from the test fixture, not personal message data.</sub>
+
 </div>
 
 ---
@@ -30,21 +32,23 @@ You are in five group chats, two Slack workspaces, and a family iMessage thread.
 
 Every messaging app solves this by sending you *more* notifications. LLMessenger does the opposite:
 
-> 🔕 **Routine chatter is held back silently.**
-> 🔔 **You get one notification — when someone needs your reply.**
-> ☕ **Everything else lands in your Morning Digest.**
+- Routine chatter is held back silently.
+- You get one notification when someone needs your reply.
+- Everything else lands in one digest you can clear and leave.
 
 It looks like this:
 
-> **iMessage** — *Mum confirmed Sunday lunch — needs a reply* · `REPLY NEEDED`
-> Mum sent six messages confirming she's bringing the casserole and asking if you can pick up wine.
-> **NEXT** → Reply by 12:00 · Pick up wine
+> **iMessage** — *Dad confirmed Sunday lunch, asks if 1pm works* · `REPLY NEEDED`<br>
+> Two messages, one direct question, source-backed.<br>
+> **NEXT** → Confirm whether 1pm works.
 
-> **Slack** — *#eng-pricing settled on the new tier structure* · `INFO`
-> The team converged on three tiers after a 90-message debate. Engineering scoped it to two sprints.
-> **NEXT** → Acknowledge the proposal in #eng-pricing
+> **Slack** — *#launch-room resolved the staging incident* · `HEADS-UP`<br>
+> The outage was staging-only, postmortem due today, no customer impact.<br>
+> **NEXT** → Review Priya's postmortem.
 
-Click any card to ask follow-up questions ("who confirmed attendance?"), tap a style-matched quick reply, or have the AI draft a response you review before sending.
+Every card explains why it is there, which local source messages back it, whether prior context affected it, and what privacy posture applies. Click any card to inspect sources, ask follow-up questions, teach the app "more like this" or "quiet this", or have the AI draft a response you review before sending.
+
+![Synthetic demo mode — open the real command center without connecting accounts](docs/demo-mode.png)
 
 ## It doesn't just tell you — it acts
 
@@ -75,13 +79,27 @@ It learns who matters from your own behavior, or you can just tell it: *"this is
 
 ## Quick start
 
-**4 steps, one permission, no account required.**
+**Open once, clear what matters, leave.**
+
+You can try the full command center first with synthetic demo messages. No account, no message access, no API key required for the demo.
 
 1. **[Download the latest release](https://github.com/googlarz/LLMessenger/releases/latest)**, unzip, move to Applications.
    > The binary is unsigned — right-click → **Open** → **Open** on first launch (or System Settings → Privacy & Security → **Open Anyway**).
-2. **Connect your services** — iMessage is on by default. Toggle Telegram or Signal to add them inline. Grant Full Disk Access when prompted; the screen detects the grant live, no restart needed.
-3. **Choose your AI** — on macOS 26 with Apple Intelligence it auto-selects with zero config. Otherwise paste an Anthropic or OpenAI key, or point at a local Ollama instance.
-4. **Watch it sync** — LLMessenger reads your last 7 days in the background. Click the envelope in your menu bar when done → **New Digest**.
+2. **Try the demo command center** from onboarding, or connect iMessage when you are ready.
+3. **Choose your AI** — on-device on macOS 26, Ollama for local macOS 14+, or an explicit Anthropic/OpenAI key.
+4. **Clear the first digest** — inspect sources, mark one card done, mark a VIP or quiet a low-signal thread.
+
+When you connect real services, grant Full Disk Access for iMessage when prompted; the screen detects the grant live, no restart needed. Telegram, Signal, and Slack can be added from Settings.
+
+## Try demo first
+
+The fastest way to judge LLMessenger is the built-in demo. It opens the real app chrome with synthetic conversations, prepared actions, source citations, VIP/quiet controls, and the same privacy surfaces used for your real inbox.
+
+| 1. Open the demo | 2. Clear the Act queue | 3. Inspect sources |
+|---|---|---|
+| ![Synthetic demo command center](docs/demo-mode.png) | ![Synthetic Act queue](docs/act.png) | ![Synthetic source-grounding proof](docs/sources.png) |
+
+The demo can be wiped from the app chrome before connecting real services.
 
 <details>
 <summary><strong>Build from source instead</strong></summary>
@@ -133,6 +151,8 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) i
 - Unified inbox: iMessage, Signal, Telegram, Slack (multi-workspace).
 - Structured cards: headline, prose summary, action items, key quotes, priority, reply-needed state, and the reason it matters.
 - Actionability is explicit: `needsReply`, reason, and grounding chips separate "urgent" from "you should answer this."
+- Card-level trust: each expanded card shows reason, evidence count, memory/context use, and privacy posture.
+- One-click teaching: mark a conversation VIP, quiet it, or correct priority from the card itself.
 - One conversation can produce multiple cards when a thread contains distinct asks, decisions, and FYIs.
 - **Source-grounded** — every card cites exact message IDs; quotes are validated against real messages. No hallucinated summaries.
 - Conversation memory: rolling per-conversation summaries and unresolved actions carry across digest cycles, and older digests compress into episodic context.
@@ -201,6 +221,18 @@ Don't trust the README? The [reproducible release workflow](.github/workflows/re
 <summary><strong>Does the agent send messages on its own?</strong></summary>
 
 By default, **no** — it only *prepares* actions; you tap Approve to send. The one exception is opt-in: you can delegate a single low-risk action type (acknowledgements, RSVPs) for a single conversation, and then it auto-sends those — but with a 30-second Undo, an audit log, and a global kill switch. It is off until you turn it on, never applies to a brand-new recipient or anything containing a link or money, and **cannot be enabled or triggered by the content of a message** — delegation is something only you set, and the decision that authorizes a send reads only your settings, never message text. Everything else always waits for your tap.
+</details>
+
+<details>
+<summary><strong>Can I try it without connecting accounts?</strong></summary>
+
+Yes. On first launch, choose **Open demo first**. It seeds synthetic conversations into the local database and opens the same command center, Act queue, source viewer, and learning controls used by the real app. No account, message permission, or API key is needed for the demo.
+</details>
+
+<details>
+<summary><strong>Are the screenshots real user data?</strong></summary>
+
+No. README screenshots are generated from `DesignSnapshotTests` and `DemoSeeder` synthetic fixtures: investor thread, launch room, family plan, and low-signal group. They do not read your Messages database or any personal account.
 </details>
 
 <details>
@@ -277,7 +309,15 @@ xcodebuild -scheme LLMessenger test    # keep them green
 - [ ] WhatsApp adapter (pending viable local API)
 
 <details>
-<summary>Shipped (v1.4 – v2.2.3)</summary>
+<summary>Shipped (v1.4 – v2.2.4)</summary>
+
+**v2.2.4** — trust, demo, and product-love pass:
+- ✅ Demo-first onboarding lets new users explore the command center before connecting real accounts
+- ✅ Empty-state CTA opens the sample command center instead of leaving users at setup-only dead air
+- ✅ Card context popovers now include conversation-level privacy controls: normal, local-only, and never draft
+- ✅ Source-evidence screenshot and README FAQ make it clear demos use synthetic data, not private inbox content
+- ✅ README conversion flow now shows demo, action, and source-proof screenshots together
+- ✅ Product-health and first-week surfaces make progress, trust, and habit loops visible inside the app
 
 **v2.2.3** — brief quality + actionability:
 - ✅ Explicit `needsReply`, `reason`, and `grounding` fields on digest cards
@@ -285,6 +325,7 @@ xcodebuild -scheme LLMessenger test    # keep them green
 - ✅ Reason and grounding chips explain why a card matters and whether it is direct, contextual, or inferred
 - ✅ One conversation can produce multiple cards when it contains distinct asks, decisions, or FYIs
 - ✅ Priority rules now transform the visible stored digest JSON, so rule outcomes match what the user sees
+- ✅ Product-love pass: clearer first-run demo path, card-level trust explanation, one-click VIP/quiet teaching, local product-health surfaces, and synthetic README screenshots
 
 **v2.2.2** — action-first UX + large-inbox safety:
 - ✅ Unified Act feed with keyboard navigation, staged sends, undo, editable drafts, and source-aware action flow
