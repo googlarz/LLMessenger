@@ -61,6 +61,31 @@ struct AdapterConversation: Decodable {
     let messages: [AdapterMessage]
 }
 
+/// Groups a flat, time-ordered message stream into conversations while
+/// preserving first-seen conversation order. Shared by the adapters that
+/// read row-by-row (Signal's message store, iMessage's chat.db).
+struct ConversationAccumulator {
+    private var byID: [String: (name: String, type: ConversationType, messages: [AdapterMessage])] = [:]
+    private var order: [String] = []
+
+    mutating func add(_ message: AdapterMessage, conversationID: String,
+                      name: String, type: ConversationType) {
+        if byID[conversationID] == nil {
+            byID[conversationID] = (name: name, type: type, messages: [])
+            order.append(conversationID)
+        }
+        byID[conversationID]?.messages.append(message)
+    }
+
+    func finish() -> [AdapterConversation] {
+        order.compactMap { id in
+            guard let entry = byID[id] else { return nil }
+            return AdapterConversation(id: id, name: entry.name,
+                                       type: entry.type, messages: entry.messages)
+        }
+    }
+}
+
 struct AdapterFetchResult {
     let conversations: [AdapterConversation]
 }

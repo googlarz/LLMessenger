@@ -502,8 +502,7 @@ final class SignalCLIAdapter: MessengerAdapter {
         groupNames: [String: String] = [:],
         accountNumber: String? = nil
     ) -> [AdapterConversation] {
-        var byID: [String: (name: String, type: ConversationType, messages: [AdapterMessage])] = [:]
-        var order: [String] = []
+        var accumulator = ConversationAccumulator()
 
         for row in rows {
             guard let body = row["body"]?.storage.value as? String, !body.isEmpty,
@@ -544,18 +543,10 @@ final class SignalCLIAdapter: MessengerAdapter {
                 isFromMe: isFromMe
             )
 
-            if byID[convID] == nil {
-                byID[convID] = (name: convName, type: convType, messages: [])
-                order.append(convID)
-            }
-            byID[convID]!.messages.append(msg)
+            accumulator.add(msg, conversationID: convID, name: convName, type: convType)
         }
 
-        return order.compactMap { id in
-            guard let entry = byID[id] else { return nil }
-            return AdapterConversation(id: id, name: entry.name,
-                                       type: entry.type, messages: entry.messages)
-        }
+        return accumulator.finish()
     }
 }
 
