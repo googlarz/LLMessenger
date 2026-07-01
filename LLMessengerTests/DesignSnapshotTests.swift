@@ -340,6 +340,14 @@ final class DesignSnapshotTests: XCTestCase {
         try render(view, size: NSSize(width: 760, height: 560), name: "owed")
     }
 
+    /// About tab incl. the in-app "What's new" release notes section.
+    func testSnapshotAbout() throws {
+        let view = AboutSettingsTab()
+            .frame(width: 640, height: 640)
+            .background(Theme.bg)
+        try render(view, size: NSSize(width: 640, height: 640), name: "about")
+    }
+
     /// Source-grounding proof for README: rendered from DemoSeeder data, showing
     /// validated source messages without touching the user's real message stores.
     func testSnapshotSources() throws {

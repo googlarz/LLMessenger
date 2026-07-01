@@ -54,12 +54,61 @@ struct AboutSettingsTab: View {
                         .help("Versions, store integrity, service health, crash reports — never message content")
                     }
                 }
+
+                Rule().frame(maxWidth: 320)
+
+                whatsNew
             }
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.bg)
+    }
+
+    private var whatsNew: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            WireLabel("What's new")
+                .padding(.bottom, 8)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(ReleaseNotes.all) { note in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 8) {
+                                Text("v\(note.version)")
+                                    .font(Theme.mono(10.5, weight: .semibold))
+                                    .foregroundStyle(Theme.textSecondary)
+                                Text(note.title)
+                                    .font(Theme.sans(12, weight: .medium))
+                                    .foregroundStyle(Theme.textPrimary)
+                            }
+                            ForEach(note.highlights, id: \.self) { line in
+                                HStack(alignment: .top, spacing: 6) {
+                                    Text("·")
+                                        .font(Theme.sans(11.5))
+                                        .foregroundStyle(Theme.textTertiary)
+                                    Text(line)
+                                        .font(Theme.sans(11.5))
+                                        .foregroundStyle(Theme.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+
+                    Link("Full release history →",
+                         destination: URL(string: "https://github.com/googlarz/LLMessenger/releases")!)
+                        .font(Theme.mono(10.5))
+                        .tint(Theme.textTertiary)
+                }
+                .padding(.trailing, 8)
+            }
+            .frame(maxHeight: 190)
+        }
+        .frame(maxWidth: 420, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("What's new in recent versions")
     }
 
     private var appVersion: String {

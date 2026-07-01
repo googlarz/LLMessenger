@@ -167,6 +167,7 @@
 		BAB6F302E2FD6409D2BEEAA5 /* BriefRepositoryExtendedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */; };
 		BCB8920954E2D52C91A6B62B /* TriageEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84296051C7F18D8918F1FE01 /* TriageEngine.swift */; };
 		BCC3B16C914779BD3C042292 /* AppState+Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6257A25865F921D932156CE /* AppState+Errors.swift */; };
+		BCEB4A66495F7FAAAF60F4C1 /* ReleaseNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA9209CE1BFD09099C22706A /* ReleaseNotes.swift */; };
 		BCFC2235AC318EA2A9019F83 /* ConversationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95C2ACF68692E965BA4055BA /* ConversationStateTests.swift */; };
 		C0E3FFBB117C0375D5181543 /* AppState+Context.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76CFBED45C4CA03C45C8B758 /* AppState+Context.swift */; };
 		C140973F42CB8978F87DA2A0 /* KeyboardShortcutMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B77E8AC79E6D8AC9C4E54849 /* KeyboardShortcutMonitor.swift */; };
@@ -401,6 +402,7 @@
 		A7984BAF95D16BC6C2BF8FC4 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		A8B2BBEC782F0035C68E1CD2 /* DigestOrderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigestOrderingTests.swift; sourceTree = "<group>"; };
 		AA244AA90638FA48D795F7D2 /* ContextBias.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextBias.swift; sourceTree = "<group>"; };
+		AA9209CE1BFD09099C22706A /* ReleaseNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseNotes.swift; sourceTree = "<group>"; };
 		B0638D99CC1DF540F470F50E /* CommandRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRouterTests.swift; sourceTree = "<group>"; };
 		B0E3E5C7F80F5E5EACF5E3E9 /* ChatPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPanelView.swift; sourceTree = "<group>"; };
 		B66620DE37E240D22F45957F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -949,6 +951,7 @@
 				44D6788AD581D62FE11B99E8 /* LLMSettingsTab.swift */,
 				6BC6FDFCFADDCEE5A74B7FB0 /* OllamaModelPicker.swift */,
 				B70F5BB0EE53BF59D4BAC943 /* PrivacySettingsTab.swift */,
+				AA9209CE1BFD09099C22706A /* ReleaseNotes.swift */,
 				BBB79E8B76355B5DB2E4835C /* RulesSettingsTab.swift */,
 				DF6366D0E1F8A72B71A9F530 /* ServiceSettingsTab.swift */,
 				E310D3698200C661D0937036 /* SettingsView.swift */,
@@ -1224,6 +1227,7 @@
 				34ACCAF6781DDF51A663A56F /* PromptBuilder.swift in Sources */,
 				E0260C55BF88112D39490B73 /* QuickReply.swift in Sources */,
 				B85703706B8EBB6DAEDDC4D9 /* RealtimeMonitor.swift in Sources */,
+				BCEB4A66495F7FAAAF60F4C1 /* ReleaseNotes.swift in Sources */,
 				2FA9A9CE602BE2F90A1FC1A8 /* ReplyDraftView.swift in Sources */,
 				435F622009F472E8133ABF9A /* ReplyVoiceSampler.swift in Sources */,
 				179F12ED4A596B8CE26B8AF6 /* RuleEvaluator.swift in Sources */,
