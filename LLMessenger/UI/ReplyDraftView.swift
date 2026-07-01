@@ -49,6 +49,21 @@ struct ReplyDraftView: View {
                     }
                 }
 
+                if let provenance = draft.provenance, !provenance.isEmpty {
+                    HStack(alignment: .top, spacing: 7) {
+                        Image(systemName: "checkmark.shield")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.ok)
+                            .padding(.top, 1)
+                        Text(provenance)
+                            .font(Theme.sans(11.5))
+                            .foregroundStyle(Theme.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Draft source. \(provenance)")
+                }
+
                 Text(draft.text)
                     .font(Theme.sans(13))
                     .lineSpacing(4)

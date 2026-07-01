@@ -428,6 +428,11 @@ struct ActFeedView: View {
         case .owedReply(let r):
             OwedReplyStore.dismiss(r.id)
             appState.reloadOwedReplies()
+            appState.showReceipt("Dismissed owed reply.", actionTitle: "Undo") {
+                OwedReplyStore.undismiss(r.id)
+                appState.reloadOwedReplies()
+                appState.recordUndo()
+            }
             resolvedInSession += 1
         }
     }
@@ -804,6 +809,11 @@ private struct ActCardRow: View {
         actionButton("SNOOZE") {
             OwedReplyStore.snooze(reply.id, until: Date().addingTimeInterval(86400))
             appState.reloadOwedReplies()
+            appState.showReceipt("Snoozed reply until tomorrow.", actionTitle: "Undo") {
+                OwedReplyStore.unsnooze(reply.id)
+                appState.reloadOwedReplies()
+                appState.recordUndo()
+            }
             onResolved?()
         }
     }
@@ -812,6 +822,11 @@ private struct ActCardRow: View {
         actionButton("DISMISS") {
             OwedReplyStore.dismiss(reply.id)
             appState.reloadOwedReplies()
+            appState.showReceipt("Dismissed owed reply.", actionTitle: "Undo") {
+                OwedReplyStore.undismiss(reply.id)
+                appState.reloadOwedReplies()
+                appState.recordUndo()
+            }
             onResolved?()
         }
     }

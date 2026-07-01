@@ -11,6 +11,7 @@ struct ReplyDraft: Identifiable, Equatable {
     let serviceID: String
     let conversationID: String
     let senderName: String
+    var provenance: String? = nil
 }
 
 struct ConversationOption: Identifiable, Equatable {
@@ -19,6 +20,13 @@ struct ConversationOption: Identifiable, Equatable {
     let service: String       // "signal", "telegram", etc.
     let convId: String        // raw conversation ID
     let displayName: String   // "Alice Müller", "Work group"
+}
+
+struct UserReceipt: Identifiable {
+    let id = UUID()
+    let text: String
+    let actionTitle: String?
+    let action: (() -> Void)?
 }
 
 struct ThreadSource: Identifiable, Equatable {
@@ -119,6 +127,7 @@ final class AppState: ObservableObject {
     @Published var serviceHealthMap: [String: ServiceHealth] = [:]
     @Published var nextPollDate: Date?
     @Published var lastError: String?
+    @Published var userReceipt: UserReceipt?
     @Published var briefGenerationState: BriefGenerationState = .cached
     /// Keys of cards the user has marked as handled. Format: "\(briefID):\(cardID)".
     /// Persisted to UserDefaults so state survives app restarts.
@@ -867,6 +876,11 @@ final class AppState: ObservableObject {
         do {
             try repository.updateAgentActionStatus(id: id, status: .skipped, resolvedAt: Date())
             reloadAgentActions()
+            showReceipt("Skipped suggested action.", actionTitle: "Undo") { [weak self] in
+                try? self?.repository.updateAgentActionStatus(id: id, status: .pending, resolvedAt: nil)
+                self?.reloadAgentActions()
+                self?.recordUndo()
+            }
         } catch {
             lastError = friendly(error)
         }
@@ -980,6 +994,19 @@ final class AppState: ObservableObject {
 
     func dismissFirstWeekGuide() {
         productLoveMetrics = ProductLoveMetricStore.dismissFirstWeekGuide()
+        showReceipt("First-week guide hidden.")
+    }
+
+    func acknowledgeFirstRealDigest() {
+        productLoveMetrics = ProductLoveMetricStore.acknowledgeFirstRealDigest()
+    }
+
+    func showReceipt(_ text: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        userReceipt = UserReceipt(text: text, actionTitle: actionTitle, action: action)
+    }
+
+    func clearReceipt() {
+        userReceipt = nil
     }
 
     func refreshTasks() {
@@ -994,6 +1021,16 @@ final class AppState: ObservableObject {
         do {
             try repository.completeTask(id: taskID)
             refreshTasks()
+            showReceipt("Task completed.", actionTitle: "Undo") { [weak self] in
+                guard let self else { return }
+                do {
+                    try self.repository.reopenTask(id: taskID)
+                    self.refreshTasks()
+                    self.productLoveMetrics = ProductLoveMetricStore.recordUndo()
+                } catch {
+                    self.lastError = self.friendly(error)
+                }
+            }
         } catch {
             lastError = friendly(error)
         }
@@ -1005,6 +1042,12 @@ final class AppState: ObservableObject {
         if inserted {
             productLoveMetrics = ProductLoveMetricStore.recordHandledCard()
             reloadProductOutcomeStats()
+            showReceipt("Card marked done.", actionTitle: "Undo") { [weak self] in
+                guard let self else { return }
+                self.unmarkCardHandled(briefID: briefID, cardID: cardID)
+                self.productLoveMetrics = ProductLoveMetricStore.recordUndo()
+                self.reloadProductOutcomeStats()
+            }
         }
     }
 
@@ -1058,6 +1101,11 @@ final class AppState: ObservableObject {
         do {
             try repository.setArchived(briefID: briefID, archivedAt: Date())
             refreshBriefs()
+            showReceipt("Digest filed away.", actionTitle: "Undo") { [weak self] in
+                guard let self else { return }
+                self.unarchiveBrief(briefID)
+                self.productLoveMetrics = ProductLoveMetricStore.recordUndo()
+            }
         } catch {
             lastError = friendly(error)
         }
@@ -1076,6 +1124,16 @@ final class AppState: ObservableObject {
         do {
             try repository.setSnoozed(briefID: briefID, snoozedUntil: date)
             refreshBriefs()
+            showReceipt("Digest snoozed.", actionTitle: "Undo") { [weak self] in
+                guard let self else { return }
+                do {
+                    try self.repository.setSnoozed(briefID: briefID, snoozedUntil: nil)
+                    self.refreshBriefs()
+                    self.productLoveMetrics = ProductLoveMetricStore.recordUndo()
+                } catch {
+                    self.lastError = self.friendly(error)
+                }
+            }
         } catch {
             lastError = friendly(error)
         }
@@ -1111,10 +1169,12 @@ final class AppState: ObservableObject {
     func startDemoMode() {
         do {
             try DemoSeeder.seed(into: database)
+            productLoveMetrics = ProductLoveMetricStore.recordDemoStart()
             let task = refreshBriefs()
             Task { @MainActor in
                 await task.value
                 selectedBriefID = try? repository.latestBriefID()
+                showReceipt("Sample command center opened. This is synthetic demo data.")
             }
         } catch {
             lastError = friendly(error)
@@ -1162,9 +1222,34 @@ final class AppState: ObservableObject {
         }
     }
 
+    func restoreConversationContext(_ previous: ConversationContext?, service: String, conversationId: String) {
+        do {
+            if let previous {
+                try repository.upsertConversationContext(previous)
+                mergeConversationContexts([previous])
+            } else {
+                try repository.deleteConversationContext(service: service, conversationId: conversationId)
+                conversationContextsByKey.removeValue(forKey: conversationContextKey(service: service, conversationId: conversationId))
+            }
+            reloadOwedReplies()
+            reloadAgentActions()
+            productLoveMetrics = ProductLoveMetricStore.recordUndo()
+        } catch {
+            lastError = friendly(error)
+        }
+    }
+
     func recordQuietedThread() {
         productLoveMetrics = ProductLoveMetricStore.recordQuietedThread()
         reloadProductOutcomeStats()
+    }
+
+    func recordDraftCreated() {
+        productLoveMetrics = ProductLoveMetricStore.recordDraftCreated()
+    }
+
+    func recordUndo() {
+        productLoveMetrics = ProductLoveMetricStore.recordUndo()
     }
 
     func conversationContextKey(service: String, conversationId: String) -> String {

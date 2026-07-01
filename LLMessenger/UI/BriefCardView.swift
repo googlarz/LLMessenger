@@ -172,22 +172,28 @@ struct BriefCardView: View {
                     privacyOverride: $labelEditPrivacy,
                     onSave: {
                         let label = labelEditText.trimmingCharacters(in: .whitespaces)
+                        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
                         saveContext(label: label, priorityHint: labelEditHint, privacyOverride: labelEditPrivacy)
+                        showContextReceipt("Conversation context saved.", previous: previous)
                         showLabelEditor = false
                     },
                     onMarkVIP: {
+                        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
                         saveContext(label: labelEditText.isEmpty ? "VIP" : labelEditText,
                                     priorityHint: "high",
                                     privacyOverride: labelEditPrivacy)
                         learnedHint = "Future briefs will treat this conversation as high priority."
+                        showContextReceipt("Marked VIP for future digests.", previous: previous)
                         showLabelEditor = false
                     },
                     onQuiet: {
+                        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
                         saveContext(label: labelEditText.isEmpty ? "quiet" : labelEditText,
                                     priorityHint: "low",
                                     privacyOverride: labelEditPrivacy)
                         appState.recordQuietedThread()
                         learnedHint = "We'll keep this conversation quieter."
+                        showContextReceipt("Thread quieted for future digests.", previous: previous)
                         showLabelEditor = false
                     },
                     onCancel: { showLabelEditor = false }
@@ -320,7 +326,18 @@ struct BriefCardView: View {
         if chips.isEmpty && !card.sourceMessageIds.isEmpty {
             chips.append(("Directly sourced", Theme.textTertiary))
         }
+        chips.append((confidenceLabel.text, confidenceLabel.color))
         return chips
+    }
+
+    private var confidenceLabel: (text: String, color: Color) {
+        if card.sourceMessageIds.isEmpty || card.grounding == "inferred" {
+            return ("Check sources", Theme.signal)
+        }
+        if card.grounding == "context" {
+            return ("Context assisted", Theme.standby)
+        }
+        return ("High confidence", Theme.ok)
     }
 
     private var trustInlineLine: some View {
@@ -408,6 +425,7 @@ struct BriefCardView: View {
             sourceCount: card.sourceMessageIds.count,
             quoteCount: card.quotes.count,
             grounding: card.grounding,
+            confidenceText: confidenceText,
             context: effectiveContext
         )
 
@@ -419,6 +437,7 @@ struct BriefCardView: View {
                 learnedHint: learnedHint,
                 onMoreLikeThis: { teachFutureBriefs(priority: "high", label: "We'll surface threads like this.") },
                 onLessLikeThis: { teachFutureBriefs(priority: "low", label: "We'll lower items like this.") },
+                onNotReply: { markNotReply() },
                 onQuietThread: { quietThread() }
             )
             .transition(.opacity)
@@ -499,6 +518,7 @@ struct BriefCardView: View {
     }
 
     private func teachFutureBriefs(priority: String, label: String) {
+        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
         appState.savePriorityCorrection(
             service: card.service,
             conversationId: card.conversationId,
@@ -508,15 +528,35 @@ struct BriefCardView: View {
         )
         saveContext(label: effectiveContext?.label ?? "", priorityHint: priority)
         learnedHint = label
+        showContextReceipt(label, previous: previous)
+    }
+
+    private func markNotReply() {
+        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
+        appState.savePriorityCorrection(
+            service: card.service,
+            conversationId: card.conversationId,
+            headline: card.headline,
+            llmPriority: card.priority,
+            userPriority: "low"
+        )
+        saveContext(label: effectiveContext?.label ?? "", priorityHint: card.priority == "high" ? "med" : "auto")
+        if let briefID, !isHandled {
+            appState.markCardHandled(briefID: briefID, cardID: card.id)
+        }
+        learnedHint = "Got it — future digests will be less likely to ask for a reply here."
+        showContextReceipt("Marked as not needing a reply.", previous: previous)
     }
 
     private func quietThread() {
+        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
         saveContext(label: effectiveContext?.label ?? "", priorityHint: "low")
         appState.recordQuietedThread()
         if let briefID, !isHandled {
             appState.markCardHandled(briefID: briefID, cardID: card.id)
         }
         learnedHint = "We'll keep this thread quiet."
+        showContextReceipt("Thread quieted and card marked done.", previous: previous)
     }
 
     private var trustReason: String {
@@ -524,6 +564,19 @@ struct BriefCardView: View {
             return reason
         }
         return card.needsReply ? "The thread contains a likely ask." : "The thread changed since the last digest."
+    }
+
+    private var confidenceText: String {
+        if card.sourceMessageIds.isEmpty {
+            return "Low confidence: no direct local source was attached."
+        }
+        if card.grounding == "inferred" {
+            return "Medium confidence: this includes an inference, so verify sources before acting."
+        }
+        if card.grounding == "context" {
+            return "High confidence with context: grounded in local messages plus saved conversation memory."
+        }
+        return "High confidence: grounded in local source messages."
     }
 
     private func saveContext(label: String, priorityHint: String, privacyOverride: String? = nil) {
@@ -550,6 +603,13 @@ struct BriefCardView: View {
             privacyOverride: privacyOverride == nil ? effectiveContext?.privacyOverride : normalizedPrivacy
         )
     }
+
+    private func showContextReceipt(_ text: String, previous: ConversationContext?) {
+        appState.showReceipt(text, actionTitle: "Undo") { [weak appState] in
+            appState?.restoreConversationContext(previous, service: card.service, conversationId: card.conversationId)
+            savedContextOverride = previous
+        }
+    }
 }
 
 private struct TrustExplanationView: View {
@@ -557,6 +617,7 @@ private struct TrustExplanationView: View {
     let sourceCount: Int
     let quoteCount: Int
     let grounding: String?
+    let confidenceText: String
     let context: ConversationContext?
 
     var body: some View {
@@ -566,13 +627,14 @@ private struct TrustExplanationView: View {
                 Rule()
             }
             trustRow("Reason", reason)
+            trustRow("Confidence", confidenceText)
             trustRow("Evidence", evidenceText)
             trustRow("Memory", memoryText)
             trustRow("Privacy", privacyText)
         }
         .padding(.top, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Why this card. \(reason). \(evidenceText). \(memoryText). \(privacyText).")
+        .accessibilityLabel("Why this card. \(reason). \(confidenceText). \(evidenceText). \(memoryText). \(privacyText).")
     }
 
     private var evidenceText: String {
@@ -614,7 +676,7 @@ private struct TrustExplanationView: View {
             Text(label.uppercased())
                 .font(Theme.mono(9.5, weight: .semibold))
                 .foregroundStyle(Theme.textTertiary)
-                .frame(width: 62, alignment: .leading)
+                .frame(width: 78, alignment: .leading)
             Text(value)
                 .font(Theme.sans(11.5))
                 .foregroundStyle(Theme.textSecondary)

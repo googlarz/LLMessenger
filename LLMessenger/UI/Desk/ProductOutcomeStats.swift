@@ -20,7 +20,8 @@ struct ProductOutcomeStats: Equatable {
 
     var reassuranceLine: String {
         if totalResolved > 0 {
-            return "\(totalResolved) handled, \(quietThreadCount) quieted, \(heldBackCount) held back."
+            let auto = autoSentCount == 0 ? "0 auto-sent" : "\(autoSentCount) auto-sent"
+            return "\(totalResolved) handled, \(quietThreadCount) quieted, \(heldBackCount) held back, \(auto)."
         }
         if replyNeededCount > 0 {
             return "\(replyNeededCount) reply-needed \(replyNeededCount == 1 ? "thread" : "threads") found across \(digestCount) \(digestCount == 1 ? "digest" : "digests")."

@@ -4,6 +4,7 @@ struct BriefLearningRow: View {
     let learnedHint: String?
     let onMoreLikeThis: () -> Void
     let onLessLikeThis: () -> Void
+    let onNotReply: () -> Void
     let onQuietThread: () -> Void
 
     var body: some View {
@@ -38,6 +39,9 @@ struct BriefLearningRow: View {
             Button("LESS", action: onLessLikeThis)
                 .buttonStyle(WireActionStyle())
                 .accessibilityHint("Marks this kind of item as lower priority in future digests.")
+            Button("NOT A REPLY", action: onNotReply)
+                .buttonStyle(WireActionStyle())
+                .accessibilityHint("Teaches future digests that this kind of card does not need a reply.")
             Button("QUIET + DONE", action: onQuietThread)
                 .buttonStyle(WireActionStyle())
                 .accessibilityHint("Marks this card done and keeps the conversation lower priority in future digests.")

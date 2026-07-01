@@ -35,6 +35,16 @@ struct ContentView: View {
                 Rule()
             }
 
+            if let receipt = appState.userReceipt {
+                ReceiptBanner(receipt: receipt, onDismiss: { appState.clearReceipt() })
+                Rule()
+            }
+
+            if shouldShowFirstRealDigestMoment {
+                FirstRealDigestSuccessView()
+                Rule()
+            }
+
             GeometryReader { proxy in
                 let layout = deskLayout(for: proxy.size.width)
                 let deskWidth = deskWidth(for: proxy.size.width, layout: layout)
@@ -125,6 +135,12 @@ struct ContentView: View {
                     .first?.id
             }
         }
+    }
+
+    private var shouldShowFirstRealDigestMoment: Bool {
+        !DemoSeeder.isActive &&
+        !appState.briefs.isEmpty &&
+        !appState.productLoveMetrics.firstRealDigestAcknowledged
     }
 
     // MARK: - Navigation helpers
@@ -264,16 +280,16 @@ private struct FirstBriefPreparingView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 26)
 
-                VStack(alignment: .leading, spacing: 5) {
-                    setupRow("AI", appState.isLLMConfigured ? "Ready" : "Choose local, Anthropic, or OpenAI")
-                    setupRow("Messages", appState.briefs.isEmpty ? "Waiting for the first sync" : "Digest ready")
-                    setupRow("Privacy", appState.llmClient.isLocal ? "Local model selected" : "Uses your selected provider")
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(setupChecks) { check in
+                        setupRow(check)
+                    }
                 }
                 .padding(.top, 14)
 
                 if appState.briefs.isEmpty && !DemoSeeder.isActive {
                     HStack(spacing: 10) {
-                        Button("Open sample command center") {
+                        Button("Explore demo while this runs") {
                             appState.startDemoMode()
                         }
                         .buttonStyle(PaperButtonStyle(prominent: true))
@@ -334,7 +350,72 @@ private struct FirstBriefPreparingView: View {
         if !appState.isLLMConfigured {
             return "Choose an AI backend to build your first digest. Local models keep message content on this Mac."
         }
-        return "Reading your messages and writing your first digest. This usually takes a moment."
+        return "Reading your messages, contacts, and context. You can explore the sample command center while the first real digest is loading."
+    }
+
+    private var setupChecks: [SetupCheck] {
+        [
+            SetupCheck(
+                label: "AI",
+                value: aiSetupText,
+                state: appState.isLLMConfigured ? .ready : .needsSetup
+            ),
+            SetupCheck(
+                label: "Services",
+                value: serviceSetupText,
+                state: serviceSetupState
+            ),
+            SetupCheck(
+                label: "Messages",
+                value: messageSetupText,
+                state: appState.briefs.isEmpty ? .waiting : .ready
+            ),
+            SetupCheck(
+                label: "Privacy",
+                value: privacySetupText,
+                state: .ready
+            )
+        ]
+    }
+
+    private var aiSetupText: String {
+        if appState.isLLMConfigured {
+            return appState.llmClient.isLocal ? "Local model selected" : "Cloud provider selected with consent"
+        }
+        return "Needs a local model or provider key"
+    }
+
+    private var serviceSetupText: String {
+        if appState.serviceHealthMap.isEmpty {
+            return "Waiting for Signal, Telegram, iMessage, or Slack"
+        }
+        let failing = appState.serviceHealthMap.values.filter { $0.status == "error" }.count
+        if failing > 0 {
+            return "\(failing) service\(failing == 1 ? "" : "s") need attention"
+        }
+        let ok = appState.serviceHealthMap.values.filter { $0.status == "ok" }.count
+        return ok > 0 ? "\(ok) service\(ok == 1 ? "" : "s") connected" : "Checking service permissions"
+    }
+
+    private var serviceSetupState: SetupCheck.State {
+        if appState.serviceHealthMap.values.contains(where: { $0.status == "error" }) { return .needsSetup }
+        if appState.serviceHealthMap.values.contains(where: { $0.status == "ok" }) { return .ready }
+        return .waiting
+    }
+
+    private var messageSetupText: String {
+        if !appState.briefs.isEmpty { return "First digest is ready" }
+        if let last = appState.lastCheckedDate {
+            return "Last checked \(relativeSetupTime(last)); waiting for digest"
+        }
+        return "Waiting for the first sync"
+    }
+
+    private var privacySetupText: String {
+        if appState.llmClient.isLocal {
+            return "Message content stays on this Mac"
+        }
+        return "Drafts are review-first; nothing auto-sends by default"
     }
 
     private func bar(_ width: CGFloat, _ height: CGFloat) -> some View {
@@ -343,15 +424,158 @@ private struct FirstBriefPreparingView: View {
             .frame(width: width, height: height)
     }
 
-    private func setupRow(_ label: String, _ value: String) -> some View {
+    private func setupRow(_ check: SetupCheck) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label.uppercased())
+            Circle()
+                .fill(check.state.color)
+                .frame(width: 6, height: 6)
+                .padding(.top, 4)
+                .accessibilityHidden(true)
+            Text(check.label.uppercased())
                 .font(Theme.mono(9.5, weight: .semibold))
                 .foregroundStyle(Theme.textTertiary)
-                .frame(width: 62, alignment: .leading)
-            Text(value)
+                .frame(width: 66, alignment: .leading)
+            Text(check.value)
                 .font(Theme.sans(11.5))
                 .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func relativeSetupTime(_ date: Date) -> String {
+        let seconds = max(0, Date().timeIntervalSince(date))
+        if seconds < 60 { return "just now" }
+        let minutes = Int(seconds / 60)
+        if minutes < 60 { return "\(minutes)m ago" }
+        let hours = Int(seconds / 3600)
+        if hours < 24 { return "\(hours)h ago" }
+        return "\(hours / 24)d ago"
+    }
+}
+
+private struct SetupCheck: Identifiable {
+    enum State {
+        case ready
+        case waiting
+        case needsSetup
+
+        var color: Color {
+            switch self {
+            case .ready: return Theme.ok
+            case .waiting: return Theme.textTertiary
+            case .needsSetup: return Theme.signal
+            }
+        }
+    }
+
+    let label: String
+    let value: String
+    let state: State
+
+    var id: String { label }
+}
+
+// MARK: - First real digest success
+
+private struct FirstRealDigestSuccessView: View {
+    @EnvironmentObject var appState: AppState
+
+    private var latestBrief: Brief? {
+        appState.briefs.sorted { $0.createdAt > $1.createdAt }.first
+    }
+
+    private var cardStats: (cards: Int, replies: Int, sourced: Int) {
+        guard let json = BriefJSON.decodeLenient(from: latestBrief?.openingSummary) else {
+            return (0, 0, 0)
+        }
+        return (
+            json.cards.count,
+            json.cards.filter(\.needsReply).count,
+            json.cards.filter { !$0.sourceMessageIds.isEmpty }.count
+        )
+    }
+
+    var body: some View {
+        let stats = cardStats
+        HStack(alignment: .top, spacing: 12) {
+            Theme.ok.frame(width: 2)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
+
+            VStack(alignment: .leading, spacing: 5) {
+                WireLabel("First real digest ready", color: Theme.ok)
+                Text(successLine(stats))
+                    .font(Theme.sans(12.5, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Nothing was sent. Drafts stay review-first, and every important card can show its local sources.")
+                    .font(Theme.sans(11.5))
+                    .foregroundStyle(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                firstDigestGuide
+                    .padding(.top, 3)
+            }
+
+            Spacer(minLength: 8)
+
+            if let latestBrief {
+                Button("OPEN") {
+                    appState.selectedBriefID = latestBrief.id
+                    appState.acknowledgeFirstRealDigest()
+                }
+                .buttonStyle(PaperButtonStyle(prominent: true))
+            }
+
+            Button("GOT IT") {
+                appState.acknowledgeFirstRealDigest()
+            }
+            .buttonStyle(WireActionStyle())
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 10)
+        .background(Theme.ok.opacity(0.045))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("First real digest ready. \(successLine(cardStats)) Nothing was sent.")
+    }
+
+    private func successLine(_ stats: (cards: Int, replies: Int, sourced: Int)) -> String {
+        let held = appState.heldBackCount
+        let cards = "\(stats.cards) card\(stats.cards == 1 ? "" : "s")"
+        let replies = "\(stats.replies) need\(stats.replies == 1 ? "s" : "") you"
+        let sources = "\(stats.sourced) source-backed"
+        let heldBack = "\(held) held back"
+        return "\(cards), \(replies), \(sources), \(heldBack)."
+    }
+
+    private var firstDigestGuide: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 7) {
+                guideStep("1", "Open sources")
+                guideStep("2", "Mark one done")
+                guideStep("3", "Draft only if ready")
+                guideStep("4", "Quiet noise")
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                guideStep("1", "Open sources")
+                guideStep("2", "Mark one done")
+                guideStep("3", "Draft only if ready")
+                guideStep("4", "Quiet noise")
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Suggested first digest steps: open sources, mark one done, draft only if ready, quiet noise.")
+    }
+
+    private func guideStep(_ number: String, _ text: String) -> some View {
+        HStack(spacing: 4) {
+            Text(number)
+                .font(Theme.mono(9, weight: .bold))
+                .foregroundStyle(Theme.ok)
+                .frame(width: 12, height: 12)
+                .overlay(Circle().strokeBorder(Theme.ok.opacity(0.45), lineWidth: 1))
+            Text(text)
+                .font(Theme.mono(9.5, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize()
         }
     }
 }
@@ -393,5 +617,38 @@ private struct NoticeBanner: View {
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 9)
         .background(Theme.signalWash)
+    }
+}
+
+private struct ReceiptBanner: View {
+    let receipt: UserReceipt
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Theme.ok.frame(width: 2)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
+            VStack(alignment: .leading, spacing: 3) {
+                WireLabel("Saved", color: Theme.ok)
+                Text(receipt.text)
+                    .font(Theme.sans(12.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            if let actionTitle = receipt.actionTitle, let action = receipt.action {
+                Button(actionTitle.uppercased()) {
+                    action()
+                    onDismiss()
+                }
+                .buttonStyle(WireActionStyle(tint: Theme.ok))
+            }
+            Button("DISMISS", action: onDismiss)
+                .buttonStyle(WireActionStyle())
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 9)
+        .background(Theme.ok.opacity(0.035))
+        .accessibilityElement(children: .contain)
     }
 }

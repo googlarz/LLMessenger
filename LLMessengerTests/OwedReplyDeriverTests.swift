@@ -119,6 +119,10 @@ final class OwedReplyDeriverTests: XCTestCase {
         OwedReplyStore.snooze(id, until: now.addingTimeInterval(86400))
         let after = try OwedReplyDeriver().derive(db: db, contexts: [], now: now)
         XCTAssertTrue(after.isEmpty)
+
+        OwedReplyStore.unsnooze(id)
+        let restored = try OwedReplyDeriver().derive(db: db, contexts: [], now: now)
+        XCTAssertEqual(restored.count, 1)
     }
 
     // 7: dismissed entry is excluded
@@ -129,5 +133,9 @@ final class OwedReplyDeriverTests: XCTestCase {
         OwedReplyStore.dismiss(first[0].id)
         let after = try OwedReplyDeriver().derive(db: db, contexts: [], now: now)
         XCTAssertTrue(after.isEmpty)
+
+        OwedReplyStore.undismiss(first[0].id)
+        let restored = try OwedReplyDeriver().derive(db: db, contexts: [], now: now)
+        XCTAssertEqual(restored.count, 1)
     }
 }

@@ -8,6 +8,10 @@ struct ProductLoveMetrics: Equatable {
     var quietedThreads: Int
     var openedDigests: Int
     var guideDismissed: Bool
+    var draftsCreated: Int
+    var undoCount: Int
+    var demoStarts: Int
+    var firstRealDigestAcknowledged: Bool
 
     var firstWeekDay: Int {
         guard let firstSeenAt else { return 1 }
@@ -34,6 +38,13 @@ struct ProductLoveMetrics: Equatable {
     }
 
     var learningReceipt: String {
+        if undoCount > 0 {
+            let undo = "\(undoCount) undo\(undoCount == 1 ? "" : "s")"
+            if quietedThreads > 0 || priorityCorrections > 0 {
+                return "\(undo) used safely. You also taught \(quietedThreads + priorityCorrections) ranking signal\(quietedThreads + priorityCorrections == 1 ? "" : "s") to future digests."
+            }
+            return "\(undo) used safely. Recovery is working; nothing irreversible happened."
+        }
         if quietedThreads > 0 && priorityCorrections > 0 {
             return "You quieted \(quietedThreads) \(quietedThreads == 1 ? "thread" : "threads") and corrected \(priorityCorrections) \(priorityCorrections == 1 ? "priority" : "priorities"). Future digests use that signal."
         }
@@ -49,6 +60,9 @@ struct ProductLoveMetrics: Equatable {
     var learningNextStep: String {
         if quietedThreads > 0 && priorityCorrections > 0 {
             return "Next digest: fewer low-signal repeats, sharper priority on familiar people."
+        }
+        if draftsCreated > 0 {
+            return "Next draft: still review-first, with sources visible before anything is sent."
         }
         if quietedThreads > 0 {
             return "Next digest: similar low-signal threads stay quieter."
@@ -66,7 +80,11 @@ struct ProductLoveMetrics: Equatable {
         priorityCorrections: 0,
         quietedThreads: 0,
         openedDigests: 0,
-        guideDismissed: false
+        guideDismissed: false,
+        draftsCreated: 0,
+        undoCount: 0,
+        demoStarts: 0,
+        firstRealDigestAcknowledged: false
     )
 }
 
@@ -78,6 +96,10 @@ enum ProductLoveMetricStore {
     private static let quietedThreadsKey = "loveMetrics.quietedThreads"
     private static let openedDigestsKey = "loveMetrics.openedDigests"
     private static let guideDismissedKey = "loveMetrics.guideDismissed"
+    private static let draftsCreatedKey = "loveMetrics.draftsCreated"
+    private static let undoCountKey = "loveMetrics.undoCount"
+    private static let demoStartsKey = "loveMetrics.demoStarts"
+    private static let firstRealDigestAcknowledgedKey = "loveMetrics.firstRealDigestAcknowledged"
     private static let activeDayPrefix = "loveMetrics.activeDay."
 
     static func markActiveToday(defaults: UserDefaults = .standard, now: Date = Date()) -> ProductLoveMetrics {
@@ -108,8 +130,25 @@ enum ProductLoveMetricStore {
         increment(openedDigestsKey, defaults: defaults)
     }
 
+    static func recordDraftCreated(defaults: UserDefaults = .standard) -> ProductLoveMetrics {
+        increment(draftsCreatedKey, defaults: defaults)
+    }
+
+    static func recordUndo(defaults: UserDefaults = .standard) -> ProductLoveMetrics {
+        increment(undoCountKey, defaults: defaults)
+    }
+
+    static func recordDemoStart(defaults: UserDefaults = .standard) -> ProductLoveMetrics {
+        increment(demoStartsKey, defaults: defaults)
+    }
+
     static func dismissFirstWeekGuide(defaults: UserDefaults = .standard) -> ProductLoveMetrics {
         defaults.set(true, forKey: guideDismissedKey)
+        return load(defaults: defaults)
+    }
+
+    static func acknowledgeFirstRealDigest(defaults: UserDefaults = .standard) -> ProductLoveMetrics {
+        defaults.set(true, forKey: firstRealDigestAcknowledgedKey)
         return load(defaults: defaults)
     }
 
@@ -121,7 +160,11 @@ enum ProductLoveMetricStore {
             priorityCorrections: defaults.integer(forKey: priorityCorrectionsKey),
             quietedThreads: defaults.integer(forKey: quietedThreadsKey),
             openedDigests: defaults.integer(forKey: openedDigestsKey),
-            guideDismissed: defaults.bool(forKey: guideDismissedKey)
+            guideDismissed: defaults.bool(forKey: guideDismissedKey),
+            draftsCreated: defaults.integer(forKey: draftsCreatedKey),
+            undoCount: defaults.integer(forKey: undoCountKey),
+            demoStarts: defaults.integer(forKey: demoStartsKey),
+            firstRealDigestAcknowledged: defaults.bool(forKey: firstRealDigestAcknowledgedKey)
         )
     }
 

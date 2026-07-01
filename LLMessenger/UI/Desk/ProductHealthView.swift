@@ -35,6 +35,8 @@ struct ProductHealthView: View {
         HealthMetric(value: metrics.openedDigests, label: "opens")
         HealthMetric(value: stats.totalResolved, label: "handled")
         HealthMetric(value: metrics.priorityCorrections + metrics.quietedThreads, label: "taught")
+        HealthMetric(value: metrics.draftsCreated, label: "drafts")
+        HealthMetric(value: metrics.undoCount, label: "undos")
     }
 
     private var score: Int {
@@ -59,7 +61,7 @@ struct ProductHealthView: View {
 
     private var healthLine: String {
         if score >= 80 {
-            return "The loop is working: repeated opens, clear outcomes, learning signals, and source-backed trust."
+            return "The loop is working: repeated opens, clear outcomes, learning signals, source-backed trust, and review-first drafts."
         }
         if metrics.openedDigests == 0 {
             return "Open one digest to start measuring habit quality locally."
@@ -69,6 +71,9 @@ struct ProductHealthView: View {
         }
         if !metrics.hasLearningSignal {
             return "The next unlock is learning: correct priority or quiet one low-signal thread."
+        }
+        if metrics.draftsCreated == 0 {
+            return "The next unlock is trust in drafts: create one, inspect its sources, then copy or discard."
         }
         return "Good signal is forming. Another active day turns it into a habit."
     }

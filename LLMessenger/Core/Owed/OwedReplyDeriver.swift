@@ -23,6 +23,12 @@ enum OwedReplyStore {
         defaults.set(Array(set), forKey: dismissedKey)
     }
 
+    static func undismiss(_ id: String, defaults: UserDefaults = .standard) {
+        var set = dismissedIDs(defaults)
+        set.remove(id)
+        defaults.set(Array(set), forKey: dismissedKey)
+    }
+
     /// Map of id → ISO8601 snooze-until string.
     static func snoozedMap(_ defaults: UserDefaults = .standard) -> [String: String] {
         defaults.dictionary(forKey: snoozedKey) as? [String: String] ?? [:]
@@ -31,6 +37,12 @@ enum OwedReplyStore {
     static func snooze(_ id: String, until date: Date, defaults: UserDefaults = .standard) {
         var map = snoozedMap(defaults)
         map[id] = ISO8601DateFormatter().string(from: date)
+        defaults.set(map, forKey: snoozedKey)
+    }
+
+    static func unsnooze(_ id: String, defaults: UserDefaults = .standard) {
+        var map = snoozedMap(defaults)
+        map.removeValue(forKey: id)
         defaults.set(map, forKey: snoozedKey)
     }
 

@@ -534,8 +534,10 @@ final class ChatViewModel: ObservableObject {
                                    text: draftText,
                                    serviceID: target?.service ?? services.first ?? "",
                                    conversationID: target?.convId ?? "",
-                                   senderName: "")
+                                   senderName: "",
+                                   provenance: "Draft based on this digest context. Nothing has been sent.")
             threadItems.append(.replyDraft(id: draft.id, draft: draft))
+            appState.recordDraftCreated()
         } else {
             threadItems.append(.assistantResponse(id: UUID(), text: responseText))
         }
@@ -634,6 +636,13 @@ final class ChatViewModel: ObservableObject {
         guard currentBrief != nil else { return }
         guard !quickRepliesLoading.contains(cardID) else { return }
 
+        let ctx = (try? appState.repository.fetchConversationContext(service: service, conversationId: convId)) ?? nil
+        if let blocked = draftingBlockedMessage(context: ctx) {
+            quickRepliesFailed.insert(cardID)
+            threadItems.append(.assistantResponse(id: UUID(), text: blocked))
+            return
+        }
+
         quickRepliesLoading.insert(cardID)
         defer { quickRepliesLoading.remove(cardID) }
 
@@ -701,8 +710,10 @@ final class ChatViewModel: ObservableObject {
                                text: reply.draft,
                                serviceID: service,
                                conversationID: convId,
-                               senderName: convName)
+                               senderName: convName,
+                               provenance: "Quick draft based on recent local messages for this conversation. Nothing has been sent.")
         threadItems.append(.replyDraft(id: draft.id, draft: draft))
+        appState.recordDraftCreated()
         // Clear chips so the "Quick reply" trigger reappears and the user
         // can generate a fresh set if they discard this draft.
         quickReplies.removeValue(forKey: cardID)
@@ -743,6 +754,10 @@ final class ChatViewModel: ObservableObject {
         // Auto-learn the user's voice in this thread: fetch the persistent context
         // and a sample of recent sent messages (same window/filter as quick replies).
         let ctx = (try? appState.repository.fetchConversationContext(service: service, conversationId: convId)) ?? nil
+        if let blocked = draftingBlockedMessage(context: ctx) {
+            threadItems.append(.assistantResponse(id: UUID(), text: blocked))
+            return
+        }
         let styleSince = Date().addingTimeInterval(-ReplyVoiceSampler.styleWindowDays * 24 * 3600)
         let recentAll = (try? appState.repository.fetchMessages(service: service, since: styleSince)) ?? []
         let sentTexts = ReplyVoiceSampler.sampleSentTexts(messages: recentAll, conversationId: convId)
@@ -777,8 +792,14 @@ final class ChatViewModel: ObservableObject {
             let responseText = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
             let draftText = stripDraftPrefix(responseText)
             let draft = ReplyDraft(id: UUID(), text: draftText,
-                                   serviceID: service, conversationID: convId, senderName: "")
+                                   serviceID: service, conversationID: convId, senderName: convName,
+                                   provenance: draftProvenance(
+                                        contextMessageCount: contextMessages.count,
+                                        styleSampleCount: sentTexts.count,
+                                        context: ctx
+                                   ))
             threadItems.append(.replyDraft(id: draft.id, draft: draft))
+            appState.recordDraftCreated()
             InstrumentationManager.shared.track(event: .draftCreated, metadata: ["service": service, "draftLength": draftText.count])
         } catch {
             threadItems.append(.assistantResponse(id: UUID(),
@@ -1135,5 +1156,42 @@ final class ChatViewModel: ObservableObject {
         guard let text else { return nil }
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? nil : value
+    }
+
+    private func draftProvenance(
+        contextMessageCount: Int,
+        styleSampleCount: Int,
+        context: ConversationContext?
+    ) -> String {
+        var parts: [String] = []
+        if contextMessageCount > 0 {
+            parts.append("Based on \(contextMessageCount) recent local message\(contextMessageCount == 1 ? "" : "s")")
+        } else {
+            parts.append("Based on the current digest context")
+        }
+        if styleSampleCount > 0 {
+            parts.append("\(styleSampleCount) of your sent messages for tone")
+        }
+        switch context?.privacyOverride {
+        case "local_only":
+            parts.append("local-only conversation")
+        case "never_draft":
+            parts.append("drafting is disabled for this conversation")
+        default:
+            break
+        }
+        parts.append("nothing has been sent")
+        return parts.joined(separator: " · ") + "."
+    }
+
+    private func draftingBlockedMessage(context: ConversationContext?) -> String? {
+        switch context?.privacyOverride {
+        case "never_draft":
+            return "Drafting is disabled for this conversation. Change its privacy setting to draft a reply."
+        case "local_only" where !appState.llmClient.isLocal:
+            return "This conversation is local-only, and your current AI provider is cloud. Switch to a local model to draft here."
+        default:
+            return nil
+        }
     }
 }

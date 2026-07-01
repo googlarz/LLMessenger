@@ -189,13 +189,22 @@ final class FrontendRobustnessTests: XCTestCase {
         metrics = ProductLoveMetricStore.recordHandledCard(defaults: defaults)
         metrics = ProductLoveMetricStore.recordPriorityCorrection(defaults: defaults)
         metrics = ProductLoveMetricStore.recordQuietedThread(defaults: defaults)
+        metrics = ProductLoveMetricStore.recordDraftCreated(defaults: defaults)
+        metrics = ProductLoveMetricStore.recordUndo(defaults: defaults)
+        metrics = ProductLoveMetricStore.recordDemoStart(defaults: defaults)
 
         XCTAssertEqual(metrics.openedDigests, 1)
         XCTAssertEqual(metrics.handledCards, 1)
         XCTAssertEqual(metrics.priorityCorrections, 1)
         XCTAssertEqual(metrics.quietedThreads, 1)
+        XCTAssertEqual(metrics.draftsCreated, 1)
+        XCTAssertEqual(metrics.undoCount, 1)
+        XCTAssertEqual(metrics.demoStarts, 1)
         XCTAssertTrue(metrics.hasLearningSignal)
-        XCTAssertTrue(metrics.learningReceipt.contains("quieted"))
+        XCTAssertTrue(metrics.learningReceipt.contains("undo"))
+
+        metrics = ProductLoveMetricStore.acknowledgeFirstRealDigest(defaults: defaults)
+        XCTAssertTrue(metrics.firstRealDigestAcknowledged)
     }
 
     func testProductLoveMetricsHidesFirstWeekGuideAfterHabitLoopCompletes() {
@@ -206,7 +215,11 @@ final class FrontendRobustnessTests: XCTestCase {
             priorityCorrections: 1,
             quietedThreads: 1,
             openedDigests: 4,
-            guideDismissed: false
+            guideDismissed: false,
+            draftsCreated: 1,
+            undoCount: 0,
+            demoStarts: 0,
+            firstRealDigestAcknowledged: false
         )
         let newUser = ProductLoveMetrics.empty
 
@@ -229,6 +242,43 @@ final class FrontendRobustnessTests: XCTestCase {
         XCTAssertFalse(dismissed.shouldShowFirstWeekGuide(suggestionCount: 1))
     }
 
+    func testMarkCardHandledReceiptCanUndo() async throws {
+        let db = try makeDB()
+        let appState = makeAppState(db: db)
+        let briefID = try await insertBrief(db: db)
+
+        appState.markCardHandled(briefID: briefID, cardID: "card-1")
+        XCTAssertTrue(appState.isCardHandled(briefID: briefID, cardID: "card-1"))
+        XCTAssertEqual(appState.userReceipt?.actionTitle, "Undo")
+
+        let beforeUndo = appState.productLoveMetrics.undoCount
+        appState.userReceipt?.action?()
+        XCTAssertFalse(appState.isCardHandled(briefID: briefID, cardID: "card-1"))
+        XCTAssertEqual(appState.productLoveMetrics.undoCount, beforeUndo + 1)
+    }
+
+    func testSkipActionReceiptCanUndo() async throws {
+        let db = try makeDB()
+        let appState = makeAppState(db: db)
+        let action = try await insertAgentAction(db: db)
+
+        appState.reloadAgentActions()
+        appState.skipAction(action)
+        var stored = try await db.dbQueue.read { d in
+            try AgentAction.fetchOne(d, key: action.id!)
+        }
+        XCTAssertEqual(stored?.statusEnum, .skipped)
+        XCTAssertEqual(appState.userReceipt?.actionTitle, "Undo")
+
+        let beforeUndo = appState.productLoveMetrics.undoCount
+        appState.userReceipt?.action?()
+        stored = try await db.dbQueue.read { d in
+            try AgentAction.fetchOne(d, key: action.id!)
+        }
+        XCTAssertEqual(stored?.statusEnum, .pending)
+        XCTAssertEqual(appState.productLoveMetrics.undoCount, beforeUndo + 1)
+    }
+
     /// Inserts a Brief using only the fields accepted by the existing memberwise init.
     private func insertBrief(db: AppDatabase,
                              status: String = "ready",
@@ -241,6 +291,28 @@ final class FrontendRobustnessTests: XCTestCase {
                           episodicSummary: episodicSummary)
             try b.insert(d)
             return b.id!
+        }
+    }
+
+    private func insertAgentAction(db: AppDatabase) async throws -> AgentAction {
+        try await db.dbQueue.write { d in
+            var action = AgentAction(
+                id: nil,
+                kind: AgentActionKind.reply.rawValue,
+                service: "signal",
+                conversationId: "c1",
+                conversationName: "Anna",
+                title: "Reply to Anna",
+                payload: AgentAction.encodeReplyPayload("On it."),
+                reasoning: "Fixture",
+                confidence: 0.8,
+                riskLevel: AgentActionRisk.low.rawValue,
+                status: AgentActionStatus.pending.rawValue,
+                createdAt: Date(),
+                resolvedAt: nil
+            )
+            try action.insert(d)
+            return action
         }
     }
 

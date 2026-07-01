@@ -6,6 +6,27 @@
 
 ---
 
+## Current Product Status (v2.2.5+)
+
+This PRD began as the v1 planning document. The shipped app has moved well past several sections below; treat older roadmap checkboxes as historical context, not the source of truth for current work.
+
+Shipped since this document was first written:
+- Act/Digest/Activity desk with owed replies, commitments, tasks, and suggested actions
+- Review-first drafts with staged sends, undo windows, and per-conversation privacy controls
+- Source-backed brief cards, confidence/trust explanation, local evidence drilldown, and learning controls
+- Search, priority rules, quiet hours, notification firewall, demo mode, first-week guidance, and local product-health surfaces
+- Local audit/proof surfaces for sent actions, held-back notifications, source-backed cards, and learning receipts
+
+Current product principles:
+- First run must be useful before private data is ready, via demo mode and clear setup diagnosis.
+- No send should feel irreversible; visible undo/recovery is part of the product contract.
+- Briefs should explain why each card appeared, how confident the app is, and what local sources support it.
+- Privacy posture should be visible in-product, not only in documentation.
+
+Next planning should start from the latest GitHub release notes and the current codebase, then update this document or replace it with a v2 PRD.
+
+---
+
 ## 1. Problem Statement
 
 Modern messaging is fragmented across Signal, Telegram, and iMessage. A typical user wakes up to dozens of unread conversations spread across three apps — and spends 20–40 minutes every morning just catching up, before doing any actual work. Important action items are buried in small talk; urgent requests are missed because the thread was long.

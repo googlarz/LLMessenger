@@ -667,11 +667,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         guard let provider = repo.loadSelectedLLMProvider() else {
+            let provider: LLMProvider = AppleFM.isAvailable ? .appleIntelligence : .ollama
+            let savedModel = repo.loadOllamaModel()
+            let model = provider == .ollama && !savedModel.isEmpty ? savedModel : provider.defaultModel
             return ResolvedProvider(
-                provider: nil,
-                client: UnconfiguredLLMClient(),
-                model: "",
-                isConfigured: false
+                provider: provider,
+                client: provider.makeClient(apiKey: nil),
+                model: model,
+                isConfigured: provider == .appleIntelligence ? AppleFM.isAvailable : true
             )
         }
 

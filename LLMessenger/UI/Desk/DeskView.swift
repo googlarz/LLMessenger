@@ -48,6 +48,7 @@ struct DeskView: View {
             ToDoStripView(layout: layout)
 
             tabBar
+            selectedTabHelp
             Rule()
 
             Group {
@@ -86,6 +87,25 @@ struct DeskView: View {
         .background(Theme.sidebar)
     }
 
+    private var selectedTabHelp: some View {
+        HStack(spacing: 6) {
+            Image(systemName: selectedTab.iconName)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+            Text(selectedTab.helpText)
+                .font(Theme.sans(11.5))
+                .foregroundStyle(Theme.textTertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, layout.gutter)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
+        .background(Theme.sidebar)
+        .accessibilityHidden(true)
+    }
+
     private func badge(for tab: DeskTab) -> String? {
         switch tab {
         case .act:
@@ -105,6 +125,24 @@ struct DeskView: View {
         case .act:      return "1"
         case .digest:   return "2"
         case .activity: return "3"
+        }
+    }
+}
+
+extension DeskView.DeskTab {
+    var helpText: String {
+        switch self {
+        case .act: return "What needs you now."
+        case .digest: return "What happened in your messages."
+        case .activity: return "What changed, sent, or was learned."
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .act: return "bolt.fill"
+        case .digest: return "newspaper"
+        case .activity: return "checkmark.seal"
         }
     }
 }
@@ -147,6 +185,8 @@ private struct DeskTabButton: View {
         }
         .buttonStyle(.plain)
         .keyboardShortcut(keyEquivalent, modifiers: .command)
+        .help(tab.helpText)
+        .accessibilityHint(tab.helpText)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }

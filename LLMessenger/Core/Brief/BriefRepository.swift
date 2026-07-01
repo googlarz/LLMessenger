@@ -656,6 +656,14 @@ struct BriefRepository {
         }
     }
 
+    func deleteConversationContext(service: String, conversationId: String) throws {
+        try database.dbQueue.write { db in
+            try ConversationContext
+                .filter(Column("service") == service && Column("conversationId") == conversationId)
+                .deleteAll(db)
+        }
+    }
+
     func fetchAllConversationContexts() throws -> [ConversationContext] {
         try database.dbQueue.read { db in
             try ConversationContext.fetchAll(db)
@@ -951,6 +959,15 @@ struct BriefRepository {
             try db.execute(
                 sql: "UPDATE tasks SET completedAt = ? WHERE id = ?",
                 arguments: [Date(), id]
+            )
+        }
+    }
+
+    func reopenTask(id: Int64) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE tasks SET completedAt = NULL WHERE id = ?",
+                arguments: [id]
             )
         }
     }

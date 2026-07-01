@@ -24,6 +24,16 @@ internal final class SendTestSpyAdapter: MessengerAdapter {
     }
 }
 
+private final class SendTestCloudLLMClient: LLMClient {
+    var callCount = 0
+    var isLocal: Bool { false }
+
+    func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
+        callCount += 1
+        return LLMResponse(text: "DRAFT: ok", inputTokens: 1, outputTokens: 1)
+    }
+}
+
 // MARK: - Helpers
 
 @MainActor
@@ -61,6 +71,23 @@ final class ChatViewModelSendTests: XCTestCase {
                               sender: sender, text: text,
                               timestamp: Date().addingTimeInterval(timeOffset), isSent: false)
             try msg.insert(d)
+        }
+    }
+
+    private func saveContext(db: AppDatabase,
+                             service: String = "signal",
+                             conversationId: String = "c1",
+                             privacyOverride: String?) async throws {
+        try await db.dbQueue.write { d in
+            let ctx = ConversationContext(
+                service: service,
+                conversationId: conversationId,
+                label: "",
+                priorityHint: "auto",
+                updatedAt: Date(),
+                privacyOverride: privacyOverride
+            )
+            try ctx.save(d)
         }
     }
 
@@ -145,6 +172,53 @@ final class ChatViewModelSendTests: XCTestCase {
         XCTAssertEqual(vm.inputText, "write to Alice: ")
         XCTAssertNotEqual(vm.inputFocusRequest, previousFocusRequest)
         XCTAssertEqual(mock.calls.count, 0, "Preparing a reply must not call the LLM until the user sends")
+    }
+
+    func testMentionTargetDraftRespectsNeverDraftPrivacy() async throws {
+        let db = try await makeDB()
+        let briefId = try await insertBrief(db: db)
+        try await insertMessage(db: db, briefId: briefId, convId: "c1", convName: "Alice")
+        try await saveContext(db: db, privacyOverride: "never_draft")
+
+        let mock = MockLLMClient()
+        let (vm, _) = try await makeVM(db: db, mock: mock, briefId: briefId)
+        vm.setMentionTarget(.init(service: "signal", conversationId: "c1", displayName: "Alice", isGroup: false))
+        vm.inputText = "yes works"
+
+        await vm.send()
+
+        XCTAssertEqual(mock.calls.count, 0)
+        XCTAssertTrue(vm.threadItems.contains {
+            if case .assistantResponse(_, let text) = $0 {
+                return text.contains("Drafting is disabled")
+            }
+            return false
+        })
+    }
+
+    func testMentionTargetDraftRespectsLocalOnlyWhenUsingCloudClient() async throws {
+        let db = try await makeDB()
+        let briefId = try await insertBrief(db: db)
+        try await insertMessage(db: db, briefId: briefId, convId: "c1", convName: "Alice")
+        try await saveContext(db: db, privacyOverride: "local_only")
+
+        let cloud = SendTestCloudLLMClient()
+        let appState = AppState(database: db, llmClient: cloud, llmModel: "test", basePrompt: "BASE")
+        let brief = try appState.repository.fetchBrief(id: briefId)!
+        let vm = ChatViewModel(appState: appState)
+        try await vm.loadBrief(brief)
+        vm.setMentionTarget(.init(service: "signal", conversationId: "c1", displayName: "Alice", isGroup: false))
+        vm.inputText = "yes works"
+
+        await vm.send()
+
+        XCTAssertEqual(cloud.callCount, 0)
+        XCTAssertTrue(vm.threadItems.contains {
+            if case .assistantResponse(_, let text) = $0 {
+                return text.contains("local-only")
+            }
+            return false
+        })
     }
 
     func testNaturalLanguageReplyAndDetailsRunsBothActions() async throws {
