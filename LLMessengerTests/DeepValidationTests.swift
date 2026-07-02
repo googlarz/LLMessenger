@@ -472,8 +472,9 @@ final class ConversationStateCarryForwardTests: XCTestCase {
 @MainActor
 final class CompressionErrorHandlingTests: XCTestCase {
 
-    // When compression LLM fails, empty sentinel is written and next brief still succeeds.
-    func testCompressionFailureWritesSentinelAndNextBriefSucceeds() async throws {
+    // When compression LLM fails, the brief is marked for retry-after-backoff
+    // (not a permanent empty-string sentinel) and the next brief still succeeds.
+    func testCompressionFailureMarksRetryAndNextBriefSucceeds() async throws {
         let db = try makeDB()
         let now = Date()
 
@@ -501,24 +502,27 @@ final class CompressionErrorHandlingTests: XCTestCase {
         // Brief should still be created
         XCTAssertNotNil(result, "Brief must succeed even when compression fails")
 
-        // Old brief should have empty sentinel
+        // Old brief should be marked for retry, not permanently sentinel'd.
         let oldBrief = try await db.dbQueue.read { d in
             try Brief.order(Column("createdAt").asc).fetchAll(d).first
         }
-        XCTAssertEqual(oldBrief?.episodicSummary, "",
-                       "Failed compression must write empty sentinel so it's not retried")
+        XCTAssertNil(oldBrief?.episodicSummary,
+                     "Failed compression must leave episodicSummary nil, not a permanent sentinel")
+        XCTAssertNotNil(oldBrief?.compressionFailedAt,
+                        "Failed compression must record a retry timestamp")
     }
 
-    // A brief with empty sentinel is never re-compressed.
-    func testEmptySentinelBriefIsNotReCompressed() async throws {
+    // A brief that failed compression within the backoff window is not re-attempted.
+    func testRecentlyFailedCompressionBriefIsNotReCompressed() async throws {
         let db = try makeDB()
         let now = Date()
 
-        // Insert brief with empty sentinel
+        // Insert brief that failed compression moments ago (within backoff window).
         try await db.dbQueue.write { d in
             var b = Brief(createdAt: now.addingTimeInterval(-3600), status: "ready",
                           services: #"["signal"]"#, openingSummary: nil,
-                          notificationText: "old", episodicSummary: "")
+                          notificationText: "old", episodicSummary: nil,
+                          compressionFailedAt: now.addingTimeInterval(-60))
             try b.insert(d)
             var m = Message(briefId: b.id, service: "signal", conversationId: "c1",
                             messageId: "m-old", sender: "Alice", text: "Old",
@@ -537,7 +541,7 @@ final class CompressionErrorHandlingTests: XCTestCase {
         // Compressor should NOT have been called (no "2-3 sentences" call)
         // The DynamicMock would have callCount=1 for the brief, +0 for compression
         XCTAssertEqual(mock.callCount, 1,
-                       "Compression must not be attempted on briefs with empty sentinel")
+                       "Compression must not be re-attempted within the retry backoff window")
     }
 
     // Compression runs oldest-first — if B1 and B2 both lack episodicSummary,
@@ -765,15 +769,17 @@ final class RepositoryBoundaryTests: XCTestCase {
         XCTAssertEqual(telegramSummaries[0].summary, "Telegram context")
     }
 
-    // recentEpisodicSummaries excludes empty sentinel.
-    func testEpisodicSummariesExcludesEmptySentinel() async throws {
+    // recentEpisodicSummaries excludes briefs that failed compression (nil episodicSummary,
+    // regardless of retry state) — only briefs with a real summary contribute context.
+    func testEpisodicSummariesExcludesFailedCompression() async throws {
         let db = try makeDB()
         let repo = BriefRepository(database: db)
 
         try await db.dbQueue.write { d in
             var b1 = Brief(createdAt: Date().addingTimeInterval(-120), status: "ready",
                            services: #"["signal"]"#, openingSummary: nil,
-                           notificationText: "b1", episodicSummary: "")
+                           notificationText: "b1", episodicSummary: nil,
+                           compressionFailedAt: Date())
             try b1.insert(d)
             var b2 = Brief(createdAt: Date().addingTimeInterval(-60), status: "ready",
                            services: #"["signal"]"#, openingSummary: nil,
@@ -782,7 +788,7 @@ final class RepositoryBoundaryTests: XCTestCase {
         }
 
         let summaries = try repo.recentEpisodicSummaries(service: "signal", limit: 10)
-        XCTAssertEqual(summaries.count, 1, "Empty sentinel must be excluded")
+        XCTAssertEqual(summaries.count, 1, "Brief with failed/pending compression must be excluded")
         XCTAssertEqual(summaries[0].summary, "Real summary")
     }
 }

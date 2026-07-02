@@ -518,6 +518,17 @@ final class AppDatabase: @unchecked Sendable {
                 t.add(column: "grounding", .text).notNull().defaults(to: "direct")
             }
         }
+        migrator.registerMigration("v29_compression_retry") { db in
+            // Replaces the episodicSummary == "" permanent-failure sentinel with a
+            // retryable timestamp — a transient compression failure (Ollama restart,
+            // LLM timeout) should not permanently block that brief's episodic memory.
+            try db.alter(table: "briefs") { t in
+                t.add(column: "compressionFailedAt", .datetime)
+            }
+            // Existing "" sentinels become nil (uncompressed, eligible for retry)
+            // rather than staying permanently stuck.
+            try db.execute(sql: "UPDATE briefs SET episodicSummary = NULL WHERE episodicSummary = ''")
+        }
         try migrator.migrate(dbQueue)
     }
 }

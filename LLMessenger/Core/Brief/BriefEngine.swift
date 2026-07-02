@@ -48,7 +48,7 @@ final class BriefEngine {
             do {
                 try await compressor.compress(briefID: prevID, repository: repository)
             } catch {
-                try? repository.setEpisodicSummary(briefID: prevID, summary: "")
+                try? repository.markCompressionFailed(briefID: prevID)
             }
         }
 
@@ -309,7 +309,7 @@ final class BriefEngine {
             do {
                 try await compressor.compress(briefID: prevID, repository: repository)
             } catch {
-                try? repository.setEpisodicSummary(briefID: prevID, summary: "")
+                try? repository.markCompressionFailed(briefID: prevID)
             }
         }
 

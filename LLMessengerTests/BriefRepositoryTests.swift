@@ -161,6 +161,34 @@ final class BriefRepositoryTests: XCTestCase {
         XCTAssertNil(try repo.fetchOldestUncompressedBrief())
     }
 
+    func testMarkCompressionFailedExcludesBriefUntilBackoffElapses() throws {
+        let db = try AppDatabase(inMemory: true)
+        var briefId: Int64 = 0
+        try db.dbQueue.write { db in
+            var b = Brief(createdAt: Date(), status: "idle", services: "[]",
+                          openingSummary: nil, notificationText: "x", episodicSummary: nil)
+            try b.insert(db)
+            briefId = b.id!
+        }
+
+        let repo = BriefRepository(database: db)
+        let failedAt = Date()
+        try repo.markCompressionFailed(briefID: briefId, at: failedAt)
+
+        // Immediately after failure: excluded from retry (still within backoff).
+        XCTAssertNil(try repo.fetchOldestUncompressedBrief(now: failedAt.addingTimeInterval(60)))
+
+        // After the backoff window: eligible again — a transient failure never
+        // permanently blocks the brief, unlike the old empty-string sentinel.
+        let afterBackoff = failedAt.addingTimeInterval(BriefRepository.compressionRetryBackoff + 1)
+        let retried = try repo.fetchOldestUncompressedBrief(now: afterBackoff)
+        XCTAssertEqual(retried?.id, briefId)
+
+        // A successful compression clears the failure mark.
+        try repo.setEpisodicSummary(briefID: briefId, summary: "now compressed")
+        XCTAssertNil(try repo.fetchOldestUncompressedBrief(now: afterBackoff))
+    }
+
     func testFetchUnreadCountReturnsOnlyReadyBriefs() throws {
         let db = try AppDatabase(inMemory: true)
         let repo = BriefRepository(database: db)

@@ -105,26 +105,44 @@ struct BriefRepository {
         }
     }
 
+    /// Backoff window before a failed compression is retried, so a stuck local
+    /// model doesn't get hammered every brief cycle.
+    static let compressionRetryBackoff: TimeInterval = 6 * 3600
+
     // Returns the oldest uncompressed brief so compression runs oldest-first,
     // preventing new briefs from starving older ones of episodic summaries.
-    // Briefs where episodicSummary == "" have failed compression and are excluded
-    // (empty string is the sentinel written by BriefEngine when compression fails).
-    func fetchOldestUncompressedBrief() throws -> Brief? {
-        try database.dbQueue.read { db in
+    // Briefs that failed compression within the backoff window are excluded;
+    // once the window elapses they become eligible again (unlike the old
+    // episodicSummary == "" sentinel, which blocked retry forever).
+    func fetchOldestUncompressedBrief(now: Date = Date()) throws -> Brief? {
+        let retryAfter = now.addingTimeInterval(-Self.compressionRetryBackoff)
+        return try database.dbQueue.read { db in
             try Brief
                 .filter(Column("episodicSummary") == nil)
+                .filter(sql: "compressionFailedAt IS NULL OR compressionFailedAt < ?", arguments: [retryAfter])
                 .order(Column("createdAt").asc)
                 .fetchOne(db)
         }
     }
 
-    // Writes episodicSummary for a brief — used by MemoryCompressor on success and,
-    // with an empty string, as a sentinel when compression permanently fails.
+    // Writes episodicSummary for a brief on successful compression, clearing
+    // any prior failure mark.
     func setEpisodicSummary(briefID: Int64, summary: String) throws {
         try database.dbQueue.write { db in
             try db.execute(
-                sql: "UPDATE briefs SET episodicSummary = ? WHERE id = ?",
+                sql: "UPDATE briefs SET episodicSummary = ?, compressionFailedAt = NULL WHERE id = ?",
                 arguments: [summary, briefID]
+            )
+        }
+    }
+
+    /// Marks a brief's compression attempt as failed so it is retried after
+    /// `compressionRetryBackoff` instead of every cycle or never again.
+    func markCompressionFailed(briefID: Int64, at date: Date = Date()) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE briefs SET compressionFailedAt = ? WHERE id = ?",
+                arguments: [date, briefID]
             )
         }
     }
@@ -134,7 +152,6 @@ struct BriefRepository {
             let pattern = "%\"" + service + "\"%"
             let briefs = try Brief
                 .filter(Column("episodicSummary") != nil)
-                .filter(sql: "episodicSummary != ''")   // exclude compression-failed sentinel
                 .filter(sql: "services LIKE ?", arguments: [pattern])
                 .order(Column("createdAt").desc)
                 .limit(limit)

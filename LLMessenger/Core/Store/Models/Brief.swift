@@ -21,6 +21,10 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
     var windowStart: Date?
     var archivedAt: Date?
     var snoozedUntil: Date?
+    /// Set when episodic compression last failed (transient errors — Ollama
+    /// restart, LLM timeout). Retried after a backoff window instead of being
+    /// permanently skipped. Cleared on the next successful compression.
+    var compressionFailedAt: Date?
 
     static let databaseTableName = "briefs"
 
@@ -37,7 +41,8 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
          pinned: Bool = false,
          windowStart: Date? = nil,
          archivedAt: Date? = nil,
-         snoozedUntil: Date? = nil) {
+         snoozedUntil: Date? = nil,
+         compressionFailedAt: Date? = nil) {
         self.id = id
         self.createdAt = createdAt
         self.status = status
@@ -50,6 +55,7 @@ struct Brief: Codable, FetchableRecord, MutablePersistableRecord {
         self.windowStart = windowStart
         self.archivedAt = archivedAt
         self.snoozedUntil = snoozedUntil
+        self.compressionFailedAt = compressionFailedAt
     }
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
