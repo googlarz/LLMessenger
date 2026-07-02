@@ -5,6 +5,76 @@ import GRDB
 
 final class BriefRepositoryTests: XCTestCase {
 
+    func testPruneOldDataRemovesOldAttachedMessagesAndAuditRowsOnly() throws {
+        let db = try AppDatabase(inMemory: true)
+        let old = Date().addingTimeInterval(-100 * 86400)
+        let recent = Date().addingTimeInterval(-1 * 86400)
+        var briefId: Int64 = 0
+
+        try db.dbQueue.write { db in
+            var brief = Brief(createdAt: old, status: "ready",
+                              services: "[]", openingSummary: nil,
+                              notificationText: "x", episodicSummary: "compressed already")
+            try brief.insert(db)
+            briefId = brief.id!
+
+            // Old, attached — should be pruned (already summarized into the brief).
+            var attachedOld = Message(briefId: briefId, service: "telegram",
+                                      conversationId: "c1", messageId: "m1",
+                                      sender: "A", text: "old attached", timestamp: old, isSent: false)
+            try attachedOld.insert(db)
+
+            // Old, unattached — must survive (still waiting to be summarized).
+            var unattachedOld = Message(briefId: nil, service: "telegram",
+                                        conversationId: "c2", messageId: "m2",
+                                        sender: "A", text: "old unattached", timestamp: old, isSent: false)
+            try unattachedOld.insert(db)
+
+            // Recent, attached — must survive (inside retention window).
+            var attachedRecent = Message(briefId: briefId, service: "telegram",
+                                         conversationId: "c3", messageId: "m3",
+                                         sender: "A", text: "recent attached", timestamp: recent, isSent: false)
+            try attachedRecent.insert(db)
+
+            var oldEvent = TriageEvent(service: "telegram", conversationId: "c1", priority: "low",
+                                       needsReply: false, reason: "x", triggeredBy: "rule",
+                                       notified: true, createdAt: old)
+            try oldEvent.insert(db)
+            var recentEvent = TriageEvent(service: "telegram", conversationId: "c1", priority: "low",
+                                          needsReply: false, reason: "x", triggeredBy: "rule",
+                                          notified: true, createdAt: recent)
+            try recentEvent.insert(db)
+
+            var oldAudit = ActionAuditRecord(actionKind: "ack", service: "telegram",
+                                             conversationId: "c1", detail: "x",
+                                             trigger: "approved", createdAt: old)
+            try oldAudit.insert(db)
+        }
+
+        let repo = BriefRepository(database: db)
+        let cutoff = Date().addingTimeInterval(-90 * 86400)
+        let deleted = try repo.pruneOldData(olderThan: cutoff)
+        XCTAssertEqual(deleted, 3)   // 1 message + 1 triageEvent + 1 actionAudit
+
+        try db.dbQueue.read { db in
+            let remainingMessages = try Message.fetchAll(db)
+            XCTAssertEqual(remainingMessages.count, 2)
+            XCTAssertTrue(remainingMessages.contains { $0.text == "old unattached" })
+            XCTAssertTrue(remainingMessages.contains { $0.text == "recent attached" })
+
+            let remainingEvents = try TriageEvent.fetchAll(db)
+            XCTAssertEqual(remainingEvents.count, 1)
+
+            let remainingAudit = try ActionAuditRecord.fetchAll(db)
+            XCTAssertEqual(remainingAudit.count, 0)
+
+            // The brief itself and its episodic summary must never be pruned.
+            let brief = try Brief.fetchOne(db, key: briefId)
+            XCTAssertNotNil(brief)
+            XCTAssertEqual(brief?.episodicSummary, "compressed already")
+        }
+    }
+
     func testFetchUnattachedMessagesReturnsOnlyNullBriefId() throws {
         let db = try AppDatabase(inMemory: true)
         try db.dbQueue.write { db in

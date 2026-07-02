@@ -496,6 +496,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menuBarController?.setUnreadCount(state.unreadCount)
             }
 
+            RetentionPruner.pruneIfDue(repository: state.repository)
+
             let checker = UpdateChecker()
             checker.onUpdateAvailable = { [weak self] update in
                 self?.menuBarController?.setAvailableUpdate(update)

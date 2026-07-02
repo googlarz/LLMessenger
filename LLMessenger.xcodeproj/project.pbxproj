@@ -43,6 +43,7 @@
 		2A11383BA014D49F2D898CA7 /* ServiceHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B01BD5888FD90D28050A644 /* ServiceHealth.swift */; };
 		2A8C3511868F93C5A6FF7D43 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7984BAF95D16BC6C2BF8FC4 /* MenuBarController.swift */; };
 		2B4D78D5DDA0209E861CCE7A /* ChatInteractionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31422A7C01764570369907E7 /* ChatInteractionContext.swift */; };
+		2D02E2D3EE3C8D51767B2D8A /* RetentionPruner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8415197BA792A213F4C0F1CB /* RetentionPruner.swift */; };
 		2EFA151ECCBBC3B53FD73792 /* ComponentContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76800B61B4615653CD1A1140 /* ComponentContractTests.swift */; };
 		2FA9A9CE602BE2F90A1FC1A8 /* ReplyDraftView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20CEA789D8047744320CFBF /* ReplyDraftView.swift */; };
 		31B7BD1DC9B5390F3020EC0A /* PrivacySettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70F5BB0EE53BF59D4BAC943 /* PrivacySettingsTab.swift */; };
@@ -375,6 +376,7 @@
 		81F98163F2B0DC06E29DF2EB /* LLMProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderTests.swift; sourceTree = "<group>"; };
 		82EF19035E62A0A1C9E812E5 /* LLMessengerWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LLMessengerWidget.entitlements; sourceTree = "<group>"; };
 		8342ED2F825C2C81001D644A /* ActionQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionQueueTests.swift; sourceTree = "<group>"; };
+		8415197BA792A213F4C0F1CB /* RetentionPruner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetentionPruner.swift; sourceTree = "<group>"; };
 		84296051C7F18D8918F1FE01 /* TriageEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriageEngine.swift; sourceTree = "<group>"; };
 		84EB0B279B88D95171226FE1 /* CommitmentDeriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommitmentDeriver.swift; sourceTree = "<group>"; };
 		865BE46F6C10FA7E2EE342A6 /* IntentRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntentRoute.swift; sourceTree = "<group>"; };
@@ -819,6 +821,7 @@
 				E9CB123F828CD9B509AA4977 /* DigestOrdering.swift */,
 				8EECDFBE48FD81655E32558B /* MemoryCompressor.swift */,
 				F0A44ACF0445A86BBF07D51E /* QuickReply.swift */,
+				8415197BA792A213F4C0F1CB /* RetentionPruner.swift */,
 			);
 			path = Brief;
 			sourceTree = "<group>";
@@ -1230,6 +1233,7 @@
 				BCEB4A66495F7FAAAF60F4C1 /* ReleaseNotes.swift in Sources */,
 				2FA9A9CE602BE2F90A1FC1A8 /* ReplyDraftView.swift in Sources */,
 				435F622009F472E8133ABF9A /* ReplyVoiceSampler.swift in Sources */,
+				2D02E2D3EE3C8D51767B2D8A /* RetentionPruner.swift in Sources */,
 				179F12ED4A596B8CE26B8AF6 /* RuleEvaluator.swift in Sources */,
 				B3C7906C6B6EC42D776CBACB /* RuleSuggestionEngine.swift in Sources */,
 				86FDD0D773B2F5C2FE5EE988 /* RulesSettingsTab.swift in Sources */,

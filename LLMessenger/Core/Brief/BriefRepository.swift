@@ -971,4 +971,28 @@ struct BriefRepository {
             )
         }
     }
+
+    // MARK: - Retention pruning
+
+    /// Deletes data that has already served its purpose and would otherwise grow
+    /// forever: raw message text that has been folded into a brief (the brief's
+    /// cards + episodic summary are the durable record), and pure audit/log rows.
+    /// Never touches briefs themselves (visible digest history) or unattached
+    /// messages (still waiting to be summarized). FTS5 triggers cascade the
+    /// messages delete automatically. Returns the number of rows removed, for
+    /// diagnostics.
+    @discardableResult
+    func pruneOldData(olderThan cutoff: Date) throws -> Int {
+        try database.dbQueue.write { db in
+            var deleted = 0
+            try db.execute(sql: "DELETE FROM messages WHERE briefId IS NOT NULL AND timestamp < ?",
+                           arguments: [cutoff])
+            deleted += db.changesCount
+            try db.execute(sql: "DELETE FROM triageEvents WHERE createdAt < ?", arguments: [cutoff])
+            deleted += db.changesCount
+            try db.execute(sql: "DELETE FROM actionAudit WHERE createdAt < ?", arguments: [cutoff])
+            deleted += db.changesCount
+            return deleted
+        }
+    }
 }
