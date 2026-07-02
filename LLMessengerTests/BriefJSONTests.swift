@@ -32,6 +32,30 @@ final class BriefJSONTests: XCTestCase {
         XCTAssertEqual(brief.cards.count, 0)
     }
 
+    // One malformed card (headline is a number, not a string — has no fallback in
+    // BriefCard's decoder) must not sink the other well-formed cards in the same
+    // response. Regression test: array-level Codable decode is all-or-nothing by
+    // default, so a single bad LLM-produced card used to discard the whole brief.
+    func testDecodeSkipsMalformedCardWithoutLosingValidOnes() throws {
+        let json = """
+        {"cards":[
+            {"id":"a","headline":"Valid A","counts":{"messages":1,"threads":1,"people":1}},
+            {"id":"b","headline":12345,"counts":{"messages":1,"threads":1,"people":1}},
+            {"id":"c","headline":"Valid C","counts":{"messages":1,"threads":1,"people":1}}
+        ]}
+        """
+        let brief = try decode(json)
+        XCTAssertEqual(brief.cards.map(\.id), ["a", "c"])
+    }
+
+    // Every card malformed → empty result, not a thrown error — the caller's
+    // emptyCards validation is what should react to this, not a decode crash.
+    func testDecodeAllMalformedCardsYieldsEmptyArray() throws {
+        let json = #"{"cards":[{"id":"a","headline":1},{"id":"b","headline":2}]}"#
+        let brief = try decode(json)
+        XCTAssertEqual(brief.cards.count, 0)
+    }
+
     func testDecodeTopLevelTotals() throws {
         let json = """
         {"total_messages":7,"total_threads":3,"total_people":4,"cards":[]}

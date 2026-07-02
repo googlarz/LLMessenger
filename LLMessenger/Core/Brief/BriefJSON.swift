@@ -16,6 +16,48 @@ struct BriefJSON: Codable {
         case totalPeople = "total_people"
         case cards
     }
+
+    init(totalMessages: Int?, totalThreads: Int?, totalPeople: Int?, cards: [BriefCard]) {
+        self.totalMessages = totalMessages
+        self.totalThreads = totalThreads
+        self.totalPeople = totalPeople
+        self.cards = cards
+    }
+
+    // Decoding `cards` as a plain [BriefCard] is all-or-nothing: BriefCard.headline
+    // has no fallback, so one malformed card in a 10-card LLM response throws and
+    // discards every card, not just the bad one. Decode element-by-element instead,
+    // skipping cards that fail to decode, so a single bad card costs one card —
+    // not the whole service's brief.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        totalMessages = try container.decodeIfPresent(Int.self, forKey: .totalMessages)
+        totalThreads = try container.decodeIfPresent(Int.self, forKey: .totalThreads)
+        totalPeople = try container.decodeIfPresent(Int.self, forKey: .totalPeople)
+
+        var decodedCards: [BriefCard] = []
+        if var cardsContainer = try? container.nestedUnkeyedContainer(forKey: .cards) {
+            while !cardsContainer.isAtEnd {
+                if let card = try? cardsContainer.decode(BriefCard.self) {
+                    decodedCards.append(card)
+                } else {
+                    // Consume the malformed element so the loop can advance past it —
+                    // an unkeyed container has no "skip" primitive, so decode as an
+                    // untyped placeholder to move the cursor forward.
+                    _ = try? cardsContainer.decode(EmptyCardPlaceholder.self)
+                }
+            }
+        }
+        cards = decodedCards
+    }
+}
+
+/// Decodes any JSON value without validating its shape — used only to advance
+/// past a card element that failed to decode as BriefCard.
+private struct EmptyCardPlaceholder: Decodable {
+    init(from decoder: Decoder) throws {
+        _ = try? decoder.singleValueContainer()
+    }
 }
 
 struct BriefCard: Codable, Identifiable {
