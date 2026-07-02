@@ -14,6 +14,12 @@ enum BriefEngineValidationError: Error {
 final class BriefEngine {
     private let maxRecentContextMessages = 20
     private let recentContextWindow: TimeInterval = 24 * 3600
+    /// Per-conversation budget for TokenEstimator.selectWithinBudget — replaces
+    /// the old blind "last 100 messages" cap. ~3000 tokens roughly matches what
+    /// 100 typical short chat messages cost, so ordinary threads see no change,
+    /// while a thread of long messages now gets proportionally fewer of them
+    /// instead of the same row count blowing past the model's context window.
+    private let perConversationTokenBudget = 3000
     private let database: AppDatabase
     var client: LLMClient
     private let model: String
@@ -131,7 +137,8 @@ final class BriefEngine {
                         var allPromptMessages: [Message] = serviceMessages
                         for convId in rankedConvIds {
                             let convMessages = (byConversation[convId] ?? []).sorted { $0.timestamp < $1.timestamp }
-                            let capped = convMessages.count > 100 ? Array(convMessages.suffix(100)) : convMessages
+                            let capped = TokenEstimator.selectWithinBudget(
+                                convMessages, tokenBudget: self.perConversationTokenBudget, text: \.text)
                             let firstDate = capped.first?.timestamp ?? Date()
                             let contextMessages = (try? self.repository.fetchRecentContextMessages(
                                 service: service,
@@ -464,7 +471,8 @@ final class BriefEngine {
                         var msgCount = 0
                         for conv in allowedConversations {
                             let sorted = conv.messages.sorted { $0.timestamp < $1.timestamp }
-                            let capped = sorted.count > 100 ? Array(sorted.suffix(100)) : sorted
+                            let capped = TokenEstimator.selectWithinBudget(
+                                sorted, tokenBudget: self.perConversationTokenBudget, text: \.text)
                             let omitted = sorted.count - capped.count
                             let block = try self.buildConversationBlock(
                                 service: serviceID,

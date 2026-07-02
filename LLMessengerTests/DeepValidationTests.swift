@@ -275,12 +275,28 @@ final class ContextWindowTests: XCTestCase {
                        "No recent context section when no prior messages exist")
     }
 
-    // Conversation with >100 messages — should be capped to suffix of 100.
-    func testLargeConversationIsCappedAt100Messages() async throws {
+    // Conversation whose combined message text exceeds BriefEngine's per-conversation
+    // token budget (3000, see perConversationTokenBudget) must be truncated to the
+    // most recent messages that fit — replacing the old blind "cap at 100 rows"
+    // behavior, which treated 100 one-word messages identically to 100 paragraphs.
+    func testOversizedConversationIsCappedByTokenBudgetNotRowCount() async throws {
         let db = try makeDB()
         let now = Date()
+        // Each message's text is padded to a fixed ~120 chars (~30 estimated
+        // tokens), so 3000 / 30 = 100 of these 120 messages fit the budget —
+        // deliberately chosen so the boundary (20 omitted) is unambiguous
+        // regardless of the estimator's exact rounding.
         let ids = (0..<120).map { "m\($0)" }
-        try await insertMessages(db: db, messageIds: ids, baseTime: now.addingTimeInterval(-200))
+        let paddedText = { (id: String) in "Message \(id) " + String(repeating: "x", count: 110) }
+        try await db.dbQueue.write { d in
+            for (i, msgId) in ids.enumerated() {
+                var m = Message(briefId: nil, service: "signal", conversationId: "c1",
+                                conversationName: nil, messageId: msgId, sender: "Alice",
+                                text: paddedText(msgId),
+                                timestamp: now.addingTimeInterval(-200 + Double(i)), isSent: false)
+                try m.insert(d)
+            }
+        }
 
         let capturingMock = CapturingMockLLMClient()
         capturingMock.specs["signal"] = .init(convId: "c1", messageIds: Array(ids.suffix(10)))
@@ -289,13 +305,24 @@ final class ContextWindowTests: XCTestCase {
 
         let briefCall = capturingMock.capturedCalls.first { !$0.systemPrompt.contains("2-3 sentences") }
         let userContent = briefCall?.userContent ?? ""
-        // 120 - 100 = 20 omitted from the new messages section
-        XCTAssertTrue(userContent.contains("20 earlier new messages omitted"),
-                      "Must indicate omitted message count when capping at 100")
-        // m20 is the first message in the capped suffix
-        XCTAssertTrue(userContent.contains("[id=m20 |"), "m20 should be included (first of suffix 100)")
-        XCTAssertTrue(userContent.contains("[id=m119 |"), "m119 should be included (last message)")
-        // The [New messages] section should exist
+
+        // Compute the expected split with the exact same estimator BriefEngine uses,
+        // rather than hardcoding a count — keeps this test correct even if the
+        // budget constant or estimator ratio changes later.
+        let allMessages = ids.map { Message(briefId: nil, service: "signal", conversationId: "c1",
+                                            conversationName: nil, messageId: $0, sender: "Alice",
+                                            text: paddedText($0), timestamp: now, isSent: false) }
+        let expectedKept = TokenEstimator.selectWithinBudget(allMessages, tokenBudget: 3000, text: \.text)
+        let expectedOmitted = ids.count - expectedKept.count
+
+        XCTAssertGreaterThan(expectedOmitted, 0, "Test setup must actually exceed the budget")
+        XCTAssertTrue(userContent.contains("\(expectedOmitted) earlier new messages omitted"),
+                      "Must indicate the token-budget-derived omitted count")
+        XCTAssertTrue(userContent.contains("[id=m119 |"), "The newest message must always be included")
+        // (Not asserting the exact oldest-excluded id: message-id digit-count
+        // variance shifts text length by 1-2 chars near the boundary, which can
+        // move the cut by one message — the omitted COUNT assertion above is
+        // the one that must be exact and IS derived from the real estimator.)
         XCTAssertTrue(userContent.contains("[New messages]"))
     }
 
