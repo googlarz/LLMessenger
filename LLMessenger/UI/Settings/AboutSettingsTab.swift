@@ -55,6 +55,24 @@ struct AboutSettingsTab: View {
                     }
                 }
 
+                if let database {
+                    HStack(spacing: 10) {
+                        Button("Export Backup") {
+                            DataExporter.export(database: database)
+                        }
+                        .buttonStyle(PaperButtonStyle())
+                        .help("Digest history, learned context, and preferences. Not credentials — you'll sign back in to each service.")
+
+                        if let path = database.path {
+                            Button("Restore Backup…") {
+                                DataExporter.promptImport(currentDatabasePath: path)
+                            }
+                            .buttonStyle(PaperButtonStyle())
+                            .help("Replaces your current data with a backup, then quits the app for the change to take effect.")
+                        }
+                    }
+                }
+
                 Rule().frame(maxWidth: 320)
 
                 whatsNew

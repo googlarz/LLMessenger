@@ -4,6 +4,9 @@ import Foundation
 // Thread-safe: DatabaseQueue serializes all access internally.
 final class AppDatabase: @unchecked Sendable {
     let dbQueue: DatabaseQueue
+    /// On-disk path, if any — nil for the in-memory test store. Used by
+    /// DataExporter to locate the live file for backup/restore.
+    let path: String?
 
     /// Production store in ~/Library/Application Support/LLMessenger/.
     /// If the store fails to open or fails PRAGMA quick_check, it is moved
@@ -51,11 +54,13 @@ final class AppDatabase: @unchecked Sendable {
     init(inMemory: Bool) throws {
         precondition(inMemory)
         dbQueue = try DatabaseQueue()
+        path = nil
         try migrate()
     }
 
     init(path: String) throws {
         dbQueue = try DatabaseQueue(path: path)
+        self.path = path
         try? FileManager.default.setAttributes([FileAttributeKey.posixPermissions: 0o600], ofItemAtPath: path)
         try migrate()
     }
