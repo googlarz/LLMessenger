@@ -386,20 +386,20 @@ private struct FirstBriefPreparingView: View {
     }
 
     private var serviceSetupText: String {
-        if appState.serviceHealthMap.isEmpty {
+        if appState.serviceHealth.isEmpty {
             return "Waiting for Signal, Telegram, iMessage, or Slack"
         }
-        let failing = appState.serviceHealthMap.values.filter { $0.status == "error" }.count
+        let failing = appState.serviceHealth.values.filter { $0 == .error }.count
         if failing > 0 {
             return "\(failing) service\(failing == 1 ? "" : "s") need attention"
         }
-        let ok = appState.serviceHealthMap.values.filter { $0.status == "ok" }.count
+        let ok = appState.serviceHealth.values.filter { $0 == .ok }.count
         return ok > 0 ? "\(ok) service\(ok == 1 ? "" : "s") connected" : "Checking service permissions"
     }
 
     private var serviceSetupState: SetupCheck.State {
-        if appState.serviceHealthMap.values.contains(where: { $0.status == "error" }) { return .needsSetup }
-        if appState.serviceHealthMap.values.contains(where: { $0.status == "ok" }) { return .ready }
+        if appState.serviceHealth.values.contains(.error) { return .needsSetup }
+        if appState.serviceHealth.values.contains(.ok) { return .ready }
         return .waiting
     }
 
@@ -481,11 +481,11 @@ private struct FirstRealDigestSuccessView: View {
     @EnvironmentObject var appState: AppState
 
     private var latestBrief: Brief? {
-        appState.briefs.sorted { $0.createdAt > $1.createdAt }.first
+        appState.briefs.max(by: { $0.createdAt < $1.createdAt })
     }
 
     private var cardStats: (cards: Int, replies: Int, sourced: Int) {
-        guard let json = BriefJSON.decodeLenient(from: latestBrief?.openingSummary) else {
+        guard let json = latestBrief.flatMap({ BriefJSON.decodedCached(for: $0) }) else {
             return (0, 0, 0)
         }
         return (

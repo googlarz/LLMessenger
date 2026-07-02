@@ -123,6 +123,9 @@ final class AppState: ObservableObject {
     @Published var briefs: [Brief] = []
     @Published var tasks: [BriefTask] = []
     @Published var selectedBriefID: Int64?
+    /// Live adapter status, pushed by AppDelegate on every poll event. Source of
+    /// truth for all status reads. `serviceHealthMap` (DB rows, loaded in
+    /// refreshBriefs) is kept only for `lastCheck` timestamps.
     @Published var serviceHealth: [String: AdapterHealthResult.Status] = [:]
     @Published var serviceHealthMap: [String: ServiceHealth] = [:]
     @Published var nextPollDate: Date?
@@ -247,7 +250,7 @@ final class AppState: ObservableObject {
     }
 
     var hasServiceError: Bool {
-        serviceHealthMap.values.contains { $0.status == "error" }
+        serviceHealth.values.contains(.error)
     }
 
     func updateServiceHealth(_ health: [String: AdapterHealthResult.Status]) {
