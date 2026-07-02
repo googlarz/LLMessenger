@@ -15,7 +15,7 @@ struct WeeklyRecapView: View {
         var reply = 0
         var quiet = 0
         for brief in recentBriefs {
-            guard let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { continue }
+            guard let json = BriefJSON.decodedCached(for: brief) else { continue }
             threads += json.cards.count
             reply += json.cards.filter(\.needsReply).count
             quiet += json.cards.filter { !$0.needsReply && ($0.priority == "low" || $0.collapsed) }.count

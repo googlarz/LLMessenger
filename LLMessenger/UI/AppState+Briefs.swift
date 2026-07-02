@@ -125,7 +125,7 @@ extension AppState {
 
     func markAllHandled(briefID: Int64) {
         guard let brief = briefs.first(where: { $0.id == briefID }),
-              let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { return }
+              let json = BriefJSON.decodedCached(for: brief) else { return }
         for card in json.cards {
             markCardHandled(briefID: briefID, cardID: card.id)
         }
@@ -207,7 +207,7 @@ extension AppState {
         let todayHighUnhandled = briefs
             .filter { cal.isDateInToday($0.createdAt) && $0.archivedAt == nil }
             .contains { brief in
-                guard let json = BriefJSON.decodeLenient(from: brief.openingSummary)
+                guard let json = BriefJSON.decodedCached(for: brief)
                 else { return false }
                 return json.cards.contains { card in
                     card.priority == "high" &&
@@ -216,9 +216,4 @@ extension AppState {
             }
         nowNeedsAttention = todayHighUnhandled
     }
-
-    func fetchNeedsReplyCards() -> [(card: BriefCardRecord, briefCreatedAt: Date)] {
-        (try? repository.fetchRecentHighPriorityCards(limit: 30)) ?? []
-    }
-
 }

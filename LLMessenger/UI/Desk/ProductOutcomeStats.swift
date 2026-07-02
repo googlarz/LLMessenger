@@ -66,7 +66,7 @@ struct ProductOutcomeStats: Equatable {
         var quiet = 0
 
         for brief in recentBriefs {
-            guard let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { continue }
+            guard let json = BriefJSON.decodedCached(for: brief) else { continue }
             threads += json.cards.count
             sourced += json.cards.filter { !$0.sourceMessageIds.isEmpty }.count
             reply += json.cards.filter(\.needsReply).count

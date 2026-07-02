@@ -784,9 +784,7 @@ struct BriefCardEvidenceView: View {
     }
 
     private func timeStr(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f.string(from: date)
+        Theme.timeFormatter.string(from: date)
     }
 }
 

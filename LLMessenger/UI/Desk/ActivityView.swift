@@ -253,9 +253,7 @@ struct ActivityView: View {
     }
 
     private func timeString(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f.string(from: date)
+        Theme.timeFormatter.string(from: date)
     }
 
     private func relativeDue(_ date: Date) -> String {
@@ -336,8 +334,6 @@ private struct ActivityEventRow: View {
     }
 
     private func timeString(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f.string(from: date)
+        Theme.timeFormatter.string(from: date)
     }
 }

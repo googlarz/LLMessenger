@@ -261,6 +261,33 @@ extension BriefJSON {
         return try? JSONDecoder().decode(BriefJSON.self, from: data)
     }
 
+    /// Cached decode of a brief's openingSummary, keyed by brief id and validated
+    /// by the summary's hash (partial briefs and the demo seeder can rewrite the
+    /// summary under the same id). Failed decodes are cached too — they are just
+    /// as stable as successes for unchanged input. Thread-safe; called from both
+    /// the main actor (view bodies) and background stat/refresh tasks.
+    static func decodedCached(for brief: Brief) -> BriefJSON? {
+        guard let id = brief.id else { return decodeLenient(from: brief.openingSummary) }
+        let hash = brief.openingSummary?.hashValue ?? 0
+        cacheLock.lock()
+        if let entry = decodeCache[id], entry.summaryHash == hash {
+            cacheLock.unlock()
+            return entry.value
+        }
+        cacheLock.unlock()
+
+        let value = decodeLenient(from: brief.openingSummary)
+
+        cacheLock.lock()
+        if decodeCache.count > 512 { decodeCache.removeAll(keepingCapacity: true) }
+        decodeCache[id] = (summaryHash: hash, value: value)
+        cacheLock.unlock()
+        return value
+    }
+
+    private static var decodeCache: [Int64: (summaryHash: Int, value: BriefJSON?)] = [:]
+    private static let cacheLock = NSLock()
+
     /// True when a string still looks like (possibly malformed) JSON — used by the render
     /// fallback to avoid showing raw JSON to the user after decoding has already failed.
     static func looksLikeJSON(_ raw: String) -> Bool {

@@ -29,7 +29,7 @@ struct ChatPanelView: View {
             return s != nil && s != .ok
         }
 
-        if let json = BriefJSON.decodeLenient(from: appState.selectedBrief?.openingSummary) {
+        if let json = appState.selectedBrief.flatMap({ BriefJSON.decodedCached(for: $0) }) {
             let totalMsgs = json.total_messages ?? msgs.count
             let svcs = Set(json.cards.map(\.service)).count
             let briefs = json.cards.count

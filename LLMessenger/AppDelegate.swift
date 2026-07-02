@@ -852,13 +852,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// silence: direct reply needed first, then high-priority review. Routine digests fall
     /// back to the generic title/body and may be held by the firewall.
     private func highPriorityCardCount(brief: Brief?) -> Int {
-        guard let cards = BriefJSON.decodeLenient(from: brief?.openingSummary)?.cards else { return 0 }
+        guard let cards = brief.flatMap({ BriefJSON.decodedCached(for: $0) })?.cards else { return 0 }
         return cards.filter { $0.needsReply || $0.priority == "high" }.count
     }
 
     private func highPriorityNotification(brief: Brief?, defaultTitle: String) -> (title: String, body: String) {
         let defaultBody = brief?.notificationText ?? "You have new messages"
-        guard let parsed = BriefJSON.decodeLenient(from: brief?.openingSummary)
+        guard let parsed = brief.flatMap({ BriefJSON.decodedCached(for: $0) })
         else {
             return (defaultTitle, defaultBody)
         }

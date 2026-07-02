@@ -53,7 +53,7 @@ extension AppState {
     func markCardHandledForConversation(service: String, conversationId: String) {
         for brief in briefs {
             guard let briefID = brief.id,
-                  let json = BriefJSON.decodeLenient(from: brief.openingSummary) else { continue }
+                  let json = BriefJSON.decodedCached(for: brief) else { continue }
             if let card = json.cards.first(where: { $0.service == service && $0.conversationId == conversationId }) {
                 markCardHandled(briefID: briefID, cardID: card.id)
             }

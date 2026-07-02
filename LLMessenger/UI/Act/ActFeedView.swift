@@ -158,7 +158,10 @@ struct ActFeedView: View {
         self.layout = layout
     }
 
-    private var items: [ActItem] {
+    // Rebuild + sort once per data change, not once per body evaluation — `body`,
+    // feedContent's ForEach/animation, and onChange all read this same array,
+    // which previously meant ~4 sorts per render pass.
+    var items: [ActItem] {
         let all: [ActItem] = appState.agentActions.filter { !$0.isMaybe }.map { .agentAction($0) }
             + appState.owedReplies.map { .owedReply($0) }
 
@@ -170,6 +173,7 @@ struct ActFeedView: View {
     }
 
     var body: some View {
+        let items = self.items
         VStack(spacing: 0) {
             // "What needs my attention now?" — moved here from DeskView's shared
             // header so it only shows on the Act tab, not on Digest/Activity too.
@@ -191,7 +195,7 @@ struct ActFeedView: View {
                 if items.isEmpty {
                     emptyState
                 } else {
-                    feedContent
+                    feedContent(items: items)
                 }
             }
         }
@@ -243,7 +247,7 @@ struct ActFeedView: View {
 
     // MARK: - Feed
 
-    private var feedContent: some View {
+    private func feedContent(items: [ActItem]) -> some View {
         VStack(spacing: 0) {
             safetyNote
             Rule()
@@ -364,7 +368,7 @@ struct ActFeedView: View {
             .font(Theme.sans(12.5))
             .foregroundStyle(Theme.textTertiary)
             .multilineTextAlignment(.center)
-            if let latest = appState.briefs.sorted(by: { $0.createdAt > $1.createdAt }).first {
+            if let latest = appState.briefs.max(by: { $0.createdAt < $1.createdAt }) {
                 Button("Read latest digest →") {
                     appState.selectedBriefID = latest.id
                 }
@@ -860,7 +864,11 @@ private struct ActCardRow: View {
     // MARK: - Helpers
 
     private func isDraftingDisabled(_ reply: OwedReply) -> Bool {
-        appState.fetchConversationContext(service: reply.service, conversationId: reply.conversationId)?
+        // Render path (called per row per body eval) — read the in-memory cache
+        // only. fetchConversationContext would fall through to a synchronous DB
+        // read AND write @Published state from inside a view update on a miss.
+        // The cache is bulk-populated by reloadOwedReplies/reloadAgentActions.
+        appState.cachedConversationContext(service: reply.service, conversationId: reply.conversationId)?
             .privacyOverride == "never_draft"
     }
 

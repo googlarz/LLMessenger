@@ -249,12 +249,17 @@ struct BriefListView: View {
     }
 
     private func refreshNeedsReply() {
-        let raw = appState.fetchNeedsReplyCards()
-        // Deduplicate: keep the newest card per service+conversationId
-        var seen = Set<String>()
-        needsReplyCards = raw.filter { item in
-            let key = "\(item.card.service)|\(item.card.conversationId)"
-            return seen.insert(key).inserted
+        // The JOIN query runs off-main; only the result assignment touches the UI.
+        let repository = appState.repository
+        Task.detached(priority: .userInitiated) {
+            let raw = (try? repository.fetchRecentHighPriorityCards(limit: 30)) ?? []
+            // Deduplicate: keep the newest card per service+conversationId
+            var seen = Set<String>()
+            let deduped = raw.filter { item in
+                let key = "\(item.card.service)|\(item.card.conversationId)"
+                return seen.insert(key).inserted
+            }
+            await MainActor.run { needsReplyCards = deduped }
         }
     }
 
@@ -354,8 +359,7 @@ struct BriefListView: View {
     }
 
     private var dateRangeLabel: String {
-        let f = DateFormatter()
-        f.dateFormat = "d MMM"
+        let f = Theme.dayMonthFormatter
         let fromStr = dateFrom.map { f.string(from: $0) } ?? "…"
         let toStr   = dateTo.map   { f.string(from: $0) } ?? "now"
         return "\(fromStr) – \(toStr)"
@@ -568,9 +572,7 @@ private struct BriefRowView: View {
     }
 
     private var timeLabel: String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f.string(from: brief.createdAt)
+        Theme.timeFormatter.string(from: brief.createdAt)
     }
 }
 

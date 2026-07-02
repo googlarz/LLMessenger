@@ -171,6 +171,28 @@ enum Theme {
 
     static let spring = Animation.spring(response: 0.32, dampingFraction: 0.86)
     static let quick  = Animation.easeOut(duration: 0.14)
+
+    // MARK: - Shared date formatters
+    // DateFormatter init costs ~0.1–1 ms; per-row view code must use these
+    // cached instances instead of allocating one per call.
+
+    static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    static let dayMonthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "d MMM"
+        return f
+    }()
+
+    static let dayMonthTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "d MMM, HH:mm"
+        return f
+    }()
 }
 
 // MARK: - Shared components

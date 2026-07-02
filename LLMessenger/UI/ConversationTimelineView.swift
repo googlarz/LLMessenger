@@ -164,8 +164,6 @@ private struct TimelineEntryRow: View {
     }
 
     private func dateStr(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "d MMM, HH:mm"
-        return f.string(from: date)
+        Theme.dayMonthTimeFormatter.string(from: date)
     }
 }

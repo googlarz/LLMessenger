@@ -36,7 +36,10 @@ final class MenuBarController {
     private var owedCount: Int = 0 { didSet { updateButton() } }
     private var actionsReady: Int = 0 { didSet { updateButton() } }
     private var recentBriefs: [Brief] = []
-    private var briefPreviews: [Int64: String] = [:]
+    /// Preview cache validated by the summary's hash — partial briefs can rewrite
+    /// their summary under the same id, so id alone is not a safe key.
+    private var briefPreviews: [Int64: (summaryHash: Int, preview: String)] = [:]
+    private var menuRebuildScheduled = false
     private var isLoading = false
     private var loadingTimer: Timer?
     private var loadingAngle: CGFloat = 0
@@ -109,12 +112,17 @@ final class MenuBarController {
 
     func setBriefs(_ briefs: [Brief]) {
         recentBriefs = Array(briefs.prefix(10))
-        briefPreviews = [:]
+        var fresh: [Int64: (summaryHash: Int, preview: String)] = [:]
         for brief in recentBriefs {
-            if let id = brief.id, let summary = brief.openingSummary {
-                briefPreviews[id] = menuPreview(summary)
+            guard let id = brief.id, let summary = brief.openingSummary else { continue }
+            let hash = summary.hashValue
+            if let cached = briefPreviews[id], cached.summaryHash == hash {
+                fresh[id] = cached          // unchanged brief — skip the JSON re-parse
+            } else {
+                fresh[id] = (summaryHash: hash, preview: menuPreview(summary))
             }
         }
+        briefPreviews = fresh
         rebuildMenu()
     }
 
@@ -254,7 +262,20 @@ final class MenuBarController {
         return image
     }()
 
+    /// Coalesces the rebuild to once per runloop tick. A refresh cycle calls the
+    /// set* methods 7+ times back-to-back (each previously triggering a full NSMenu
+    /// rebuild); one deferred rebuild sees all of their state at once.
     private func rebuildMenu() {
+        guard !menuRebuildScheduled else { return }
+        menuRebuildScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.menuRebuildScheduled = false
+            self.rebuildMenuNow()
+        }
+    }
+
+    private func rebuildMenuNow() {
         let menu = NSMenu()
 
         if let update = availableUpdate {
@@ -342,7 +363,7 @@ final class MenuBarController {
                     item.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)
                     item.image?.size = NSSize(width: 8, height: 8)
                 }
-                if let id = brief.id, let preview = briefPreviews[id] {
+                if let id = brief.id, let preview = briefPreviews[id]?.preview {
                     let attr = NSMutableAttributedString(string: title + "\n")
                     let sub = NSAttributedString(
                         string: preview,

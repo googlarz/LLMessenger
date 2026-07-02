@@ -21,11 +21,11 @@ struct TodaySummaryView: View {
     }
 
     private var latestBrief: Brief? {
-        appState.briefs.sorted { $0.createdAt > $1.createdAt }.first
+        appState.briefs.max(by: { $0.createdAt < $1.createdAt })
     }
 
     private var latestDigestStats: (reply: Int, review: Int, quiet: Int) {
-        guard let json = BriefJSON.decodeLenient(from: latestBrief?.openingSummary) else {
+        guard let json = latestBrief.flatMap({ BriefJSON.decodedCached(for: $0) }) else {
             return (0, 0, 0)
         }
         let reply = json.cards.filter(\.needsReply).count

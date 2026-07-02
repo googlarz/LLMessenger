@@ -154,7 +154,7 @@ struct ChatInteractionContext {
     }
 
     private static func decodeCards(from brief: Brief) -> [BriefCard] {
-        BriefJSON.decodeLenient(from: brief.openingSummary)?.cards ?? []
+        BriefJSON.decodedCached(for: brief)?.cards ?? []
     }
 
     private func normalized(_ text: String?) -> String? {
