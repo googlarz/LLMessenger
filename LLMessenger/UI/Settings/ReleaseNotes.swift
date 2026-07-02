@@ -17,6 +17,16 @@ struct ReleaseNote: Identifiable {
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
         ReleaseNote(
+            version: "2.2.7",
+            title: "Cleaner internals, faster Desk, in-app release notes",
+            highlights: [
+                "Fixed several runtime crash-risk force-unwraps in the message adapters and poll pipeline.",
+                "AppState split into focused files — no behavior change, easier to review going forward.",
+                "Brief JSON is now cached instead of re-decoded on every render — noticeably snappier with a full inbox.",
+                "Menu bar updates coalesce into one rebuild per refresh instead of dozens.",
+                "About tab now shows a \"What's new\" section — this list — without leaving the app."
+            ]),
+        ReleaseNote(
             version: "2.2.6",
             title: "First-run trust and recovery polish",
             highlights: [
