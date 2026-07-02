@@ -177,6 +177,20 @@ struct SettingsRepository {
         userDefaults.string(forKey: "base_prompt") ?? ""
     }
 
+    // MARK: - Digest language
+
+    /// The language briefs are written in, e.g. "English", "German", "Polish".
+    /// Empty/unset means English (the model's default, and PromptBuilder's
+    /// fallback) — this only needs a value for non-English users.
+    func saveBriefLanguage(_ language: String) {
+        userDefaults.set(language, forKey: "brief_language")
+    }
+
+    func loadBriefLanguage() -> String {
+        let saved = userDefaults.string(forKey: "brief_language") ?? ""
+        return saved.trimmingCharacters(in: .whitespaces).isEmpty ? "English" : saved
+    }
+
     // MARK: - Theme
 
     func saveTheme(_ theme: String) {

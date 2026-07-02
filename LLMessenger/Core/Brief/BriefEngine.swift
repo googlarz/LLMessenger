@@ -94,6 +94,7 @@ final class BriefEngine {
         let client = self.client
         let model = self.model
         let basePrompt = self.basePrompt
+        let briefLanguage = SettingsRepository().loadBriefLanguage()
 
         let results = await withTaskGroup(of: ServiceResult?.self) { group in
             for service in services {
@@ -114,7 +115,8 @@ final class BriefEngine {
                             services: [service],
                             episodicSummaries: recent,
                             now: Date(),
-                            conversationContexts: contexts
+                            conversationContexts: contexts,
+                            briefLanguage: briefLanguage
                         )
                         let maxConversations = 30
                         let rankedConvIds = byConversation.keys
@@ -343,6 +345,7 @@ final class BriefEngine {
         let client2 = self.client
         let model2 = self.model
         let basePrompt2 = self.basePrompt
+        let briefLanguage2 = SettingsRepository().loadBriefLanguage()
 
         let results = await withTaskGroup(of: ServiceResult?.self) { group in
             // Collect service IDs from both live adapters and DB (covers adapters that failed to start).
@@ -453,7 +456,8 @@ final class BriefEngine {
                             episodicSummaries: recent,
                             now: Date(),
                             priorityCorrections: correctionTuples,
-                            conversationContexts: contexts
+                            conversationContexts: contexts,
+                            briefLanguage: briefLanguage2
                         )
 
                         var conversationBlocks: [String] = []

@@ -97,11 +97,26 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("[id="), "Suffix must explain [id= extraction rule")
     }
 
-    func testDefaultPromptEnforcesEnglish() {
-        XCTAssertTrue(
-            PromptBuilder.defaultBasePrompt.lowercased().contains("english"),
-            "Base prompt must instruct the LLM to write in English regardless of input language"
+    // English is the default output language, but — unlike before — it is now
+    // achieved by omitting an explicit override (the model already defaults to
+    // English) rather than a hardcoded instruction baked into defaultBasePrompt,
+    // so non-English users can override it via Settings → Digest Language.
+    func testDefaultBriefLanguageOmitsExplicitInstruction() {
+        let prompt = PromptBuilder.build(
+            mode: .summarizer, basePrompt: "base", services: [],
+            episodicSummaries: [], now: Date()
         )
+        XCTAssertFalse(prompt.lowercased().contains("write your response in"),
+                       "Default (English) should not spend prompt budget on a language instruction")
+    }
+
+    func testNonEnglishBriefLanguageAddsExplicitInstruction() {
+        let prompt = PromptBuilder.build(
+            mode: .summarizer, basePrompt: "base", services: [],
+            episodicSummaries: [], now: Date(), briefLanguage: "German"
+        )
+        XCTAssertTrue(prompt.contains("Always write your response in German"),
+                      "A non-English briefLanguage must produce an explicit instruction")
     }
 
     func testDefaultPromptContainsHeadlineGoodExample() {

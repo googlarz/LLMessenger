@@ -115,6 +115,19 @@ final class SettingsRepositoryTests: XCTestCase {
         XCTAssertTrue(repo.loadCloudAutoBriefsConsent())
     }
 
+    func testLoadBriefLanguageDefaultsToEnglishWhenUnset() throws {
+        let defaults = try makeIsolatedDefaults()
+        let repo = SettingsRepository(keychainStore: store, userDefaults: defaults)
+        XCTAssertEqual(repo.loadBriefLanguage(), "English")
+    }
+
+    func testSaveAndLoadBriefLanguage() throws {
+        let defaults = try makeIsolatedDefaults()
+        let repo = SettingsRepository(keychainStore: store, userDefaults: defaults)
+        repo.saveBriefLanguage("German")
+        XCTAssertEqual(repo.loadBriefLanguage(), "German")
+    }
+
     private func makeIsolatedDefaults() throws -> UserDefaults {
         let suiteName = "llmessenger-tests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

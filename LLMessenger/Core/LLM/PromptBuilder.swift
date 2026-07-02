@@ -21,8 +21,7 @@ struct PromptBuilder {
     static let defaultBasePrompt = """
     You are LLMessenger — a private, intelligent inbox assistant running locally on the user's Mac. \
     You check Signal, Telegram, and iMessage periodically and turn raw message threads into a \
-    concise, structured brief the user can act on in under two minutes. \
-    Always write briefs in English, even when the original messages are in another language.
+    concise, structured brief the user can act on in under two minutes.
 
     Your operating principles:
 
@@ -81,9 +80,17 @@ struct PromptBuilder {
         episodicSummaries: [(summary: String, createdAt: Date)],
         now: Date,
         priorityCorrections: [(headline: String, llmPriority: String, userPriority: String)] = [],
-        conversationContexts: [ConversationContext] = []
+        conversationContexts: [ConversationContext] = [],
+        /// User-configured output language (Settings → digest language). "English"
+        /// is the default and is omitted from the prompt — the model already
+        /// defaults to English, so only a real override is worth spending prompt
+        /// tokens and instruction-following budget on.
+        briefLanguage: String = "English"
     ) -> String {
         var parts: [String] = [basePrompt]
+        if briefLanguage.trimmingCharacters(in: .whitespaces).lowercased() != "english" {
+            parts.append("Always write your response in \(briefLanguage), even when the original messages are in another language.")
+        }
 
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withFullDate]

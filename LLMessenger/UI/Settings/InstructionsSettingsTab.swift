@@ -5,6 +5,7 @@ import AppKit
 struct InstructionsSettingsTab: View {
     @State private var prompt: String = ""
     @State private var theme: String = "system"
+    @State private var briefLanguage: String = "English"
     @State private var saveStatus: String = ""
     @State private var showResetConfirmation = false
 
@@ -49,6 +50,22 @@ struct InstructionsSettingsTab: View {
                                 } message: {
                                     Text("Your current prompt will be replaced. This cannot be undone.")
                                 }
+                        }
+                    }
+                    .padding(.vertical, 14)
+
+                    Rule()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        WireLabel("Digest Language")
+                        HStack {
+                            TextField("English", text: $briefLanguage)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 200)
+                            Text("Briefs, drafts, and summaries are written in this language, even when the original messages are in another language.")
+                                .font(Theme.sans(11))
+                                .foregroundStyle(Theme.textTertiary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .padding(.vertical, 14)
@@ -101,11 +118,13 @@ struct InstructionsSettingsTab: View {
         let saved = repo.loadBasePrompt()
         prompt = saved.isEmpty ? PromptBuilder.defaultBasePrompt : saved
         theme = repo.loadTheme()
+        briefLanguage = repo.loadBriefLanguage()
     }
 
     private func save() {
         repo.saveBasePrompt(prompt)
         repo.saveTheme(theme)
+        repo.saveBriefLanguage(briefLanguage)
         applyTheme(theme)
         saveStatus = "Saved ✓"
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }
