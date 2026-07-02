@@ -116,20 +116,34 @@ final class SlackAdapter: MessengerAdapter {
             healthStatus = .warning
             return AdapterHealthResult(status: .warning, reason: "No Slack workspaces configured", retryAfter: nil)
         }
-        var failed: [String] = []
+        var needsReconnect: [String] = []
+        var otherFailures: [String] = []
         for (_, client) in clients {
-            if (try? await client.authTest())?.ok != true {
-                failed.append(client.workspace.teamName)
+            do {
+                _ = try await client.authTest()
+            } catch SlackAPIError.authFailed {
+                needsReconnect.append(client.workspace.teamName)
+            } catch {
+                otherFailures.append(client.workspace.teamName)
             }
         }
-        if failed.isEmpty {
+        if needsReconnect.isEmpty && otherFailures.isEmpty {
             healthStatus = .ok
             return AdapterHealthResult(status: .ok, reason: nil, retryAfter: nil)
         }
         healthStatus = .warning
+        // Auth failures need a reconnect, not a retry — say so distinctly from a
+        // transient API/network issue so the reason text points to the right fix.
+        var parts: [String] = []
+        if !needsReconnect.isEmpty {
+            parts.append("reconnect needed: \(needsReconnect.joined(separator: ", "))")
+        }
+        if !otherFailures.isEmpty {
+            parts.append("temporarily unreachable: \(otherFailures.joined(separator: ", "))")
+        }
         return AdapterHealthResult(
             status: .warning,
-            reason: "Slack auth failed for: \(failed.joined(separator: ", "))",
+            reason: "Slack — " + parts.joined(separator: "; "),
             retryAfter: nil
         )
     }

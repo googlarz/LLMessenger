@@ -1,5 +1,34 @@
 import Foundation
 
+/// Slack's Web API returns HTTP 200 even when a call fails — failure is signaled by
+/// `"ok": false` plus a machine-readable `error` code in the body. `.authFailed` is a
+/// specific subset of `.apiError` for the codes Slack documents as requiring the user
+/// to reconnect (as opposed to a transient issue worth just retrying).
+enum SlackAPIError: Error, LocalizedError {
+    case authFailed(code: String)
+    case apiError(code: String)
+
+    /// https://api.slack.com/methods/auth.test — codes that mean the token itself
+    /// is no longer usable, not a transient hiccup.
+    private static let authFailureCodes: Set<String> = [
+        "invalid_auth", "token_revoked", "account_inactive",
+        "token_expired", "not_authed", "no_permission"
+    ]
+
+    static func from(code: String) -> SlackAPIError {
+        authFailureCodes.contains(code) ? .authFailed(code: code) : .apiError(code: code)
+    }
+
+    var errorDescription: String? {
+        switch self {
+        case .authFailed(let code):
+            return "Slack authentication expired (\(code)) — reconnect this workspace in Settings."
+        case .apiError(let code):
+            return "Slack API error: \(code)"
+        }
+    }
+}
+
 /// Thin HTTPS wrapper for the Slack Web API. One instance per workspace.
 /// All methods POST form-urlencoded and decode the standard {"ok": Bool, ...} envelope.
 /// Rate limiting: Slack publishes per-method tiers (T3 = ~50/min). We serialise calls
@@ -137,13 +166,12 @@ final class SlackAPIClient {
 
     /// Send a plain-text message to a channel/DM/group.
     func chatPostMessage(channelId: String, text: String) async throws {
-        struct Resp: Decodable { let ok: Bool; let error: String? }
-        let resp = try await call("chat.postMessage",
-                                  params: ["channel": channelId, "text": text],
-                                  decode: Resp.self)
-        if !resp.ok {
-            throw AdapterError.sendFailed(resp.error ?? "slack error")
-        }
+        // ok:false is now caught generically inside call() and thrown as
+        // SlackAPIError before this decode ever sees a failure response.
+        struct Resp: Decodable { let ok: Bool }
+        _ = try await call("chat.postMessage",
+                           params: ["channel": channelId, "text": text],
+                           decode: Resp.self)
     }
 
     /// All users in the workspace. Used to build the @ mention picker and resolve sender_id → name.
@@ -209,11 +237,23 @@ final class SlackAPIClient {
         guard (200..<300).contains(http.statusCode) else {
             throw AdapterError.invalidResponse
         }
+        // Slack signals API-level failure with HTTP 200 + "ok": false — a decode
+        // into T alone can't see this (T's fields are typically all-optional, so
+        // an auth failure with an empty body would otherwise decode "successfully"
+        // into a default/empty T and silently look like zero results).
+        if let envelope = try? JSONDecoder().decode(SlackEnvelope.self, from: data), !envelope.ok {
+            throw SlackAPIError.from(code: envelope.error ?? "unknown_error")
+        }
         do {
             return try JSONDecoder().decode(decode, from: data)
         } catch {
             throw AdapterError.invalidResponse
         }
+    }
+
+    private struct SlackEnvelope: Decodable {
+        let ok: Bool
+        let error: String?
     }
 
     private func pace(method: String) async throws {

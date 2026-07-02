@@ -119,4 +119,84 @@ final class SlackAdapterTests: XCTestCase {
         XCTAssertEqual(result.messages.count, 1, "Bot messages without user and empty-text messages must be dropped")
         XCTAssertEqual(result.messages.first?.text, "real message")
     }
+
+    // MARK: - ok:false envelope handling
+
+    private func makeWorkspace() -> SlackWorkspace {
+        SlackWorkspace(teamId: "T01", teamName: "Acme", token: "xoxp-fake",
+                       userId: "U1", userName: "Me")
+    }
+
+    private func mockSession() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        return URLSession(configuration: config)
+    }
+
+    private func stubResponse(json: String, status: Int32 = 200) {
+        MockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: Int(status),
+                httpVersion: nil, headerFields: nil
+            )!
+            return (response, Data(json.utf8))
+        }
+    }
+
+    override func tearDown() {
+        MockURLProtocol.handler = nil
+        super.tearDown()
+    }
+
+    // Slack signals failure via HTTP 200 + "ok": false — call() must throw a
+    // specific, actionable error instead of silently returning an empty/default
+    // decoded value that looks like "zero results" to the caller.
+    func testAuthTestThrowsAuthFailedOnInvalidAuth() async {
+        stubResponse(json: #"{"ok":false,"error":"invalid_auth"}"#)
+        let client = SlackAPIClient(workspace: makeWorkspace(), session: mockSession())
+        do {
+            _ = try await client.authTest()
+            XCTFail("Expected authTest to throw on ok:false invalid_auth")
+        } catch SlackAPIError.authFailed(let code) {
+            XCTAssertEqual(code, "invalid_auth")
+        } catch {
+            XCTFail("Expected SlackAPIError.authFailed, got \(error)")
+        }
+    }
+
+    // A non-auth API error (e.g. rate limit body, or a method-specific error) must
+    // be distinguished from an auth failure — it doesn't mean "reconnect."
+    func testConversationsHistoryThrowsApiErrorOnNonAuthFailure() async {
+        stubResponse(json: #"{"ok":false,"error":"channel_not_found"}"#)
+        let client = SlackAPIClient(workspace: makeWorkspace(), session: mockSession())
+        do {
+            _ = try await client.conversationsHistory(channelId: "C1", oldestTs: nil)
+            XCTFail("Expected conversationsHistory to throw on ok:false")
+        } catch SlackAPIError.apiError(let code) {
+            XCTAssertEqual(code, "channel_not_found")
+        } catch {
+            XCTFail("Expected SlackAPIError.apiError, got \(error)")
+        }
+    }
+
+    // The old behavior (before this fix) silently decoded ok:false as an empty
+    // page — this test guards against that regression by asserting it throws.
+    func testUsersConversationsDoesNotSilentlyReturnEmptyOnAuthFailure() async {
+        stubResponse(json: #"{"ok":false,"error":"token_revoked"}"#)
+        let client = SlackAPIClient(workspace: makeWorkspace(), session: mockSession())
+        do {
+            _ = try await client.usersConversations()
+            XCTFail("Expected usersConversations to throw rather than return silently")
+        } catch SlackAPIError.authFailed(let code) {
+            XCTAssertEqual(code, "token_revoked")
+        } catch {
+            XCTFail("Expected SlackAPIError.authFailed, got \(error)")
+        }
+    }
+
+    func testChatPostMessageSucceedsOnOkTrue() async throws {
+        stubResponse(json: #"{"ok":true}"#)
+        let client = SlackAPIClient(workspace: makeWorkspace(), session: mockSession())
+        try await client.chatPostMessage(channelId: "C1", text: "hi")   // must not throw
+    }
 }
