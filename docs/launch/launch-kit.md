@@ -77,3 +77,43 @@ data so you can see the whole product without connecting anything.
 - [ ] **Record demo video** using shot list above.
 - [ ] **Landing page** with the video above the fold + the two positioning angles.
 - [ ] Verify brief quality on real noisy data (the demo promise must survive first contact with the user's own messages).
+
+## Product Hunt assets (generated 2026-07-03 — docs/launch/producthunt/)
+
+All rendered from demo-fixture screenshots — no real message data anywhere.
+Every frame shows the DEMO badge + "Example data — not your messages" banner.
+
+- `01`–`06` gallery PNGs at 2540×1520 (2× PH's 1270×760 minimum), padded onto
+  the Wire Desk dark ground for a uniform look.
+- `tour.mp4` (13.6s, 608 KB) + `tour.gif` (1000px, 3.4 MB) — crossfade tour:
+  demo command center → main window → owed replies → source evidence → Act queue.
+  Use the MP4 in the PH gallery (PH prefers video first); GIF for the tweet/README.
+- `thumbnail-240.png` — PH logo slot, from the 512px app icon.
+
+**Gallery order on PH:** tour.mp4 first, then 01, 04 (sources — the
+differentiator), 03, 05, 02, 06.
+
+**Tagline (60-char limit), recommended:**
+> Your messages, briefed. Every claim, sourced. (45)
+
+Alternates:
+> One AI brief for iMessage, Signal, Slack — local & sourced (58)
+> Stop reading 400 messages. Read one brief that cites them. (58)
+
+**Topics:** Mac, Artificial Intelligence, Productivity, Privacy, Open Source
+
+## Launch timing
+
+PH days reset **12:01 AM Pacific** = **9:01 AM CET** — comfortable morning
+start, no all-nighter.
+
+Recommendation for a first launch with no follower base: **Sunday, 12:01 AM PT
+(Sunday ~9:01 AM CET)**. Weekends have meaningfully less competition, so a
+small launch can realistically reach top 5 and get the badge + newsletter
+mention; weekday launches (Tue–Thu) have the most traffic but are dominated
+by launches with prepared audiences. Saturday works too; Sunday is typically
+the quietest. Plan to be responsive in comments for the first 4–6 hours
+(9:00–15:00 CET) — early velocity and maker replies drive the ranking.
+
+Submit the product a few days early as "scheduled" so PH's team can feature-
+check it, and make sure the repo is public before the launch goes live.
