@@ -5,24 +5,54 @@ published — it's staged so launch day is an execution day, not a writing day.
 
 ## Positioning
 
-**One-liner:** The morning brief for your messages — every claim sourced, any model you choose.
+**Lead frame: MESSAGE DEBT — not message overload.**
 
-Two structural angles no current competitor owns together:
+"Morning brief" was the v1 frame and it's retired for launch, for three reasons:
 
-1. **Source-backed AI.** Every card shows its evidence: tap any claim and read
-   the exact messages behind it. Beeper's AI summarization (in beta) and
-   Apple Intelligence summaries are black boxes — LLMessenger is the only
-   client where the AI is accountable. *(Verified 2026-06-12: Beeper desktop
-   has summarization in beta + "BeepMate" assistant on roadmap; no source
-   citation UI.)*
-2. **Bring your own model.** Ollama (fully local, nothing leaves the Mac),
-   Anthropic, or OpenAI — user's choice, disclosed per call in the Privacy
-   tab's live network audit log.
+1. It positions us in the *summarization* category, which Apple Intelligence
+   now gives away free at the OS level. A summaries-led launch hands the top
+   comment to "doesn't Apple already do this?" and has no answer.
+2. It markets the feature the product itself demoted. The Act queue is the
+   default tab; the digest is the archive. The product's arc was
+   Summarize → Guard → Understand → Act — launch on where it arrived.
+3. It names the wrong pain. "Too many messages" is an information problem.
+   The real pain is social: **someone is waiting on you and you don't know
+   who.** Unread count tells you what you received. Nothing on earth tells
+   you what you OWE — until this. The product's own headline is literally
+   "4 people are waiting on you."
 
-Tagline candidates:
-- "Your messages, briefed. Every claim, sourced."
-- "Stop reading 400 messages. Read one brief that cites them."
-- "A private intelligence desk for your group chats."
+**One-liner:** LLMessenger tracks what you owe people across every messaging
+app — who's waiting, what you promised — and drafts the way out. Local-first,
+and every AI claim cites the exact messages behind it.
+
+**Category of one:** the first *message-debt* tracker. Every competitor
+(Beeper, Texts, Apple Intelligence) organizes what arrived. LLMessenger is
+organized around the only number that matters: how many people are waiting
+on you. Everything else is proof stacked behind that hook:
+
+1. **It acts, safely.** Replies drafted in your voice, queued for one-tap
+   approval. Nothing ever sends without you: review-first by default,
+   opt-in delegation only for low-risk acks with a 30s undo, audit log,
+   and a kill switch. (This is the wow; the trust model is the moat.)
+2. **Accountable AI.** Every card cites the exact source messages — tap any
+   claim, read the evidence. Beeper's summarization and Apple Intelligence
+   are black boxes. *(Verified 2026-06-12: no competitor has citation UI.)*
+3. **Local-first, inspectable.** On-device / Ollama by default, live network
+   audit log, no server, no telemetry, open source. The privacy story isn't
+   a policy page — it's grep-able.
+4. **Demo mode = zero-friction conversion.** The entire product runs on
+   synthetic data with no accounts connected. "See it working in 60 seconds"
+   is the CTA everywhere: first comment, video, README.
+
+**Tagline (≤60 chars), recommended:**
+> Knows who's waiting on you. Drafts replies. Local-first. (56)
+
+Alternates:
+> Stop counting unread. Start knowing who's waiting on you. (57)
+> It tracks what you owe people — then drafts the way out. (56)
+
+Fallback (if the debt frame tests badly with beta users):
+> Your messages, briefed. Every claim, sourced. (45)
 
 ## 60-second demo video — shot list
 
@@ -31,33 +61,82 @@ Record in **Demo Mode** (fresh install → "Explore the demo desk") at 1280×800
 
 | # | Seconds | Shot | Overlay text |
 |---|---------|------|--------------|
-| 1 | 0–6 | Menu bar, brief glyph with unread badge "1". Click it. | "It watches Signal, Telegram, iMessage and Slack…" |
-| 2 | 6–16 | The morning brief opens: "One thing needs you." serif masthead, 4 cards. Slow scroll. | "…and writes you a brief instead of 400 unread messages." |
-| 3 | 16–28 | Click "3 SOURCES" on the Meridian card — evidence drawer opens, citations in serif italic. | "Every claim shows its sources. No black-box AI." |
-| 4 | 28–38 | Click REPLY → type "tell her the cap table lands Wednesday morning" → AI draft appears → confirm-send screen with "Nothing sends until you confirm." | "Draft replies in your voice. Nothing sends without you." |
-| 5 | 38–48 | Open Settings → AI tab: Ollama / Anthropic / OpenAI picker. Then Privacy tab → network audit log. | "Run it on your own model. Audit every byte that leaves." |
-| 6 | 48–60 | Back to the brief. Press H — card marks done. Final card: "MARK DONE". Empty desk: "The desk is clear." | "Inbox zero, for everything. — LLMessenger" |
+| 1 | 0–6 | Menu bar glyph with badge. Click — Desk opens on the Act tab, "4 people are waiting on you." headline. | "Your unread count is a lie. This is the real number." |
+| 2 | 6–16 | Owed Replies list: who's waiting, ranked, with "you promised the deck by Friday" callback line. | "It tracks what you owe — who's waiting, what you promised." |
+| 3 | 16–28 | Click "3 SOURCES" on the Meridian card — evidence drawer opens, exact quoted messages. | "Every claim cites its source messages. No black-box AI." |
+| 4 | 28–38 | Act queue: drafted reply ready → APPROVE → "SENDING IN 5s" countdown with UNDO. | "Replies drafted in your voice. Nothing sends without you." |
+| 5 | 38–48 | Settings → AI tab: On-Device / Ollama / Anthropic picker. Privacy tab → live network audit log. | "Local AI by default. Audit every byte that leaves." |
+| 6 | 48–60 | Clear the last item. Empty desk: "You're clear. Nothing needs you right now." | "Leave with confidence. — LLMessenger" |
 
 GIF export (for HN): shots 1–3 only, 15s loop.
 
 ## Product Hunt draft
 
 **Name:** LLMessenger
-**Tagline:** Your messages, briefed. Every claim, sourced.
+**Tagline:** Knows who's waiting on you. Drafts replies. Local-first.
 **Description (260 chars):**
-A macOS menu-bar app that reads your Signal, Telegram, iMessage and Slack so
-you don't have to. It writes a sourced intelligence brief — tap any claim to
-see the exact messages behind it. Runs on your own model (Ollama) or
-Anthropic/OpenAI. Nothing sends without your confirmation.
+Unread counts show what you received. LLMessenger shows what you OWE — who's
+waiting on you across iMessage, Signal, Telegram & Slack, and what you
+promised. It drafts replies in your voice; nothing sends without your OK.
+Local AI, open source, sourced claims.
 
 **First comment (maker):**
-I built this because I was drowning: 4 messaging apps, ~40 group chats, and
-the constant fear of missing the one message that mattered. Existing unified
-inboxes just put all the noise in one place. LLMessenger reads everything and
-hands me a morning brief instead — and because I don't trust black-box AI
-with my messages either, every card cites its sources and you can run the
-whole thing on a local Ollama model. Try the demo desk (no accounts needed) —
-it's the first button on the welcome screen.
+I built this after realizing — days too late, again — that a friend had been
+waiting on an answer from me all week. My unread badge said 214. Useless
+number. The number I actually needed was: *3 people are waiting on you, and
+you promised one of them a document by Friday.*
+
+So LLMessenger tracks message debt, not message volume. It reads iMessage,
+Signal, Telegram and Slack locally, keeps a ledger of who's waiting and what
+you promised (both directions), and queues drafted replies in your voice for
+one-tap approval.
+
+Three things I refused to compromise on, because I have to trust this with
+my own messages:
+• **No black-box AI.** Every claim cites the exact source messages — tap and
+  read the evidence. If a card says "Anna needs the cap table Thursday,"
+  you can see the message where she said it.
+• **Local-first.** On-device / Ollama by default, live network audit log,
+  no server, no telemetry. It's open source — don't trust me, read it.
+• **Nothing sends without you.** Every reply is review-first. Even the
+  opt-in auto-send for trivial acks has a 30-second undo, an audit trail,
+  and a kill switch.
+
+Fastest way to judge it: **the demo desk** — the entire product on sample
+data, zero accounts connected, first button on the welcome screen. 60
+seconds and you'll know if it's for you. Happy to answer anything, including
+the hard privacy questions.
+
+## Objection playbook (pre-write these — top comments decide PH fate)
+
+| Objection (will appear) | Answer |
+|---|---|
+| "Apple Intelligence already summarizes notifications" | Summaries tell you what happened. This tracks what you *owe* — who's waiting, what you promised — and drafts the way out. Also: Apple's summaries are black boxes; every LLMessenger claim cites its source messages. |
+| "I would never give an app my messages" | Neither would I — it never leaves your Mac. Local model by default, live network audit log of every byte, no server, open source. And the demo needs zero accounts. |
+| "Why is the app unsigned?" | Free community app, no $99 Apple fee baked in. CI publishes a SHA-256 of every build and you can build from source; signing lands if traction warrants it. |
+| "WhatsApp?" | Adapter plugin API is on the roadmap (protocol already designed) — WhatsApp is the first target once there's a reliable local bridge. |
+| "How accurate is the AI on a real inbox?" | Honest answer: it's grounded — cards that can't cite real source messages get rejected before you see them, and 'Check sources' confidence labels flag anything shaky. The demo shows exactly what the output looks like. |
+| "Auto-send AI = scary" | Off by default, forever. The only auto-send possible is per-conversation opt-in, low-risk templated acks only, never free-form content, 30s undo, audit log, global kill switch — and message content can never enable it (injection-tested). |
+
+## Launch-day run sheet (Sunday, times CET)
+
+- **T-3 days:** schedule the launch on PH; repo public; pin the tour.mp4 to
+  the repo README; ship page teaser live for early "notify me" subscribers.
+- **09:01** — launch goes live (00:01 PT). Post first comment immediately.
+- **09:05** — personal messages (not blasts) to the 10–20 people who agreed
+  to support; each gets the demo pitch, not "please upvote."
+- **09:30** — tweet thread: hook ("your unread count is a lie — the real
+  number is who's waiting on you") + tour.gif + PH link. Cross-post to
+  relevant subreddits (r/macapps, r/LocalLLaMA — the local-first angle
+  lands there) spaced through the day.
+- **09:00–15:00** — live in PH comments. Answer everything within minutes;
+  maker responsiveness is a ranking input. Use the objection playbook.
+- **15:00** — status check: if top-5, push the second wave (newsletter
+  mentions, Discord/Slack communities). If not, keep engaging — evening PT
+  traffic (18:00–24:00 CET) is the second surge.
+- **Do NOT:** launch Show HN the same day. HN is a separate audience and a
+  separate day (Tue/Wed following week, citations-led frame — HN cares more
+  about the accountable-AI + local architecture than the debt hook).
 
 ## Show HN draft
 
@@ -93,12 +172,10 @@ Every frame shows the DEMO badge + "Example data — not your messages" banner.
 **Gallery order on PH:** tour.mp4 first, then 01, 04 (sources — the
 differentiator), 03, 05, 02, 06.
 
-**Tagline (60-char limit), recommended:**
-> Your messages, briefed. Every claim, sourced. (45)
-
-Alternates:
-> One AI brief for iMessage, Signal, Slack — local & sourced (58)
-> Stop reading 400 messages. Read one brief that cites them. (58)
+**Tagline:** superseded — see Positioning section (message-debt frame).
+Gallery hero should show the "N people are waiting on you" headline; if the
+current 01 frame leads with "One thing needs you," re-render the demo shot
+with the Owed state front and center before launch.
 
 **Topics:** Mac, Artificial Intelligence, Productivity, Privacy, Open Source
 
