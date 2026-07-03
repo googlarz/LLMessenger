@@ -340,6 +340,48 @@ final class DesignSnapshotTests: XCTestCase {
         try render(view, size: NSSize(width: 760, height: 560), name: "owed")
     }
 
+    /// Launch-film frame renderer — NOT part of the normal suite (env-gated).
+    /// Renders the approve → "SENDING IN 5s" countdown → UNDO sequence as real
+    /// product frames: each render samples the actual clock against a fixed
+    /// scheduledAt, so the countdown text and progress bar genuinely drain
+    /// across frames. All data is the synthetic fixture — no real messages.
+    /// Run: SNAPSHOT_TAG=film RENDER_LAUNCH_FILM=1 (via TEST_RUNNER_ env).
+    func testRenderLaunchFilmFrames() throws {
+        guard ProcessInfo.processInfo.environment["RENDER_LAUNCH_FILM"] == "1" else {
+            throw XCTSkip("Set RENDER_LAUNCH_FILM=1 to render launch film frames")
+        }
+        let size = NSSize(width: 820, height: 760)
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        func desk() -> some View {
+            DeskView()
+                .environmentObject(state)
+                .environmentObject(chat)
+                .frame(width: size.width, height: size.height)
+                .background(Theme.bg)
+        }
+
+        // Beat 1 — the queue, pending. (Two takes; assembly holds the shot.)
+        try render(desk(), size: size, name: "film-01-queue")
+
+        // Beat 2 — the Coach reply is approved: staged with a 5s undo window.
+        // Fixed scheduledAt + advancing wall clock = real draining frames.
+        state.agentActions[1].status = AgentActionStatus.scheduled.rawValue
+        state.agentActions[1].scheduledKind = "manual"
+        state.agentActions[1].scheduledWindow = 5
+        state.agentActions[1].scheduledAt = Date().addingTimeInterval(5.4)
+        for i in 0..<8 {
+            try render(desk(), size: size, name: String(format: "film-02-countdown-%02d", i))
+        }
+
+        // Beat 3 — UNDO: back to pending, nothing sent.
+        state.agentActions[1].status = AgentActionStatus.pending.rawValue
+        state.agentActions[1].scheduledAt = nil
+        state.agentActions[1].scheduledKind = nil
+        state.agentActions[1].scheduledWindow = nil
+        try render(desk(), size: size, name: "film-03-undone")
+    }
+
     /// About tab incl. the in-app "What's new" release notes section.
     func testSnapshotAbout() throws {
         let view = AboutSettingsTab()

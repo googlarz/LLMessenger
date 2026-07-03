@@ -164,9 +164,18 @@ Every frame shows the DEMO badge + "Example data — not your messages" banner.
 
 - `01`–`06` gallery PNGs at 2540×1520 (2× PH's 1270×760 minimum), padded onto
   the Wire Desk dark ground for a uniform look.
-- `tour.mp4` (13.6s, 608 KB) + `tour.gif` (1000px, 3.4 MB) — crossfade tour:
-  demo command center → main window → owed replies → source evidence → Act queue.
-  Use the MP4 in the PH gallery (PH prefers video first); GIF for the tweet/README.
+- **`launch-film.mp4` (11.4s) — THE primary video.** Real product frames
+  rendered through the offscreen snapshot harness: the queue ("4 people are
+  waiting on you") → APPROVE → the "SENDING IN 5s" countdown genuinely
+  draining (verified pixel-linear) → UNDO → end card with the tagline. Not a
+  slideshow — the drain is real UI physics. `launch-film.gif` for tweets.
+  Regenerate: TEST_RUNNER_SNAPSHOT_TAG=film TEST_RUNNER_RENDER_LAUNCH_FILM=1
+  xcodebuild test -only-testing:.../testRenderLaunchFilmFrames + the ffmpeg
+  assembly (see session notes).
+- `thumbnail-animated-240.gif` — animated PH thumbnail: badge counts message
+  debt 3 → 2 → 1 → ✓ → calm. Use INSTEAD of the static thumbnail; animated
+  thumbnails stand out in the feed list.
+- `tour.mp4` / `tour.gif` — crossfade stills tour (fallback/secondary).
 - `thumbnail-240.png` — PH logo slot, from the 512px app icon.
 
 **Gallery order on PH:** tour.mp4 first, then 01, 04 (sources — the
