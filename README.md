@@ -14,6 +14,7 @@ Free. Open source. On-device AI. Your messages never have to leave your Mac, and
 [![Release](https://img.shields.io/github/v/release/googlarz/LLMessenger)](https://github.com/googlarz/LLMessenger/releases/latest)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)](https://github.com/googlarz/LLMessenger/releases/latest)
+[![Homebrew](https://img.shields.io/badge/Homebrew-tap-FBB040?logo=homebrew&logoColor=white)](https://github.com/googlarz/homebrew-tap)
 [![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)](project.yml)
 
 [**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [Quick start](#quick-start) · [The agent](#it-doesnt-just-tell-you--it-acts) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
@@ -85,6 +86,14 @@ You can try the full command center first with synthetic demo messages. No accou
 
 1. **[Download the latest release](https://github.com/googlarz/LLMessenger/releases/latest)**, unzip, move to Applications.
    > The binary is unsigned — right-click → **Open** → **Open** on first launch (or System Settings → Privacy & Security → **Open Anyway**).
+
+   Or, via [Homebrew](https://brew.sh):
+   ```bash
+   brew tap googlarz/tap && brew install --cask llmessenger
+   ```
+   The cask removes the quarantine flag for you, so there's no right-click-Open
+   step — see [googlarz/homebrew-tap](https://github.com/googlarz/homebrew-tap)
+   for exactly what it does and how to verify the binary yourself.
 2. **Try the demo command center** from onboarding, or connect iMessage when you are ready.
 3. **Choose your AI** — on-device on macOS 26, Ollama for local macOS 14+, or an explicit Anthropic/OpenAI key.
 4. **Clear the first digest** — inspect sources, mark one card done, mark a VIP or quiet a low-signal thread.
