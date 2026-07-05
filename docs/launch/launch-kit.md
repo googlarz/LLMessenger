@@ -44,12 +44,15 @@ on you. Everything else is proof stacked behind that hook:
    synthetic data with no accounts connected. "See it working in 60 seconds"
    is the CTA everywhere: first comment, video, README.
 
-**Tagline (≤60 chars), recommended:**
-> Knows who's waiting on you. Drafts replies. Local-first. (56)
+**Tagline (≤60 chars) — tournament winner (5 writers × 3 judges, 9.0/10):**
+> 214 unread. 4 people waiting. Only one number matters. (54)
 
-Alternates:
-> Stop counting unread. Start knowing who's waiting on you. (57)
-> It tracks what you owe people — then drafts the way out. (56)
+Both numbers are true (the maker's badge; the app's real headline), zero
+adjectives, numeric rhythm, screenshot-able as-is.
+
+Alternates (previous recommendation and runners-up):
+> Knows who's waiting on you. Drafts replies. Local-first. (56)
+> Your unread count lies. Someone's been waiting all week. (56)
 
 Fallback (if the debt frame tests badly with beta users):
 > Your messages, briefed. Every claim, sourced. (45)
@@ -73,44 +76,51 @@ GIF export (for HN): shots 1–3 only, 15s loop.
 ## Product Hunt draft
 
 **Name:** LLMessenger
-**Tagline:** Knows who's waiting on you. Drafts replies. Local-first.
-**Description (260 chars):**
-Unread counts show what you received. LLMessenger shows what you OWE — who's
-waiting on you across iMessage, Signal, Telegram & Slack, and what needs
-your attention. Drafts replies in your voice; nothing sends without your OK.
-Local AI, open source.
+**Tagline:** 214 unread. 4 people waiting. Only one number matters.
+**Description (255/260 chars):**
+Unread counts show what you received. LLMessenger shows what you owe — who's
+waiting on you across iMessage, Signal, Telegram & Slack — and drafts
+replies you approve with one tap. Every claim cites its source messages.
+Local AI, open source. Demo in 60s.
 
 **First comment (maker):**
-I built this after realizing — days too late, again — that a friend had been
-waiting on an answer from me all week. My unread badge said 214. Useless
-number. The number I actually needed was: *4 people are waiting on you, and
-you promised one of them a document by Friday.*
+Last month I found out a friend had been waiting a week for an answer from
+me. A week of him thinking I'd seen it and didn't care. My unread badge said
+214 — a number that told me everything I'd received and nothing about what
+I owed.
 
-So LLMessenger tracks message debt, not message volume. It reads iMessage,
-Signal, Telegram and Slack locally, keeps a ledger of who's waiting and what
-you promised (both directions), and queues drafted replies in your voice for
-one-tap approval.
+So I built the opposite of an unread count. LLMessenger tracks message debt
+across iMessage, Signal, Telegram and Slack. The headline in the app isn't a
+count — it's "4 people are waiting on you." Then it drafts the way out:
+replies in your voice, queued for one-tap approval, with a visible 5-second
+countdown and undo on every send. Auto-send exists only as an opt-in for
+trivial templated acks — 30-second undo, audit log, kill switch.
 
-Three things I refused to compromise on, because I have to trust this with
-my own messages:
-• **No black-box AI.** Every claim cites the exact source messages — tap and
-  read the evidence. If a card says "Anna needs the cap table Thursday,"
-  you can see the message where she said it.
-• **Local-first.** On-device / Ollama by default, live network audit log,
-  no server, no telemetry. It's open source — don't trust me, read it.
-• **Nothing sends without you.** Every reply is review-first. Even the
-  opt-in auto-send for trivial acks has a 30-second undo, an audit trail,
-  and a kill switch.
+I built it to be distrusted first. Every card cites the exact source
+messages — tap a claim, read the evidence; anything that can't cite a real
+message gets rejected. It runs on-device by default (Apple Intelligence or
+Ollama), no server, no telemetry, and it's Apache 2.0 — don't take my word
+for any of this, read the code.
 
-Fastest way to judge it: **the demo desk** — the entire product on sample
-data, zero accounts connected, first button on the welcome screen. 60
-seconds and you'll know if it's for you. Or straight from Homebrew:
+Honesty corner: it's unsigned (I skipped Apple's $99/yr fee), so macOS will
+grumble once — or skip that entirely:
 
     brew tap googlarz/tap && brew install --cask llmessenger
 
-Happy to answer anything, including the hard privacy questions.
+Demo Mode is the first button on the welcome screen — the entire product on
+synthetic data, zero accounts connected. 60 seconds and you'll know.
 
-Be honest — what's your unread count right now? 👇
+So: what does your badge say right now — and do you know who's actually
+waiting on you? 👇
+
+**Launch tweet (268/280, attach launch-film.gif):**
+214 unread. 4 people waiting. Only one number matters.
+
+Unread counts show what you received. LLMessenger shows what you OWE —
+across iMessage, Signal, Telegram & Slack — and drafts the way out. Local
+AI, open source, nothing sends without you.
+
+Live on Product Hunt 👇
 
 ## Objection playbook (pre-write these — top comments decide PH fate)
 
