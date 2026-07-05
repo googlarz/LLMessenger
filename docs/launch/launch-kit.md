@@ -77,13 +77,13 @@ GIF export (for HN): shots 1–3 only, 15s loop.
 **Description (260 chars):**
 Unread counts show what you received. LLMessenger shows what you OWE — who's
 waiting on you across iMessage, Signal, Telegram & Slack, and what you
-promised. It drafts replies in your voice; nothing sends without your OK.
-Local AI, open source, sourced claims.
+promised. Drafts replies in your voice; nothing sends without your OK.
+Local AI, open source.
 
 **First comment (maker):**
 I built this after realizing — days too late, again — that a friend had been
 waiting on an answer from me all week. My unread badge said 214. Useless
-number. The number I actually needed was: *3 people are waiting on you, and
+number. The number I actually needed was: *4 people are waiting on you, and
 you promised one of them a document by Friday.*
 
 So LLMessenger tracks message debt, not message volume. It reads iMessage,
@@ -104,8 +104,13 @@ my own messages:
 
 Fastest way to judge it: **the demo desk** — the entire product on sample
 data, zero accounts connected, first button on the welcome screen. 60
-seconds and you'll know if it's for you. Happy to answer anything, including
-the hard privacy questions.
+seconds and you'll know if it's for you. Or straight from Homebrew:
+
+    brew tap googlarz/tap && brew install --cask llmessenger
+
+Happy to answer anything, including the hard privacy questions.
+
+Be honest — what's your unread count right now? 👇
 
 ## Objection playbook (pre-write these — top comments decide PH fate)
 
@@ -120,13 +125,17 @@ the hard privacy questions.
 
 ## Launch-day run sheet (Sunday, times CET)
 
-- **T-3 days:** schedule the launch on PH; repo public; pin the tour.mp4 to
-  the repo README; ship page teaser live for early "notify me" subscribers.
+- **T-7 days:** create the PH "coming soon" teaser page — followers collected
+  there get auto-notified at launch (free first-hour velocity). Publish the
+  googlarz/homebrew-tap repo so the install one-liner is live.
+- **T-3 days:** schedule the launch on PH (their team feature-checks early
+  submissions); pin launch-film.mp4 to the repo README; send beta users the
+  quote ask (template below).
 - **09:01** — launch goes live (00:01 PT). Post first comment immediately.
 - **09:05** — personal messages (not blasts) to the 10–20 people who agreed
   to support; each gets the demo pitch, not "please upvote."
 - **09:30** — tweet thread: hook ("your unread count is a lie — the real
-  number is who's waiting on you") + tour.gif + PH link. Cross-post to
+  number is who's waiting on you") + launch-film.gif + PH link. Cross-post to
   relevant subreddits (r/macapps, r/LocalLLaMA — the local-first angle
   lands there) spaced through the day.
 - **09:00–15:00** — live in PH comments. Answer everything within minutes;
@@ -140,7 +149,7 @@ the hard privacy questions.
 
 ## Show HN draft
 
-**Title:** Show HN: LLMessenger – a morning brief for Signal/Telegram/iMessage/Slack, with citations
+**Title:** Show HN: LLMessenger – local AI for iMessage/Signal/Slack, with citations
 **Body:** macOS menu-bar app. Polls your messengers locally, compiles an
 intelligence brief, and shows the source messages behind every claim. LLM
 backend is your choice — local Ollama (nothing leaves the Mac), Anthropic, or
@@ -150,10 +159,16 @@ data so you can see the whole product without connecting anything.
 
 ## Pre-launch checklist
 
-- [ ] **Sign + notarize the DMG** (Makefile `make dmg` already wired; needs Developer ID cert). Unsigned Gatekeeper-blocked installs will kill non-technical conversions.
-- [ ] **Decide repo visibility** — HN audience converts on inspectable code; currently private.
-- [ ] **Beta validation (3–5 users) before any launch:** ask (1) "what was the first moment it felt useful?", (2) "what would make you nervous handing this to someone you trust?", (3) "after a brief, did you feel you missed anything — how would you know?"
-- [ ] **Record demo video** using shot list above.
+- [x] ~~Sign + notarize~~ — **decision: launch unsigned** (see objection
+  playbook). Mitigations shipped: Homebrew tap strips quarantine, SHA-256
+  published per release, build-from-source documented. Signing revisits
+  post-traction (`make dmg` stays wired for that day).
+- [x] ~~Repo visibility~~ — repo is already public (verified 2026-07-04).
+- [ ] **Publish googlarz/homebrew-tap** (built + install-tested locally;
+  needs the public repo push).
+- [ ] **Beta validation (3–5 users) before any launch:** ask (1) "what was the first moment it felt useful?", (2) "what would make you nervous handing this to someone you trust?", (3) "after a brief, did you feel you missed anything — how would you know?" **Then the quote ask** (template in Social proof section) — 3 one-liners become gallery card 07.
+- [ ] **Record the 60-second demo video** using the shot list above (the
+  11s launch-film covers the hook; the 60s walkthrough covers understanding).
 - [ ] **Landing page** with the video above the fold + the two positioning angles.
 - [ ] Verify brief quality on real noisy data (the demo promise must survive first contact with the user's own messages).
 
@@ -178,15 +193,30 @@ Every frame shows the DEMO badge + "Example data — not your messages" banner.
 - `tour.mp4` / `tour.gif` — crossfade stills tour (fallback/secondary).
 - `thumbnail-240.png` — PH logo slot, from the 512px app icon.
 
-**Gallery order on PH:** tour.mp4 first, then 01, 04 (sources — the
-differentiator), 03, 05, 02, 06.
+**Gallery order on PH:** launch-film.mp4 first (PH plays the first video
+slot inline), then 01, 04 (sources — the differentiator), 03, 07 (quote
+card, once beta quotes are harvested), 05, 02, 06. tour.mp4 is the fallback
+if the film needs re-rendering after a UI change.
 
-**Tagline:** superseded — see Positioning section (message-debt frame).
-Gallery hero should show the "N people are waiting on you" headline; if the
-current 01 frame leads with "One thing needs you," re-render the demo shot
-with the Owed state front and center before launch.
+**Topics (PH lets you pick 3):** Artificial Intelligence (traffic), Mac
+(relevance), Privacy (differentiation — the local-first crowd browses it).
 
-**Topics:** Mac, Artificial Intelligence, Productivity, Privacy, Open Source
+## Social proof — quote card (gallery slot 07)
+
+The one asset money can't render: real humans. After the beta round, send
+each user this (personal, not a blast):
+
+> You've been using LLMessenger for a bit — would you give me one honest
+> sentence about it I can put on the launch page? Anything real: the moment
+> it was useful, or what surprised you. First name + role is enough
+> ("Marta, product manager"). And if the honest sentence is critical,
+> tell me that instead — more useful before launch than after.
+
+Three quotes → one 2540×1520 gallery card on the Wire Desk ground: serif
+quotes, mono attribution, same typographic system as the app. The target
+quote is the debt frame in a user's own words — e.g. "I found out someone
+had been waiting on me for four days." Do not paraphrase; verbatim or not
+at all.
 
 ## Launch timing
 
