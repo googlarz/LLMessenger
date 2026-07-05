@@ -22,8 +22,8 @@ published — it's staged so launch day is an execution day, not a writing day.
    "4 people are waiting on you."
 
 **One-liner:** LLMessenger tracks what you owe people across every messaging
-app — who's waiting, what you promised — and drafts the way out. Local-first,
-and every AI claim cites the exact messages behind it.
+app — who's waiting, what needs your attention — and drafts the way out.
+Local-first, and every AI claim cites the exact messages behind it.
 
 **Category of one:** the first *message-debt* tracker. Every competitor
 (Beeper, Texts, Apple Intelligence) organizes what arrived. LLMessenger is
@@ -76,8 +76,8 @@ GIF export (for HN): shots 1–3 only, 15s loop.
 **Tagline:** Knows who's waiting on you. Drafts replies. Local-first.
 **Description (260 chars):**
 Unread counts show what you received. LLMessenger shows what you OWE — who's
-waiting on you across iMessage, Signal, Telegram & Slack, and what you
-promised. Drafts replies in your voice; nothing sends without your OK.
+waiting on you across iMessage, Signal, Telegram & Slack, and what needs
+your attention. Drafts replies in your voice; nothing sends without your OK.
 Local AI, open source.
 
 **First comment (maker):**
