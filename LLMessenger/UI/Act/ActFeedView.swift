@@ -306,7 +306,7 @@ struct ActFeedView: View {
     private func commitmentRow(_ c: Commitment) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(c.directionEnum == .iOwe ? "YOU" : "THEM")
-                .font(Theme.mono(9, weight: .bold))
+                .font(Theme.mono(10, weight: .bold))
                 .tracking(0.8)
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: layout == .compact ? 42 : 36, alignment: .leading)
@@ -592,7 +592,7 @@ private struct ActCardRow: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 8))
                     Text("\(item.ageHours / 24)d waiting")
-                        .font(Theme.mono(9.5, weight: .semibold))
+                        .font(Theme.mono(10, weight: .semibold))
                 }
                 .foregroundStyle(Theme.signal)
             } else {

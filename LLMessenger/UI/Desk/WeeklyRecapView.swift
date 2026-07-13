@@ -33,7 +33,7 @@ struct WeeklyRecapView: View {
                 WireLabel("This week", color: Theme.textSecondary)
                 Spacer()
                 Text(weeklyVerdict.uppercased())
-                    .font(Theme.mono(9.5, weight: .semibold))
+                    .font(Theme.mono(10, weight: .semibold))
                     .foregroundStyle(owedCount == 0 ? Theme.ok : Theme.standby)
             }
 
@@ -87,7 +87,7 @@ private struct RecapMetric: View {
                 .foregroundStyle(Theme.textPrimary)
                 .monospacedDigit()
             Text(label.uppercased())
-                .font(Theme.mono(8.5, weight: .medium))
+                .font(Theme.mono(10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

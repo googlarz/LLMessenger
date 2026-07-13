@@ -64,7 +64,7 @@ private struct TaskRowView: View {
                     .foregroundStyle(Theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(briefDateLabel.uppercased())
-                    .font(Theme.mono(8.5))
+                    .font(Theme.mono(10))
                     .tracking(0.8)
                     .foregroundStyle(Theme.textTertiary)
             }

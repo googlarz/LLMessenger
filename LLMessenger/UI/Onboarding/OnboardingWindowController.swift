@@ -294,7 +294,7 @@ private struct OnboardingView: View {
                 // Always-on badge: iMessage can't be disabled in onboarding —
                 // it's the reason to be here.
                 Text("RECOMMENDED")
-                    .font(Theme.mono(9, weight: .bold))
+                    .font(Theme.mono(10, weight: .bold))
                     .tracking(0.8)
                     .foregroundStyle(Theme.serviceIMessage)
                     .padding(.horizontal, 7)

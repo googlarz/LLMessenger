@@ -121,7 +121,7 @@ private struct DeskRailButton: View {
                 Spacer(minLength: 4)
                 if let badge {
                     Text(badge)
-                        .font(Theme.mono(9, weight: .bold))
+                        .font(Theme.mono(10, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)

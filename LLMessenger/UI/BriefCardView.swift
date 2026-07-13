@@ -514,7 +514,7 @@ struct BriefCardView: View {
                         Image(systemName: "checkmark.shield")
                             .font(.system(size: 10, weight: .medium))
                         Text("WHY THIS CARD")
-                            .font(Theme.mono(9.5, weight: .semibold))
+                            .font(Theme.mono(10, weight: .semibold))
                         Image(systemName: "chevron.down")
                             .font(.system(size: 7, weight: .bold))
                             .rotationEffect(.degrees(trustExpanded ? 180 : 0))
@@ -768,7 +768,7 @@ private struct TrustExplanationView: View {
     private func trustRow(_ label: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label.uppercased())
-                .font(Theme.mono(9.5, weight: .semibold))
+                .font(Theme.mono(10, weight: .semibold))
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: 78, alignment: .leading)
             Text(value)
@@ -955,7 +955,7 @@ private struct ActionabilityChip: View {
 
     var body: some View {
         Text(label)
-            .font(Theme.mono(9.5, weight: .semibold))
+            .font(Theme.mono(10, weight: .semibold))
             .tracking(0.6)
             .foregroundStyle(color)
             .lineLimit(1)

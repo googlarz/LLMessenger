@@ -472,7 +472,7 @@ private struct FirstBriefPreparingView: View {
                 .padding(.top, 4)
                 .accessibilityHidden(true)
             Text(check.label.uppercased())
-                .font(Theme.mono(9.5, weight: .semibold))
+                .font(Theme.mono(10, weight: .semibold))
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: 66, alignment: .leading)
             Text(check.value)

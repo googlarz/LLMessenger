@@ -120,7 +120,7 @@ private struct TimelineEntryRow: View {
                         ForEach(actionItems, id: \.self) { action in
                             HStack(spacing: 6) {
                                 Image(systemName: "circle")
-                                    .font(Theme.sans(9))
+                                    .font(Theme.sans(10))
                                     .foregroundStyle(Theme.signal)
                                 Text(action)
                                     .font(Theme.sans(12, weight: .medium))

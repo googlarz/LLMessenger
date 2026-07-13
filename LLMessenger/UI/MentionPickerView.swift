@@ -100,7 +100,7 @@ private struct ServiceHandleChip: View {
                     .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textSecondary)
                 if handle.isGroup {
                     Text("GROUP")
-                        .font(Theme.mono(8.5, weight: .semibold))
+                        .font(Theme.mono(10, weight: .semibold))
                         .tracking(0.5)
                         .foregroundStyle(Theme.textTertiary)
                 }

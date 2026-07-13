@@ -17,10 +17,16 @@ import SwiftUI
 
 extension Color {
     /// Creates a color that resolves to `light` in the light appearance and `dark` in dark.
-    init(light: Color, dark: Color) {
+    /// Optional `lightHC`/`darkHC` variants are used when the user enables
+    /// Increase Contrast in System Settings > Accessibility.
+    init(light: Color, dark: Color, lightHC: Color? = nil, darkHC: Color? = nil) {
         self.init(NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-                ? NSColor(dark) : NSColor(light)
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let highContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+            if isDark {
+                return NSColor(highContrast ? (darkHC ?? dark) : dark)
+            }
+            return NSColor(highContrast ? (lightHC ?? light) : light)
         })
     }
 }
@@ -49,10 +55,12 @@ enum Theme {
         light: Color(red: 0.914, green: 0.910, blue: 0.898),   // #E9E8E5
         dark:  Color(red: 0.114, green: 0.133, blue: 0.157)    // #1D2228
     )
-    /// Hairline rule colour.
+    /// Hairline rule colour. Full-strength under Increase Contrast.
     static let border = Color(
         light: Color(red: 0.780, green: 0.769, blue: 0.745).opacity(0.7),
-        dark:  Color(red: 0.227, green: 0.247, blue: 0.271).opacity(0.55)
+        dark:  Color(red: 0.227, green: 0.247, blue: 0.271).opacity(0.55),
+        lightHC: Color(red: 0.55, green: 0.54, blue: 0.52),
+        darkHC:  Color(red: 0.42, green: 0.45, blue: 0.49)
     )
     /// Row selection wash.
     static let selection = Color(
@@ -75,7 +83,9 @@ enum Theme {
     // call sites intentionally place this token on raised or translucent surfaces.
     static let textTertiary = Color(
         light: Color(red: 0.300, green: 0.290, blue: 0.267),
-        dark:  Color(red: 0.745, green: 0.729, blue: 0.690)
+        dark:  Color(red: 0.745, green: 0.729, blue: 0.690),
+        lightHC: Color(red: 0.16, green: 0.15, blue: 0.13),
+        darkHC:  Color(red: 0.87, green: 0.86, blue: 0.83)
     )
 
     // MARK: - Signal — the only colour that means anything
@@ -181,8 +191,18 @@ enum Theme {
 
     // MARK: - Motion
 
-    static let spring = Animation.spring(response: 0.32, dampingFraction: 0.86)
-    static let quick  = Animation.easeOut(duration: 0.14)
+    /// Honors Reduce Motion: springs collapse to an imperceptible linear step
+    /// so state still updates without movement.
+    static var reduceMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    static var spring: Animation {
+        reduceMotion ? .linear(duration: 0.01) : .spring(response: 0.32, dampingFraction: 0.86)
+    }
+    static var quick: Animation {
+        reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.14)
+    }
 
     // MARK: - Shared date formatters
     // DateFormatter init costs ~0.1–1 ms; per-row view code must use these
