@@ -1,6 +1,6 @@
 import Foundation
 
-final class SubprocessAdapter: MessengerAdapter {
+final class SubprocessAdapter: MessengerAdapter, @unchecked Sendable {
     let serviceID: String
     // .warning until start() has successfully completed. Matters because
     // PollEngine.pollOnce only calls adapter.start() when healthStatus != .ok;
@@ -231,6 +231,9 @@ final class SubprocessAdapter: MessengerAdapter {
 
         // Capture as a local ref so the closure doesn't need to retain self.
         let readBuffer = self.readBuffer
+        var encodedRequest = try JSONSerialization.data(withJSONObject: request)
+        encodedRequest.append(UInt8(ascii: "\n"))
+        let requestData = encodedRequest
 
         // Shared state hoisted so both the operation and onCancel closures can reference it.
         final class RoundTripState: @unchecked Sendable {
@@ -255,12 +258,10 @@ final class SubprocessAdapter: MessengerAdapter {
                         }
 
                         do {
-                            var data = try JSONSerialization.data(withJSONObject: request)
-                            data.append(UInt8(ascii: "\n"))
                             // Modern throwing API: a dead pipe surfaces as a Swift error
                             // (NSCocoaErrorDomain / EPIPE) instead of an uncatchable NSException.
                             // The legacy writeData(_:) raises an ObjC exception that crashes Swift.
-                            try writeHandle.write(contentsOf: data)
+                            try writeHandle.write(contentsOf: requestData)
                         } catch {
                             continuation.resume(throwing: AdapterError.processClosed)
                             return
@@ -268,7 +269,7 @@ final class SubprocessAdapter: MessengerAdapter {
 
                         // Slice one newline-terminated line from the shared buffer.
                         // Bytes after the newline are left in place for the next call.
-                        let consumeLine: () -> Bool = {
+                        let consumeLine: @Sendable () -> Bool = {
                             guard let nlIdx = readBuffer.data.firstIndex(of: UInt8(ascii: "\n")) else { return false }
                             let line = readBuffer.data[..<nlIdx]
                             readBuffer.data = Data(readBuffer.data[readBuffer.data.index(after: nlIdx)...])

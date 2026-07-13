@@ -13,7 +13,7 @@ enum BriefRepositoryError: Error, LocalizedError {
     }
 }
 
-struct BriefConversationKey: Hashable {
+struct BriefConversationKey: Hashable, Sendable {
     var service: String
     var conversationID: String
 }
@@ -37,7 +37,7 @@ struct BriefPromptData {
     var recentMessages: [BriefConversationKey: [Message]]
 }
 
-struct BriefRepository {
+struct BriefRepository: Sendable {
     let database: AppDatabase
 
     static let maximumBriefJobAttempts = 3

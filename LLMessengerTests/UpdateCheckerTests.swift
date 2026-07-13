@@ -3,7 +3,7 @@ import XCTest
 @testable import LLMessenger
 
 private final class UpdateCheckerURLProtocol: URLProtocol {
-    static var handler: ((URLRequest) throws -> (URLResponse, Data))?
+    nonisolated(unsafe) static var handler: ((URLRequest) throws -> (URLResponse, Data))?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }

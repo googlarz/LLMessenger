@@ -134,7 +134,7 @@ final class AgentFoundationTests: XCTestCase {
 
 // MARK: - Test doubles
 
-final class SilentLLMClient: LLMClient {
+final class SilentLLMClient: LLMClient, @unchecked Sendable {
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
         LLMResponse(text: "", inputTokens: 0, outputTokens: 0)
     }

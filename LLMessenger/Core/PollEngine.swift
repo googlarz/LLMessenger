@@ -26,11 +26,6 @@ final class PollEngine {
             ?? MessageIngestionCoordinator(database: database)
     }
 
-    deinit {
-        timers.values.forEach { $0.invalidate() }
-        timers.removeAll()
-    }
-
     func register(adapter: MessengerAdapter, config: ServiceConfig) {
         adapters[adapter.serviceID] = adapter
         configs[adapter.serviceID] = config
@@ -72,22 +67,22 @@ final class PollEngine {
     func start() async {
         // Start all enabled adapters concurrently so a slow/unresponsive adapter
         // (e.g. Telegram timing out) doesn't block iMessage or Signal from starting.
-        await withTaskGroup(of: Void.self) { group in
-            for (serviceID, config) in configs where config.enabled {
-                let intervalSeconds = config.pollIntervalSeconds
-                group.addTask { @MainActor [weak self] in
-                    guard let self, let adapter = self.adapters[serviceID] else { return }
-                    do {
-                        try await adapter.start()
-                        self.scheduleTimer(serviceID: serviceID, intervalSeconds: intervalSeconds)
-                        await self.checkCatchUp(serviceID: serviceID)
-                    } catch {
-                        self.writeHealth(service: serviceID, status: "error",
-                                         error: error.localizedDescription, updateLastCheck: true)
-                    }
+        let tasks = configs.compactMap { serviceID, config -> Task<Void, Never>? in
+            guard config.enabled else { return nil }
+            let intervalSeconds = config.pollIntervalSeconds
+            return Task { @MainActor [weak self] in
+                guard let self, let adapter = self.adapters[serviceID] else { return }
+                do {
+                    try await adapter.start()
+                    self.scheduleTimer(serviceID: serviceID, intervalSeconds: intervalSeconds)
+                    await self.checkCatchUp(serviceID: serviceID)
+                } catch {
+                    self.writeHealth(service: serviceID, status: "error",
+                                     error: error.localizedDescription, updateLastCheck: true)
                 }
             }
         }
+        for task in tasks { await task.value }
     }
 
     // Poll all enabled adapters; fire onPollSucceeded exactly once if any new messages were stored.
@@ -97,18 +92,15 @@ final class PollEngine {
         pollAllInvocationCount += 1
         defer { pollAllInvocationCount -= 1 }
         let serviceIDs = adapters.keys.filter { configs[$0]?.enabled == true }
-        let anyNew = await withTaskGroup(of: Bool.self) { group in
-            for serviceID in serviceIDs {
-                group.addTask { @MainActor [weak self] in
-                    guard let self else { return false }
-                    let hasNew = (try? await self.pollOnce(serviceID: serviceID)) == true
-                    return hasNew && self.configs[serviceID]?.resolvedPrivacyMode == .eager
-                }
+        let tasks = serviceIDs.map { serviceID in
+            Task { @MainActor [weak self] in
+                guard let self else { return false }
+                let hasNew = (try? await self.pollOnce(serviceID: serviceID)) == true
+                return hasNew && self.configs[serviceID]?.resolvedPrivacyMode == .eager
             }
-            var result = false
-            for await hadNew in group { if hadNew { result = true } }
-            return result
         }
+        var anyNew = false
+        for task in tasks where await task.value { anyNew = true }
         if anyNew && invokeSuccessHandler { await onPollSucceeded?() }
         return anyNew
     }

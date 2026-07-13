@@ -287,7 +287,9 @@ final class ContextWindowTests: XCTestCase {
         // deliberately chosen so the boundary (20 omitted) is unambiguous
         // regardless of the estimator's exact rounding.
         let ids = (0..<120).map { "m\($0)" }
-        let paddedText = { (id: String) in "Message \(id) " + String(repeating: "x", count: 110) }
+        let paddedText: @Sendable (String) -> String = {
+            id in "Message \(id) " + String(repeating: "x", count: 110)
+        }
         try await db.dbQueue.write { d in
             for (i, msgId) in ids.enumerated() {
                 var m = Message(briefId: nil, service: "signal", conversationId: "c1",
@@ -895,7 +897,7 @@ final class MultiServicePartialFailureTests: XCTestCase {
 
 // MARK: - Private Mocks
 
-private final class RiggedMock: LLMClient {
+private final class RiggedMock: LLMClient, @unchecked Sendable {
     let payload: String
     init(_ payload: String) { self.payload = payload }
 
@@ -908,7 +910,7 @@ private final class RiggedMock: LLMClient {
     }
 }
 
-private final class CompressionFailMock: LLMClient {
+private final class CompressionFailMock: LLMClient, @unchecked Sendable {
     var briefSpec: DynamicMockLLMClient.Spec?
 
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {

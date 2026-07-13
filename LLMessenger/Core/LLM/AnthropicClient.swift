@@ -1,7 +1,7 @@
 // LLMessenger/Core/LLM/AnthropicClient.swift
 import Foundation
 
-final class AnthropicClient: LLMClient {
+final class AnthropicClient: LLMClient, @unchecked Sendable {
     private let apiKey: String
     private let session: URLSession
 

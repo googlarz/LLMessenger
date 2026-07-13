@@ -1,7 +1,7 @@
 // LLMessenger/Core/LLM/OpenAIClient.swift
 import Foundation
 
-final class OpenAIClient: LLMClient {
+final class OpenAIClient: LLMClient, @unchecked Sendable {
     private let apiKey: String
     private let session: URLSession
 

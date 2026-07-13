@@ -5,7 +5,7 @@ import GRDB
 
 @MainActor
 final class DataExporterTests: XCTestCase {
-    private var tempDir: URL!
+    nonisolated(unsafe) private var tempDir: URL!
 
     override func setUp() {
         super.setUp()

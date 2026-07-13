@@ -172,7 +172,7 @@ struct ToDoStripView: View {
 
 /// Measures the strip's intrinsic content height so it can size-to-fit up to a cap.
 private struct StripHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    nonisolated(unsafe) static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 

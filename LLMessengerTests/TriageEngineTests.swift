@@ -5,7 +5,7 @@ import GRDB
 
 // MARK: - Mock LLM Client
 
-final class TriageMockLLMClient: LLMClient {
+final class TriageMockLLMClient: LLMClient, @unchecked Sendable {
     var stubbedResponse: String = """
     {"priority":"high","needsReply":true,"reason":"Urgent request"}
     """

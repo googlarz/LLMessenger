@@ -7,6 +7,14 @@ import AppKit
 import Foundation
 import GRDB
 
+private struct BriefRefreshSnapshot: @unchecked Sendable {
+    let briefs: [Brief]
+    let cardsByBriefID: [Int64: [BriefCard]]
+    let pipelineHealth: BriefPipelineHealth
+    let serviceHealth: [String: ServiceHealth]
+    let heldBackCount: Int
+}
+
 extension AppState {
     /// Returns the reload task so callers that need deterministic sequencing
     /// (tests, chained UI updates) can await it; UI call sites discard it.
@@ -27,32 +35,37 @@ extension AppState {
     @discardableResult
     func refreshBriefs() -> Task<Void, Never> {
         let settingsRepo = makeSettingsRepository()
+        let repository = repository
         let selectedID = selectedBriefID
         let limit = briefFetchLimit
-        return Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
+        return Task { @MainActor [weak self] in
             do {
-                let fetched = try self.repository.fetchRecentBriefs(limit: limit, including: selectedID)
-                let cardsByBriefID = try self.repository.fetchBriefCards(briefIDs: fetched.compactMap(\.id))
-                let pipelineHealth = try self.repository.fetchBriefPipelineHealth()
-                let healthMap = (try? settingsRepo.loadAllServiceHealth()) ?? [:]
-                let heldBack = settingsRepo.loadFirewallHeldBack()
-                await MainActor.run {
-                    self.briefCardsByBriefID = cardsByBriefID
-                    self.briefs = fetched
-                    self.briefPipelineHealth = pipelineHealth
-                    self.serviceHealthMap = healthMap
-                    self.heldBackCount = heldBack
-                    self.recomputeNowState()
-                    self.onBriefsChanged?()
-                    self.reloadOwedReplies()
-                    self.reloadAgentActions()
-                    self.reloadCommitments()
-                    self.reloadContextSuggestions()
-                    self.reloadProductOutcomeStats()
-                }
+                let snapshot = try await Task.detached(priority: .userInitiated) {
+                    let briefs = try repository.fetchRecentBriefs(limit: limit, including: selectedID)
+                    return BriefRefreshSnapshot(
+                        briefs: briefs,
+                        cardsByBriefID: try repository.fetchBriefCards(briefIDs: briefs.compactMap(\.id)),
+                        pipelineHealth: try repository.fetchBriefPipelineHealth(),
+                        serviceHealth: (try? settingsRepo.loadAllServiceHealth()) ?? [:],
+                        heldBackCount: settingsRepo.loadFirewallHeldBack()
+                    )
+                }.value
+                guard let self else { return }
+                self.briefCardsByBriefID = snapshot.cardsByBriefID
+                self.briefs = snapshot.briefs
+                self.briefPipelineHealth = snapshot.pipelineHealth
+                self.serviceHealthMap = snapshot.serviceHealth
+                self.heldBackCount = snapshot.heldBackCount
+                self.recomputeNowState()
+                self.onBriefsChanged?()
+                self.reloadOwedReplies()
+                self.reloadAgentActions()
+                self.reloadCommitments()
+                self.reloadContextSuggestions()
+                self.reloadProductOutcomeStats()
             } catch {
-                await MainActor.run { self.lastError = self.friendly(error) }
+                guard let self else { return }
+                self.lastError = self.friendly(error)
             }
         }
     }

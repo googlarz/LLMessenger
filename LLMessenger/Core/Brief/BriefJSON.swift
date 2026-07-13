@@ -327,7 +327,7 @@ extension BriefJSON {
         return value
     }
 
-    private static var decodeCache: [Int64: (summaryHash: Int, value: BriefJSON?)] = [:]
+    nonisolated(unsafe) private static var decodeCache: [Int64: (summaryHash: Int, value: BriefJSON?)] = [:]
     private static let cacheLock = NSLock()
 
     /// True when a string still looks like (possibly malformed) JSON — used by the render

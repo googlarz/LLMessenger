@@ -359,7 +359,7 @@ final class BriefEngineScalabilityTests: XCTestCase {
     }
 }
 
-final class PromptReflectingBriefClient: LLMClient {
+final class PromptReflectingBriefClient: LLMClient, @unchecked Sendable {
     var omittedConversations: Set<String> = []
     var sourceMessageIDsByConversation: [String: [String]] = [:]
     var onGeneration: ((Int) -> Void)?

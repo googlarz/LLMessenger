@@ -18,6 +18,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.llmessenger.app
         SWIFT_VERSION: "5.9"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         INFOPLIST_FILE: LLMessenger/Info.plist
         CODE_SIGN_ENTITLEMENTS: LLMessenger/LLMessenger.entitlements
@@ -40,6 +42,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.llmessenger.app.widget
         SWIFT_VERSION: "5.9"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         INFOPLIST_FILE: LLMessengerWidget/Info.plist
         CODE_SIGN_ENTITLEMENTS: LLMessengerWidget/LLMessengerWidget.entitlements
@@ -54,6 +58,8 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "5.9"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         GENERATE_INFOPLIST_FILE: YES
     dependencies:

@@ -2,7 +2,7 @@
 import XCTest
 @testable import LLMessenger
 
-private final class StubLLMClient: LLMClient {
+private final class StubLLMClient: LLMClient, @unchecked Sendable {
     var stubbedResponse: String
     init(_ response: String) { self.stubbedResponse = response }
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {

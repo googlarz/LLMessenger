@@ -2,8 +2,8 @@ import Foundation
 
 // MARK: - Fetch Configuration
 
-struct FetchConfig {
-    enum Mode {
+struct FetchConfig: Sendable {
+    enum Mode: Sendable {
         case byTime(since: Date)
         case byCount(last: Int)
     }
@@ -12,7 +12,7 @@ struct FetchConfig {
 
 // MARK: - Adapter Response Types
 
-struct AdapterMessage: Decodable {
+struct AdapterMessage: Decodable, Sendable {
     let id: String
     let sender: String
     let text: String
@@ -41,7 +41,7 @@ struct AdapterMessage: Decodable {
     }
 }
 
-enum ConversationType: String, Decodable {
+enum ConversationType: String, Decodable, Sendable {
     case dm
     case group
     case channel
@@ -54,7 +54,7 @@ enum ConversationType: String, Decodable {
     }
 }
 
-struct AdapterConversation: Decodable {
+struct AdapterConversation: Decodable, Sendable {
     let id: String
     let name: String
     let type: ConversationType
@@ -86,12 +86,12 @@ struct ConversationAccumulator {
     }
 }
 
-struct AdapterFetchResult {
+struct AdapterFetchResult: Sendable {
     let conversations: [AdapterConversation]
 }
 
-struct AdapterHealthResult {
-    enum Status: String, Equatable {
+struct AdapterHealthResult: Sendable {
+    enum Status: String, Equatable, Sendable {
         case ok, warning, error
     }
     let status: Status
@@ -123,7 +123,7 @@ enum AdapterError: Error, LocalizedError {
 
 // MARK: - Protocol
 
-protocol MessengerAdapter: AnyObject {
+protocol MessengerAdapter: AnyObject, Sendable {
     var serviceID: String { get }
     var healthStatus: AdapterHealthResult.Status { get }
 

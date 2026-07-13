@@ -1,7 +1,7 @@
 import GRDB
 import Foundation
 
-struct Message: Codable, FetchableRecord, MutablePersistableRecord {
+struct Message: Codable, FetchableRecord, MutablePersistableRecord, Sendable {
     var id: Int64?
     var briefId: Int64?
     var service: String

@@ -2,7 +2,7 @@
 import Foundation
 import GRDB
 
-final class SignalCLIAdapter: MessengerAdapter {
+final class SignalCLIAdapter: MessengerAdapter, @unchecked Sendable {
     let serviceID = "signal"
     private(set) var healthStatus: AdapterHealthResult.Status = .warning
 

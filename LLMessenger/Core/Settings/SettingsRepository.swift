@@ -7,7 +7,7 @@ enum SettingsError: Error, LocalizedError {
     var errorDescription: String? { "Settings database is not configured" }
 }
 
-struct SettingsRepository {
+struct SettingsRepository: @unchecked Sendable {
     private let keychainStore: KeychainStore
     private let keyPrefix: String
     private let database: AppDatabase?

@@ -10,7 +10,7 @@ import GRDB
 
 // MARK: - FakeMessengerAdapter
 
-final class FakeMessengerAdapter: MessengerAdapter {
+final class FakeMessengerAdapter: MessengerAdapter, @unchecked Sendable {
     func listContacts() async -> [Contact] { [] }
     let serviceID: String
     var healthStatus: AdapterHealthResult.Status = .ok

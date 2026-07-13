@@ -9,7 +9,7 @@ enum BriefEvent: String {
     case refreshTriggered = "refresh_triggered"
 }
 
-final class InstrumentationManager {
+final class InstrumentationManager: @unchecked Sendable {
     static let shared = InstrumentationManager()
     
     private init() {}

@@ -5,7 +5,7 @@ import Foundation
 ///
 /// Conversation IDs are encoded as "<team_id>/<channel_id>" so PollEngine and BriefEngine
 /// see flat strings while the adapter can still find the right workspace token on send.
-final class SlackAdapter: MessengerAdapter {
+final class SlackAdapter: MessengerAdapter, @unchecked Sendable {
     let serviceID = "slack"
     private(set) var healthStatus: AdapterHealthResult.Status = .warning
 

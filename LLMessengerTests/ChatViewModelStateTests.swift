@@ -331,7 +331,7 @@ final class ChatViewModelStateTests: XCTestCase {
     }
 }
 
-private final class StateSequenceLLMClient: LLMClient {
+private final class StateSequenceLLMClient: LLMClient, @unchecked Sendable {
     var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
     var error: Error?
     private var responses: [LLMResponse]

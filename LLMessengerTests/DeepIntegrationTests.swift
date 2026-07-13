@@ -174,7 +174,7 @@ private let telegramSuccessJSON = """
 }
 """
 
-final class PartialFailureMockLLMClient: LLMClient {
+final class PartialFailureMockLLMClient: LLMClient, @unchecked Sendable {
     var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
     var responses: [String: Result<LLMResponse, Error>] = [:]
     

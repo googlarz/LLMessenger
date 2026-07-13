@@ -96,9 +96,13 @@ struct BriefProseView: View {
         }
         guard !uniquePairs.isEmpty else { return }
         let repository = appState.repository
+        let requestedKeys = uniquePairs.map {
+            BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+        }
         contextLoadTask = Task {
             let loaded = await Task.detached(priority: .userInitiated) {
-                (try? repository.fetchConversationContexts(for: uniquePairs)) ?? []
+                let contexts = (try? repository.fetchConversationContexts(for: requestedKeys)) ?? [:]
+                return Array(contexts.values)
             }.value
             guard !Task.isCancelled, !loaded.isEmpty else { return }
             appState.mergeConversationContexts(loaded)

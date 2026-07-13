@@ -12,7 +12,7 @@ import GRDB
 // Returns a fixed payload for every briefing call, regardless of input.
 // Compressor calls (detected by "2-3 sentences" in system prompt) get a safe fallback.
 
-private final class RiggedMockLLMClient: LLMClient {
+private final class RiggedMockLLMClient: LLMClient, @unchecked Sendable {
     let payload: String
     init(_ payload: String) { self.payload = payload }
 
@@ -27,7 +27,7 @@ private final class RiggedMockLLMClient: LLMClient {
 
 // MARK: - ThrowingMockLLMClient
 
-private final class ThrowingMockLLMClient: LLMClient {
+private final class ThrowingMockLLMClient: LLMClient, @unchecked Sendable {
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
         throw URLError(.notConnectedToInternet)
     }

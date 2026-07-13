@@ -2,7 +2,7 @@ import XCTest
 import GRDB
 @testable import LLMessenger
 
-private final class GatewaySpyClient: LLMClient {
+private final class GatewaySpyClient: LLMClient, @unchecked Sendable {
     var local = false
     var response = LLMResponse(text: "response text", inputTokens: 11, outputTokens: 7)
     var error: Error?

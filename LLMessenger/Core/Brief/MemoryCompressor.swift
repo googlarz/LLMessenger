@@ -1,7 +1,7 @@
 // LLMessenger/Core/Brief/MemoryCompressor.swift
 import Foundation
 
-struct MemoryCompressor {
+struct MemoryCompressor: Sendable {
     let client: LLMClient
     let model: String
     let basePrompt: String

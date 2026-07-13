@@ -6,7 +6,7 @@ import Contacts
 // Mac absolute time epoch offset from Unix epoch (seconds between 2001-01-01 and 1970-01-01).
 private let kMacEpochOffset: TimeInterval = 978_307_200
 
-final class iMessageAdapter: MessengerAdapter {
+final class iMessageAdapter: MessengerAdapter, @unchecked Sendable {
     let serviceID = "imessage"
     private(set) var healthStatus: AdapterHealthResult.Status = .warning
 

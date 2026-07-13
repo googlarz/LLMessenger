@@ -1,7 +1,7 @@
 // LLMessenger/Core/LLM/OllamaClient.swift
 import Foundation
 
-final class OllamaClient: LLMClient {
+final class OllamaClient: LLMClient, @unchecked Sendable {
     var isLocal: Bool { true }
     private let baseURL: URL
     private let session: URLSession

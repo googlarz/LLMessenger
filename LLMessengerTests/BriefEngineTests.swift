@@ -877,7 +877,7 @@ final class BriefEngineTests: XCTestCase {
 
 // Local (on-device) client stub: isLocal == true. Used to assert that local_only
 // conversations ARE briefed when the configured client never leaves the machine.
-final class LocalMockLLMClient: LLMClient {
+final class LocalMockLLMClient: LLMClient, @unchecked Sendable {
     var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
     var response: LLMResponse = LLMResponse(text: "", inputTokens: 0, outputTokens: 0)
     var isLocal: Bool { true }
@@ -889,7 +889,7 @@ final class LocalMockLLMClient: LLMClient {
 }
 
 // Service-aware mock: returns service-specific JSON based on which service appears in the system prompt.
-final class ServiceAwareMockLLMClient: LLMClient {
+final class ServiceAwareMockLLMClient: LLMClient, @unchecked Sendable {
     var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
     var jsonForService: [String: String] = [:]
     var fallbackJSON: String = #"{"cards":[]}"#
@@ -904,7 +904,7 @@ final class ServiceAwareMockLLMClient: LLMClient {
 }
 
 // Two-stage mock: returns `first` on call 1, `second` on call 2+.
-final class TwoStageMockLLMClient: LLMClient {
+final class TwoStageMockLLMClient: LLMClient, @unchecked Sendable {
     var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
     private let first: String
     private let second: String

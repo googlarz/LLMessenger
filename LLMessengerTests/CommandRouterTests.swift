@@ -21,7 +21,7 @@ final class CommandRouterTests: XCTestCase {
 
     /// Deterministic LLM: replays canned classifier responses in order, and records
     /// every message it is asked to classify so we can assert on what it saw.
-    private final class CommandStubLLM: LLMClient {
+    private final class CommandStubLLM: LLMClient, @unchecked Sendable {
         private var responses: [String]
         private(set) var seenUserContents: [String] = []
         init(responses: [String]) { self.responses = responses }
@@ -44,7 +44,7 @@ final class CommandRouterTests: XCTestCase {
         func stop() { isListening = false }
     }
 
-    private final class StubAdapter: MessengerAdapter {
+    private final class StubAdapter: MessengerAdapter, @unchecked Sendable {
         let serviceID: String
         var healthStatus: AdapterHealthResult.Status = .ok
         init(serviceID: String) { self.serviceID = serviceID }

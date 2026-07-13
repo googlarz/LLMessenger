@@ -121,10 +121,8 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
         /// For rsvp: the reply text to send alongside the optional event.
         var replyText: String?
 
-        private static let formatter = ISO8601DateFormatter()
-
-        var start: Date? { Self.formatter.date(from: startISO) }
-        var end: Date? { Self.formatter.date(from: endISO) }
+        var start: Date? { ISO8601DateFormatter().date(from: startISO) }
+        var end: Date? { ISO8601DateFormatter().date(from: endISO) }
     }
 
     var calendarPayload: CalendarPayload? {

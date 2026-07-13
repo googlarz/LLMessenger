@@ -1,13 +1,13 @@
 // LLMessenger/Core/LLM/LLMClient.swift
 import Foundation
 
-struct LLMMessage: Equatable {
-    enum Role: String { case system, user, assistant }
+struct LLMMessage: Equatable, Sendable {
+    enum Role: String, Sendable { case system, user, assistant }
     let role: Role
     let content: String
 }
 
-struct LLMResponse: Equatable {
+struct LLMResponse: Equatable, Sendable {
     let text: String
     let inputTokens: Int
     let outputTokens: Int
@@ -35,7 +35,7 @@ enum LLMError: Error, LocalizedError {
     }
 }
 
-protocol LLMClient {
+protocol LLMClient: Sendable {
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse
     /// True when the client runs entirely on-device (Ollama, Apple Foundation Models).
     /// Cloud clients (OpenAI, Anthropic) return false. Used to enforce per-conversation

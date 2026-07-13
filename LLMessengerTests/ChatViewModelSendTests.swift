@@ -5,7 +5,7 @@ import GRDB
 
 // MARK: - Test-local adapter (SpyAdapter in ChatViewModelTests.swift is private)
 
-internal final class SendTestSpyAdapter: MessengerAdapter {
+internal final class SendTestSpyAdapter: MessengerAdapter, @unchecked Sendable {
     func listContacts() async -> [Contact] { [] }
     let serviceID: String
     var healthStatus: AdapterHealthResult.Status = .ok
@@ -24,7 +24,7 @@ internal final class SendTestSpyAdapter: MessengerAdapter {
     }
 }
 
-private final class SendTestCloudLLMClient: LLMClient {
+private final class SendTestCloudLLMClient: LLMClient, @unchecked Sendable {
     var callCount = 0
     var isLocal: Bool { false }
 
@@ -785,7 +785,7 @@ final class ChatViewModelSendTests: XCTestCase {
     }
 }
 
-private final class SequenceLLMClient: LLMClient {
+private final class SequenceLLMClient: LLMClient, @unchecked Sendable {
     var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
     private var responses: [LLMResponse]
 

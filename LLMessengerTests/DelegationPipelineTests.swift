@@ -14,8 +14,8 @@ import GRDB
 @MainActor
 final class DelegationPipelineTests: XCTestCase {
 
-    private var savedKill: Any?
-    private var savedAgent: Any?
+    nonisolated(unsafe) private var savedKill: Any?
+    nonisolated(unsafe) private var savedAgent: Any?
 
     override func setUp() {
         super.setUp()

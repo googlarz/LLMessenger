@@ -25,6 +25,11 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         Coordinator(isEnabled: isEnabled, onKeyDown: onKeyDown)
     }
 
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.uninstall()
+    }
+
+    @MainActor
     final class Coordinator {
         var isEnabled: Bool
         var onKeyDown: (NSEvent) -> Bool
@@ -35,10 +40,6 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             self.onKeyDown = onKeyDown
         }
 
-        deinit {
-            if let monitor { NSEvent.removeMonitor(monitor) }
-        }
-
         func install() {
             guard monitor == nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -46,6 +47,11 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 guard !Self.isTextEditing(event.window?.firstResponder) else { return event }
                 return self.onKeyDown(event) ? nil : event
             }
+        }
+
+        func uninstall() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
         }
 
         private static func isTextEditing(_ responder: NSResponder?) -> Bool {

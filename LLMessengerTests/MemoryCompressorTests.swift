@@ -2,7 +2,7 @@
 import XCTest
 @testable import LLMessenger
 
-final class MockLLMClient: LLMClient {
+final class MockLLMClient: LLMClient, @unchecked Sendable {
     var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
     var response: LLMResponse = LLMResponse(text: "compressed summary", inputTokens: 10, outputTokens: 5)
     var error: Error?

@@ -2,7 +2,7 @@ import XCTest
 import GRDB
 @testable import LLMessenger
 
-private final class IngestionTestAdapter: MessengerAdapter {
+private final class IngestionTestAdapter: MessengerAdapter, @unchecked Sendable {
     let serviceID: String
     var healthStatus: AdapterHealthResult.Status = .ok
     var fetchCallCount = 0

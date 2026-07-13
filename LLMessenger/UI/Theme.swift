@@ -334,6 +334,7 @@ struct WireActionStyle: ButtonStyle {
 
 // MARK: - NSAppearance helpers
 
+@MainActor
 extension NSAppearance {
     static let dark  = NSAppearance(named: .darkAqua)!
     static let light = NSAppearance(named: .aqua)!

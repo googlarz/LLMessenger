@@ -4,7 +4,7 @@ import GRDB
 @testable import LLMessenger
 
 /// Spy that records calls and declares itself a cloud client.
-private final class CloudSpyLLMClient: LLMClient {
+private final class CloudSpyLLMClient: LLMClient, @unchecked Sendable {
     var callCount = 0
     var requestedModels: [String] = []
     var isLocal: Bool { false }

@@ -10,7 +10,7 @@ import GRDB
 // message IDs inserted into the DB. This is what BriefEngine validates — making
 // every scenario test a real integration test, not a mock-the-implementation test.
 
-final class DynamicMockLLMClient: LLMClient {
+final class DynamicMockLLMClient: LLMClient, @unchecked Sendable {
     struct Spec {
         let convId: String
         let messageIds: [String]

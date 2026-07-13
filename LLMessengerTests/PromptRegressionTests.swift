@@ -16,7 +16,7 @@ import GRDB
 // Records the (systemPrompt, userContent) sent on each call and returns valid JSON so
 // BriefEngine proceeds. Used only for integration-level prompt inspection.
 
-final class CapturingMockLLMClient: LLMClient {
+final class CapturingMockLLMClient: LLMClient, @unchecked Sendable {
     struct CapturedCall {
         let systemPrompt: String
         let userContent: String

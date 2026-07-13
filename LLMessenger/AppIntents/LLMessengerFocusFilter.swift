@@ -4,9 +4,9 @@ import Foundation
 // MARK: - Focus Filter Parameters
 
 struct LLMessengerFocusFilter: SetFocusFilterIntent {
-    static var title: LocalizedStringResource = "LLMessenger"
-    static var description = IntentDescription("Filter which messages LLMessenger surfaces during this Focus.")
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "LLMessenger Focus Filter"
+    nonisolated(unsafe) static var title: LocalizedStringResource = "LLMessenger"
+    nonisolated(unsafe) static var description = IntentDescription("Filter which messages LLMessenger surfaces during this Focus.")
+    nonisolated(unsafe) static var typeDisplayRepresentation: TypeDisplayRepresentation = "LLMessenger Focus Filter"
     var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "LLMessenger Focus Filter") }
 
     @Parameter(title: "Suppress Services", default: [])

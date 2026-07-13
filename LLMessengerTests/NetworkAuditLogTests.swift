@@ -3,12 +3,8 @@ import XCTest
 
 @MainActor
 final class NetworkAuditLogTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
-        NetworkAuditLog.shared.clear()
-    }
-
     func testAuditEntryDropsQueryHeadersBodiesAndErrorDetails() async throws {
+        NetworkAuditLog.shared.clear()
         let secret = "top-secret-message"
         var request = URLRequest(url: try XCTUnwrap(URL(
             string: "https://api.example.com/v1/messages?user=alice&token=\(secret)"
@@ -34,6 +30,7 @@ final class NetworkAuditLogTests: XCTestCase {
     }
 
     func testLocalhostClassificationIsMetadataOnly() async throws {
+        NetworkAuditLog.shared.clear()
         let request = URLRequest(url: try XCTUnwrap(URL(
             string: "http://127.0.0.1:11434/api/chat?prompt=private"
         )))

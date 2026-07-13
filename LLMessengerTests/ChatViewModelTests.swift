@@ -122,7 +122,7 @@ final class ChatViewModelTests: XCTestCase {
     }
 }
 
-private final class SpyAdapter: MessengerAdapter {
+private final class SpyAdapter: MessengerAdapter, @unchecked Sendable {
     func listContacts() async -> [Contact] { [] }
     let serviceID: String
     var healthStatus: AdapterHealthResult.Status = .ok
