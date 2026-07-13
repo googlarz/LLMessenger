@@ -66,13 +66,22 @@ struct MainToolbar: ToolbarContent {
                 .help(appState.askPanelOpen ? "Close the Ask panel" : "Ask about this digest, or draft a reply")
             }
 
-            Button {
-                appState.onRequestRefresh?()
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+            // Routine progress is a toolbar spinner, never a banner.
+            if appState.briefGenerationState == .fetching || appState.briefGenerationState == .summarizing {
+                ProgressView()
+                    .controlSize(.small)
+                    .help(appState.briefGenerationState == .fetching
+                          ? "Checking messages…" : "Building digest…")
+                    .accessibilityLabel("Building digest")
+            } else {
+                Button {
+                    appState.onRequestRefresh?()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .help("Check messages and build a digest now (⌘R)")
+                .keyboardShortcut("r", modifiers: .command)
             }
-            .help("Check messages and build a digest now (⌘R)")
-            .keyboardShortcut("r", modifiers: .command)
 
             Button {
                 showingServiceStatus.toggle()

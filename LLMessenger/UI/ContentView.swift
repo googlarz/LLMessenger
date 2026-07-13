@@ -36,11 +36,6 @@ struct ContentView: View {
                 Rule()
             }
 
-            if let receipt = appState.userReceipt {
-                ReceiptBanner(receipt: receipt, onDismiss: { appState.clearReceipt() })
-                Rule()
-            }
-
             if shouldShowFirstRealDigestMoment {
                 FirstRealDigestSuccessView()
                 Rule()
@@ -86,6 +81,16 @@ struct ContentView: View {
             }
         }
         .background(Theme.bg)
+        // Routine success is a floating toast that never displaces content;
+        // it auto-dismisses and carries its optional follow-up action.
+        .overlay(alignment: .bottom) {
+            if let receipt = appState.userReceipt {
+                ReceiptToast(receipt: receipt, onDismiss: { appState.clearReceipt() })
+                    .padding(.bottom, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(Theme.spring, value: appState.userReceipt?.id)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("LLMessenger main window")
         .toolbar {
@@ -672,22 +677,22 @@ private struct BriefPipelineBanner: View {
     }
 }
 
-private struct ReceiptBanner: View {
+/// Floating confirmation for routine success — overlays the content instead of
+/// pushing it down, and dismisses itself unless the user is hovering it.
+private struct ReceiptToast: View {
     let receipt: UserReceipt
     let onDismiss: () -> Void
+    @State private var hovering = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Theme.ok.frame(width: 2)
-                .clipShape(RoundedRectangle(cornerRadius: 1))
-            VStack(alignment: .leading, spacing: 3) {
-                WireLabel("Saved", color: Theme.ok)
-                Text(receipt.text)
-                    .font(Theme.sans(12.5))
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.ok)
+            Text(receipt.text)
+                .font(Theme.sans(12.5))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(2)
             if let actionTitle = receipt.actionTitle, let action = receipt.action {
                 Button(actionTitle.uppercased()) {
                     action()
@@ -695,12 +700,36 @@ private struct ReceiptBanner: View {
                 }
                 .buttonStyle(WireActionStyle(tint: Theme.ok))
             }
-            Button("DISMISS", action: onDismiss)
-                .buttonStyle(WireActionStyle())
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss confirmation")
         }
-        .padding(.horizontal, Theme.gutter)
-        .padding(.vertical, 9)
-        .background(Theme.ok.opacity(0.035))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radius + 2)
+                .fill(Theme.surfaceHigh)
+                .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius + 2)
+                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+        )
+        .frame(maxWidth: 480)
+        .onHover { hovering = $0 }
+        .task(id: receipt.id) {
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            if !hovering { onDismiss() }
+        }
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("Saved: \(receipt.text)")
     }
 }
