@@ -25,8 +25,11 @@ final class AccessibilityUITests: XCTestCase {
                 }
                 // Toolbar menu buttons (SwiftUI Menu bridged to NSMenuToolbarItem)
                 // expose AXShowMenu, not AXPress; the audit only counts the latter
-                // as a click action. VoiceOver operates them via Show Menu.
-                if element.elementType == .menuButton, issue.auditType == .action {
+                // as a click action. VoiceOver operates them via Show Menu. Newer
+                // XCTest builds map the same control to .popUpButton and also miss
+                // its title-provided description.
+                if element.elementType == .menuButton || element.elementType == .popUpButton,
+                   issue.auditType == .action || issue.auditType == .sufficientElementDescription {
                     return true
                 }
                 // SwiftUI emits unlabeled AXGroup layout containers (ForEach/if
