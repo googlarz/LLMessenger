@@ -21,9 +21,9 @@ concurrency:
 
 jobs:
   test:
-    name: Build & Test
+    name: Production Gates
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +34,12 @@ jobs:
       - name: Regenerate project from project.yml
         run: xcodegen generate
 
+      - name: Security audit
+        run: scripts/security-audit.sh
+
+      - name: Verify test registration
+        run: scripts/check-test-registration.sh
+
       - name: Build & test
         run: |
           set -o pipefail
@@ -41,11 +47,24 @@ jobs:
             -scheme LLMessenger \
             -configuration Debug \
             -project LLMessenger.xcodeproj \
+            -parallel-testing-enabled NO \
+            -resultBundlePath TestResults.xcresult \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             OTHER_LDFLAGS="" \
             test 2>&1 | tee test.log | grep -E "Test Suite|Executed|error:" || true
           grep -q "TEST SUCCEEDED" test.log
+
+      - name: Static analysis
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -scheme LLMessenger \
+            -configuration Release \
+            -project LLMessenger.xcodeproj \
+            CODE_SIGNING_ALLOWED=NO \
+            OTHER_LDFLAGS="" \
+            analyze 2>&1 | tee analyze.log
 
       - name: Lint — no hard-coded colors outside Theme.swift
         run: |
@@ -59,10 +78,31 @@ jobs:
             exit 1
           fi
 
-      - name: Upload test log on failure
+      - name: Archive unsigned universal app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -scheme LLMessenger \
+            -configuration Release \
+            -project LLMessenger.xcodeproj \
+            -destination 'generic/platform=macOS' \
+            -archivePath build/LLMessenger.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            OTHER_LDFLAGS="" \
+            archive 2>&1 | tee archive.log
+
+      - name: Verify archived app
+        run: scripts/verify-app-bundle.sh build/LLMessenger.xcarchive/Products/Applications/LLMessenger.app
+
+      - name: Upload diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-log
-          path: test.log
+          name: ci-diagnostics
+          path: |
+            test.log
+            analyze.log
+            archive.log
+            TestResults.xcresult
           retention-days: 14

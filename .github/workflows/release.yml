@@ -1,6 +1,6 @@
 name: Release
 
-# Builds an unsigned .app from a tagged commit and uploads it as a workflow artifact.
+# Tests and archives an unsigned .app from a tagged commit, then uploads it.
 # Anyone can re-run this workflow on a clean macOS-15 runner to verify the binary
 # matches the source. The artifact is intentionally unsigned — users who want a
 # notarised binary should sign locally with their own Developer ID.
@@ -20,9 +20,9 @@ permissions:
 
 jobs:
   build:
-    name: Build LLMessenger.app
+    name: Verify & Archive LLMessenger.app
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,32 +41,63 @@ jobs:
       - name: Regenerate project from project.yml
         run: xcodegen generate
 
-      - name: Build Release
+      - name: Security audit
+        run: scripts/security-audit.sh
+
+      - name: Verify test registration
+        run: scripts/check-test-registration.sh
+
+      - name: Run full test suite
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -scheme LLMessenger \
+            -configuration Debug \
+            -project LLMessenger.xcodeproj \
+            -parallel-testing-enabled NO \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            OTHER_LDFLAGS="" \
+            test 2>&1 | tee test.log
+
+      - name: Static analysis
         run: |
           set -o pipefail
           xcodebuild \
             -scheme LLMessenger \
             -configuration Release \
-            -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
+            -project LLMessenger.xcodeproj \
             CODE_SIGNING_ALLOWED=NO \
             OTHER_LDFLAGS="" \
-            build | tee build.log
+            analyze 2>&1 | tee analyze.log
 
-      - name: Locate built app
+      - name: Archive Release
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -scheme LLMessenger \
+            -configuration Release \
+            -project LLMessenger.xcodeproj \
+            -destination 'generic/platform=macOS' \
+            -archivePath build/LLMessenger.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            OTHER_LDFLAGS="" \
+            archive 2>&1 | tee archive.log
+
+      - name: Verify archived app
+        run: scripts/verify-app-bundle.sh build/LLMessenger.xcarchive/Products/Applications/LLMessenger.app
+
+      - name: Locate archived app
         id: locate
         run: |
-          APP="$(find build/Build/Products/Release -name 'LLMessenger.app' -maxdepth 2 | head -1)"
-          if [ -z "$APP" ]; then
+          APP="build/LLMessenger.xcarchive/Products/Applications/LLMessenger.app"
+          if [ ! -d "$APP" ]; then
             echo "::error::LLMessenger.app not found"
             exit 1
           fi
           echo "app=$APP" >> "$GITHUB_OUTPUT"
-
-      - name: Compute SHA-256 of the binary
-        run: |
-          shasum -a 256 "${{ steps.locate.outputs.app }}/Contents/MacOS/LLMessenger" | tee SHA256SUMS
 
       - name: Zip the .app
         run: |
@@ -74,14 +105,26 @@ jobs:
             "${{ steps.locate.outputs.app }}" \
             LLMessenger-unsigned.zip
 
+      - name: Zip debug symbols
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/LLMessenger.xcarchive/dSYMs \
+            LLMessenger-dSYMs.zip
+
+      - name: Compute SHA-256 checksums
+        run: shasum -a 256 LLMessenger-unsigned.zip LLMessenger-dSYMs.zip | tee SHA256SUMS
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: LLMessenger-unsigned-${{ github.ref_name }}
           path: |
             LLMessenger-unsigned.zip
+            LLMessenger-dSYMs.zip
             SHA256SUMS
-            build.log
+            test.log
+            analyze.log
+            archive.log
           retention-days: 90
 
       - name: Attach to GitHub Release
@@ -92,5 +135,5 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
             --generate-notes \
-            LLMessenger-unsigned.zip SHA256SUMS \
-            || gh release upload "${{ github.ref_name }}" LLMessenger-unsigned.zip SHA256SUMS --clobber
+            LLMessenger-unsigned.zip LLMessenger-dSYMs.zip SHA256SUMS \
+            || gh release upload "${{ github.ref_name }}" LLMessenger-unsigned.zip LLMessenger-dSYMs.zip SHA256SUMS --clobber
