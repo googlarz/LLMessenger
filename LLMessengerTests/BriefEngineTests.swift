@@ -132,6 +132,58 @@ final class BriefEngineTests: XCTestCase {
         XCTAssertTrue(brief.notificationText.contains("3"))
     }
 
+    func testFailedJobRetriesItsSnapshotBeforeNewMessages() async throws {
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 2)
+        let repository = BriefRepository(database: db)
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: #"{"cards":[]}"#, inputTokens: 1, outputTokens: 1)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let failedResult = try await engine.processNewMessages()
+        XCTAssertNil(failedResult)
+        let failedJob = try XCTUnwrap(repository.fetchBriefJobs().first)
+        XCTAssertEqual(failedJob.jobStatus, .failed)
+        XCTAssertEqual(failedJob.attemptCount, 1)
+
+        try await db.dbQueue.write { db in
+            var later = Message(
+                briefId: nil,
+                service: "telegram",
+                conversationId: "c1",
+                messageId: "m2",
+                sender: "Alice",
+                text: "arrived later",
+                timestamp: Date().addingTimeInterval(1),
+                isSent: false
+            )
+            try later.insert(db)
+        }
+        mock.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
+
+        let retriedBriefID = try await engine.processNewMessages()
+
+        XCTAssertNotNil(retriedBriefID)
+        let retryPrompt = try XCTUnwrap(mock.calls.last?.messages.last?.content)
+        XCTAssertTrue(retryPrompt.contains("[id=m0 |"))
+        XCTAssertTrue(retryPrompt.contains("[id=m1 |"))
+        XCTAssertFalse(retryPrompt.contains("[id=m2 |"), "Later messages must not mutate a failed job snapshot")
+        let completedJob = try XCTUnwrap(repository.fetchBriefJobs().first)
+        XCTAssertEqual(completedJob.id, failedJob.id)
+        XCTAssertEqual(completedJob.jobStatus, .succeeded)
+        XCTAssertEqual(completedJob.attemptCount, 2)
+        XCTAssertEqual(try repository.fetchUnattachedMessages().map(\.messageId), ["m2"])
+
+        mock.response = LLMResponse(
+            text: validBriefJSON.replacingOccurrences(of: "m0", with: "m2"),
+            inputTokens: 5,
+            outputTokens: 5
+        )
+        let laterBriefID = try await engine.processNewMessages()
+        XCTAssertNotNil(laterBriefID)
+        XCTAssertEqual(try repository.fetchBriefJobs().count, 2)
+    }
+
     func testPriorityRulesAreAppliedToVisibleBriefJSON() async throws {
         let db = try setupDB()
         try insertUnattachedMessages(db, count: 3)

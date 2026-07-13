@@ -90,6 +90,29 @@ final class DeepIntegrationTests: XCTestCase {
         let signalCall = mock.calls.first { $0.messages.last?.content.contains("New Signal message") ?? false }
         XCTAssertNotNil(signalCall)
         XCTAssertTrue(signalCall?.messages.last?.content.contains("Unresolved actions from prior brief: [\"Send invoice\"]") ?? false)
+
+        let partialJob = try XCTUnwrap(repo.fetchBriefJobs().first)
+        XCTAssertEqual(partialJob.jobStatus, .partial)
+        XCTAssertEqual(try repo.fetchBriefJobMessages(jobID: try XCTUnwrap(partialJob.id)).map(\.messageStatus),
+                       [.succeeded, .pending])
+
+        // Retry only the failed Telegram subset. The already-briefed Signal
+        // message must not be sent to the model or create a duplicate card.
+        mock.responses["telegram"] = .success(
+            LLMResponse(text: telegramSuccessJSON, inputTokens: 10, outputTokens: 5)
+        )
+        let retryBriefID = try await engine.processNewMessages()
+        XCTAssertNotNil(retryBriefID)
+        let generationCalls = mock.calls.filter { $0.messages.last?.content.contains("=== [") == true }
+        XCTAssertEqual(generationCalls.count, 3)
+        let retryPrompt = try XCTUnwrap(mock.calls.last?.messages.last?.content)
+        XCTAssertTrue(retryPrompt.contains("New Telegram message"))
+        XCTAssertFalse(retryPrompt.contains("New Signal message"))
+
+        let completedJob = try XCTUnwrap(repo.fetchBriefJobs().first)
+        XCTAssertEqual(completedJob.id, partialJob.id)
+        XCTAssertEqual(completedJob.jobStatus, .succeeded)
+        XCTAssertEqual(completedJob.attemptCount, 2)
     }
 }
 
@@ -119,6 +142,30 @@ private let signalSuccessJSON = """
 }
 """
 
+private let telegramSuccessJSON = """
+{
+  "total_messages": 1,
+  "total_threads": 1,
+  "total_people": 1,
+  "cards": [
+    {
+      "id": "telegram-t1-1",
+      "service": "telegram",
+      "conversationId": "t1",
+      "conversationTitle": "Bob",
+      "headline": "Telegram follow-up",
+      "priority": "medium",
+      "counts": {"messages": 1, "threads": 1, "people": 1},
+      "summary": "Bob sent a Telegram follow-up.",
+      "callback": null,
+      "actionItems": [],
+      "quotes": [],
+      "sourceMessageIds": ["m-new-t"]
+    }
+  ]
+}
+"""
+
 final class PartialFailureMockLLMClient: LLMClient {
     var calls: [(model: String, messages: [LLMMessage], maxTokens: Int)] = []
     var responses: [String: Result<LLMResponse, Error>] = [:]
@@ -128,7 +175,9 @@ final class PartialFailureMockLLMClient: LLMClient {
         
         // Hack: identify service by looking for it in the system prompt
         let systemPrompt = messages.first { $0.role == .system }?.content ?? ""
-        let service = ["signal", "telegram", "imessage"].first { systemPrompt.contains($0) } ?? "unknown"
+        let service = ["signal", "telegram", "imessage"].first {
+            systemPrompt.contains("Connected services: \($0)")
+        } ?? "unknown"
         
         if let result = responses[service] {
             switch result {

@@ -44,8 +44,33 @@ final class BriefEngine {
         briefingInFlight = true
         defer { briefingInFlight = false }
 
-        let messages = try repository.fetchUnattachedMessages()
-        guard !messages.isEmpty else { return nil }
+        let candidateMessages = try repository.fetchUnattachedMessages()
+
+        // Privacy-excluded conversations never enter a durable job snapshot: a
+        // cloud client must not persist work that it is not allowed to process.
+        let clientIsCloud = self.client.isCloud
+        let initiallyExcludedConversations: Set<String> = Set(
+            Dictionary(grouping: candidateMessages, by: { $0.service }).flatMap { service, msgs in
+                Set(msgs.map { $0.conversationId })
+                    .filter { self.isExcludedByPrivacy(service: service, conversationId: $0, clientIsCloud: clientIsCloud) }
+                    .map { "\(service)|\($0)" }
+            }
+        )
+        let eligibleMessages = candidateMessages.filter {
+            !initiallyExcludedConversations.contains("\($0.service)|\($0.conversationId)")
+        }
+        guard let snapshot = try repository.claimAutomaticBriefJob(messages: eligibleMessages),
+              let jobID = snapshot.job.id else { return nil }
+        let messages = snapshot.messages
+        var jobFinalized = false
+        defer {
+            if !jobFinalized {
+                try? repository.markBriefJobFailed(
+                    jobID: jobID,
+                    error: "Brief generation interrupted before commit"
+                )
+            }
+        }
 
         // Step 1: Compress oldest uncompressed Brief (non-fatal; oldest-first avoids starvation).
         // On failure, write an empty-string sentinel so the same brief is not retried every cycle.
@@ -66,7 +91,6 @@ final class BriefEngine {
         // ever) or local_only (cloud client only) are excluded from the brief entirely. Their
         // text must never enter threadText, and their messages must stay unattached so they
         // are not lost. Keys are "service|conversationId" (same convention as elsewhere).
-        let clientIsCloud = self.client.isCloud
         let excludedConversations: Set<String> = Set(
             messagesByService.flatMap { service, msgs in
                 Set(msgs.map { $0.conversationId })
@@ -222,7 +246,11 @@ final class BriefEngine {
         }
 
         // Step 4: Guard against blank briefs — messages stay unattached if LLM returned nothing.
-        guard !allCards.isEmpty else { return nil }
+        guard !allCards.isEmpty else {
+            try repository.markBriefJobFailed(jobID: jobID, error: "No valid cards were generated")
+            jobFinalized = true
+            return nil
+        }
 
         allCards = applyPriorityRules(to: allCards)
 
@@ -269,6 +297,7 @@ final class BriefEngine {
         let (cardRecords, cardSources) = try buildBriefCardRecords(
             allCards, briefID: 0, sourceMessagesByService: sourceMessagesByService
         )
+        let failedServicesSnapshot = failedServices
 
         // Atomic transaction: Brief row + all cards + all sources + message attachment.
         // If any step throws, the entire transaction rolls back — no partial brief is committed.
@@ -285,8 +314,16 @@ final class BriefEngine {
             try BriefRepository.insertBriefCardSources(stampedSources, db: db)
             try BriefRepository.insertTasksForCards(stampedCards, db: db)
             try BriefRepository.attach(messages: messagesToAttach, toBriefID: insertedID, db: db)
+            try BriefRepository.completeBriefJob(
+                jobID: jobID,
+                messages: messagesToAttach,
+                briefID: insertedID,
+                failedServices: failedServicesSnapshot,
+                db: db
+            )
             return insertedID
         }
+        jobFinalized = true
 
         try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
         updateContactProfiles(from: allCards)
