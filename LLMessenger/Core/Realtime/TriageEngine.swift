@@ -28,7 +28,10 @@ actor TriageEngine {
         messages: [Message],
         rules: [PriorityRule]
     ) async throws {
-        guard let newest = messages.max(by: { $0.timestamp < $1.timestamp }) else { return }
+        guard let newest = messages
+            .filter({ !$0.isSent })
+            .max(by: { $0.timestamp < $1.timestamp })
+        else { return }
         let messageKey = "\(service)\u{1F}\(newest.messageId)"
         guard inFlightMessageKeys.insert(messageKey).inserted else { return }
         defer { inFlightMessageKeys.remove(messageKey) }

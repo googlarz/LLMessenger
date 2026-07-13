@@ -4,19 +4,26 @@ import GRDB
 @MainActor
 final class PollEngine {
     private let database: AppDatabase
+    let ingestionCoordinator: MessageIngestionCoordinator
     private var adapters: [String: MessengerAdapter] = [:]
     private var configs: [String: ServiceConfig] = [:]
     private var timers: [String: Timer] = [:]
     private var nextFireDates: [String: Date] = [:]
     private var inFlight: Set<String> = []
+    private var observedMessageWatermarks: [String: Int64] = [:]
     private var pollAllInFlight = false
     var failureCounts: [String: Int] = [:]
     var onPollSucceeded: (() async -> Void)?
     var onPollFailed: ((String, Error) async -> Void)?
     var onHealthWarning: ((String, String) async -> Void)?
 
-    init(database: AppDatabase) {
+    init(
+        database: AppDatabase,
+        ingestionCoordinator: MessageIngestionCoordinator? = nil
+    ) {
         self.database = database
+        self.ingestionCoordinator = ingestionCoordinator
+            ?? MessageIngestionCoordinator(database: database)
     }
 
     deinit {
@@ -92,7 +99,8 @@ final class PollEngine {
             for serviceID in serviceIDs {
                 group.addTask { @MainActor [weak self] in
                     guard let self else { return false }
-                    return (try? await self.pollOnce(serviceID: serviceID)) == true
+                    let hasNew = (try? await self.pollOnce(serviceID: serviceID)) == true
+                    return hasNew && self.configs[serviceID]?.resolvedPrivacyMode == .eager
                 }
             }
             var result = false
@@ -137,51 +145,58 @@ final class PollEngine {
         }
 
         let fetchConfig = await makeFetchConfig(config: config, serviceID: serviceID)
-        let result: AdapterFetchResult
+        let batch: MessageIngestionBatch
         do {
-            result = try await adapter.fetch(config: fetchConfig)
+            batch = try await ingestionCoordinator.ingest(
+                service: serviceID,
+                adapter: adapter,
+                config: fetchConfig
+            )
         } catch {
             let failures = (failureCounts[serviceID] ?? 0) + 1
             failureCounts[serviceID] = failures
-            NSLog("[PollEngine] %@", "\(serviceID): fetch failed: \(error.localizedDescription)")
-            // Fetch failed — write error status; lastCheck advances so the next poll
-            // starts from now rather than re-fetching the same (failed) window again.
+            NSLog("[PollEngine] %@", "\(serviceID): ingestion failed: \(error.localizedDescription)")
+            // A persistence failure must preserve the previous watermark so the
+            // fetched window is retried. Fetch failures retain the existing behavior.
+            let updateLastCheck = !((error as? MessageIngestionError)?.isPersistenceFailure ?? false)
             writeHealth(service: serviceID, status: "error",
-                        error: error.localizedDescription, updateLastCheck: true)
+                        error: error.localizedDescription, updateLastCheck: updateLastCheck)
             throw error
         }
 
-        let totalMsgs = result.conversations.reduce(0) { $0 + $1.messages.count }
-        NSLog("[PollEngine] %@", "\(serviceID): fetched \(result.conversations.count) conversations, \(totalMsgs) messages")
+        NSLog(
+            "[PollEngine] %@",
+            "\(serviceID): fetched \(batch.conversationCount) conversations, \(batch.messageCount) messages"
+        )
 
-        do {
-            let hadNew = try store(result: result, service: serviceID)
-            failureCounts[serviceID] = 0
+        failureCounts[serviceID] = 0
 
-            let healthResult = await adapter.healthCheck()
-            // ponytail: only advance lastCheck when data was actually fetched — a 0-message
-            // poll must not leap the watermark past messages signal-mcp hasn't synced yet.
-            let advanceWatermark = totalMsgs > 0
-            if healthResult.status == .ok {
-                writeHealth(service: serviceID, status: "ok", error: nil, updateLastCheck: advanceWatermark)
-            } else {
-                writeHealth(service: serviceID, status: healthResult.status.rawValue,
-                            error: healthResult.reason, updateLastCheck: advanceWatermark)
-                if let reason = healthResult.reason {
-                    await onHealthWarning?(serviceID, reason)
-                }
+        let hadNew: Bool
+        if let watermark = batch.pendingMessageWatermark {
+            hadNew = watermark > (observedMessageWatermarks[serviceID] ?? 0)
+            observedMessageWatermarks[serviceID] = max(
+                watermark,
+                observedMessageWatermarks[serviceID] ?? 0
+            )
+        } else {
+            hadNew = false
+        }
+
+        let healthResult = await adapter.healthCheck()
+        // ponytail: only advance lastCheck when data was actually fetched — a 0-message
+        // poll must not leap the watermark past messages signal-mcp hasn't synced yet.
+        let advanceWatermark = batch.messageCount > 0
+        if healthResult.status == .ok {
+            writeHealth(service: serviceID, status: "ok", error: nil, updateLastCheck: advanceWatermark)
+        } else {
+            writeHealth(service: serviceID, status: healthResult.status.rawValue,
+                        error: healthResult.reason, updateLastCheck: advanceWatermark)
+            if let reason = healthResult.reason {
+                await onHealthWarning?(serviceID, reason)
             }
-
-            return hadNew
-        } catch {
-            let failures = (failureCounts[serviceID] ?? 0) + 1
-            failureCounts[serviceID] = failures
-            // Store failed after a successful fetch — do NOT advance lastCheck so the
-            // next poll re-fetches the same window and retries the store.
-            writeHealth(service: serviceID, status: "error",
-                        error: error.localizedDescription, updateLastCheck: false)
-            throw error
         }
+
+        return hadNew
     }
 
     private func scheduleTimer(serviceID: String, intervalSeconds: Int) {
@@ -256,31 +271,6 @@ final class PollEngine {
             let since = Date().addingTimeInterval(-firstRunWindow)
             return FetchConfig(mode: .byTime(since: since))
         }
-    }
-
-    // Returns true if at least one new message was inserted (not a duplicate).
-    private func store(result: AdapterFetchResult, service: String) throws -> Bool {
-        var hadNew = false
-        try database.dbQueue.write { db in
-            for conv in result.conversations {
-                for msg in conv.messages {
-                    var record = Message(
-                        briefId: nil,
-                        service: service,
-                        conversationId: conv.id,
-                        conversationName: conv.name,
-                        messageId: msg.id,
-                        sender: msg.sender,
-                        text: msg.text,
-                        timestamp: msg.timestamp,
-                        isSent: msg.isFromMe
-                    )
-                    try record.insert(db, onConflict: .ignore)
-                    if db.changesCount > 0 { hadNew = true }
-                }
-            }
-        }
-        return hadNew
     }
 
     private func writeHealth(service: String, status: String, error: String?, updateLastCheck: Bool) {

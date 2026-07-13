@@ -434,10 +434,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             pollEngine = engine
-            startTask = Task {
-                await engine.start()
-                state.nextPollDate = engine.nextFireDate
-            }
 
             NotificationCenter.default.addObserver(
                 forName: .serviceConfigDidChange, object: nil, queue: .main
@@ -546,6 +542,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let monitor = RealtimeMonitor(
                 adapters: state.adapters,
                 db: db,
+                ingestionCoordinator: engine.ingestionCoordinator,
                 notificationManager: notifications,
                 llmClient: llm.client,
                 llmModel: llm.model,
@@ -554,7 +551,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             )
             realtimeMonitor = monitor
-            Task { await monitor.start() }
+            startTask = Task {
+                // Install the ingestion subscriber before any startup catch-up poll
+                // can insert messages, so realtime triage never misses that batch.
+                await monitor.start()
+                await engine.start()
+                state.nextPollDate = engine.nextFireDate
+            }
 
             realtimeKillSwitchObserver = UserDefaults.standard.observe(
                 \.realtimeFirewallDisabled, options: [.new]

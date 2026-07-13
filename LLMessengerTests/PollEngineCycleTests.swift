@@ -301,6 +301,25 @@ final class PollEngineCycleTests: XCTestCase {
                        "onPollSucceeded must NOT fire when adapter returns no new messages")
     }
 
+    func testPollAllDoesNotAutoBriefOnDemandService() async throws {
+        let db = try makeDB()
+        let adapter = FakeMessengerAdapter(serviceID: "signal")
+        adapter.addMessage(convId: "c1", msgId: "m1")
+        var config = signalConfig()
+        config.privacyMode = PrivacyMode.onDemand.rawValue
+
+        let engine = makeEngine(db: db)
+        engine.register(adapter: adapter, config: config)
+        var callbackFired = false
+        engine.onPollSucceeded = { callbackFired = true }
+
+        await engine.pollAll()
+
+        XCTAssertFalse(callbackFired)
+        let count = try await db.dbQueue.read { try Message.fetchCount($0) }
+        XCTAssertEqual(count, 1, "On-demand messages should be stored without automatic LLM work")
+    }
+
     func testOnPollSucceededDoesNotFireForDuplicateMessages() async throws {
         let db = try makeDB()
         let adapter = FakeMessengerAdapter(serviceID: "signal")

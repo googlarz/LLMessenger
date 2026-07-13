@@ -5,13 +5,16 @@ import GRDB
 actor RealtimeMonitor {
     private let adapters: [String: any MessengerAdapter]
     private let db: AppDatabase
+    private let ingestionCoordinator: MessageIngestionCoordinator
     private let triageEngine: TriageEngine
     private let rulesProvider: @Sendable () async -> [PriorityRule]
 
     private var running = false
     private var pollTasks: [Task<Void, Never>] = []
     private var fsSource: DispatchSourceFileSystemObject?
-    private var debounceWorkItems: [String: DispatchWorkItem] = [:]
+    private var debounceTasks: [String: Task<Void, Never>] = [:]
+    private var pendingMessages: [String: [String: Message]] = [:]
+    private var pendingConversationNames: [String: String] = [:]
 
     var isRunning: Bool { running }
 
@@ -34,6 +37,7 @@ actor RealtimeMonitor {
     init(
         adapters: [String: any MessengerAdapter],
         db: AppDatabase,
+        ingestionCoordinator: MessageIngestionCoordinator,
         notificationManager: NotificationManager,
         llmClient: any LLMClient,
         llmModel: String,
@@ -41,6 +45,7 @@ actor RealtimeMonitor {
     ) {
         self.adapters = adapters
         self.db = db
+        self.ingestionCoordinator = ingestionCoordinator
         self.triageEngine = TriageEngine(
             db: db,
             llmClient: llmClient,
@@ -54,6 +59,10 @@ actor RealtimeMonitor {
         guard !running else { return }
         guard !UserDefaults.standard.bool(forKey: "realtimeFirewallDisabled") else { return }
         running = true
+        await ingestionCoordinator.setNewMessagesHandler { [weak self] messages in
+            await self?.receiveNewMessages(messages)
+        }
+        await enqueuePendingUntriagedMessages()
 
         // iMessage: FSEvents on WAL file
         if let iMessageAdapter = adapters["imessage"],
@@ -76,8 +85,11 @@ actor RealtimeMonitor {
         fsSource = nil
         for task in pollTasks { task.cancel() }
         pollTasks.removeAll()
-        debounceWorkItems.values.forEach { $0.cancel() }
-        debounceWorkItems.removeAll()
+        debounceTasks.values.forEach { $0.cancel() }
+        debounceTasks.removeAll()
+        pendingMessages.removeAll()
+        pendingConversationNames.removeAll()
+        await ingestionCoordinator.setNewMessagesHandler(nil)
     }
 
     // MARK: - FSWatch
@@ -106,16 +118,11 @@ actor RealtimeMonitor {
         guard running else { return }
         let since = Date().addingTimeInterval(-60)
         let config = FetchConfig(mode: .byTime(since: since))
-        guard let result = try? await adapter.fetch(config: config) else { return }
-
-        for conv in result.conversations {
-            scheduleDebounced(
-                serviceID: "imessage",
-                conversationId: conv.id,
-                conversationName: conv.name,
-                messages: conv.messages.map { adapterMsgToModel(m: $0, service: "imessage", convId: conv.id, convName: conv.name) }
-            )
-        }
+        _ = try? await ingestionCoordinator.ingest(
+            service: "imessage",
+            adapter: adapter,
+            config: config
+        )
     }
 
     // MARK: - Poll
@@ -137,11 +144,11 @@ actor RealtimeMonitor {
         // Look back one full interval plus a 5s overlap so no message slips between ticks.
         let since = Date().addingTimeInterval(-(Self.pollIntervalSeconds + 5))
         let config = FetchConfig(mode: .byTime(since: since))
-        guard let result = try? await adapter.fetch(config: config) else { return }
-        for conv in result.conversations {
-            let msgs = conv.messages.map { adapterMsgToModel(m: $0, service: serviceID, convId: conv.id, convName: conv.name) }
-            scheduleDebounced(serviceID: serviceID, conversationId: conv.id, conversationName: conv.name, messages: msgs)
-        }
+        _ = try? await ingestionCoordinator.ingest(
+            service: serviceID,
+            adapter: adapter,
+            config: config
+        )
     }
 
     // MARK: - Debounce + Triage
@@ -153,20 +160,47 @@ actor RealtimeMonitor {
         messages: [Message]
     ) {
         let key = "\(serviceID)|\(conversationId)"
-        debounceWorkItems[key]?.cancel()
-        let item = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            Task {
-                await self.triageConversation(
-                    serviceID: serviceID,
-                    conversationId: conversationId,
-                    conversationName: conversationName,
-                    messages: messages
-                )
-            }
+        var accumulated = pendingMessages[key] ?? [:]
+        for message in messages {
+            accumulated[message.messageId] = message
         }
-        debounceWorkItems[key] = item
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 3, execute: item)
+        pendingMessages[key] = accumulated
+        pendingConversationNames[key] = conversationName
+
+        debounceTasks[key]?.cancel()
+        debounceTasks[key] = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(3))
+            } catch {
+                return
+            }
+            await self?.flushDebouncedConversation(
+                key: key,
+                serviceID: serviceID,
+                conversationId: conversationId
+            )
+        }
+    }
+
+    private func flushDebouncedConversation(
+        key: String,
+        serviceID: String,
+        conversationId: String
+    ) async {
+        guard running else { return }
+        let messages = (pendingMessages.removeValue(forKey: key) ?? [:])
+            .values
+            .sorted { $0.timestamp < $1.timestamp }
+        let conversationName = pendingConversationNames.removeValue(forKey: key) ?? conversationId
+        debounceTasks[key] = nil
+        guard !messages.isEmpty else { return }
+
+        await triageConversation(
+            serviceID: serviceID,
+            conversationId: conversationId,
+            conversationName: conversationName,
+            messages: messages
+        )
     }
 
     private func triageConversation(
@@ -185,20 +219,38 @@ actor RealtimeMonitor {
         )
     }
 
-    // MARK: - Helpers
+    private func receiveNewMessages(_ messages: [Message]) {
+        let grouped = Dictionary(grouping: messages) { message in
+            "\(message.service)|\(message.conversationId)"
+        }
+        for group in grouped.values {
+            guard let first = group.first, group.contains(where: { !$0.isSent }) else { continue }
+            scheduleDebounced(
+                serviceID: first.service,
+                conversationId: first.conversationId,
+                conversationName: first.conversationName ?? first.conversationId,
+                messages: group
+            )
+        }
+    }
 
-    private func adapterMsgToModel(m: AdapterMessage, service: String, convId: String, convName: String) -> Message {
-        Message(
-            id: nil,
-            briefId: nil,
-            service: service,
-            conversationId: convId,
-            conversationName: convName,
-            messageId: m.id,
-            sender: m.sender,
-            text: m.text,
-            timestamp: m.timestamp,
-            isSent: m.isFromMe
-        )
+    private func enqueuePendingUntriagedMessages() async {
+        let cutoff = Date().addingTimeInterval(-48 * 3600)
+        let messages = (try? await db.dbQueue.read { database in
+            try Message.fetchAll(
+                database,
+                sql: """
+                    SELECT m.*
+                    FROM messages m
+                    LEFT JOIN triageEvents t
+                      ON t.service = m.service AND t.messageId = m.messageId
+                    WHERE m.isSent = 0 AND m.timestamp >= ? AND t.id IS NULL
+                    ORDER BY m.timestamp ASC
+                    LIMIT 500
+                    """,
+                arguments: [cutoff]
+            )
+        }) ?? []
+        receiveNewMessages(messages)
     }
 }

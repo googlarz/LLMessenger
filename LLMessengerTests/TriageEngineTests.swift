@@ -261,4 +261,41 @@ final class TriageEngineTests: XCTestCase {
         let events = try await db.dbQueue.read { db in try TriageEvent.fetchAll(db) }
         XCTAssertEqual(events.count, 1)
     }
+
+    func testNewerOutboundMessageDoesNotHideInboundMessage() async throws {
+        let db = try makeDB()
+        let mockLLM = TriageMockLLMClient()
+        let nm = await NotificationManager()
+        let engine = TriageEngine(
+            db: db,
+            llmClient: mockLLM,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
+        let incoming = makeMessages()[0]
+        let outgoing = Message(
+            id: nil,
+            briefId: nil,
+            service: "imessage",
+            conversationId: "conv1",
+            conversationName: "Alice",
+            messageId: "outgoing",
+            sender: "Me",
+            text: "Following up",
+            timestamp: incoming.timestamp.addingTimeInterval(1),
+            isSent: true
+        )
+
+        try await engine.triage(
+            service: "imessage",
+            conversationId: "conv1",
+            conversationName: "Alice",
+            messages: [incoming, outgoing],
+            rules: []
+        )
+
+        XCTAssertEqual(mockLLM.callCount, 1)
+        let event = try await db.dbQueue.read { try TriageEvent.fetchOne($0) }
+        XCTAssertEqual(event?.messageId, incoming.messageId)
+    }
 }
