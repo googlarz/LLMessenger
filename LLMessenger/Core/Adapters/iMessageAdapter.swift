@@ -386,16 +386,22 @@ final class iMessageAdapter: MessengerAdapter, @unchecked Sendable {
 
     private func loadContactNames() async -> [String: String] {
         // CNContactStore requires Contacts permission — fail gracefully if denied.
-        let store = CNContactStore()
         let status = CNContactStore.authorizationStatus(for: .contacts)
         guard status == .authorized || status == .notDetermined else { return [:] }
 
-        if status == .notDetermined {
-            let granted = try? await store.requestAccess(for: .contacts)
-            guard granted == true else { return [:] }
-        }
-
+        // The non-Sendable store lives entirely inside the detached task, and the
+        // access request uses the completion-handler API — awaiting the async
+        // variant would send the store across regions (Swift 6 strict concurrency).
         return await Task.detached(priority: .utility) {
+            let store = CNContactStore()
+            if status == .notDetermined {
+                let granted: Bool = await withCheckedContinuation { continuation in
+                    store.requestAccess(for: .contacts) { ok, _ in
+                        continuation.resume(returning: ok)
+                    }
+                }
+                guard granted else { return [:] }
+            }
             var names: [String: String] = [:]
             let keysToFetch = [CNContactGivenNameKey, CNContactFamilyNameKey,
                                CNContactPhoneNumbersKey, CNContactEmailAddressesKey] as [CNKeyDescriptor]

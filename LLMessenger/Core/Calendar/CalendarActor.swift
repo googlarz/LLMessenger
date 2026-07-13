@@ -33,8 +33,15 @@ actor CalendarActor {
     }
 
     func requestAccess() async -> Bool {
+        // Completion-handler variants throughout: awaiting EKEventStore's async
+        // methods sends the non-Sendable store out of the actor region, which
+        // Swift 6 strict concurrency rejects.
         if #available(macOS 14.0, *) {
-            return (try? await store.requestWriteOnlyAccessToEvents()) ?? false
+            return await withCheckedContinuation { continuation in
+                store.requestWriteOnlyAccessToEvents { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
         } else {
             return await withCheckedContinuation { continuation in
                 store.requestAccess(to: .event) { granted, _ in
