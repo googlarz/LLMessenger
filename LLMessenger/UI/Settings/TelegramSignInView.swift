@@ -198,11 +198,10 @@ struct TelegramSignInView: View {
                     "action": "auth_send_code",
                     "phone": phone.trimmingCharacters(in: .whitespaces)
                 ])
-                if resp["success"] as? Bool == true,
-                   let hash = resp["phone_code_hash"] as? String {
+                if resp.success, let hash = resp.phoneCodeHash {
                     step = .code(phoneCodeHash: hash)
                 } else {
-                    let raw = resp["error"] as? String ?? "Failed to send code."
+                    let raw = resp.error ?? "Failed to send code."
                     // Older telegram-adapter binaries don't expose auth handlers.
                     // Help the user know they have a working session and can just retry.
                     if raw.localizedCaseInsensitiveContains("unknown action") {
@@ -229,12 +228,12 @@ struct TelegramSignInView: View {
                     "phone_code_hash": phoneCodeHash,
                     "code": code.trimmingCharacters(in: .whitespaces)
                 ])
-                if resp["success"] as? Bool == true {
+                if resp.success {
                     step = .success
-                } else if resp["needs_2fa"] as? Bool == true {
+                } else if resp.needs2FA {
                     step = .password
                 } else {
-                    errorMessage = resp["error"] as? String ?? "Verification failed."
+                    errorMessage = resp.error ?? "Verification failed."
                 }
             } catch {
                 errorMessage = error.localizedDescription
@@ -252,10 +251,10 @@ struct TelegramSignInView: View {
                     "action": "auth_check_password",
                     "password": password
                 ])
-                if resp["success"] as? Bool == true {
+                if resp.success {
                     step = .success
                 } else {
-                    errorMessage = resp["error"] as? String ?? "Incorrect password."
+                    errorMessage = resp.error ?? "Incorrect password."
                 }
             } catch {
                 errorMessage = error.localizedDescription

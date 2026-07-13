@@ -219,8 +219,23 @@ final class SubprocessAdapter: MessengerAdapter, @unchecked Sendable {
         }
     }
 
-    func authRoundTrip(_ request: [String: Any]) async throws -> [String: Any] {
-        try await roundTrip(request)
+    /// Typed, Sendable projection of an auth response — `[String: Any]` cannot
+    /// cross the MainActor boundary under complete concurrency checking.
+    struct AuthResponse: Sendable {
+        let success: Bool
+        let needs2FA: Bool
+        let phoneCodeHash: String?
+        let error: String?
+    }
+
+    func authRoundTrip(_ request: [String: String]) async throws -> AuthResponse {
+        let resp = try await roundTrip(request)
+        return AuthResponse(
+            success: resp["success"] as? Bool == true,
+            needs2FA: resp["needs_2fa"] as? Bool == true,
+            phoneCodeHash: resp["phone_code_hash"] as? String,
+            error: resp["error"] as? String
+        )
     }
 
     private func roundTrip(_ request: [String: Any], timeout: TimeInterval = 30) async throws -> [String: Any] {
