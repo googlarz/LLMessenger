@@ -26,8 +26,12 @@ final class BackendWorkflowE2ETests: XCTestCase {
 
     private func makeEngine(db: AppDatabase) -> PollEngine { PollEngine(database: db) }
 
-    private func makeBriefEngine(db: AppDatabase, mock: LLMClient) -> BriefEngine {
-        BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+    private func makeBriefEngine(
+        db: AppDatabase,
+        mock: LLMClient,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) -> BriefEngine {
+        BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE", now: now)
     }
 
     /// Wires PollEngine → BriefEngine and returns both.
@@ -124,12 +128,13 @@ final class BackendWorkflowE2ETests: XCTestCase {
     // during cycle 2 is drained through a second job after the retry succeeds.
     func testMessagesFromFailedBriefCycleAreRetriedInNextCycle() async throws {
         let db = try makeDB()
+        let clock = MutableTestClock(Date())
 
         // Cycle 1: mock fails
         let failingMock = DynamicMockLLMClient()
         failingMock.specs["signal"] = .init(convId: "c1", messageIds: ["m1"], fail: true)
         let engine1 = makeEngine(db: db)
-        let briefEngine1 = makeBriefEngine(db: db, mock: failingMock)
+        let briefEngine1 = makeBriefEngine(db: db, mock: failingMock, now: { clock.now })
         engine1.onPollSucceeded = { [briefEngine1] in
             _ = try? await briefEngine1.processNewMessages()
         }
@@ -153,7 +158,8 @@ final class BackendWorkflowE2ETests: XCTestCase {
         let succeedingMock = DynamicMockLLMClient()
         succeedingMock.specs["signal"] = .init(convId: "c1", messageIds: ["m1", "m2"])
         let engine2 = makeEngine(db: db)
-        let briefEngine2 = makeBriefEngine(db: db, mock: succeedingMock)
+        clock.advance(by: 61)
+        let briefEngine2 = makeBriefEngine(db: db, mock: succeedingMock, now: { clock.now })
         engine2.onPollSucceeded = { [briefEngine2] in
             _ = try? await briefEngine2.processNewMessages()
         }

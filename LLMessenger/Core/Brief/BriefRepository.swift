@@ -16,6 +16,18 @@ enum BriefRepositoryError: Error, LocalizedError {
 struct BriefRepository {
     let database: AppDatabase
 
+    static let maximumBriefJobAttempts = 3
+    private static let baseBriefJobRetryDelay: TimeInterval = 60
+    private static let maximumBriefJobRetryDelay: TimeInterval = 3600
+
+    static func retryDelay(afterAttempt attempt: Int) -> TimeInterval {
+        let exponent = max(0, min(attempt - 1, 10))
+        return min(
+            baseBriefJobRetryDelay * pow(2, Double(exponent)),
+            maximumBriefJobRetryDelay
+        )
+    }
+
     func fetchUnattachedMessages() throws -> [Message] {
         // Exclude messages older than 7 days — they won't improve a current brief and
         // would silently bloat the LLM prompt on every cycle until attached or pruned.
@@ -47,14 +59,32 @@ struct BriefRepository {
                 sql: """
                     SELECT * FROM briefJobs
                     WHERE kind = ? AND status IN (\(placeholders))
+                      AND (nextAttemptAt IS NULL OR nextAttemptAt <= ?)
                     ORDER BY createdAt ASC
                     LIMIT 1
                 """,
-                arguments: StatementArguments([BriefJobKind.automatic.rawValue] + replayable)
+                arguments: StatementArguments([BriefJobKind.automatic.rawValue] + replayable + [now])
             )
 
             if job == nil {
-                let snapshotMessages = messages.filter { $0.id != nil && $0.briefId == nil && !$0.isSent }
+                let candidates = messages.filter { $0.id != nil && $0.briefId == nil && !$0.isSent }
+                let candidateRowIDs = candidates.compactMap(\.id)
+                let ownedRowIDs: Set<Int64>
+                if candidateRowIDs.isEmpty {
+                    ownedRowIDs = []
+                } else {
+                    let owned = try BriefJobMessage
+                        .filter(Column("status") == BriefJobMessageStatus.pending.rawValue)
+                        .filter(candidateRowIDs.contains(Column("messageRowId")))
+                        .select(Column("messageRowId"))
+                        .asRequest(of: Int64.self)
+                        .fetchAll(db)
+                    ownedRowIDs = Set(owned)
+                }
+                let snapshotMessages = candidates.filter { message in
+                    guard let id = message.id else { return false }
+                    return !ownedRowIDs.contains(id)
+                }
                 guard !snapshotMessages.isEmpty else { return nil }
 
                 var newJob = BriefJob(
@@ -65,6 +95,7 @@ struct BriefRepository {
                     updatedAt: now,
                     startedAt: nil,
                     completedAt: nil,
+                    nextAttemptAt: nil,
                     attemptCount: 0,
                     lastError: nil
                 )
@@ -108,6 +139,7 @@ struct BriefRepository {
             claimed.updatedAt = now
             claimed.startedAt = now
             claimed.completedAt = nil
+            claimed.nextAttemptAt = nil
             claimed.attemptCount += 1
             claimed.lastError = nil
             try claimed.update(db)
@@ -132,11 +164,66 @@ struct BriefRepository {
 
     func markBriefJobFailed(jobID: Int64, error: String, now: Date = Date()) throws {
         try database.dbQueue.write { db in
+            let attemptCount = try Int.fetchOne(
+                db,
+                sql: "SELECT attemptCount FROM briefJobs WHERE id = ?",
+                arguments: [jobID]
+            ) ?? 0
+            let status: BriefJobStatus = attemptCount >= Self.maximumBriefJobAttempts ? .deadLetter : .failed
+            let nextAttemptAt = status == .deadLetter
+                ? nil
+                : now.addingTimeInterval(Self.retryDelay(afterAttempt: attemptCount))
             try db.execute(sql: """
                 UPDATE briefJobs
-                SET status = ?, updatedAt = ?, completedAt = NULL, lastError = ?
+                SET status = ?, updatedAt = ?, completedAt = ?, nextAttemptAt = ?, lastError = ?
                 WHERE id = ?
-            """, arguments: [BriefJobStatus.failed.rawValue, now, String(error.prefix(1000)), jobID])
+            """, arguments: [
+                status.rawValue,
+                now,
+                status == .deadLetter ? now : nil,
+                nextAttemptAt,
+                String(error.prefix(1000)),
+                jobID
+            ])
+        }
+    }
+
+    @discardableResult
+    func skipBriefJobMessages(jobID: Int64, messages: [Message], now: Date = Date()) throws -> BriefJobStatus {
+        try database.dbQueue.write { db in
+            let rowIDs = messages.compactMap(\.id)
+            if !rowIDs.isEmpty {
+                let placeholders = rowIDs.map { _ in "?" }.joined(separator: ",")
+                var arguments: [DatabaseValueConvertible] = [
+                    BriefJobMessageStatus.skipped.rawValue,
+                    now,
+                    jobID
+                ]
+                arguments.append(contentsOf: rowIDs)
+                try db.execute(sql: """
+                    UPDATE briefJobMessages
+                    SET status = ?, completedAt = ?, briefId = NULL
+                    WHERE jobId = ? AND status = 'pending'
+                      AND messageRowId IN (\(placeholders))
+                """, arguments: StatementArguments(arguments))
+            }
+
+            let pending = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM briefJobMessages WHERE jobId = ? AND status = ?
+            """, arguments: [jobID, BriefJobMessageStatus.pending.rawValue]) ?? 0
+            let status: BriefJobStatus = pending == 0 ? .succeeded : .running
+            try db.execute(sql: """
+                UPDATE briefJobs
+                SET status = ?, updatedAt = ?, completedAt = ?, nextAttemptAt = NULL,
+                    lastError = NULL
+                WHERE id = ?
+            """, arguments: [
+                status.rawValue,
+                now,
+                status == .succeeded ? now : nil,
+                jobID
+            ])
+            return status
         }
     }
 
@@ -167,16 +254,35 @@ struct BriefRepository {
         let pending = try Int.fetchOne(db, sql: """
             SELECT COUNT(*) FROM briefJobMessages WHERE jobId = ? AND status = ?
         """, arguments: [jobID, BriefJobMessageStatus.pending.rawValue]) ?? 0
-        let status = pending == 0 ? BriefJobStatus.succeeded : BriefJobStatus.partial
+        let attemptCount = try Int.fetchOne(
+            db,
+            sql: "SELECT attemptCount FROM briefJobs WHERE id = ?",
+            arguments: [jobID]
+        ) ?? 0
+        let exhausted = pending > 0
+            && !failedServices.isEmpty
+            && attemptCount >= Self.maximumBriefJobAttempts
+        let status: BriefJobStatus
+        if pending == 0 {
+            status = .succeeded
+        } else if exhausted {
+            status = .deadLetter
+        } else {
+            status = .partial
+        }
         let failureText = failedServices.isEmpty ? nil : failedServices.sorted().joined(separator: ", ")
+        let nextAttemptAt = pending > 0 && !failedServices.isEmpty && !exhausted
+            ? now.addingTimeInterval(Self.retryDelay(afterAttempt: attemptCount))
+            : nil
         try db.execute(sql: """
             UPDATE briefJobs
-            SET status = ?, updatedAt = ?, completedAt = ?, lastError = ?
+            SET status = ?, updatedAt = ?, completedAt = ?, nextAttemptAt = ?, lastError = ?
             WHERE id = ?
         """, arguments: [
             status.rawValue,
             now,
-            status == .succeeded ? now : nil,
+            status == .succeeded || status == .deadLetter ? now : nil,
+            nextAttemptAt,
             failureText,
             jobID
         ])

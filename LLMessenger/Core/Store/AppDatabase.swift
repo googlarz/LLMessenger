@@ -566,13 +566,28 @@ final class AppDatabase: @unchecked Sendable {
                 WHERE status = 'pending'
             """)
         }
+        migrator.registerMigration("v31_fair_brief_job_retries") { db in
+            try db.alter(table: "briefJobs") { t in
+                t.add(column: "nextAttemptAt", .datetime)
+            }
+            try db.create(
+                index: "briefJobs_on_kind_status_nextAttemptAt_createdAt",
+                on: "briefJobs",
+                columns: ["kind", "status", "nextAttemptAt", "createdAt"]
+            )
+            try db.create(
+                index: "messages_on_briefId_isSent_timestamp",
+                on: "messages",
+                columns: ["briefId", "isSent", "timestamp"]
+            )
+        }
         try migrator.migrate(dbQueue)
 
         // A process cannot still own a running job after this database has been
         // reopened. Put interrupted work back in the queue for immediate replay.
         try dbQueue.write { db in
             try db.execute(
-                sql: "UPDATE briefJobs SET status = ?, updatedAt = ? WHERE status = ?",
+                sql: "UPDATE briefJobs SET status = ?, updatedAt = ?, nextAttemptAt = NULL WHERE status = ?",
                 arguments: [BriefJobStatus.queued.rawValue, Date(), BriefJobStatus.running.rawValue]
             )
         }

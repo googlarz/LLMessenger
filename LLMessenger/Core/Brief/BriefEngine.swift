@@ -25,17 +25,25 @@ final class BriefEngine {
     private let model: String
     private let basePrompt: String
     private let repository: BriefRepository
+    private let now: @Sendable () -> Date
     private var briefingInFlight = false
     // Separate flag for manual summarizeLast requests — prevents duplicate briefs from
     // double-taps while still allowing summarizeLast to wait for and follow an auto-poll.
     private var summarizeLastInFlight = false
 
-    init(database: AppDatabase, client: LLMClient, model: String, basePrompt: String) {
+    init(
+        database: AppDatabase,
+        client: LLMClient,
+        model: String,
+        basePrompt: String,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) {
         self.database = database
         self.client = client
         self.model = model
         self.basePrompt = basePrompt
         self.repository = BriefRepository(database: database)
+        self.now = now
     }
 
     @discardableResult
@@ -46,14 +54,16 @@ final class BriefEngine {
 
         var latestBriefID: Int64?
         while let outcome = try await processNextAutomaticBriefJob(adapters: adapters) {
-            latestBriefID = outcome.briefID
+            if let briefID = outcome.briefID {
+                latestBriefID = briefID
+            }
             guard outcome.jobCompleted else { break }
         }
         return latestBriefID
     }
 
     private struct AutomaticBriefOutcome {
-        var briefID: Int64
+        var briefID: Int64?
         var jobCompleted: Bool
     }
 
@@ -79,15 +89,16 @@ final class BriefEngine {
         let eligibleMessages = candidateMessages.filter {
             !initiallyExcludedConversations.contains("\($0.service)|\($0.conversationId)")
         }
-        guard let snapshot = try repository.claimAutomaticBriefJob(messages: eligibleMessages),
+        guard let snapshot = try repository.claimAutomaticBriefJob(messages: eligibleMessages, now: now()),
               let jobID = snapshot.job.id else { return nil }
-        let messages = snapshot.messages
+        let snapshotMessages = snapshot.messages
         var jobFinalized = false
         defer {
             if !jobFinalized {
                 try? repository.markBriefJobFailed(
                     jobID: jobID,
-                    error: "Brief generation interrupted before commit"
+                    error: "Brief generation interrupted before commit",
+                    now: now()
                 )
             }
         }
@@ -103,21 +114,38 @@ final class BriefEngine {
             }
         }
 
-        // Step 2: Group messages by service
-        let messagesByService = Dictionary(grouping: messages, by: { $0.service })
-        let services = Array(messagesByService.keys).sorted()
-
         // Per-conversation privacy gate: conversations the user marked never_draft (no LLM
         // ever) or local_only (cloud client only) are excluded from the brief entirely. Their
         // text must never enter threadText, and their messages must stay unattached so they
         // are not lost. Keys are "service|conversationId" (same convention as elsewhere).
         let excludedConversations: Set<String> = Set(
-            messagesByService.flatMap { service, msgs in
+            Dictionary(grouping: snapshotMessages, by: { $0.service }).flatMap { service, msgs in
                 Set(msgs.map { $0.conversationId })
                     .filter { self.isExcludedByPrivacy(service: service, conversationId: $0, clientIsCloud: clientIsCloud) }
                     .map { "\(service)|\($0)" }
             }
         )
+        let privacyExcludedMessages = snapshotMessages.filter {
+            excludedConversations.contains("\($0.service)|\($0.conversationId)")
+        }
+        if !privacyExcludedMessages.isEmpty {
+            _ = try repository.skipBriefJobMessages(
+                jobID: jobID,
+                messages: privacyExcludedMessages,
+                now: now()
+            )
+        }
+        let messages = snapshotMessages.filter {
+            !excludedConversations.contains("\($0.service)|\($0.conversationId)")
+        }
+        if messages.isEmpty {
+            jobFinalized = true
+            return AutomaticBriefOutcome(briefID: nil, jobCompleted: true)
+        }
+
+        // Step 2: Group messages by service
+        let messagesByService = Dictionary(grouping: messages, by: { $0.service })
+        let services = Array(messagesByService.keys).sorted()
 
         // Step 3: Per-service LLM call with its own episodic context
         let dateFormatter = DateFormatter()
@@ -267,7 +295,11 @@ final class BriefEngine {
 
         // Step 4: Guard against blank briefs — messages stay unattached if LLM returned nothing.
         guard !allCards.isEmpty else {
-            try repository.markBriefJobFailed(jobID: jobID, error: "No valid cards were generated")
+            try repository.markBriefJobFailed(
+                jobID: jobID,
+                error: "No valid cards were generated",
+                now: now()
+            )
             jobFinalized = true
             return nil
         }
@@ -339,6 +371,7 @@ final class BriefEngine {
                 messages: messagesToAttach,
                 briefID: insertedID,
                 failedServices: failedServicesSnapshot,
+                now: self.now(),
                 db: db
             )
             return insertedID

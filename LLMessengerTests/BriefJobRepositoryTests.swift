@@ -2,6 +2,18 @@ import XCTest
 import GRDB
 @testable import LLMessenger
 
+final class MutableTestClock: @unchecked Sendable {
+    var now: Date
+
+    init(_ now: Date) {
+        self.now = now
+    }
+
+    func advance(by interval: TimeInterval) {
+        now = now.addingTimeInterval(interval)
+    }
+}
+
 final class BriefJobRepositoryTests: XCTestCase {
     private func insertMessage(_ database: AppDatabase, id: String, at date: Date = Date()) throws -> Message {
         try database.dbQueue.write { db in
@@ -23,14 +35,16 @@ final class BriefJobRepositoryTests: XCTestCase {
     func testClaimCreatesImmutableMessageSnapshot() throws {
         let database = try AppDatabase(inMemory: true)
         let repository = BriefRepository(database: database)
-        let first = try insertMessage(database, id: "first")
+        let start = Date(timeIntervalSince1970: 500)
+        let first = try insertMessage(database, id: "first", at: start)
 
-        let initial = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: [first]))
-        try repository.markBriefJobFailed(jobID: try XCTUnwrap(initial.job.id), error: "offline")
-        _ = try insertMessage(database, id: "later", at: Date().addingTimeInterval(1))
+        let initial = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: [first], now: start))
+        try repository.markBriefJobFailed(jobID: try XCTUnwrap(initial.job.id), error: "offline", now: start)
+        _ = try insertMessage(database, id: "later", at: start.addingTimeInterval(1))
 
         let replay = try XCTUnwrap(repository.claimAutomaticBriefJob(
-            messages: try repository.fetchUnattachedMessages()
+            messages: try repository.fetchUnattachedMessages(),
+            now: start.addingTimeInterval(61)
         ))
 
         XCTAssertEqual(replay.job.id, initial.job.id)
@@ -41,6 +55,7 @@ final class BriefJobRepositoryTests: XCTestCase {
     func testPartialCompletionLeavesOnlyFailedInputsPending() throws {
         let database = try AppDatabase(inMemory: true)
         let repository = BriefRepository(database: database)
+        let start = Date(timeIntervalSince1970: 750)
         var signal = try insertMessage(database, id: "signal")
         var telegram = try insertMessage(database, id: "telegram")
         telegram.service = "telegram"
@@ -59,6 +74,7 @@ final class BriefJobRepositoryTests: XCTestCase {
                 messages: [signal],
                 briefID: briefID,
                 failedServices: ["telegram"],
+                now: start,
                 db: db
             )
             signal.briefId = briefID
@@ -69,7 +85,10 @@ final class BriefJobRepositoryTests: XCTestCase {
         let items = try repository.fetchBriefJobMessages(jobID: jobID)
         XCTAssertEqual(items.map(\.messageStatus), [.succeeded, .pending])
 
-        let replay = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: []))
+        let replay = try XCTUnwrap(repository.claimAutomaticBriefJob(
+            messages: [],
+            now: start.addingTimeInterval(61)
+        ))
         XCTAssertEqual(replay.messages.map(\.messageId), ["telegram"])
     }
 
@@ -97,5 +116,52 @@ final class BriefJobRepositoryTests: XCTestCase {
         XCTAssertEqual(recovered.job.id, first.job.id)
         XCTAssertEqual(recovered.job.attemptCount, 2)
         XCTAssertEqual(recovered.messages.map(\.messageId), ["interrupted"])
+    }
+
+    func testFailedJobBackoffAllowsNewMessagesToCreateANewJob() throws {
+        let database = try AppDatabase(inMemory: true)
+        let repository = BriefRepository(database: database)
+        let start = Date(timeIntervalSince1970: 1_000)
+        let failedMessage = try insertMessage(database, id: "failed", at: start)
+
+        let first = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: [failedMessage], now: start))
+        let firstID = try XCTUnwrap(first.job.id)
+        try repository.markBriefJobFailed(jobID: firstID, error: "offline", now: start)
+
+        let laterMessage = try insertMessage(database, id: "later", at: start.addingTimeInterval(1))
+        let next = try XCTUnwrap(repository.claimAutomaticBriefJob(
+            messages: [failedMessage, laterMessage],
+            now: start.addingTimeInterval(1)
+        ))
+
+        XCTAssertNotEqual(next.job.id, firstID)
+        XCTAssertEqual(next.messages.map(\.messageId), ["later"])
+        let failedJob = try XCTUnwrap(repository.fetchBriefJobs().first { $0.id == firstID })
+        XCTAssertEqual(failedJob.jobStatus, .failed)
+        XCTAssertEqual(failedJob.nextAttemptAt, start.addingTimeInterval(60))
+    }
+
+    func testRepeatedFailureMovesJobToDeadLetter() throws {
+        let database = try AppDatabase(inMemory: true)
+        let repository = BriefRepository(database: database)
+        let start = Date(timeIntervalSince1970: 2_000)
+        let message = try insertMessage(database, id: "poison", at: start)
+        var now = start
+
+        for expectedAttempt in 1...BriefRepository.maximumBriefJobAttempts {
+            let snapshot = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: [message], now: now))
+            XCTAssertEqual(snapshot.job.attemptCount, expectedAttempt)
+            try repository.markBriefJobFailed(
+                jobID: try XCTUnwrap(snapshot.job.id),
+                error: "still offline",
+                now: now
+            )
+            now = now.addingTimeInterval(BriefRepository.retryDelay(afterAttempt: expectedAttempt) + 1)
+        }
+
+        let job = try XCTUnwrap(repository.fetchBriefJobs().first)
+        XCTAssertEqual(job.jobStatus, .deadLetter)
+        XCTAssertNotNil(job.completedAt)
+        XCTAssertNil(try repository.claimAutomaticBriefJob(messages: [message], now: now))
     }
 }

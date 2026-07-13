@@ -12,11 +12,13 @@ enum BriefJobStatus: String, Codable {
     case partial
     case succeeded
     case failed
+    case deadLetter = "dead_letter"
 }
 
 enum BriefJobMessageStatus: String, Codable {
     case pending
     case succeeded
+    case skipped
 }
 
 struct BriefJob: Codable, FetchableRecord, MutablePersistableRecord {
@@ -27,6 +29,7 @@ struct BriefJob: Codable, FetchableRecord, MutablePersistableRecord {
     var updatedAt: Date
     var startedAt: Date?
     var completedAt: Date?
+    var nextAttemptAt: Date?
     var attemptCount: Int
     var lastError: String?
 

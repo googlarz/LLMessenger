@@ -139,7 +139,14 @@ final class BriefEngineTests: XCTestCase {
         let repository = BriefRepository(database: db)
         let mock = MockLLMClient()
         mock.response = LLMResponse(text: #"{"cards":[]}"#, inputTokens: 1, outputTokens: 1)
-        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+        let clock = MutableTestClock(Date())
+        let engine = BriefEngine(
+            database: db,
+            client: mock,
+            model: "test",
+            basePrompt: "BASE",
+            now: { clock.now }
+        )
 
         let failedResult = try await engine.processNewMessages()
         XCTAssertNil(failedResult)
@@ -166,6 +173,7 @@ final class BriefEngineTests: XCTestCase {
             messageIds: ["m0", "m1", "m2"]
         )
         engine.client = succeedingMock
+        clock.advance(by: 61)
 
         let retriedBriefID = try await engine.processNewMessages()
 
@@ -749,6 +757,42 @@ final class BriefEngineTests: XCTestCase {
         XCTAssertEqual(local.calls.count, 0, "never_draft conversation must never reach any LLM")
         let stillUnattached = try BriefRepository(database: db).fetchUnattachedMessages()
         XCTAssertEqual(stillUnattached.count, 2, "never_draft messages must stay unattached (not lost)")
+    }
+
+    func testPrivacyChangeRetiresRetryWithoutBlockingLaterConversation() async throws {
+        let db = try setupDB()
+        try insertMessages(db, conversationId: "c1", idPrefix: "x", count: 1)
+        let repository = BriefRepository(database: db)
+        let clock = MutableTestClock(Date())
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: #"{"cards":[]}"#, inputTokens: 1, outputTokens: 1)
+        let engine = BriefEngine(
+            database: db,
+            client: mock,
+            model: "test",
+            basePrompt: "BASE",
+            now: { clock.now }
+        )
+
+        let failedResult = try await engine.processNewMessages()
+        XCTAssertNil(failedResult)
+        let failedJob = try XCTUnwrap(repository.fetchBriefJobs().first)
+        try setPrivacy(db, conversationId: "c1", "never_draft")
+        try insertMessages(db, conversationId: "c2", idPrefix: "y", count: 1)
+        mock.response = LLMResponse(text: c2BriefJSON, inputTokens: 5, outputTokens: 5)
+        clock.advance(by: 61)
+
+        let briefID = try await engine.processNewMessages()
+
+        XCTAssertNotNil(briefID)
+        XCTAssertEqual(mock.calls.count, 2, "The retired private retry must not call the LLM")
+        let retiredItems = try repository.fetchBriefJobMessages(jobID: try XCTUnwrap(failedJob.id))
+        XCTAssertEqual(retiredItems.map(\.messageStatus), [.skipped])
+        XCTAssertEqual(
+            try repository.fetchUnattachedMessages().map(\.conversationId),
+            ["c1"],
+            "Private messages remain local and can be reconsidered if the user changes the setting"
+        )
     }
 
     /// summarizeLast is the second, more complex path (adapter / DB-fallback branches and a

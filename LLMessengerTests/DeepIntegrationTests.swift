@@ -56,7 +56,14 @@ final class DeepIntegrationTests: XCTestCase {
         mock.responses["signal"] = .success(LLMResponse(text: signalSuccessJSON, inputTokens: 10, outputTokens: 5))
         mock.responses["telegram"] = .failure(NSError(domain: "test", code: 500))
         
-        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+        let clock = MutableTestClock(Date())
+        let engine = BriefEngine(
+            database: db,
+            client: mock,
+            model: "test",
+            basePrompt: "BASE",
+            now: { clock.now }
+        )
         
         // 4. Run summarization
         let briefID = try await engine.processNewMessages()
@@ -101,6 +108,7 @@ final class DeepIntegrationTests: XCTestCase {
         mock.responses["telegram"] = .success(
             LLMResponse(text: telegramSuccessJSON, inputTokens: 10, outputTokens: 5)
         )
+        clock.advance(by: 61)
         let retryBriefID = try await engine.processNewMessages()
         XCTAssertNotNil(retryBriefID)
         let generationCalls = mock.calls.filter { $0.messages.last?.content.contains("=== [") == true }
