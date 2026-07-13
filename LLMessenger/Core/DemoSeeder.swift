@@ -144,7 +144,7 @@ enum DemoSeeder {
     /// Seeds demo briefs, messages, cards, sources, and tasks. Also writes
     /// disabled ServiceConfig rows for every service so the poll engine and
     /// health UI stay quiet while demo data is on screen.
-    static func seed(into database: AppDatabase) throws {
+    static func seed(into database: AppDatabase, activateDemoMode: Bool = true) throws {
         let now = Date()
 
         // Yesterday evening's quiet brief first, so it sits below today's in
@@ -214,7 +214,9 @@ enum DemoSeeder {
             try settings.saveServiceConfig(config)
         }
 
-        UserDefaults.standard.set(true, forKey: demoFlagKey)
+        if activateDemoMode {
+            UserDefaults.standard.set(true, forKey: demoFlagKey)
+        }
     }
 
     /// Removes everything seed() created and clears the flag. Demo mode only

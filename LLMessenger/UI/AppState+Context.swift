@@ -59,23 +59,23 @@ extension AppState {
             }
             reloadOwedReplies()
             reloadAgentActions()
-            productLoveMetrics = ProductLoveMetricStore.recordUndo()
+            productLoveMetrics = ProductLoveMetricStore.recordUndo(defaults: defaults)
         } catch {
             lastError = friendly(error)
         }
     }
 
     func recordQuietedThread() {
-        productLoveMetrics = ProductLoveMetricStore.recordQuietedThread()
+        productLoveMetrics = ProductLoveMetricStore.recordQuietedThread(defaults: defaults)
         reloadProductOutcomeStats()
     }
 
     func recordDraftCreated() {
-        productLoveMetrics = ProductLoveMetricStore.recordDraftCreated()
+        productLoveMetrics = ProductLoveMetricStore.recordDraftCreated(defaults: defaults)
     }
 
     func recordUndo() {
-        productLoveMetrics = ProductLoveMetricStore.recordUndo()
+        productLoveMetrics = ProductLoveMetricStore.recordUndo(defaults: defaults)
     }
 
     func conversationContextKey(service: String, conversationId: String) -> String {
@@ -128,9 +128,9 @@ extension AppState {
                 to: userPriority,
                 cardHeadline: headline
             )
-            productLoveMetrics = ProductLoveMetricStore.recordPriorityCorrection()
+            productLoveMetrics = ProductLoveMetricStore.recordPriorityCorrection(defaults: defaults)
             if userPriority == "low" {
-                productLoveMetrics = ProductLoveMetricStore.recordQuietedThread()
+                productLoveMetrics = ProductLoveMetricStore.recordQuietedThread(defaults: defaults)
             }
             reloadProductOutcomeStats()
         } catch {

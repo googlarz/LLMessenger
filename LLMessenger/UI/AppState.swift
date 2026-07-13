@@ -176,16 +176,14 @@ final class AppState: ObservableObject {
     @Published var conversationContextsByKey: [String: ConversationContext] = [:] { didSet { recomputeAttentionProjection() } }
     @Published var attentionProjection: AttentionProjection = .empty
     @Published var productOutcomeStats: ProductOutcomeStats = .empty
-    @Published var productLoveMetrics: ProductLoveMetrics = ProductLoveMetricStore.load()
+    @Published var productLoveMetrics: ProductLoveMetrics
     @Published var briefFetchLimit = 500
 
-    @Published var handledCardKeys: Set<String> = {
-        let saved = UserDefaults.standard.stringArray(forKey: "handledCardKeys") ?? []
-        return Set(saved)
-    }() { didSet { recomputeAttentionProjection() } }
+    @Published var handledCardKeys: Set<String> { didSet { recomputeAttentionProjection() } }
 
     let database: AppDatabase
     let repository: BriefRepository
+    let defaults: UserDefaults
     let llmClient: LLMClient
     @Published var llmModel: String
     @Published var llmProvider: LLMProvider?
@@ -224,15 +222,18 @@ final class AppState: ObservableObject {
          llmModel: String,
          llmProvider: LLMProvider? = nil,
          isLLMConfigured: Bool = true,
-         basePrompt: String) {
+         basePrompt: String,
+         defaults: UserDefaults = .standard) {
         self.database = database
         self.repository = BriefRepository(database: database)
+        self.defaults = defaults
         self.llmClient = llmClient
         self.llmModel = llmModel
         self.llmProvider = llmProvider
         self.isLLMConfigured = isLLMConfigured
         self.basePrompt = basePrompt
-        self.productLoveMetrics = ProductLoveMetricStore.markActiveToday()
+        self.handledCardKeys = Set(defaults.stringArray(forKey: "handledCardKeys") ?? [])
+        self.productLoveMetrics = ProductLoveMetricStore.markActiveToday(defaults: defaults)
     }
 
     func updateLLMConfiguration(

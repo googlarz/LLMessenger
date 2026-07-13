@@ -41,6 +41,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var briefRefreshCoordinator: BriefRefreshCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if ProcessInfo.processInfo.environment["LLMESSENGER_UI_TEST_MODE"] == "1" {
+            do {
+                try launchUITestFixture()
+            } catch {
+                assertionFailure("Could not launch UI test fixture: \(error)")
+            }
+            return
+        }
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
             return
         }
@@ -459,6 +467,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.runModal()
             NSApp.terminate(nil)
         }
+    }
+
+    private func launchUITestFixture() throws {
+        NSApp.appearance = NSAppearance(named: .darkAqua)
+        let db = try AppDatabase(inMemory: true)
+        try DemoSeeder.seed(into: db, activateDemoMode: false)
+        let defaultsSuite = "com.llmessenger.ui-tests"
+        let defaults = UserDefaults(suiteName: defaultsSuite)!
+        defaults.removePersistentDomain(forName: defaultsSuite)
+        let state = AppState(
+            database: db,
+            llmClient: UnconfiguredLLMClient(),
+            llmModel: "ui-test",
+            llmProvider: nil,
+            isLLMConfigured: false,
+            basePrompt: PromptBuilder.defaultBasePrompt,
+            defaults: defaults
+        )
+        let repository = BriefRepository(database: db)
+        let briefs = try repository.fetchRecentBriefs()
+        state.briefs = briefs
+        state.briefCardsByBriefID = try repository.fetchBriefCards(briefIDs: briefs.compactMap(\.id))
+        state.selectedBriefID = briefs.first?.id
+        state.handledCardKeys = []
+        var metrics = ProductLoveMetrics.empty
+        metrics.activeDays = 1
+        metrics.firstSeenAt = Date()
+        metrics.openedDigests = 1
+        metrics.firstRealDigestAcknowledged = true
+        state.productLoveMetrics = metrics
+
+        database = db
+        appState = state
+        let windowController = ChatWindowController(appState: state)
+        chatWindowController = windowController
+        windowController.show(selectingBriefID: briefs.first?.id)
+        windowController.window?.setContentSize(NSSize(width: 1040, height: 900))
+        windowController.window?.center()
     }
 
     /// Routes onboarding completion: demo mode lands directly on the seeded

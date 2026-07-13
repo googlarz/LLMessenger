@@ -32,7 +32,7 @@ struct ChatInputView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 1))
                 Text("No AI backend configured — digests and replies are paused.")
                     .font(Theme.sans(12.5))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(Theme.textPrimary)
                 Button("OPEN SETTINGS") { appState.onOpenSettings?() }
                     .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
             }

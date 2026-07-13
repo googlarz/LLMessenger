@@ -142,7 +142,7 @@ struct BriefHeaderView: View {
         HStack(spacing: 4) {
             Text(value)
                 .font(Theme.mono(11, weight: .semibold))
-                .foregroundStyle(Theme.textSecondary)
+                .foregroundStyle(Theme.textPrimary)
             Text(unit.uppercased())
                 .font(Theme.labelFont)
                 .tracking(Theme.labelTracking)
@@ -153,7 +153,7 @@ struct BriefHeaderView: View {
     private var datelineDot: some View {
         Text("·")
             .font(Theme.mono(11))
-            .foregroundStyle(Theme.textTertiary)
+            .foregroundStyle(Theme.textSecondary)
             .padding(.horizontal, 7)
     }
 

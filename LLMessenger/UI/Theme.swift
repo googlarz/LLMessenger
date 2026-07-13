@@ -63,19 +63,19 @@ enum Theme {
     // MARK: - Text — warm against the ground
 
     static let textPrimary = Color(
-        light: Color(red: 0.133, green: 0.122, blue: 0.098),   // #221F19 deep ink
-        dark:  Color(red: 0.929, green: 0.910, blue: 0.871)    // #EDE8DE warm paper
+        light: Color(red: 0.090, green: 0.082, blue: 0.067),
+        dark:  Color(red: 0.965, green: 0.949, blue: 0.918)
     )
     static let textSecondary = Color(
-        light: Color(red: 0.404, green: 0.388, blue: 0.353),   // #676358
-        dark:  Color(red: 0.608, green: 0.596, blue: 0.561)    // #9B988F
+        light: Color(red: 0.235, green: 0.224, blue: 0.200),
+        dark:  Color(red: 0.820, green: 0.804, blue: 0.765)
     )
-    // Carries real content (timestamps, agent reasoning, captions), so it must clear
-    // WCAG AA 4.5:1. Computed against the page grounds: light #6E6B65 → 4.99:1 on bg /
-    // 4.6:1 on sidebar; dark #8B887F → 5.33:1 on bg / 4.51:1 on surfaceHigh.
+    // Carries real content (timestamps, agent reasoning, captions). Keep substantial
+    // headroom above AA because small macOS text loses contrast to antialiasing and several
+    // call sites intentionally place this token on raised or translucent surfaces.
     static let textTertiary = Color(
-        light: Color(red: 0.432, green: 0.421, blue: 0.394),   // #6E6B65
-        dark:  Color(red: 0.544, green: 0.533, blue: 0.496)    // #8B887F
+        light: Color(red: 0.300, green: 0.290, blue: 0.267),
+        dark:  Color(red: 0.745, green: 0.729, blue: 0.690)
     )
 
     // MARK: - Signal — the only colour that means anything
@@ -85,19 +85,19 @@ enum Theme {
     // audit verified ≥4.5:1 on #F9F8F6. Dark mode unchanged.
     /// Vermilion. Urgency, unread, "needs you now". Use in small doses.
     static let signal = Color(
-        light: Color(red: 0.760, green: 0.227, blue: 0.122),   // #C23A1F
-        dark:  Color(red: 0.886, green: 0.310, blue: 0.196)    // #E24F32
+        light: Color(red: 0.700, green: 0.165, blue: 0.082),
+        dark:  Color(red: 0.980, green: 0.420, blue: 0.300)
     )
     static let signalWash  = signal.opacity(0.10)
     /// Standby amber — partial states, warnings, "heads-up".
     static let standby = Color(
-        light: Color(red: 0.604, green: 0.420, blue: 0.102),   // #9A6B1A
-        dark:  Color(red: 0.851, green: 0.647, blue: 0.302)    // #D9A54D
+        light: Color(red: 0.505, green: 0.337, blue: 0.055),
+        dark:  Color(red: 0.930, green: 0.735, blue: 0.380)
     )
     /// Quiet sage — health OK, handled, success. Desaturated on purpose.
     static let ok = Color(
-        light: Color(red: 0.247, green: 0.478, blue: 0.259),   // #3F7A42
-        dark:  Color(red: 0.498, green: 0.651, blue: 0.467)    // #7FA677
+        light: Color(red: 0.180, green: 0.405, blue: 0.188),
+        dark:  Color(red: 0.650, green: 0.800, blue: 0.615)
     )
 
     // Legacy aliases — `accent` now maps to the signal vermilion.
@@ -108,10 +108,22 @@ enum Theme {
 
     // MARK: - Service inks — uniform saturation, like rubber stamps
 
-    static let serviceIMessage = Color(red: 0.467, green: 0.624, blue: 0.443) // sage
-    static let serviceTelegram = Color(red: 0.420, green: 0.604, blue: 0.733) // sky steel
-    static let serviceSignal   = Color(red: 0.478, green: 0.541, blue: 0.776) // wire blue
-    static let serviceSlack    = Color(red: 0.671, green: 0.518, blue: 0.690) // clay violet
+    static let serviceIMessage = Color(
+        light: Color(red: 0.180, green: 0.380, blue: 0.170),
+        dark: Color(red: 0.640, green: 0.800, blue: 0.610)
+    )
+    static let serviceTelegram = Color(
+        light: Color(red: 0.150, green: 0.340, blue: 0.480),
+        dark: Color(red: 0.550, green: 0.750, blue: 0.880)
+    )
+    static let serviceSignal = Color(
+        light: Color(red: 0.280, green: 0.320, blue: 0.580),
+        dark: Color(red: 0.650, green: 0.700, blue: 0.950)
+    )
+    static let serviceSlack = Color(
+        light: Color(red: 0.400, green: 0.250, blue: 0.450),
+        dark: Color(red: 0.780, green: 0.620, blue: 0.820)
+    )
 
     static func serviceName(_ service: String) -> String {
         switch service {

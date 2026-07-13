@@ -742,11 +742,6 @@ private struct WeekAtGlanceView: View {
             )
             .foregroundStyle(day.barColor)
             .cornerRadius(2, style: .continuous)
-            .accessibilityLabel(Text(day.label))
-            .accessibilityValue(
-                Text("\(day.count) message\(day.count == 1 ? "" : "s")"
-                     + (day.hasHighCard ? ", high priority" : ""))
-            )
         }
         .chartXAxis {
             AxisMarks { value in
@@ -767,6 +762,9 @@ private struct WeekAtGlanceView: View {
         .chartYAxis(.hidden)
         .frame(height: 52)
         .animation(.spring(response: 0.45, dampingFraction: 0.82), value: appeared)
+        .accessibilityRepresentation {
+            Text(weekAccessibilitySummary(data))
+        }
     }
 
     private func countReadout(leadCount: Int,
@@ -788,8 +786,17 @@ private struct WeekAtGlanceView: View {
                 .foregroundStyle(character.color)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(leadCount) of \(totalCards) threads, \(character.text)")
+        .accessibilityRepresentation {
+            Text("\(leadCount) of \(totalCards) threads, \(character.text)")
+        }
+    }
+
+    private func weekAccessibilitySummary(_ data: [DayData]) -> String {
+        let days = data.map { day in
+            "\(day.label), \(day.count) message\(day.count == 1 ? "" : "s")"
+                + (day.hasHighCard ? ", high priority" : "")
+        }
+        return "Messages in the last seven days. " + days.joined(separator: "; ")
     }
 
     private var legend: some View {

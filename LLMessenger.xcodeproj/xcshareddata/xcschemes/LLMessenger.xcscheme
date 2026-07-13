@@ -37,6 +37,20 @@
          </BuildActionEntry>
          <BuildActionEntry
             buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "F6DFF1A468578A1CFA6CAB78"
+               BuildableName = "LLMessengerUITests.xctest"
+               BlueprintName = "LLMessengerUITests"
+               ReferencedContainer = "container:LLMessenger.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
             buildForRunning = "YES"
             buildForProfiling = "YES"
             buildForArchiving = "YES"
@@ -75,6 +89,17 @@
                BlueprintIdentifier = "D523D9B22AB9F1E089BDE196"
                BuildableName = "LLMessengerTests.xctest"
                BlueprintName = "LLMessengerTests"
+               ReferencedContainer = "container:LLMessenger.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "F6DFF1A468578A1CFA6CAB78"
+               BuildableName = "LLMessengerUITests.xctest"
+               BlueprintName = "LLMessengerUITests"
                ReferencedContainer = "container:LLMessenger.xcodeproj">
             </BuildableReference>
          </TestableReference>

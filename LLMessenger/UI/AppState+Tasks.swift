@@ -24,7 +24,7 @@ extension AppState {
                 do {
                     try self.repository.reopenTask(id: taskID)
                     self.refreshTasks()
-                    self.productLoveMetrics = ProductLoveMetricStore.recordUndo()
+                    self.productLoveMetrics = ProductLoveMetricStore.recordUndo(defaults: self.defaults)
                 } catch {
                     self.lastError = self.friendly(error)
                 }

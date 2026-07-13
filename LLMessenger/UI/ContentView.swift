@@ -101,6 +101,8 @@ struct ContentView: View {
             }
         }
         .background(Theme.bg)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("LLMessenger main window")
         .ignoresSafeArea(.all, edges: .top)
         .onChange(of: showSearch) { _, searching in
             if searching { withAnimation(Theme.spring) { sidebarCollapsed = false } }

@@ -193,7 +193,7 @@ private struct BriefFooterView: View {
             Text(footerText.uppercased())
                 .font(Theme.mono(11))
                 .tracking(1.0)
-                .foregroundStyle(Theme.textTertiary)
+                .foregroundStyle(Theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)

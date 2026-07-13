@@ -12,10 +12,9 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
         self.appState = appState
         self.chatViewModel = appState.makeChatViewModel()
 
-        let window = NSPanel(
+        let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1040, height: 700),
-            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView,
-                        .nonactivatingPanel],
+            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -42,7 +41,9 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
             .environmentObject(appState)
             .environmentObject(chatViewModel)
             .environmentObject(appState.contactDirectory)
-        window.contentView = NSHostingView(rootView: content)
+        let hostingView = NSHostingView(rootView: content)
+        hostingView.setAccessibilityLabel("LLMessenger main window")
+        window.contentView = hostingView
 
         appState.contactDirectory.refresh()
 

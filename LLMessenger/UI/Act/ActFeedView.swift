@@ -210,7 +210,7 @@ struct ActFeedView: View {
                 .font(Theme.sans(28, weight: .thin))
                 .foregroundStyle(Theme.textTertiary.opacity(0.4))
                 .padding(.bottom, 2)
-            WireLabel("Act")
+            WireLabel("Act", color: Theme.textPrimary)
             Text("You're clear")
                 .font(Theme.display(21))
                 .foregroundStyle(Theme.textPrimary)
@@ -222,7 +222,7 @@ struct ActFeedView: View {
                 }
             }
             .font(Theme.sans(12.5))
-            .foregroundStyle(Theme.textTertiary)
+            .foregroundStyle(Theme.textPrimary)
             .multilineTextAlignment(.center)
             if let latest = appState.briefs.max(by: { $0.createdAt < $1.createdAt }) {
                 Button("Read latest digest →") {

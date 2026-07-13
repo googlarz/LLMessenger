@@ -105,12 +105,12 @@ extension AppState {
     }
 
     func dismissFirstWeekGuide() {
-        productLoveMetrics = ProductLoveMetricStore.dismissFirstWeekGuide()
+        productLoveMetrics = ProductLoveMetricStore.dismissFirstWeekGuide(defaults: defaults)
         showReceipt("First-week guide hidden.")
     }
 
     func acknowledgeFirstRealDigest() {
-        productLoveMetrics = ProductLoveMetricStore.acknowledgeFirstRealDigest()
+        productLoveMetrics = ProductLoveMetricStore.acknowledgeFirstRealDigest(defaults: defaults)
     }
 
     func showReceipt(_ text: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {

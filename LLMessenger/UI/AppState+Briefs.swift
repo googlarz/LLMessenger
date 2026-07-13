@@ -24,7 +24,7 @@ extension AppState {
         do {
             try repository.markAsOpen(briefID: briefID)
             InstrumentationManager.shared.track(event: .briefOpened, metadata: ["briefID": briefID])
-            productLoveMetrics = ProductLoveMetricStore.recordOpenedDigest()
+            productLoveMetrics = ProductLoveMetricStore.recordOpenedDigest(defaults: defaults)
             return refreshBriefs()
         } catch {
             lastError = friendly(error)
@@ -136,14 +136,14 @@ extension AppState {
     }
     func markCardHandled(briefID: Int64, cardID: String) {
         let inserted = handledCardKeys.insert("\(briefID):\(cardID)").inserted
-        UserDefaults.standard.set(Array(handledCardKeys), forKey: "handledCardKeys")
+        defaults.set(Array(handledCardKeys), forKey: "handledCardKeys")
         if inserted {
-            productLoveMetrics = ProductLoveMetricStore.recordHandledCard()
+            productLoveMetrics = ProductLoveMetricStore.recordHandledCard(defaults: defaults)
             reloadProductOutcomeStats()
             showReceipt("Card marked done.", actionTitle: "Undo") { [weak self] in
                 guard let self else { return }
                 self.unmarkCardHandled(briefID: briefID, cardID: cardID)
-                self.productLoveMetrics = ProductLoveMetricStore.recordUndo()
+                self.productLoveMetrics = ProductLoveMetricStore.recordUndo(defaults: self.defaults)
                 self.reloadProductOutcomeStats()
             }
         }
@@ -151,7 +151,7 @@ extension AppState {
 
     func unmarkCardHandled(briefID: Int64, cardID: String) {
         handledCardKeys.remove("\(briefID):\(cardID)")
-        UserDefaults.standard.set(Array(handledCardKeys), forKey: "handledCardKeys")
+        defaults.set(Array(handledCardKeys), forKey: "handledCardKeys")
     }
 
     func isCardHandled(briefID: Int64, cardID: String) -> Bool {
@@ -202,7 +202,7 @@ extension AppState {
             showReceipt("Digest filed away.", actionTitle: "Undo") { [weak self] in
                 guard let self else { return }
                 self.unarchiveBrief(briefID)
-                self.productLoveMetrics = ProductLoveMetricStore.recordUndo()
+                self.productLoveMetrics = ProductLoveMetricStore.recordUndo(defaults: self.defaults)
             }
         } catch {
             lastError = friendly(error)
@@ -227,7 +227,7 @@ extension AppState {
                 do {
                     try self.repository.setSnoozed(briefID: briefID, snoozedUntil: nil)
                     self.refreshBriefs()
-                    self.productLoveMetrics = ProductLoveMetricStore.recordUndo()
+                    self.productLoveMetrics = ProductLoveMetricStore.recordUndo(defaults: self.defaults)
                 } catch {
                     self.lastError = self.friendly(error)
                 }

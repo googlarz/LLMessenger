@@ -65,6 +65,20 @@ targets:
     dependencies:
       - target: LLMessenger
       - package: GRDB
+  LLMessengerUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: LLMessengerUITests
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: LLMessenger
 schemes:
   LLMessenger:
     build:
@@ -72,9 +86,11 @@ schemes:
         LLMessenger: all
         LLMessengerWidget: all
         LLMessengerTests: [testing]
+        LLMessengerUITests: [testing]
     test:
       targets:
         - LLMessengerTests
+        - LLMessengerUITests
       environmentVariables:
         - variable: OS_ACTIVITY_MODE
           value: disable

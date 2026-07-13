@@ -13,7 +13,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         context.coordinator.install()
-        return NSView(frame: .zero)
+        let view = NSView(frame: .zero)
+        view.setAccessibilityElement(false)
+        return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {

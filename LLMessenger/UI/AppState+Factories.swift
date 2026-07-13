@@ -18,7 +18,7 @@ extension AppState {
     func startDemoMode() {
         do {
             try DemoSeeder.seed(into: database)
-            productLoveMetrics = ProductLoveMetricStore.recordDemoStart()
+            productLoveMetrics = ProductLoveMetricStore.recordDemoStart(defaults: defaults)
             let task = refreshBriefs()
             Task { @MainActor in
                 await task.value

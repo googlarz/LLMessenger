@@ -64,6 +64,7 @@ struct BriefCardView: View {
     @State private var bodyExpanded = false
     @State private var evidenceExpanded = false
     @State private var showLabelEditor = false
+    @State private var showPriorityEditor = false
     @State private var labelEditText = ""
     @State private var labelEditHint = "auto"
     @State private var labelEditPrivacy = "none"
@@ -206,9 +207,12 @@ struct BriefCardView: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 10))
                     .foregroundStyle(Theme.textTertiary.opacity(hovering ? 1 : 0))
+                    .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
             .help("Full conversation history across briefs")
+            .accessibilityLabel("Show conversation history")
+            .accessibilityHint("Opens earlier digest entries for \(convName).")
 
             Spacer(minLength: 8)
 
@@ -230,22 +234,36 @@ struct BriefCardView: View {
             if isHandled {
                 WireLabel("Filed", color: Theme.ok)
             } else {
-                Menu {
-                    Text("Correct priority — teaches future briefs")
-                    ForEach(["high", "med", "low"], id: \.self) { p in
-                        Button(p.capitalized) {
-                            appState.savePriorityCorrection(
-                                service: card.service, conversationId: card.conversationId,
-                                headline: card.headline, llmPriority: card.priority, userPriority: p)
-                        }
-                    }
+                Button {
+                    showPriorityEditor = true
                 } label: {
                     PriorityStamp(priority: card.priority)
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
                 .fixedSize()
                 .help("Tap to correct this priority")
+                .accessibilityLabel("\(priorityAccessibilityLabel) priority")
+                .accessibilityHint("Choose the priority to use for future digests.")
+                .popover(isPresented: $showPriorityEditor) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Correct priority")
+                            .font(Theme.sans(12, weight: .semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                        Text("This teaches future digests.")
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.textTertiary)
+                        ForEach([("high", "High"), ("med", "Medium"), ("low", "Low")], id: \.0) { value, label in
+                            Button(label) {
+                                correctPriority(value)
+                                showPriorityEditor = false
+                            }
+                            .buttonStyle(WireActionStyle())
+                            .accessibilityLabel("Set \(label.lowercased()) priority")
+                        }
+                    }
+                    .padding(14)
+                    .frame(width: 190)
+                }
             }
 
             // High and promoted cards are always-expanded ledes — no collapse affordance.
@@ -270,6 +288,24 @@ struct BriefCardView: View {
             guard !isHigh && !promoted else { return }
             withAnimation(Theme.spring) { bodyExpanded.toggle() }
         }
+    }
+
+    private var priorityAccessibilityLabel: String {
+        switch card.priority {
+        case "high": return "Needs you"
+        case "med": return "Heads-up"
+        default: return "FYI"
+        }
+    }
+
+    private func correctPriority(_ priority: String) {
+        appState.savePriorityCorrection(
+            service: card.service,
+            conversationId: card.conversationId,
+            headline: card.headline,
+            llmPriority: card.priority,
+            userPriority: priority
+        )
     }
 
     private var headline: some View {

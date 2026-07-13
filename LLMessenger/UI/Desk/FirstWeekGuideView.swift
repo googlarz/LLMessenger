@@ -14,7 +14,7 @@ struct FirstWeekGuideView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                WireLabel("First week", color: Theme.textSecondary)
+                WireLabel("First week", color: Theme.textPrimary)
                 Spacer()
                 WireLabel("Day \(metrics.firstWeekDay)", color: Theme.standby)
                 Button {
@@ -104,7 +104,7 @@ private struct GuideStep: View {
                 .overlay(Circle().strokeBorder(done ? Theme.ok.opacity(0.55) : Theme.border, lineWidth: 1))
             Text(label.uppercased())
                 .font(Theme.mono(9.5, weight: .medium))
-                .foregroundStyle(done ? Theme.textSecondary : Theme.textTertiary)
+                .foregroundStyle(Theme.textPrimary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
