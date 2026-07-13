@@ -120,7 +120,8 @@ final class BackendWorkflowE2ETests: XCTestCase {
         XCTAssertEqual(msg?.briefId, briefId, "Message briefId must remain attached to original brief")
     }
 
-    // 1.4 — LLM failure on cycle 1 leaves messages unattached; cycle 2 succeeds and attaches all.
+    // 1.4 — LLM failure on cycle 1 leaves its snapshot retryable. A message arriving
+    // during cycle 2 is drained through a second job after the retry succeeds.
     func testMessagesFromFailedBriefCycleAreRetriedInNextCycle() async throws {
         let db = try makeDB()
 
@@ -147,7 +148,8 @@ final class BackendWorkflowE2ETests: XCTestCase {
         XCTAssertNotNil(m1, "m1 must be stored even when LLM fails")
         XCTAssertNil(m1?.briefId, "m1 must remain unattached after failed cycle")
 
-        // Cycle 2: add m2, mock succeeds covering both m1 and m2
+        // Cycle 2: add m2. The first job still owns only m1; after it succeeds,
+        // processNewMessages drains m2 through a second immutable job.
         let succeedingMock = DynamicMockLLMClient()
         succeedingMock.specs["signal"] = .init(convId: "c1", messageIds: ["m1", "m2"])
         let engine2 = makeEngine(db: db)
@@ -161,13 +163,10 @@ final class BackendWorkflowE2ETests: XCTestCase {
         await engine2.pollAll()
 
         let briefCountAfterCycle2 = try await db.dbQueue.read { d in try Brief.fetchCount(d) }
-        XCTAssertEqual(briefCountAfterCycle2, 1, "One brief must be created on cycle 2")
+        XCTAssertEqual(briefCountAfterCycle2, 2, "The retry and later message must produce separate briefs")
 
         let msgCount = try await db.dbQueue.read { d in try Message.fetchCount(d) }
         XCTAssertEqual(msgCount, 2, "Both messages must be stored")
-
-        let brief = try await db.dbQueue.read { d in try Brief.fetchAll(d).first }
-        let briefRowId = try XCTUnwrap(brief?.id)
 
         let m1After = try await db.dbQueue.read { d in
             try Message.filter(Column("messageId") == "m1").fetchOne(d)
@@ -175,8 +174,14 @@ final class BackendWorkflowE2ETests: XCTestCase {
         let m2After = try await db.dbQueue.read { d in
             try Message.filter(Column("messageId") == "m2").fetchOne(d)
         }
-        XCTAssertEqual(m1After?.briefId, briefRowId, "m1 must be attached to the brief on cycle 2")
-        XCTAssertEqual(m2After?.briefId, briefRowId, "m2 must be attached to the brief on cycle 2")
+        XCTAssertNotNil(m1After?.briefId, "m1 must be attached by the retried job")
+        XCTAssertNotNil(m2After?.briefId, "m2 must be attached by the subsequent job")
+        XCTAssertNotEqual(m1After?.briefId, m2After?.briefId,
+                          "Messages from different snapshots must not be merged into one brief")
+
+        let jobs = try BriefRepository(database: db).fetchBriefJobs()
+        XCTAssertEqual(jobs.count, 2)
+        XCTAssertTrue(jobs.allSatisfy { $0.jobStatus == .succeeded })
     }
 
     // 1.5 — Two services polled → single brief covering both.

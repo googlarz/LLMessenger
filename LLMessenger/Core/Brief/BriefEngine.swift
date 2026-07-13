@@ -44,6 +44,26 @@ final class BriefEngine {
         briefingInFlight = true
         defer { briefingInFlight = false }
 
+        var latestBriefID: Int64?
+        while let outcome = try await processNextAutomaticBriefJob(adapters: adapters) {
+            latestBriefID = outcome.briefID
+            guard outcome.jobCompleted else { break }
+        }
+        return latestBriefID
+    }
+
+    private struct AutomaticBriefOutcome {
+        var briefID: Int64
+        var jobCompleted: Bool
+    }
+
+    /// Processes one immutable job snapshot. The public entry point drains a
+    /// later snapshot only after this one fully succeeds; partial jobs wait for
+    /// the next trigger instead of retrying a failed provider in a hot loop.
+    private func processNextAutomaticBriefJob(
+        adapters: [String: any MessengerAdapter]
+    ) async throws -> AutomaticBriefOutcome? {
+
         let candidateMessages = try repository.fetchUnattachedMessages()
 
         // Privacy-excluded conversations never enter a durable job snapshot: a
@@ -328,7 +348,10 @@ final class BriefEngine {
         try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
         updateContactProfiles(from: allCards)
 
-        return briefID
+        return AutomaticBriefOutcome(
+            briefID: briefID,
+            jobCompleted: failedServicesSnapshot.isEmpty
+        )
     }
 
     // Fetch from adapters for the last N hours, store any new messages, and create a brief.

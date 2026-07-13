@@ -1,5 +1,6 @@
 // LLMessengerTests/BriefEngineTests.swift
 import XCTest
+import GRDB
 @testable import LLMessenger
 
 // Valid JSON the BriefEngine expects: cards array with at least one card.
@@ -159,29 +160,38 @@ final class BriefEngineTests: XCTestCase {
             )
             try later.insert(db)
         }
-        mock.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
+        let succeedingMock = DynamicMockLLMClient()
+        succeedingMock.specs["telegram"] = .init(
+            convId: "c1",
+            messageIds: ["m0", "m1", "m2"]
+        )
+        engine.client = succeedingMock
 
         let retriedBriefID = try await engine.processNewMessages()
 
         XCTAssertNotNil(retriedBriefID)
-        let retryPrompt = try XCTUnwrap(mock.calls.last?.messages.last?.content)
-        XCTAssertTrue(retryPrompt.contains("[id=m0 |"))
-        XCTAssertTrue(retryPrompt.contains("[id=m1 |"))
-        XCTAssertFalse(retryPrompt.contains("[id=m2 |"), "Later messages must not mutate a failed job snapshot")
-        let completedJob = try XCTUnwrap(repository.fetchBriefJobs().first)
+        XCTAssertEqual(succeedingMock.callCount, 3,
+                       "Expected two generation calls plus compression between completed jobs")
+        let jobs = try repository.fetchBriefJobs()
+        let completedJob = try XCTUnwrap(jobs.first)
         XCTAssertEqual(completedJob.id, failedJob.id)
         XCTAssertEqual(completedJob.jobStatus, .succeeded)
         XCTAssertEqual(completedJob.attemptCount, 2)
-        XCTAssertEqual(try repository.fetchUnattachedMessages().map(\.messageId), ["m2"])
-
-        mock.response = LLMResponse(
-            text: validBriefJSON.replacingOccurrences(of: "m0", with: "m2"),
-            inputTokens: 5,
-            outputTokens: 5
-        )
-        let laterBriefID = try await engine.processNewMessages()
-        XCTAssertNotNil(laterBriefID)
-        XCTAssertEqual(try repository.fetchBriefJobs().count, 2)
+        XCTAssertEqual(jobs.count, 2)
+        XCTAssertTrue(jobs.allSatisfy { $0.jobStatus == .succeeded })
+        XCTAssertTrue(try repository.fetchUnattachedMessages().isEmpty)
+        let jobInputs = try await db.dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT j.jobId, m.messageId
+                FROM briefJobMessages j
+                JOIN messages m ON m.id = j.messageRowId
+                ORDER BY j.jobId, m.messageId
+            """)
+        }
+        let inputsByJob = Dictionary(grouping: jobInputs, by: { $0["jobId"] as Int64 })
+            .mapValues { $0.map { $0["messageId"] as String } }
+        XCTAssertEqual(inputsByJob[try XCTUnwrap(jobs[0].id)], ["m0", "m1"])
+        XCTAssertEqual(inputsByJob[try XCTUnwrap(jobs[1].id)], ["m2"])
     }
 
     func testPriorityRulesAreAppliedToVisibleBriefJSON() async throws {
