@@ -53,8 +53,12 @@ final class BriefEngine {
 
     /// Runs a bounded automatic drain and returns every brief created during it.
     /// The legacy single-ID entry point returns the latest ID for compatibility.
-    func processNewMessageBatch(adapters: [String: any MessengerAdapter] = [:]) async throws -> [Int64] {
+    func processNewMessageBatch(
+        adapters: [String: any MessengerAdapter] = [:],
+        eligibleServiceIDs: Set<String>? = nil
+    ) async throws -> [Int64] {
         guard !briefingInFlight else { return [] }
+        guard eligibleServiceIDs?.isEmpty != true else { return [] }
         briefingInFlight = true
         defer { briefingInFlight = false }
 
@@ -72,7 +76,10 @@ final class BriefEngine {
         var briefIDs: [Int64] = []
         var processedJobs = 0
         while processedJobs < Self.maximumAutomaticJobsPerRun,
-              let outcome = try await processNextAutomaticBriefJob(adapters: adapters) {
+              let outcome = try await processNextAutomaticBriefJob(
+                adapters: adapters,
+                eligibleServiceIDs: eligibleServiceIDs
+              ) {
             processedJobs += 1
             if let briefID = outcome.briefID {
                 briefIDs.append(briefID)
@@ -91,10 +98,12 @@ final class BriefEngine {
     /// later snapshot only after this one fully succeeds; partial jobs wait for
     /// the next trigger instead of retrying a failed provider in a hot loop.
     private func processNextAutomaticBriefJob(
-        adapters: [String: any MessengerAdapter]
+        adapters: [String: any MessengerAdapter],
+        eligibleServiceIDs: Set<String>?
     ) async throws -> AutomaticBriefOutcome? {
 
         let candidateMessages = try repository.fetchUnattachedMessages(
+            serviceIDs: eligibleServiceIDs,
             limit: Self.maximumAutomaticCandidateMessages
         )
 
@@ -123,7 +132,6 @@ final class BriefEngine {
             messageLimit: Self.maximumAutomaticJobMessages
         ),
               let jobID = snapshot.job.id else { return nil }
-        let snapshotMessages = selectAutomaticJobMessages(snapshot.messages)
         var jobFinalized = false
         defer {
             if !jobFinalized {
@@ -134,6 +142,26 @@ final class BriefEngine {
                 )
             }
         }
+
+        // A replayable job may predate a service's switch to on-demand mode.
+        // Retire those rows from the automatic job without attaching them; they
+        // remain available for an explicit user-triggered summary later.
+        let serviceExcludedMessages = snapshot.messages.filter { message in
+            guard let eligibleServiceIDs else { return false }
+            return !eligibleServiceIDs.contains(message.service)
+        }
+        if !serviceExcludedMessages.isEmpty {
+            _ = try repository.skipBriefJobMessages(
+                jobID: jobID,
+                messages: serviceExcludedMessages,
+                now: now()
+            )
+        }
+        let snapshotMessages = selectAutomaticJobMessages(
+            snapshot.messages.filter { message in
+                eligibleServiceIDs?.contains(message.service) ?? true
+            }
+        )
 
         // Per-conversation privacy gate: conversations the user marked never_draft (no LLM
         // ever) or local_only (cloud client only) are excluded from the brief entirely. Their

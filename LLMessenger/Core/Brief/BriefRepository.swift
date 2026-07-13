@@ -52,9 +52,15 @@ struct BriefRepository {
         )
     }
 
-    func fetchUnattachedMessages(limit: Int? = nil) throws -> [Message] {
+    func fetchUnattachedMessages(
+        serviceIDs: Set<String>? = nil,
+        limit: Int? = nil
+    ) throws -> [Message] {
         // Exclude messages older than 7 days — they won't improve a current brief and
         // would silently bloat the LLM prompt on every cycle until attached or pruned.
+        if let serviceIDs, serviceIDs.isEmpty {
+            return []
+        }
         let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
         return try database.dbQueue.read { db in
             var request = Message
@@ -62,6 +68,9 @@ struct BriefRepository {
                 .filter(Column("isSent") == false)
                 .filter(Column("timestamp") >= cutoff)
                 .order(Column("timestamp").asc)
+            if let serviceIDs {
+                request = request.filter(serviceIDs.contains(Column("service")))
+            }
             if let limit {
                 request = request.limit(limit)
             }

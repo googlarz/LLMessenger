@@ -133,6 +133,51 @@ final class BriefEngineTests: XCTestCase {
         XCTAssertTrue(brief.notificationText.contains("3"))
     }
 
+    func testAutomaticServiceAllowlistLeavesOnDemandServiceUnattached() async throws {
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 1)
+        try await db.dbQueue.write { db in
+            var signalMessage = Message(
+                briefId: nil,
+                service: "signal",
+                conversationId: "signal-c1",
+                messageId: "signal-m1",
+                sender: "Bob",
+                text: "Do not summarize automatically",
+                timestamp: Date(),
+                isSent: false
+            )
+            try signalMessage.insert(db)
+        }
+        let mock = DynamicMockLLMClient()
+        mock.specs = [
+            "telegram": .init(convId: "c1", messageIds: ["m0"]),
+            "signal": .init(convId: "signal-c1", messageIds: ["signal-m1"])
+        ]
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let ids = try await engine.processNewMessageBatch(eligibleServiceIDs: ["telegram"])
+
+        XCTAssertEqual(ids.count, 1)
+        XCTAssertEqual(mock.callCount, 1, "Only the eager service may reach the automatic LLM path")
+        let remaining = try BriefRepository(database: db).fetchUnattachedMessages()
+        XCTAssertEqual(remaining.map(\.service), ["signal"])
+    }
+
+    func testEmptyAutomaticServiceAllowlistDoesNoLLMWork() async throws {
+        let db = try setupDB()
+        try insertUnattachedMessages(db, count: 1)
+        let mock = MockLLMClient()
+        mock.response = LLMResponse(text: validBriefJSON, inputTokens: 10, outputTokens: 5)
+        let engine = BriefEngine(database: db, client: mock, model: "test", basePrompt: "BASE")
+
+        let ids = try await engine.processNewMessageBatch(eligibleServiceIDs: [])
+
+        XCTAssertTrue(ids.isEmpty)
+        XCTAssertTrue(mock.calls.isEmpty)
+        XCTAssertEqual(try BriefRepository(database: db).fetchUnattachedMessages().count, 1)
+    }
+
     func testFailedJobRetriesItsSnapshotBeforeNewMessages() async throws {
         let db = try setupDB()
         try insertUnattachedMessages(db, count: 2)

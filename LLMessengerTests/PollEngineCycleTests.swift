@@ -79,6 +79,35 @@ final class PollEngineCycleTests: XCTestCase {
                       fetchLimit: 50, privacyMode: "eager")
     }
 
+    func testAutomaticBriefServiceIDsIncludesOnlyEnabledEagerServices() throws {
+        let engine = makeEngine(db: try makeDB())
+        engine.register(adapter: FakeMessengerAdapter(serviceID: "signal"), config: signalConfig())
+        engine.register(
+            adapter: FakeMessengerAdapter(serviceID: "telegram"),
+            config: ServiceConfig(
+                service: "telegram",
+                enabled: true,
+                pollIntervalMinutes: 30,
+                fetchMode: "time",
+                fetchLimit: 50,
+                privacyMode: "on_demand"
+            )
+        )
+        engine.register(
+            adapter: FakeMessengerAdapter(serviceID: "imessage"),
+            config: ServiceConfig(
+                service: "imessage",
+                enabled: false,
+                pollIntervalMinutes: 30,
+                fetchMode: "time",
+                fetchLimit: 50,
+                privacyMode: "eager"
+            )
+        )
+
+        XCTAssertEqual(engine.automaticBriefServiceIDs, ["signal"])
+    }
+
     // MARK: - Message storage
 
     func testPollAllStoresMessagesFromAdapter() async throws {
@@ -282,6 +311,24 @@ final class PollEngineCycleTests: XCTestCase {
 
         XCTAssertTrue(callbackFired,
                       "onPollSucceeded must fire when new messages were stored — this triggers brief generation")
+    }
+
+    func testPollAllCanLeaveBriefGenerationToItsCaller() async throws {
+        let db = try makeDB()
+        let adapter = FakeMessengerAdapter(serviceID: "signal")
+        adapter.addMessage(convId: "c1", msgId: "m1")
+
+        let engine = makeEngine(db: db)
+        engine.register(adapter: adapter, config: signalConfig())
+        var callbackCount = 0
+        engine.onPollSucceeded = { callbackCount += 1 }
+
+        let hadNewMessages = await engine.pollAll(invokeSuccessHandler: false)
+
+        XCTAssertTrue(hadNewMessages)
+        XCTAssertEqual(callbackCount, 0)
+        let storedCount = try await db.dbQueue.read { try Message.fetchCount($0) }
+        XCTAssertEqual(storedCount, 1, "Suppressing the callback must not suppress ingestion")
     }
 
     func testOnPollSucceededDoesNotFireWhenNoNewMessages() async throws {

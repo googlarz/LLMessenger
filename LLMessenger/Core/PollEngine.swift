@@ -11,7 +11,7 @@ final class PollEngine {
     private var nextFireDates: [String: Date] = [:]
     private var inFlight: Set<String> = []
     private var observedMessageWatermarks: [String: Int64] = [:]
-    private var pollAllInFlight = false
+    private var pollAllInvocationCount = 0
     var failureCounts: [String: Int] = [:]
     var onPollSucceeded: (() async -> Void)?
     var onPollFailed: ((String, Error) async -> Void)?
@@ -91,9 +91,11 @@ final class PollEngine {
     }
 
     // Poll all enabled adapters; fire onPollSucceeded exactly once if any new messages were stored.
-    func pollAll() async {
-        pollAllInFlight = true
-        defer { pollAllInFlight = false }
+    // Callers that own the follow-up generation pass can suppress the handler and use the result.
+    @discardableResult
+    func pollAll(invokeSuccessHandler: Bool = true) async -> Bool {
+        pollAllInvocationCount += 1
+        defer { pollAllInvocationCount -= 1 }
         let serviceIDs = adapters.keys.filter { configs[$0]?.enabled == true }
         let anyNew = await withTaskGroup(of: Bool.self) { group in
             for serviceID in serviceIDs {
@@ -107,7 +109,8 @@ final class PollEngine {
             for await hadNew in group { if hadNew { result = true } }
             return result
         }
-        if anyNew { await onPollSucceeded?() }
+        if anyNew && invokeSuccessHandler { await onPollSucceeded?() }
+        return anyNew
     }
 
     // Public: poll one service and fire onPollSucceeded if new messages arrived.
@@ -115,7 +118,7 @@ final class PollEngine {
     // Skips onPollSucceeded if pollAll() is already in flight to avoid duplicate notifications.
     func pollNow(serviceID: String) async throws {
         let isEager = configs[serviceID]?.resolvedPrivacyMode == .eager
-        if try await pollOnce(serviceID: serviceID) && isEager && !pollAllInFlight {
+        if try await pollOnce(serviceID: serviceID) && isEager && pollAllInvocationCount == 0 {
             await onPollSucceeded?()
         }
     }
@@ -224,6 +227,12 @@ final class PollEngine {
 
     var nextFireDate: Date? {
         nextFireDates.values.min()
+    }
+
+    var automaticBriefServiceIDs: Set<String> {
+        Set(configs.values.compactMap { config in
+            config.enabled && config.resolvedPrivacyMode == .eager ? config.service : nil
+        })
     }
 
     var currentServiceHealth: [String: AdapterHealthResult.Status] {

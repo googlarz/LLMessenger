@@ -99,6 +99,34 @@ final class BriefRepositoryTests: XCTestCase {
         XCTAssertTrue(unattached.allSatisfy { $0.briefId == nil })
     }
 
+    func testFetchUnattachedMessagesFiltersServicesBeforeApplyingLimit() throws {
+        let db = try AppDatabase(inMemory: true)
+        let base = Date().addingTimeInterval(-60)
+        try db.dbQueue.write { db in
+            for (index, service) in ["signal", "signal", "telegram"].enumerated() {
+                var message = Message(
+                    briefId: nil,
+                    service: service,
+                    conversationId: "c\(index)",
+                    messageId: "m\(index)",
+                    sender: "Alice",
+                    text: "message \(index)",
+                    timestamp: base.addingTimeInterval(TimeInterval(index)),
+                    isSent: false
+                )
+                try message.insert(db)
+            }
+        }
+
+        let messages = try BriefRepository(database: db).fetchUnattachedMessages(
+            serviceIDs: ["telegram"],
+            limit: 1
+        )
+
+        XCTAssertEqual(messages.map(\.service), ["telegram"])
+        XCTAssertEqual(messages.map(\.messageId), ["m2"])
+    }
+
     func testAttachMessagesToBrief() throws {
         let db = try AppDatabase(inMemory: true)
         var briefId: Int64 = 0

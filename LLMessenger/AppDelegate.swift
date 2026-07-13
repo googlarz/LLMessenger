@@ -38,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var realtimeKillSwitchObserver: NSKeyValueObservation?
     var agentEngine: AgentEngine?
     var llmGateway: LLMGateway?
+    var briefRefreshCoordinator: BriefRefreshCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
@@ -99,12 +100,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             appState = state
 
-            briefEngine = BriefEngine(
+            let briefGenerator = BriefEngine(
                 database: db,
                 client: gateway,
                 model: llm.model,
                 basePrompt: basePrompt
             )
+            briefEngine = briefGenerator
 
             let windowController = ChatWindowController(appState: state)
             chatWindowController = windowController
@@ -123,147 +125,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             notificationManager = notifications
 
             let menuBar = MenuBarController()
-            // Shared by the menu bar's "New Brief" and the brief header's
-            // "Refresh" — full poll → summarize → notify cycle. Call sites
-            // track their own instrumentation source.
-            let runBriefRefresh: () -> Void = { [weak self] in
-                guard let self else { return }
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.appState?.briefGenerationState = .fetching
-                    self.menuBarController?.setLoading(true)
-                    let start = Date()
-                    await self.pollEngine?.pollAll()
-                    // Surface adapter failures after polling (e.g. FDA not granted for iMessage).
-                    if let health = self.pollEngine?.currentServiceHealth {
-                        let failed = health.filter { $0.value != .ok }.keys.sorted()
-                        if !failed.isEmpty {
-                            self.appState?.lastError = "Could not reach: \(failed.joined(separator: ", ")). Check permissions in System Settings."
-                        }
-                    }
-                    do {
-                        self.appState?.briefGenerationState = .summarizing
-                        let newIDs = try await self.briefEngine?.processNewMessageBatch(
-                            adapters: self.appState?.adapters ?? [:]
-                        ) ?? []
-                        if let id = newIDs.last {
-                            self.appState?.lastError = nil
-                            self.appState?.selectedBriefID = id
-                            let brief = try? self.appState?.repository.fetchBrief(id: id)
-                            let cards: [BriefCardRecord]
-                            if let dbQueue = self.database?.dbQueue {
-                                cards = (try? await dbQueue.read { db in
-                                    try BriefCardRecord.filter(Column("briefId") == id).fetchAll(db)
-                                }) ?? []
-                            } else {
-                                cards = []
-                            }
-                            WidgetDataProvider.write(briefID: id, cards: cards, openingSummary: brief?.openingSummary)
-                        }
-                        for id in newIDs {
-                            let brief = try? self.appState?.repository.fetchBrief(id: id)
-                            // Notification firewall: routine briefs stay silent;
-                            // only high-priority items earn an interruption.
-                            let settingsRepo = SettingsRepository()
-                            if settingsRepo.loadFirewallEnabled() && self.highPriorityCardCount(brief: brief) == 0 {
-                                settingsRepo.incrementFirewallHeldBack(by: 1)
-                            } else {
-                                let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
-                                self.notificationManager?.post(briefID: id, title: title, body: body)
-                            }
-                        }
-                        self.appState?.briefGenerationState = newIDs.isEmpty ? .noNewMessages : .complete
-                    } catch {
-                        self.appState?.lastError = error.localizedDescription
-                        self.appState?.briefGenerationState = .failed
-                    }
-                    // Keep animation visible for at least 1.5s so user sees activity
-                    let elapsed = Date().timeIntervalSince(start)
-                    if elapsed < 1.5 {
-                        try? await Task.sleep(nanoseconds: UInt64((1.5 - elapsed) * 1_000_000_000))
-                    }
-                    self.appState?.refreshBriefs()
-                    self.menuBarController?.setLoading(false)
-                    self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
-                    self.menuBarController?.setLastError(self.appState?.lastError)
-                    let unread = self.appState?.unreadCount ?? 0
-                    self.menuBarController?.setUnreadCount(unread)
-                }
+            let engine = PollEngine(database: db)
+            pollEngine = engine
+            let refreshCoordinator = BriefRefreshCoordinator(
+                database: db,
+                state: state,
+                pollEngine: engine,
+                briefEngine: briefGenerator,
+                notificationManager: notifications,
+                menuBarController: menuBar
+            )
+            briefRefreshCoordinator = refreshCoordinator
+            let runBriefRefresh: () -> Void = { [weak refreshCoordinator] in
+                Task { @MainActor in await refreshCoordinator?.refreshNow() }
             }
             menuBar.onNewBrief = {
                 InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "menuBar"])
                 runBriefRefresh()
             }
             state.onRequestRefresh = runBriefRefresh
-            menuBar.onLast24h = { [weak self] in
-                guard let self else { return }
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.appState?.briefGenerationState = .fetching
-                    self.menuBarController?.setLoading(true)
-                    let start = Date()
-                    let adapters = self.appState?.adapters ?? [:]
-                    do {
-                        self.appState?.briefGenerationState = .summarizing
-                        if let briefID = try await self.briefEngine?.summarizeLast(hours: 48, adapters: adapters) {
-                            let brief = try? self.appState?.repository.fetchBrief(id: briefID)
-                            let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "48h Summary")
-                            self.notificationManager?.post(briefID: briefID, title: title, body: body)
-                            self.appState?.briefGenerationState = .complete
-                            self.appState?.selectedBriefID = briefID
-                        } else {
-                            self.appState?.briefGenerationState = .noNewMessages
-                        }
-                        self.appState?.lastError = nil
-                    } catch {
-                        self.appState?.lastError = error.localizedDescription
-                        self.appState?.briefGenerationState = .failed
-                    }
-                    let elapsed = Date().timeIntervalSince(start)
-                    if elapsed < 1.5 {
-                        try? await Task.sleep(nanoseconds: UInt64((1.5 - elapsed) * 1_000_000_000))
-                    }
-                    self.appState?.refreshBriefs()
-                    self.menuBarController?.setLoading(false)
-                    self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
-                    self.menuBarController?.setLastError(self.appState?.lastError)
-                    let unread = self.appState?.unreadCount ?? 0
-                    self.menuBarController?.setUnreadCount(unread)
+            menuBar.onLast24h = { [weak refreshCoordinator] in
+                Task { @MainActor in
+                    await refreshCoordinator?.refreshHistory(hours: 48, title: "48h Summary")
                 }
             }
-            menuBar.onLast7d = { [weak self] in
-                guard let self else { return }
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.appState?.briefGenerationState = .fetching
-                    self.menuBarController?.setLoading(true)
-                    let start = Date()
-                    let adapters = self.appState?.adapters ?? [:]
-                    do {
-                        self.appState?.briefGenerationState = .summarizing
-                        if let briefID = try await self.briefEngine?.summarizeLast(hours: 168, adapters: adapters) {
-                            let brief = try? self.appState?.repository.fetchBrief(id: briefID)
-                            let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "7-Day Summary")
-                            self.notificationManager?.post(briefID: briefID, title: title, body: body)
-                            self.appState?.briefGenerationState = .complete
-                            self.appState?.selectedBriefID = briefID
-                        } else {
-                            self.appState?.briefGenerationState = .noNewMessages
-                        }
-                        self.appState?.lastError = nil
-                    } catch {
-                        self.appState?.lastError = error.localizedDescription
-                        self.appState?.briefGenerationState = .failed
-                    }
-                    let elapsed = Date().timeIntervalSince(start)
-                    if elapsed < 1.5 {
-                        try? await Task.sleep(nanoseconds: UInt64((1.5 - elapsed) * 1_000_000_000))
-                    }
-                    self.appState?.refreshBriefs()
-                    self.menuBarController?.setLoading(false)
-                    self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
-                    self.menuBarController?.setLastError(self.appState?.lastError)
-                    self.menuBarController?.setUnreadCount(self.appState?.unreadCount ?? 0)
+            menuBar.onLast7d = { [weak refreshCoordinator] in
+                Task { @MainActor in
+                    await refreshCoordinator?.refreshHistory(hours: 168, title: "7-Day Summary")
                 }
             }
             menuBar.onSelectBrief = { [weak windowController, weak state] briefID in
@@ -310,21 +198,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.onboardingWindowController = demoExitController
                 demoExitController.show()
             }
-            settingsController.onBuild7DaySummaries = { [weak self] in
-                guard let self else { return }
-                let adapters = self.appState?.adapters ?? [:]
-                self.appState?.briefGenerationState = .summarizing
-                do {
-                    let newBriefID = try await self.briefEngine?.summarizeLast(hours: 168, adapters: adapters)
-                    self.appState?.briefGenerationState = .complete
-                    self.appState?.lastError = nil
-                    // Auto-select so the brief opens immediately instead of sitting unread in the list.
-                    if let id = newBriefID { self.appState?.selectedBriefID = id }
-                } catch {
-                    self.appState?.briefGenerationState = .failed
-                    self.appState?.lastError = error.localizedDescription
-                }
-                self.appState?.refreshBriefs()
+            settingsController.onBuild7DaySummaries = { [weak refreshCoordinator] in
+                await refreshCoordinator?.buildHistory(hours: 168)
             }
             settingsController.onSyncContacts = { [weak self] in
                 self?.appState?.contactDirectory.refresh()
@@ -375,42 +250,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             applyTheme(savedTheme)
             menuBarController = menuBar
 
-            let engine = PollEngine(database: db)
-            engine.onPollSucceeded = { [weak self] in
-                guard let self else { return }
-                self.menuBarController?.setLoading(true)
-                self.appState?.briefGenerationState = .summarizing
-                do {
-                    let newIDs = try await self.briefEngine?.processNewMessageBatch(
-                        adapters: self.appState?.adapters ?? [:]
-                    ) ?? []
-                    self.appState?.lastError = nil
-                    self.appState?.briefGenerationState = newIDs.isEmpty ? .noNewMessages : .complete
-                    self.appState?.refreshBriefs()
-                    self.appState?.nextPollDate = self.pollEngine?.nextFireDate
-                    self.menuBarController?.setLoading(false)
-                    for id in newIDs {
-                        let brief = try? self.appState?.repository.fetchBrief(id: id)
-                        let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
-                        self.notificationManager?.post(briefID: id, title: title, body: body)
-                    }
-                } catch {
-                    self.appState?.lastError = error.localizedDescription
-                    self.appState?.briefGenerationState = .failed
-                    self.appState?.refreshBriefs()
-                    self.appState?.nextPollDate = self.pollEngine?.nextFireDate
-                    self.menuBarController?.setLoading(false)
-                }
-                let unread = self.appState?.unreadCount ?? 0
-                self.menuBarController?.setUnreadCount(unread)
-                self.menuBarController?.setBriefs(self.appState?.briefs ?? [])
-                self.menuBarController?.setLastError(self.appState?.lastError)
-                if let health = self.pollEngine?.currentServiceHealth {
-                    self.appState?.updateServiceHealth(health)
-                    if health["signal"] == .ok {
-                        self.menuBarController?.setSignalHealthWarning(nil)
-                    }
-                }
+            engine.onPollSucceeded = { [weak refreshCoordinator] in
+                await refreshCoordinator?.processPollSuccess()
             }
 
             engine.onPollFailed = { [weak self] serviceID, error in
@@ -440,8 +281,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             for svc in ["telegram", "signal", "imessage", "slack"] {
                 self.registerAdapter(serviceID: svc, engine: engine, db: db, state: state)
             }
-
-            pollEngine = engine
 
             NotificationCenter.default.addObserver(
                 forName: .serviceConfigDidChange, object: nil, queue: .main
@@ -536,30 +375,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Morning Digest — fire brief generation + notification at scheduled time
             let digest = DigestScheduler()
-            digest.onFire = { [weak self] in
-                guard let self, let engine = self.briefEngine, let state = self.appState else { return }
-                state.briefGenerationState = .summarizing
-                do {
-                    let newIDs = try await engine.processNewMessageBatch(adapters: state.adapters)
-                    state.briefGenerationState = newIDs.isEmpty ? .noNewMessages : .complete
-                    state.refreshBriefs()
-                    let settingsRepo = SettingsRepository()
-                    let heldBack = settingsRepo.loadFirewallHeldBack()
-                    for (index, id) in newIDs.enumerated() {
-                        let brief = try? state.repository.fetchBrief(id: id)
-                        let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "Morning Brief")
-                        // Surface what the firewall silenced since the last digest.
-                        let digestBody = heldBack > 0 && index == newIDs.count - 1
-                            ? "\(body) · \(heldBack) routine update\(heldBack == 1 ? "" : "s") held back"
-                            : body
-                        self.notificationManager?.post(briefID: id, title: title, body: digestBody)
-                    }
-                    if !newIDs.isEmpty {
-                        settingsRepo.resetFirewallHeldBack()
-                    }
-                } catch {
-                    state.briefGenerationState = .failed
-                }
+            digest.onFire = { [weak refreshCoordinator] in
+                await refreshCoordinator?.processDigest()
             }
             digestScheduler = digest
             digest.start(settings: SettingsRepository().loadDigestSettings())
@@ -889,67 +706,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Builds an interruption-worthy notification. The copy explains why the app broke
-    /// silence: direct reply needed first, then high-priority review. Routine digests fall
-    /// back to the generic title/body and may be held by the firewall.
-    private func highPriorityCardCount(brief: Brief?) -> Int {
-        guard let cards = brief.flatMap({ canonicalCards(for: $0) }) else { return 0 }
-        return cards.filter {
-            $0.needsReply || appState?.effectivePriority(for: $0) == "high"
-        }.count
-    }
-
-    private func highPriorityNotification(brief: Brief?, defaultTitle: String) -> (title: String, body: String) {
-        let defaultBody = brief?.notificationText ?? "You have new messages"
-        guard let cards = brief.flatMap({ canonicalCards(for: $0) }) else {
-            return (defaultTitle, defaultBody)
-        }
-        let replyCards = cards.filter(\.needsReply)
-        let reviewCards = cards.filter {
-            !$0.needsReply && appState?.effectivePriority(for: $0) == "high"
-        }
-        let interruptingCards = replyCards + reviewCards
-        guard !interruptingCards.isEmpty, let topCard = interruptingCards.first else {
-            return (defaultTitle, defaultBody)
-        }
-        let replyCount = replyCards.count
-        let reviewCount = reviewCards.count
-        let title: String
-        if replyCount > 0 {
-            title = replyCount == 1 ? "1 reply needs you" : "\(replyCount) replies need you"
-        } else {
-            title = reviewCount == 1 ? "1 item needs review" : "\(reviewCount) items need review"
-        }
-        let reason = notificationReason(for: topCard)
-        return (title, "\(topCard.headline) · \(reason)")
-    }
-
-    private func canonicalCards(for brief: Brief) -> [BriefCard]? {
-        if let id = brief.id,
-           let records = try? appState?.repository.fetchBriefCards(briefID: id),
-           !records.isEmpty {
-            return records.map(\.briefCard)
-        }
-        return BriefJSON.decodedCached(for: brief)?.cards
-    }
-
-    private func notificationReason(for card: BriefCard) -> String {
-        if let reason = card.reason?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !reason.isEmpty {
-            return "Because \(reason.lowercasedFirstLetter())"
-        }
-        if card.needsReply {
-            return "Because this is waiting for your reply"
-        }
-        if card.grounding == "context" {
-            return "Because it matches what you marked important"
-        }
-        if card.grounding == "inferred" {
-            return "Because it looks important"
-        }
-        return "Because it was marked high priority"
-    }
-
     private func telegramAdapterPath() -> String? {
         let bundled = Bundle.main.path(forResource: "telegram-adapter", ofType: nil)
         if let p = bundled, FileManager.default.fileExists(atPath: p) { return p }
@@ -972,12 +728,5 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "api_hash":     apiHash,
             "session_path": sessionPath
         ]
-    }
-}
-
-private extension String {
-    func lowercasedFirstLetter() -> String {
-        guard let first else { return self }
-        return first.lowercased() + dropFirst()
     }
 }
