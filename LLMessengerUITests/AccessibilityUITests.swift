@@ -23,6 +23,12 @@ final class AccessibilityUITests: XCTestCase {
                 if element.elementType == .touchBar {
                     return true
                 }
+                // Toolbar menu buttons (SwiftUI Menu bridged to NSMenuToolbarItem)
+                // expose AXShowMenu, not AXPress; the audit only counts the latter
+                // as a click action. VoiceOver operates them via Show Menu.
+                if element.elementType == .menuButton, issue.auditType == .action {
+                    return true
+                }
                 let frame = element.frame
                 if issue.auditType == .parentChild, frame.width <= 16, frame.height <= 16 {
                     return true

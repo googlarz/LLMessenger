@@ -18,13 +18,6 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MainChromeBar(
-                showMedia: $showMedia,
-                deskCollapsed: $deskCollapsed,
-                onRetryService: onRetryService
-            )
-            Rule()
-
             // One global surface for errors — ~30 lastError assignments used to vanish unless
             // a brief happened to be open. Now every one is visible and dismissible.
             if let err = appState.lastError, !err.isEmpty {
@@ -95,7 +88,18 @@ struct ContentView: View {
         .background(Theme.bg)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("LLMessenger main window")
-        .ignoresSafeArea(.all, edges: .top)
+        .toolbar {
+            MainToolbar(
+                appState: appState,
+                selectedSection: $selectedSection,
+                deskCollapsed: $deskCollapsed,
+                showMedia: $showMedia,
+                showShortcuts: $showShortcuts,
+                onRetryService: onRetryService
+            )
+        }
+        .navigationTitle(windowTitle)
+        .navigationSubtitle(windowSubtitle)
         // Scoped document shortcuts. J/K navigates digests only while the Digests
         // section is open — Act owns its own selection via ActFeedView.
         .background {
@@ -103,6 +107,11 @@ struct ContentView: View {
                 let key = event.normalizedKey
                 if key == "?" || (key == "/" && event.modifierFlags.contains(.shift)) {
                     showShortcuts.toggle()
+                    return true
+                }
+                if key == "f", event.modifierFlags.contains(.command) {
+                    selectedSection = .digests
+                    appState.focusArchiveSearch?()
                     return true
                 }
                 guard selectedSection == .digests, event.hasNoCommandOptionControl else { return false }
@@ -139,6 +148,30 @@ struct ContentView: View {
         !DemoSeeder.isActive &&
         !appState.briefs.isEmpty &&
         !appState.productLoveMetrics.firstRealDigestAcknowledged
+    }
+
+    // MARK: - Window title
+
+    private var windowTitle: String {
+        switch selectedSection {
+        case .act: return "Act"
+        case .digests: return "Digests"
+        case .activity: return "Activity"
+        }
+    }
+
+    private var windowSubtitle: String {
+        guard selectedSection == .digests, let brief = appState.selectedBrief else { return "" }
+        let f = DateFormatter()
+        let cal = Calendar.current
+        if cal.isDateInToday(brief.createdAt) {
+            f.dateFormat = "'Today' HH:mm"
+        } else if cal.isDateInYesterday(brief.createdAt) {
+            f.dateFormat = "'Yesterday' HH:mm"
+        } else {
+            f.dateFormat = "EEE d MMM HH:mm"
+        }
+        return f.string(from: brief.createdAt)
     }
 
     // MARK: - Navigation helpers

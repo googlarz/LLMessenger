@@ -19,8 +19,7 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
             defer: false
         )
         window.title = "LLMessenger"
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
+        window.titleVisibility = .visible
         window.toolbarStyle = .unified
         // Follow NSApp.appearance (set from saved theme in AppDelegate).
         window.backgroundColor = NSColor(Theme.bg)
@@ -41,9 +40,15 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
             .environmentObject(appState)
             .environmentObject(chatViewModel)
             .environmentObject(appState.contactDirectory)
-        let hostingView = NSHostingView(rootView: content)
-        hostingView.setAccessibilityLabel("LLMessenger main window")
-        window.contentView = hostingView
+        // NSHostingController (not NSHostingView) so SwiftUI .toolbar and
+        // .navigationTitle bridge into the window's native NSToolbar/title bar.
+        let restoredFrame = window.frame
+        let hostingController = NSHostingController(rootView: content)
+        hostingController.view.setAccessibilityLabel("LLMessenger main window")
+        window.contentViewController = hostingController
+        // Assigning contentViewController resizes to the content's ideal size;
+        // put the autosaved frame back.
+        window.setFrame(restoredFrame, display: false)
 
         appState.contactDirectory.refresh()
 

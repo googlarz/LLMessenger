@@ -104,6 +104,7 @@
 		5F8880FE230505FF8474C699 /* DigestScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A80874CD0D61038ECEAB9A2 /* DigestScheduler.swift */; };
 		60955B6BBC9E53B442135E2F /* ProductOutcomeStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE36F3EB93AE51102F819B4C /* ProductOutcomeStats.swift */; };
 		60D5289472C16DB610DC8540 /* BriefJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = D107220D4EE83DB014D6FCB4 /* BriefJob.swift */; };
+		62BE8909A6D5FAAD45957B30 /* MainToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A27A13C9FCCEF4B96E65949 /* MainToolbar.swift */; };
 		6515871374A6975B0B2432DF /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 874EAADE41BC00D431B7655A /* SettingsWindowController.swift */; };
 		6590441FCAED6F40B1C1E6A9 /* SystemInvariantTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F27CBD218CE0D49903AC0ECE /* SystemInvariantTests.swift */; };
 		6697FB8260477417E96C5758 /* UpdateCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D725694A67BD078C05B411 /* UpdateCheckerTests.swift */; };
@@ -137,6 +138,7 @@
 		7F6F72F1D44A6D047D7020D9 /* SpeechInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 434C2504E2D2DF4B41D40361 /* SpeechInput.swift */; };
 		7FC7070B75E31EE6BC03133D /* DataExporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38884CE0B819FB5A04405C77 /* DataExporterTests.swift */; };
 		807EED7934BE7878B34BF18E /* BriefCardActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AB9F12487EA1471EACE6D1 /* BriefCardActionBar.swift */; };
+		83536066417A02E9C79AD2B1 /* MainMenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B1B4F0711913B5565895859 /* MainMenuBuilder.swift */; };
 		855341464B239E648E65A068 /* SlackAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB475651CD2CEBBB7A66D36 /* SlackAPIClient.swift */; };
 		85D75B32679B8196954EE50E /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C06B210F56BF4ED8F4EDD76 /* NotificationManager.swift */; };
 		86FDD0D773B2F5C2FE5EE988 /* RulesSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB79E8B76355B5DB2E4835C /* RulesSettingsTab.swift */; };
@@ -177,7 +179,6 @@
 		B3CF5BF36060C33F25099D53 /* ChatViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B8A33ADE90F0EC79A61D4D /* ChatViewModelTests.swift */; };
 		B47F50B3DD0A86EE369C8549 /* BriefListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17E2FC6E580C483A5220F007 /* BriefListView.swift */; };
 		B69FC59BC25181FC0389FB9D /* SlackWorkspacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 724CEB5405989BE4B7824CA8 /* SlackWorkspacesView.swift */; };
-		B77224C56B9AA03C7A925526 /* MainChromeBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E77DF565652B4D6763A2605 /* MainChromeBar.swift */; };
 		B85703706B8EBB6DAEDDC4D9 /* RealtimeMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916BA52111C08C100B18B060 /* RealtimeMonitor.swift */; };
 		B93451BF2E596033EE00C54C /* BriefCardRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1551568E73E6646226FE66C3 /* BriefCardRecord.swift */; };
 		BAB6F302E2FD6409D2BEEAA5 /* BriefRepositoryExtendedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */; };
@@ -293,7 +294,6 @@
 		09D44892CD851C4994CEA012 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
 		09F863A1D7C0B0D2C9C06967 /* SlackAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAdapterTests.swift; sourceTree = "<group>"; };
 		0B01BD5888FD90D28050A644 /* ServiceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealth.swift; sourceTree = "<group>"; };
-		0E77DF565652B4D6763A2605 /* MainChromeBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainChromeBar.swift; sourceTree = "<group>"; };
 		0FE8230C2085605CB33A27C7 /* BriefNotificationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefNotificationPolicy.swift; sourceTree = "<group>"; };
 		111E6485F8D3F1F44C068B02 /* MessageIngestionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageIngestionCoordinator.swift; sourceTree = "<group>"; };
 		113724A6E99E26E8CD720DFE /* PriorityCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriorityCorrection.swift; sourceTree = "<group>"; };
@@ -306,6 +306,7 @@
 		17E2FC6E580C483A5220F007 /* BriefListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefListView.swift; sourceTree = "<group>"; };
 		182D523105308429E32E1553 /* OwedReplyDeriverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwedReplyDeriverTests.swift; sourceTree = "<group>"; };
 		1878E2B6A35CE54B6CB50CE5 /* BriefRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepository.swift; sourceTree = "<group>"; };
+		1B1B4F0711913B5565895859 /* MainMenuBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainMenuBuilder.swift; sourceTree = "<group>"; };
 		1C1B7A7D24D3AF2FF2E6FC84 /* OnboardingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWindowController.swift; sourceTree = "<group>"; };
 		1E099EAF35997459A5054481 /* DemoSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoSeeder.swift; sourceTree = "<group>"; };
 		1E66D8D35060D0CE07AD60FF /* TriageEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriageEvent.swift; sourceTree = "<group>"; };
@@ -393,6 +394,7 @@
 		792419D090E0BA27E26988ED /* AboutSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsTab.swift; sourceTree = "<group>"; };
 		79465D1CF8BC8C2A618D48F4 /* AppState+Briefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppState+Briefs.swift"; sourceTree = "<group>"; };
 		79D725694A67BD078C05B411 /* UpdateCheckerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCheckerTests.swift; sourceTree = "<group>"; };
+		7A27A13C9FCCEF4B96E65949 /* MainToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainToolbar.swift; sourceTree = "<group>"; };
 		7A76DCD8E2690E5C02F66389 /* PollEngineReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollEngineReloadTests.swift; sourceTree = "<group>"; };
 		7A84FBD8AB6BB99A59067D62 /* BriefCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefCardView.swift; sourceTree = "<group>"; };
 		7C0BEF5D9A652729F4FA11F4 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -558,6 +560,7 @@
 				BCE1A2AD60D1E42D7AAB4F4A /* Info.plist */,
 				595169617BDF071C68E4B357 /* LLMessenger.entitlements */,
 				E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */,
+				1B1B4F0711913B5565895859 /* MainMenuBuilder.swift */,
 				A194C15A90571100218AB526 /* AppIntents */,
 				1958C796DA475A22D89DE79A /* Core */,
 				8418CC4CB8ADF8512F3A2299 /* MenuBar */,
@@ -994,7 +997,7 @@
 				507F825E0D249E971E451E12 /* ConversationTimelineView.swift */,
 				B77E8AC79E6D8AC9C4E54849 /* KeyboardShortcutMonitor.swift */,
 				3B4C46F15B5A6CE0544BCE3F /* KeyboardShortcutsSheet.swift */,
-				0E77DF565652B4D6763A2605 /* MainChromeBar.swift */,
+				7A27A13C9FCCEF4B96E65949 /* MainToolbar.swift */,
 				DFC689A6D5F7D05E452154B4 /* MediaPanelView.swift */,
 				4CBE24D05550B0F805958D37 /* MentionPickerView.swift */,
 				700C9AE93DA56553E631CE85 /* MessageBubbleView.swift */,
@@ -1311,7 +1314,8 @@
 				1F3AF9DCA45D658915781028 /* LLMSettingsTab.swift in Sources */,
 				DE0C17AEBEECDE55B14BD784 /* LLMessengerApp.swift in Sources */,
 				38F78779903A2A13366A51AF /* LLMessengerFocusFilter.swift in Sources */,
-				B77224C56B9AA03C7A925526 /* MainChromeBar.swift in Sources */,
+				83536066417A02E9C79AD2B1 /* MainMenuBuilder.swift in Sources */,
+				62BE8909A6D5FAAD45957B30 /* MainToolbar.swift in Sources */,
 				6AA8C3866C3D66763E25B60A /* MediaPanelView.swift in Sources */,
 				F465FA960D540D9CFB44E578 /* MemoryCompressor.swift in Sources */,
 				0F820A2720B766AD8F46C688 /* MentionPickerView.swift in Sources */,

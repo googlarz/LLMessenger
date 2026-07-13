@@ -7,12 +7,8 @@
 import SwiftUI
 
 struct BriefListView: View {
-    var showSearch: Bool = false
-
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
-    @FocusState private var searchFocused: Bool
-    @State private var searchQuery = ""
     @State private var dateFrom: Date? = nil
     @State private var dateTo: Date? = nil
     @State private var dateClearHovered = false
@@ -39,17 +35,13 @@ struct BriefListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 8) {
+            HStack(spacing: 6) {
                 NextRefreshLine()
-                HStack(spacing: 6) {
-                    SearchBarView(query: $searchQuery, isFocused: $searchFocused)
-                        .onChange(of: searchQuery) { _, q in performSearch(q) }
-                    DateFilterButton(isActive: dateFrom != nil || dateTo != nil,
-                                     showPopover: $showDateFilter)
-                        .popover(isPresented: $showDateFilter, arrowEdge: .bottom) {
-                            DateFilterPopover(dateFrom: $dateFrom, dateTo: $dateTo)
-                        }
-                }
+                DateFilterButton(isActive: dateFrom != nil || dateTo != nil,
+                                 showPopover: $showDateFilter)
+                    .popover(isPresented: $showDateFilter, arrowEdge: .bottom) {
+                        DateFilterPopover(dateFrom: $dateFrom, dateTo: $dateTo)
+                    }
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
@@ -76,7 +68,7 @@ struct BriefListView: View {
 
             Rule()
 
-            if !searchQuery.isEmpty {
+            if !appState.archiveSearchQuery.isEmpty {
                 SearchResultsView(messageResults: searchResults,
                                   briefResults: searchBriefResults,
                                   isSearching: isSearching)
@@ -105,7 +97,7 @@ struct BriefListView: View {
                         }
 
                         // Empty state
-                        if filteredGroups.isEmpty && appState.pinnedBriefs.isEmpty && needsReplyCards.isEmpty && searchQuery.isEmpty {
+                        if filteredGroups.isEmpty && appState.pinnedBriefs.isEmpty && needsReplyCards.isEmpty && appState.archiveSearchQuery.isEmpty {
                             VStack(spacing: 8) {
                                 Spacer().frame(height: 32)
                                 Image(systemName: "newspaper")
@@ -232,18 +224,21 @@ struct BriefListView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
         }
-        .onAppear { refreshNeedsReply(); appState.refreshTasks() }
-        .onAppear { if showSearch { searchFocused = true } }
+        .onAppear {
+            refreshNeedsReply()
+            appState.refreshTasks()
+            if !appState.archiveSearchQuery.isEmpty { performSearch(appState.archiveSearchQuery) }
+        }
         .onChange(of: appState.briefs.map { $0.id }) { refreshNeedsReply(); appState.refreshTasks() }
         .onChange(of: appState.handledCardKeys) { refreshNeedsReply() }
-        // When Cmd-F opens the sidebar, immediately focus the search field.
-        .onChange(of: showSearch) { _, searching in if searching { searchFocused = true } }
+        // Search lives in the window toolbar; this view reacts to the shared query.
+        .onChange(of: appState.archiveSearchQuery) { _, q in performSearch(q) }
     }
 
     // MARK: - Helpers
 
     private var shouldShowLoadOlderButton: Bool {
-        searchQuery.isEmpty
+        appState.archiveSearchQuery.isEmpty
             && dateFrom == nil
             && dateTo == nil
             && appState.briefs.count >= appState.briefFetchLimit
@@ -480,49 +475,6 @@ private struct NextRefreshLine: View {
         let secs = max(0, Int(next.timeIntervalSinceNow))
         if secs == 0 { return "now" }
         return String(format: "%dm %02ds", secs / 60, secs % 60)
-    }
-}
-
-// MARK: - Search bar
-
-private struct SearchBarView: View {
-    @Binding var query: String
-    var isFocused: FocusState<Bool>.Binding
-    @State private var clearHovered = false
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textTertiary)
-            TextField("Search the archive", text: $query)
-                .font(Theme.sans(12.5))
-                .textFieldStyle(.plain)
-                .foregroundStyle(Theme.textPrimary)
-                .focused(isFocused)
-            if !query.isEmpty {
-                Button { query = "" } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(clearHovered ? Theme.textSecondary : Theme.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .animation(Theme.quick, value: clearHovered)
-                .onHover { clearHovered = $0 }
-            }
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.controlRadius)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.controlRadius)
-                .strokeBorder(isFocused.wrappedValue ? Theme.textSecondary : Theme.border,
-                              lineWidth: isFocused.wrappedValue ? 1 : Theme.hairline)
-        )
-        .animation(Theme.quick, value: isFocused.wrappedValue)
     }
 }
 

@@ -224,6 +224,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let openSettings: () -> Void = { [weak settingsController] in settingsController?.show() }
             menuBar.onOpenSettings = openSettings
             state.onOpenSettings = openSettings
+            MainMenuBuilder.install(appState: state, openSettings: openSettings)
 
             state.onBriefsChanged = { [weak self] in
                 guard let self else { return }

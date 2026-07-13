@@ -255,6 +255,40 @@ final class AppState: ObservableObject {
         return briefs.first { $0.id == id }
     }
 
+    // MARK: - Archive search (toolbar-driven)
+
+    /// Live query from the window toolbar's search field; BriefListView reacts.
+    @Published var archiveSearchQuery: String = ""
+    /// Makes the toolbar search field first responder (wired by the toolbar item).
+    var focusArchiveSearch: (() -> Void)?
+
+    // MARK: - Digest navigation (toolbar / View-menu older-newer)
+
+    private var briefsNewestFirst: [Brief] {
+        briefs.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private var selectedBriefIndex: Int? {
+        guard let id = selectedBriefID else { return nil }
+        return briefsNewestFirst.firstIndex { $0.id == id }
+    }
+
+    var canSelectOlderBrief: Bool {
+        guard let idx = selectedBriefIndex else { return false }
+        return idx + 1 < briefsNewestFirst.count
+    }
+
+    var canSelectNewerBrief: Bool {
+        (selectedBriefIndex ?? 0) > 0
+    }
+
+    func selectAdjacentBrief(newer: Bool) {
+        guard let idx = selectedBriefIndex else { return }
+        let target = idx + (newer ? -1 : 1)
+        guard target >= 0, target < briefsNewestFirst.count else { return }
+        selectedBriefID = briefsNewestFirst[target].id
+    }
+
     func briefJSON(for brief: Brief) -> BriefJSON? {
         let fallback = BriefJSON.decodedCached(for: brief)
         guard let briefID = brief.id,
