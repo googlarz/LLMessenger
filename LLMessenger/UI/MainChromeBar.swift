@@ -1,25 +1,18 @@
 import SwiftUI
 
-/// Top chrome bar — the single zone that answers:
-/// "Are my services working? Which brief am I on? How do I search?"
-///
-/// Layout, left to right:
-///   • Sidebar toggle (escape hatch for the full archive drawer)
-///   • Service-health stamps (IM / SG / TG / SL) with status dot + Retry
-///   • Brief picker: ◂ [TODAY 09:12 ▾] ▸  (popover lists the archive)
-///   • Spacer
-///   • Search · Media
+/// Compact document toolbar. Connection detail stays behind the status button so the
+/// current digest and its navigation remain the visual center of gravity.
 struct MainChromeBar: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
-    @Binding var sidebarCollapsed: Bool
     @Binding var showMedia: Bool
-    @Binding var showSearch: Bool
-    /// Binding into ContentView — toggles the persistent Desk panel (Inbox/Waiting/Activity).
+    /// Binding into ContentView — toggles the persistent Desk panel (Act/Digest/Activity).
     var deskCollapsed: Binding<Bool>? = nil
     var onRetryService: ((String) -> Void)? = nil
 
     @State private var showingBriefPicker = false
+    @State private var showingServiceStatus = false
+    @State private var focusBriefSearch = false
     @State private var briefPickerHovered = false
 
     var body: some View {
@@ -30,49 +23,22 @@ struct MainChromeBar: View {
                 // Traffic-lights spacer
                 Spacer().frame(width: 70)
 
-                chromeIcon("sidebar.left", active: !sidebarCollapsed, help: "Toggle archive (⌥⌘S)") {
-                    withAnimation(Theme.spring) { sidebarCollapsed.toggle() }
-                }
-
                 if let deskCollapsed {
-                    chromeIcon("sidebar.squares.left",
+                    chromeIcon("sidebar.left",
                                active: !deskCollapsed.wrappedValue,
-                               help: "Toggle inbox panel") {
+                               help: "Show or hide the sidebar (⌥⌘S)") {
                         withAnimation(Theme.spring) { deskCollapsed.wrappedValue.toggle() }
                     }
+                    .keyboardShortcut("s", modifiers: [.command, .option])
                 }
 
-                Theme.border.frame(width: Theme.hairline, height: 14)
-
-                serviceStatusCluster
-
-                privacyPostureChip
-
-                briefPickerCluster
-
-                if DemoSeeder.isActive {
-                    HStack(spacing: 6) {
-                        Text("DEMO")
-                            .font(Theme.mono(11, weight: .bold))
-                            .tracking(1.1)
-                            .foregroundStyle(Theme.standby)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2.5)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .strokeBorder(Theme.standby.opacity(0.55), lineWidth: 1)
-                            )
-                        Button("SET UP MY ACCOUNTS") { appState.onExitDemo?() }
-                            .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
-                            .help("Clear the sample data and connect your real services")
-                    }
-                    .padding(.leading, 6)
-                }
+                serviceStatusButton
 
                 Spacer()
 
-                chromeIcon("magnifyingglass", active: showSearch, help: "Search messages and digests (⌘F)") {
-                    showSearch.toggle()
+                chromeIcon("magnifyingglass", active: showingBriefPicker, help: "Search messages and digests (⌘F)") {
+                    focusBriefSearch = true
+                    showingBriefPicker = true
                 }
                 .keyboardShortcut("f", modifiers: .command)
 
@@ -81,6 +47,8 @@ struct MainChromeBar: View {
                 }
                 .padding(.trailing, 14)
             }
+
+            briefPickerCluster
         }
         .frame(height: 40)
     }
@@ -90,91 +58,29 @@ struct MainChromeBar: View {
         ChromeIconButton(symbol: symbol, active: active, help: help, action: action)
     }
 
-    /// Always-visible privacy posture — the local-first story made persistent, not buried in
-    /// Settings. Shows only once a backend is chosen, so it never lies about an idle app.
-    @ViewBuilder
-    private var privacyPostureChip: some View {
-        if appState.isLLMConfigured {
-            let isLocal = appState.llmClient.isLocal
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(isLocal ? Theme.ok : Theme.standby)
-                    .frame(width: 5, height: 5)
-                Text(isLocal ? "ON-DEVICE" : "CLOUD")
-                    .font(Theme.mono(10, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Theme.textTertiary)
-            }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .help(isLocal
-                  ? "Briefs are generated on this Mac — your messages never leave it."
-                  : "Briefs are generated by a cloud model — message text is sent to the provider's API.")
-            .accessibilityLabel("AI processing")
-            .accessibilityValue(isLocal ? "On device" : "Cloud provider")
-            .accessibilityHint(isLocal
-                               ? "Briefs are generated on this Mac."
-                               : "Message text is sent to the selected cloud provider for summaries and drafts.")
+    private var serviceStatusButton: some View {
+        Button { showingServiceStatus.toggle() } label: {
+            Image(systemName: serviceStatusSymbol)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(serviceIssueCount > 0 ? Theme.standby : Theme.textTertiary)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.controlRadius)
+                        .fill(showingServiceStatus ? Theme.surfaceHigh : Color.clear)
+                )
+                .contentShape(Rectangle())
         }
-    }
-
-    @ViewBuilder
-    private var serviceStatusCluster: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    ForEach(orderedServices, id: \.self) { svc in
-                        ServiceHealthChip(
-                            service: svc,
-                            status: appState.serviceHealth[svc],
-                            onRetry: { onRetryService?(svc) }
-                        )
-                    }
-                }
-
-                lastCheckedView
-            }
-
-            HStack(spacing: 6) {
-                serviceSummaryChip
-                lastCheckedView
-            }
+        .buttonStyle(.plain)
+        .help(serviceStatusHelp)
+        .accessibilityLabel(serviceStatusHelp)
+        .popover(isPresented: $showingServiceStatus, arrowEdge: .bottom) {
+            ServiceStatusPopover(
+                services: orderedServices,
+                health: appState.serviceHealth,
+                lastChecked: appState.lastCheckedDate,
+                onRetry: onRetryService
+            )
         }
-    }
-
-    @ViewBuilder
-    private var lastCheckedView: some View {
-        if let checked = appState.lastCheckedDate {
-            Text(lastCheckedLabel(from: checked).uppercased())
-                .font(Theme.mono(11))
-                .tracking(0.8)
-                .foregroundStyle(appState.hasServiceError ? Theme.standby : Theme.textTertiary)
-                .lineLimit(1)
-        } else if appState.hasServiceError {
-            WireLabel("Service error", color: Theme.standby)
-        }
-    }
-
-    private var serviceSummaryChip: some View {
-        let issueCount = orderedServices.filter { svc in
-            switch appState.serviceHealth[svc] {
-            case .warning, .error: return true
-            case .ok, nil: return false
-            }
-        }.count
-        return HStack(spacing: 4) {
-            Circle()
-                .fill(issueCount == 0 ? Theme.ok : Theme.standby)
-                .frame(width: 5, height: 5)
-            Text(issueCount == 0 ? "SERVICES" : "\(issueCount) ISSUE\(issueCount == 1 ? "" : "S")")
-                .font(Theme.mono(10.5, weight: .semibold))
-                .tracking(0.6)
-                .foregroundStyle(issueCount == 0 ? Theme.textTertiary : Theme.textPrimary)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .help(issueCount == 0 ? "All configured services are healthy." : "\(issueCount) service issues. Expand the window for per-service retry buttons.")
-        .accessibilityLabel(issueCount == 0 ? "Services healthy" : "\(issueCount) service issues")
     }
 
     // MARK: - Brief picker cluster
@@ -186,6 +92,7 @@ struct MainChromeBar: View {
             }
 
             Button {
+                focusBriefSearch = false
                 showingBriefPicker.toggle()
             } label: {
                 HStack(spacing: 5) {
@@ -213,7 +120,7 @@ struct MainChromeBar: View {
             .animation(Theme.quick, value: briefPickerHovered)
             .onHover { briefPickerHovered = $0 }
             .popover(isPresented: $showingBriefPicker, arrowEdge: .bottom) {
-                BriefListView()
+                BriefListView(showSearch: focusBriefSearch)
                     .environmentObject(appState)
                     .environmentObject(chatViewModel)
                     .frame(width: 320, height: 460)
@@ -223,7 +130,9 @@ struct MainChromeBar: View {
                 navigate(offset: -1)  // newer = earlier index in newest-first list
             }
         }
-        .padding(.leading, 4)
+        .onChange(of: showingBriefPicker) { _, isShowing in
+            if !isShowing { focusBriefSearch = false }
+        }
     }
 
     private func arrowButton(_ symbol: String, enabled: Bool, key: Character,
@@ -234,15 +143,28 @@ struct MainChromeBar: View {
 
     // MARK: - Helpers
 
-    private func lastCheckedLabel(from date: Date) -> String {
-        if appState.hasServiceError { return "Service error" }
-        let minutes = Int(Date().timeIntervalSince(date) / 60)
-        if minutes < 1 { return "Checked now" }
-        return "Checked \(minutes)m ago"
-    }
-
     private var orderedServices: [String] {
         ["imessage", "signal", "telegram", "slack"]
+    }
+
+    private var serviceIssueCount: Int {
+        orderedServices.filter {
+            appState.serviceHealth[$0] == .warning || appState.serviceHealth[$0] == .error
+        }.count
+    }
+
+    private var serviceStatusSymbol: String {
+        if serviceIssueCount > 0 { return "exclamationmark.triangle" }
+        if appState.serviceHealth.values.contains(.ok) { return "checkmark.circle" }
+        return "circle.dashed"
+    }
+
+    private var serviceStatusHelp: String {
+        if serviceIssueCount > 0 {
+            return "\(serviceIssueCount) service issue\(serviceIssueCount == 1 ? "" : "s")"
+        }
+        if appState.serviceHealth.values.contains(.ok) { return "Services connected" }
+        return "Service status"
     }
 
     private var briefsNewestFirst: [Brief] {
@@ -348,74 +270,81 @@ private struct BriefArrowButton: View {
     }
 }
 
-// MARK: - Service health stamp
+// MARK: - Service status popover
 
-private struct ServiceHealthChip: View {
-    let service: String
-    let status: AdapterHealthResult.Status?
-    let onRetry: () -> Void
-
-    @State private var hovering = false
+private struct ServiceStatusPopover: View {
+    let services: [String]
+    let health: [String: AdapterHealthResult.Status]
+    let lastChecked: Date?
+    let onRetry: ((String) -> Void)?
 
     var body: some View {
-        Button(action: onRetry) {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(dotColor)
-                    .frame(width: 5, height: 5)
-                Text(shortName)
-                    .font(Theme.mono(11, weight: .bold))
-                    .tracking(0.6)
-                    .foregroundStyle(textColor)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Services")
+                    .font(Theme.sans(13, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer()
+                if let lastChecked {
+                    Text(relativeLabel(lastChecked))
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.textTertiary)
+                }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(hovering ? Theme.surfaceHigh : Color.clear)
-            )
+            .padding(14)
+
+            Rule()
+
+            ForEach(services, id: \.self) { service in
+                HStack(spacing: 9) {
+                    Circle()
+                        .fill(statusColor(health[service]))
+                        .frame(width: 6, height: 6)
+                    Text(Theme.serviceName(service))
+                        .font(Theme.sans(12.5))
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    Text(statusLabel(health[service]))
+                        .font(Theme.sans(11.5))
+                        .foregroundStyle(Theme.textTertiary)
+                    if health[service] == .warning || health[service] == .error {
+                        Button { onRetry?(service) } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .buttonStyle(.plain)
+                        .help("Retry \(Theme.serviceName(service))")
+                        .accessibilityLabel("Retry \(Theme.serviceName(service))")
+                    }
+                }
+                .frame(height: 34)
+                .padding(.horizontal, 14)
+            }
         }
-        .buttonStyle(.plain)
-        .animation(Theme.quick, value: hovering)
-        .onHover { hovering = $0 }
-        .help(helpText)
-        .accessibilityLabel(helpText)
+        .frame(width: 260)
+        .background(Theme.sidebar)
     }
 
-    private var shortName: String {
-        switch service {
-        case "imessage": return "IM"
-        case "signal":   return "SG"
-        case "telegram": return "TG"
-        case "slack":    return "SL"
-        default:         return service.prefix(2).uppercased()
-        }
-    }
-
-    private var dotColor: Color {
-        guard let status else { return Theme.textTertiary.opacity(0.4) }
+    private func statusLabel(_ status: AdapterHealthResult.Status?) -> String {
         switch status {
-        case .ok:      return Theme.ok
+        case .ok: return "Connected"
+        case .warning: return "Needs attention"
+        case .error: return "Unavailable"
+        case nil: return "Not configured"
+        }
+    }
+
+    private func statusColor(_ status: AdapterHealthResult.Status?) -> Color {
+        switch status {
+        case .ok: return Theme.ok
         case .warning: return Theme.standby
-        case .error:   return Theme.signal
+        case .error: return Theme.signal
+        case nil: return Theme.textTertiary.opacity(0.4)
         }
     }
 
-    private var textColor: Color {
-        switch status {
-        case .ok:      return Theme.textSecondary
-        case .warning, .error: return Theme.textPrimary
-        case nil:      return Theme.textTertiary
-        }
-    }
-
-    private var helpText: String {
-        let name = Theme.serviceName(service)
-        switch status {
-        case .ok:      return "\(name) — connected. Click to refresh."
-        case .warning: return "\(name) — warning. Click to retry."
-        case .error:   return "\(name) — error. Click to retry."
-        case nil:      return "\(name) — not configured."
-        }
+    private func relativeLabel(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }

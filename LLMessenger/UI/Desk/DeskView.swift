@@ -22,10 +22,11 @@ struct DeskView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
     let layout: DeskLayout
-    @State private var selectedTab: DeskTab = .act
+    @State private var selectedTab: DeskTab
 
-    init(layout: DeskLayout = .regular) {
+    init(layout: DeskLayout = .regular, selectedTab: DeskTab = .act) {
         self.layout = layout
+        _selectedTab = State(initialValue: selectedTab)
     }
 
     enum DeskTab: String, CaseIterable {
@@ -44,17 +45,17 @@ struct DeskView: View {
                 Rule()
             }
 
-            // Persistent across every tab + brief: your open commitments, tasks, and "maybe"s.
-            ToDoStripView(layout: layout)
-
             tabBar
-            selectedTabHelp
             Rule()
 
             Group {
                 switch selectedTab {
                 case .act:
-                    ActFeedView(layout: layout)
+                    VStack(spacing: 0) {
+                        // Current work belongs to Act. It should not crowd the archive or audit log.
+                        ToDoStripView(layout: layout)
+                        ActFeedView(layout: layout)
+                    }
                 case .digest:
                     BriefListView()
                 case .activity:
@@ -87,25 +88,6 @@ struct DeskView: View {
         .background(Theme.sidebar)
     }
 
-    private var selectedTabHelp: some View {
-        HStack(spacing: 6) {
-            Image(systemName: selectedTab.iconName)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Theme.textTertiary)
-            Text(selectedTab.helpText)
-                .font(Theme.sans(11.5))
-                .foregroundStyle(Theme.textTertiary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, layout.gutter)
-        .padding(.top, 4)
-        .padding(.bottom, 8)
-        .background(Theme.sidebar)
-        .accessibilityHidden(true)
-    }
-
     private func badge(for tab: DeskTab) -> String? {
         switch tab {
         case .act:
@@ -134,17 +116,10 @@ extension DeskView.DeskTab {
         switch self {
         case .act: return "What needs you now."
         case .digest: return "What happened in your messages."
-        case .activity: return "What changed, sent, or was learned."
+        case .activity: return "What changed or was sent."
         }
     }
 
-    var iconName: String {
-        switch self {
-        case .act: return "bolt.fill"
-        case .digest: return "newspaper"
-        case .activity: return "checkmark.seal"
-        }
-    }
 }
 
 private struct DeskTabButton: View {

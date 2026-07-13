@@ -30,6 +30,17 @@ final class FrontendRobustnessTests: XCTestCase {
         XCTAssertTrue(behavior.contains(.fullScreenAuxiliary), "Settings window must be a fullscreen auxiliary")
     }
 
+    func testSettingsUsesNativePersistentPaneToolbar() throws {
+        let controller = SettingsWindowController(database: try makeDB())
+        let toolbar = try XCTUnwrap(controller.window?.toolbar)
+
+        XCTAssertEqual(controller.window?.toolbarStyle, .preference)
+        XCTAssertEqual(toolbar.displayMode, .iconAndLabel)
+        XCTAssertFalse(toolbar.allowsUserCustomization)
+        XCTAssertEqual(toolbar.items.count, SettingsPane.allCases.count)
+        XCTAssertNotNil(toolbar.selectedItemIdentifier)
+    }
+
     func testOnboardingWindowCanOpenOverFullscreenSpace() throws {
         let controller = OnboardingWindowController(database: try makeDB())
         let behavior = controller.window?.collectionBehavior ?? []
@@ -179,6 +190,56 @@ final class FrontendRobustnessTests: XCTestCase {
         XCTAssertEqual(projection.actBadgeCount, 2)
         XCTAssertEqual(projection.waitingConversationCount, 2)
         XCTAssertEqual(projection.owedRepliesWithoutDrafts.map(\.conversationId), ["bob"])
+    }
+
+    func testAttentionProjectionDeduplicatesOwedReplyCoveredByMaybeDraft() {
+        let now = Date(timeIntervalSince1970: 21_000)
+        var maybeDraft = AgentAction(
+            id: 2,
+            kind: AgentActionKind.reply.rawValue,
+            service: "signal",
+            conversationId: "alice",
+            conversationName: "Alice",
+            title: "Possible reply to Alice",
+            payload: AgentAction.encodeReplyPayload("I can do that"),
+            reasoning: "Low-confidence fixture",
+            confidence: 0.55,
+            riskLevel: AgentActionRisk.normal.rawValue,
+            status: AgentActionStatus.pending.rawValue,
+            createdAt: now,
+            resolvedAt: nil
+        )
+        maybeDraft.isMaybe = true
+        let owed = OwedReply(
+            service: "signal",
+            conversationId: "alice",
+            conversationName: "Alice",
+            triggerMessageId: "alice-message",
+            triggerText: "Can you do that?",
+            triggeredAt: now,
+            reason: "needs reply",
+            priorityRank: 2
+        )
+
+        let projection = AttentionProjection.build(
+            briefs: [],
+            cardsByBriefID: [:],
+            handledCardKeys: [],
+            actions: [maybeDraft],
+            owedReplies: [owed],
+            commitments: [],
+            tasks: [],
+            contextsByKey: [:],
+            now: now
+        )
+
+        XCTAssertEqual(projection.actItems.count, 1)
+        XCTAssertEqual(projection.actBadgeCount, 1)
+        XCTAssertTrue(projection.owedRepliesWithoutDrafts.isEmpty)
+        guard case .agentAction(let action) = projection.actItems[0] else {
+            return XCTFail("Expected the actionable draft to represent the obligation")
+        }
+        XCTAssertTrue(action.isMaybe)
     }
 
     func testAppStateAttentionProjectionTracksCanonicalHandledCards() throws {

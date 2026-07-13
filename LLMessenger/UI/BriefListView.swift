@@ -233,6 +233,7 @@ struct BriefListView: View {
                 .padding(.vertical, 4)
         }
         .onAppear { refreshNeedsReply(); appState.refreshTasks() }
+        .onAppear { if showSearch { searchFocused = true } }
         .onChange(of: appState.briefs.map { $0.id }) { refreshNeedsReply(); appState.refreshTasks() }
         .onChange(of: appState.handledCardKeys) { refreshNeedsReply() }
         // When Cmd-F opens the sidebar, immediately focus the search field.

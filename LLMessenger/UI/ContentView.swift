@@ -4,21 +4,16 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
-    // Brief archive sidebar — toggled by hamburger / ⌥⌘S.
-    @State private var sidebarCollapsed = true
     // Desk panel (Act/Digest/Activity) — shown on the left alongside the brief.
     @State private var deskCollapsed = false
     @State private var showMedia = false
-    @State private var showSearch = false
     @State private var showShortcuts = false
     var onRetryService: ((String) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 0) {
             MainChromeBar(
-                sidebarCollapsed: $sidebarCollapsed,
                 showMedia: $showMedia,
-                showSearch: $showSearch,
                 deskCollapsed: $deskCollapsed,
                 onRetryService: onRetryService
             )
@@ -56,18 +51,7 @@ struct ContentView: View {
                 let layout = deskLayout(for: proxy.size.width)
                 let deskWidth = deskWidth(for: proxy.size.width, layout: layout)
                 HStack(spacing: 0) {
-                    // Brief archive (power-user drawer, collapsed by default)
-                    if !sidebarCollapsed {
-                        BriefListView(showSearch: showSearch)
-                            .frame(width: archiveWidth(for: proxy.size.width))
-                            .background(Theme.sidebar)
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-
-                        Theme.border.frame(width: Theme.hairline)
-                            .transition(.opacity)
-                    }
-
-                // Desk panel — persistent left sidebar (Act/Digest/Activity)
+                    // Persistent sidebar — Act, Digest archive, and Activity.
                     if !deskCollapsed {
                         DeskView(layout: layout)
                             .frame(width: deskWidth)
@@ -104,9 +88,6 @@ struct ContentView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("LLMessenger main window")
         .ignoresSafeArea(.all, edges: .top)
-        .onChange(of: showSearch) { _, searching in
-            if searching { withAnimation(Theme.spring) { sidebarCollapsed = false } }
-        }
         // Scoped document shortcuts. J/K belongs to the Act feed while Desk is open;
         // when Desk is hidden, the reader owns J/K for digest navigation.
         .background {
@@ -133,7 +114,6 @@ struct ContentView: View {
         .sheet(isPresented: $showShortcuts) {
             KeyboardShortcutsSheet(isPresented: $showShortcuts)
         }
-        .animation(Theme.spring, value: sidebarCollapsed)
         .animation(Theme.spring, value: deskCollapsed)
         .animation(Theme.spring, value: showMedia)
         // Auto-select the latest brief the first time briefs arrive.
@@ -177,10 +157,6 @@ struct ContentView: View {
         case .regular:
             return min(380, max(320, width * 0.28))
         }
-    }
-
-    private func archiveWidth(for width: CGFloat) -> CGFloat {
-        min(300, max(232, width * 0.22))
     }
 
     private func mediaWidth(for width: CGFloat) -> CGFloat {
@@ -506,87 +482,45 @@ private struct FirstRealDigestSuccessView: View {
 
     var body: some View {
         let stats = cardStats
-        HStack(alignment: .top, spacing: 12) {
-            Theme.ok.frame(width: 2)
-                .clipShape(RoundedRectangle(cornerRadius: 1))
-
-            VStack(alignment: .leading, spacing: 5) {
-                WireLabel("First real digest ready", color: Theme.ok)
-                Text(successLine(stats))
-                    .font(Theme.sans(12.5, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Nothing was sent. Drafts stay review-first, and every important card can show its local sources.")
-                    .font(Theme.sans(11.5))
-                    .foregroundStyle(Theme.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                firstDigestGuide
-                    .padding(.top, 3)
-            }
-
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.ok)
+            Text("First digest ready")
+                .font(Theme.sans(12.5, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+            Text(successLine(stats))
+                .font(Theme.sans(12))
+                .foregroundStyle(Theme.textTertiary)
+                .lineLimit(1)
             Spacer(minLength: 8)
-
-            if let latestBrief {
-                Button("OPEN") {
-                    appState.selectedBriefID = latestBrief.id
-                    appState.acknowledgeFirstRealDigest()
-                }
-                .buttonStyle(PaperButtonStyle(prominent: true))
-            }
-
-            Button("GOT IT") {
+            Button {
                 appState.acknowledgeFirstRealDigest()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(WireActionStyle())
+            .buttonStyle(.plain)
+            .help("Dismiss")
+            .accessibilityLabel("Dismiss first digest confirmation")
         }
         .padding(.horizontal, Theme.gutter)
-        .padding(.vertical, 10)
+        .padding(.vertical, 7)
         .background(Theme.ok.opacity(0.045))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("First real digest ready. \(successLine(cardStats)) Nothing was sent.")
     }
 
     private func successLine(_ stats: (cards: Int, replies: Int, sourced: Int)) -> String {
-        let held = appState.heldBackCount
         let cards = "\(stats.cards) card\(stats.cards == 1 ? "" : "s")"
         let replies = "\(stats.replies) need\(stats.replies == 1 ? "s" : "") you"
         let sources = "\(stats.sourced) source-backed"
-        let heldBack = "\(held) held back"
-        return "\(cards), \(replies), \(sources), \(heldBack)."
+        let heldBack = appState.heldBackCount > 0 ? " · \(appState.heldBackCount) held back" : ""
+        return "\(cards) · \(replies) · \(sources)\(heldBack) · Nothing sent"
     }
 
-    private var firstDigestGuide: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 7) {
-                guideStep("1", "Open sources")
-                guideStep("2", "Mark one done")
-                guideStep("3", "Draft only if ready")
-                guideStep("4", "Quiet noise")
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                guideStep("1", "Open sources")
-                guideStep("2", "Mark one done")
-                guideStep("3", "Draft only if ready")
-                guideStep("4", "Quiet noise")
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Suggested first digest steps: open sources, mark one done, draft only if ready, quiet noise.")
-    }
-
-    private func guideStep(_ number: String, _ text: String) -> some View {
-        HStack(spacing: 4) {
-            Text(number)
-                .font(Theme.mono(9, weight: .bold))
-                .foregroundStyle(Theme.ok)
-                .frame(width: 12, height: 12)
-                .overlay(Circle().strokeBorder(Theme.ok.opacity(0.45), lineWidth: 1))
-            Text(text)
-                .font(Theme.mono(9.5, weight: .semibold))
-                .foregroundStyle(Theme.textTertiary)
-                .fixedSize()
-        }
-    }
 }
 
 // MARK: - Global notice banner

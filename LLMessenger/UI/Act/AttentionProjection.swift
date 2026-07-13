@@ -231,7 +231,9 @@ struct AttentionProjection {
     ) -> AttentionProjection {
         let readyActions = actions.filter { !$0.isMaybe }
         let maybeActions = actions.filter(\.isMaybe)
-        let draftedConversations = Set(readyActions.compactMap { action -> String? in
+        // Any visible reply proposal covers the matching owed-reply record, including a
+        // lower-confidence "maybe". The user should see one obligation, not two storage types.
+        let draftedConversations = Set(actions.compactMap { action -> String? in
             guard action.kindEnum == .reply || action.kindEnum == .ack else { return nil }
             return "\(action.service)|\(action.conversationId)"
         })
@@ -239,7 +241,7 @@ struct AttentionProjection {
             !draftedConversations.contains("\($0.service)|\($0.conversationId)")
         }
         let actItems = ActItemSorter.sort(
-            readyActions.map(ActItem.agentAction) + visibleOwed.map(ActItem.owedReply),
+            actions.map(ActItem.agentAction) + visibleOwed.map(ActItem.owedReply),
             now: now
         ) { service, conversationID in
             contextsByKey["\(service)|\(conversationID)"]

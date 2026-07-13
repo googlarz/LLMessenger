@@ -1,6 +1,55 @@
 // LLMessenger/UI/Settings/SettingsView.swift
 import SwiftUI
 
+enum SettingsPane: Int, CaseIterable, Identifiable {
+    case ai
+    case services
+    case privacy
+    case instructions
+    case rules
+    case digest
+    case about
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .ai: return "AI"
+        case .services: return "Services"
+        case .privacy: return "Privacy"
+        case .instructions: return "Instructions"
+        case .rules: return "Rules"
+        case .digest: return "Digest"
+        case .about: return "About"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .ai: return "sparkles"
+        case .services: return "point.3.connected.trianglepath.dotted"
+        case .privacy: return "lock.shield"
+        case .instructions: return "text.alignleft"
+        case .rules: return "list.bullet.rectangle"
+        case .digest: return "clock"
+        case .about: return "info.circle"
+        }
+    }
+}
+
+@MainActor
+final class SettingsPaneSelection: ObservableObject {
+    private static let defaultsKey = "settings.selectedPane"
+
+    @Published var pane: SettingsPane {
+        didSet { UserDefaults.standard.set(pane.rawValue, forKey: Self.defaultsKey) }
+    }
+
+    init(defaults: UserDefaults = .standard) {
+        pane = SettingsPane(rawValue: defaults.integer(forKey: Self.defaultsKey)) ?? .ai
+    }
+}
+
 struct SettingsView: View {
     var database: AppDatabase? = nil
     var onRunSetup: (() -> Void)? = nil
@@ -8,108 +57,37 @@ struct SettingsView: View {
     var onSyncContacts: (() async -> Void)? = nil
     var onRetryService: ((String) async -> Void)? = nil
     var onScheduleChanged: (() -> Void)? = nil
-
-    @State private var selectedTab = 0
-
-    private static let tabTitles = ["AI", "Services", "Privacy", "Instructions", "Rules", "Digest", "About"]
+    @ObservedObject var selection: SettingsPaneSelection
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Wire tab bar: paper text + underline for the selected section,
-            // margin-note gray for the rest. No filled pills.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 22) {
-                    tabButtons
-                    Spacer()
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 18) {
-                        tabButtons
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 14)
-
-            Rule()
-
-            tabContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.opacity)
-                .id(selectedTab)
-        }
-        // 720pt comfortably fits six wire tabs at the top — at 540pt the tab
-        // content gets cramped, especially on the AI tab with three provider blocks.
+        tabContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transition(.opacity)
+            .id(selection.pane)
         .frame(minWidth: 640, idealWidth: 720, minHeight: 520, idealHeight: 560)
         .background(Theme.bg)
     }
 
     @ViewBuilder
-    private var tabButtons: some View {
-        ForEach(Array(Self.tabTitles.enumerated()), id: \.offset) { index, title in
-            tabButton(index, title)
-        }
-    }
-
-    @ViewBuilder
     private var tabContent: some View {
-        switch selectedTab {
-        case 0:
+        switch selection.pane {
+        case .ai:
             AISettingsTab(database: database)
-        case 1:
+        case .services:
             ServiceSettingsTab(database: database,
                                onBuild7DaySummaries: onBuild7DaySummaries,
                                onSyncContacts: onSyncContacts,
                                onRetryService: onRetryService)
-        case 2:
+        case .privacy:
             PrivacySettingsTab()
-        case 3:
+        case .instructions:
             InstructionsSettingsTab()
-        case 4:
+        case .rules:
             RulesSettingsTab(database: database)
-        case 5:
+        case .digest:
             DigestSettingsTab(onScheduleChanged: onScheduleChanged)
-        default:
+        case .about:
             AboutSettingsTab(database: database, onRunSetup: onRunSetup)
         }
-    }
-
-    private func tabButton(_ index: Int, _ title: String) -> some View {
-        SettingsTabButton(index: index, title: title, selectedTab: $selectedTab)
-    }
-}
-
-private struct SettingsTabButton: View {
-    let index: Int
-    let title: String
-    @Binding var selectedTab: Int
-    @State private var isHovered = false
-
-    var body: some View {
-        let isSelected = selectedTab == index
-        Button {
-            withAnimation(Theme.quick) { selectedTab = index }
-        } label: {
-            VStack(spacing: 6) {
-                Text(title.uppercased())
-                    .font(Theme.labelFont)
-                    .tracking(Theme.labelTracking)
-                    .foregroundStyle(
-                        isSelected ? Theme.textPrimary
-                        : isHovered ? Theme.textSecondary
-                        : Theme.textTertiary
-                    )
-                (isSelected ? Theme.textPrimary : Color.clear)
-                    .frame(height: 1.5)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("\(title) settings")
-        .accessibilityLabel("\(title) settings")
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-        .animation(Theme.quick, value: isHovered)
-        .onHover { isHovered = $0 }
     }
 }

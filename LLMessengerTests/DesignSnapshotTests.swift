@@ -261,6 +261,30 @@ final class DesignSnapshotTests: XCTestCase {
         try render(view, size: NSSize(width: 1180, height: 780), name: "main-window")
     }
 
+    func testSnapshotDefaultWindow() throws {
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        let size = NSSize(width: 1040, height: 700)
+        let view = ContentView()
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: size.width, height: size.height)
+            .background(Theme.bg)
+        try render(view, size: size, name: "default-window")
+    }
+
+    func testSnapshotCompactWindow() throws {
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        let size = NSSize(width: 860, height: 520)
+        let view = ContentView()
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: size.width, height: size.height)
+            .background(Theme.bg)
+        try render(view, size: size, name: "compact-window")
+    }
+
     func testSnapshotSidebar() throws {
         let state = try makeFixtureState()
         let chat = state.makeChatViewModel()
@@ -338,6 +362,18 @@ final class DesignSnapshotTests: XCTestCase {
             .frame(width: 760, height: 560)
             .background(Theme.bg)
         try render(view, size: NSSize(width: 760, height: 560), name: "owed")
+    }
+
+    func testSnapshotActivity() throws {
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        let size = NSSize(width: 360, height: 700)
+        let view = DeskView(selectedTab: .activity)
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: size.width, height: size.height)
+            .background(Theme.sidebar)
+        try render(view, size: size, name: "activity")
     }
 
     /// Launch-film frame renderer — NOT part of the normal suite (env-gated).

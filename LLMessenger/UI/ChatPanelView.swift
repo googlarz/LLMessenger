@@ -148,7 +148,9 @@ struct ChatPanelView: View {
         .task(id: appState.selectedBriefID) {
             guard let brief = appState.selectedBrief else { return }
             try? await chatViewModel.loadBrief(brief)
-            if let id = brief.id { appState.markAsOpen(briefID: id) }
+            if brief.status != "open", let id = brief.id {
+                appState.markAsOpen(briefID: id)
+            }
         }
     }
 

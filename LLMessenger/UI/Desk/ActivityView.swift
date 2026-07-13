@@ -1,6 +1,6 @@
 // LLMessenger/UI/Desk/ActivityView.swift
 //
-// "What happened today?" — chronological triage events plus open commitments.
+// "What happened today?" — a retrospective summary and chronological audit.
 
 import SwiftUI
 import GRDB
@@ -23,55 +23,16 @@ struct ActivityView: View {
                 )
                 Rule()
 
-                ExecutiveQueuesView(
-                    owedReplies: appState.attentionProjection.owedRepliesWithoutDrafts,
-                    commitments: appState.attentionProjection.commitments,
-                    tasks: appState.attentionProjection.tasks,
-                    actions: appState.agentActions
-                )
-                Rule()
-
-                TrustCockpitView(
-                    isLLMConfigured: appState.isLLMConfigured,
-                    isLocalLLM: appState.llmClient.isLocal,
-                    sourceBackedCards: appState.productOutcomeStats.sourceBackedCardCount,
-                    auditCount: appState.productOutcomeStats.auditCount,
-                    queuedSendCount: appState.armedAutoSendCount + appState.actionsReadyCount
-                )
-                Rule()
-
-                ProductHealthView(
-                    metrics: appState.productLoveMetrics,
-                    stats: appState.productOutcomeStats
-                )
-                Rule()
-
-                // Retrospective proof-of-value — "what happened," not "what should I do."
-                OutcomeStripView(stats: appState.productOutcomeStats, layout: .regular)
-                if appState.productOutcomeStats.hasSignal {
-                    Rule()
-                }
-
-                if appState.productLoveMetrics.shouldShowLearningReceipt {
-                    LearningReceiptsView(metrics: appState.productLoveMetrics)
-                    Rule()
-                }
-
                 // What the agent actually sent for you — the "what did it do?" answer.
                 if !audits.isEmpty {
                     sentSection
                 }
 
-                // Open commitments (if any)
-                if !appState.commitments.isEmpty {
-                    commitmentsSection
-                }
-
                 // Triage events
-                if events.isEmpty && appState.commitments.isEmpty && audits.isEmpty {
+                if events.isEmpty && audits.isEmpty {
                     emptyState
                 } else if !events.isEmpty {
-                    if !appState.commitments.isEmpty || !audits.isEmpty {
+                    if !audits.isEmpty {
                         sectionHeader("Today's events")
                     }
                     ForEach(events) { event in
@@ -131,47 +92,6 @@ struct ActivityView: View {
         .accessibilityLabel("\(a.trigger == "delegated" ? "Auto-sent" : "Sent by you") to \(displayNames["\(a.service)|\(a.conversationId)"] ?? a.conversationId): \(a.detail)")
     }
 
-    // MARK: - Commitments section
-
-    private var commitmentsSection: some View {
-        VStack(spacing: 0) {
-            sectionHeader("Open commitments")
-            ForEach(appState.commitments) { commitment in
-                Rule()
-                commitmentRow(commitment)
-            }
-            Rule()
-        }
-    }
-
-    private func commitmentRow(_ c: Commitment) -> some View {
-        HStack(spacing: 10) {
-            // Direction indicator
-            Image(systemName: c.direction == "ours" ? "arrow.up.right" : "arrow.down.left")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(c.direction == "ours" ? Theme.standby : Theme.textTertiary)
-                .frame(width: 16)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(c.what)
-                    .font(Theme.bodyFont)
-                    .foregroundStyle(Theme.textPrimary.opacity(0.88))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let due = c.dueAt {
-                    Text(relativeDue(due))
-                        .font(Theme.mono(11))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, Theme.gutter)
-        .padding(.vertical, 10)
-    }
-
     // MARK: - Section header
 
     private func sectionHeader(_ label: String) -> some View {
@@ -192,10 +112,10 @@ struct ActivityView: View {
                 .font(.system(size: 28, weight: .thin))
                 .foregroundStyle(Theme.textTertiary.opacity(0.5))
                 .padding(.bottom, 4)
-            Text("All quiet")
+            Text("No activity yet")
                 .font(Theme.display(19))
                 .foregroundStyle(Theme.textSecondary)
-            Text("Triage events and commitments\nappear here as they happen.")
+            Text("Sends and triage events\nappear here as they happen.")
                 .font(Theme.sans(12))
                 .foregroundStyle(Theme.textTertiary)
                 .multilineTextAlignment(.center)
@@ -257,14 +177,6 @@ struct ActivityView: View {
         Theme.timeFormatter.string(from: date)
     }
 
-    private func relativeDue(_ date: Date) -> String {
-        let diff = date.timeIntervalSinceNow
-        if diff < 0 { return "overdue" }
-        let days = Int(diff / 86400)
-        if days == 0 { return "due today" }
-        if days == 1 { return "due tomorrow" }
-        return "due in \(days)d"
-    }
 }
 
 // MARK: - Event row (extracted for hover state)

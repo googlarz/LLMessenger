@@ -1,11 +1,10 @@
 // LLMessenger/UI/Desk/ToDoStripView.swift
 //
-// The persistent "you always have something to do" strip. Pinned ABOVE the Desk tab bar
-// so it survives tab switches and stays visible alongside every brief. Three buckets:
+// Open commitments and extracted tasks shown at the top of Act. Reply proposals live in
+// the action feed below so each user-level obligation appears in one place. Two buckets:
 //   • Commitments — promises you owe or are owed (open, brief-independent)
 //   • Tasks — action items pulled from briefs (global, incomplete)
-//   • Maybe — proposals the agent isn't sure actually need action ("your call")
-// Renders nothing when all three are empty, so it costs no space on a quiet desk.
+// Renders nothing when both are empty, so it costs no space on a quiet desk.
 
 import SwiftUI
 
@@ -21,14 +20,12 @@ struct ToDoStripView: View {
     /// Hard ceiling: past this the strip scrolls so it can't swallow the tab panel below.
     private let maxStripHeight: CGFloat = 248
 
-    private var maybeActions: [AgentAction] { appState.attentionProjection.maybeActions }
     private var hasToDo: Bool {
         !appState.attentionProjection.commitments.isEmpty || !appState.attentionProjection.tasks.isEmpty
     }
-    private var hasContent: Bool { hasToDo || !maybeActions.isEmpty }
 
     var body: some View {
-        if hasContent {
+        if hasToDo {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(spacing: 0) {
@@ -40,13 +37,6 @@ struct ToDoStripView: View {
                             }
                             ForEach(appState.attentionProjection.tasks, id: \.id) { t in
                                 taskRow(t)
-                                Rule()
-                            }
-                        }
-                        if !maybeActions.isEmpty {
-                            sectionHeader("Maybe — your call", color: Theme.standby)
-                            ForEach(maybeActions) { a in
-                                maybeRow(a)
                                 Rule()
                             }
                         }
@@ -97,10 +87,14 @@ struct ToDoStripView: View {
             }
             .layoutPriority(1)
             Spacer()
-            // i_owe → "DONE" (you delivered); they_owe → "GOT IT" (they delivered) — same
-            // action (mark fulfilled), but the label and VoiceOver text disambiguate which.
-            Button(c.directionEnum == .iOwe ? "DONE" : "RECEIVED") { appState.markCommitmentFulfilled(c) }
-                .buttonStyle(WireActionStyle())
+            Button { appState.markCommitmentFulfilled(c) } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+                .buttonStyle(.plain)
+                .help(c.directionEnum == .iOwe ? "Mark done" : "Mark received")
                 .accessibilityLabel(c.directionEnum == .iOwe
                     ? "Mark done, you delivered: \(c.what)"
                     : "Mark received, they delivered: \(c.what)")
@@ -121,85 +115,24 @@ struct ToDoStripView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
             Spacer()
-            Button("DONE") { if let id = t.id { appState.completeTask(id) } }
-                .buttonStyle(WireActionStyle())
+            Button { if let id = t.id { appState.completeTask(id) } } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+                .buttonStyle(.plain)
+                .help("Mark done")
                 .accessibilityLabel("Complete task: \(t.text)")
         }
         .padding(.horizontal, layout.gutter)
         .padding(.vertical, 9)
     }
 
-    private func maybeRow(_ a: AgentAction) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                ServiceStamp(service: a.service, size: 16)
-                Text(a.conversationName)
-                    .font(Theme.mono(10.5, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-                Spacer()
-            }
-            Text(a.title)
-                .font(Theme.bodyFont)
-                .foregroundStyle(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            if !a.reasoning.isEmpty {
-                Text(a.reasoning)
-                    .font(Theme.sans(11.5))
-                    .foregroundStyle(Theme.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            HStack(spacing: 8) {
-                if a.statusEnum == .scheduled {
-                    MaybeScheduledSendBar(action: a)
-                } else {
-                    Button("QUEUE SEND") { appState.stageManualApprove(a) }
-                        .buttonStyle(WireActionStyle(tint: Theme.standby))
-                        .accessibilityLabel("Queue suggested send to \(a.conversationName)")
-                        .accessibilityHint("Sends in 5 seconds unless undone.")
-                    Button("SKIP") { appState.skipAction(a) }
-                        .buttonStyle(WireActionStyle())
-                        .accessibilityLabel("Skip: \(a.title)")
-                }
-                Spacer()
-            }
-        }
-        .padding(.horizontal, layout.gutter)
-        .padding(.vertical, 10)
-    }
 }
 
 /// Measures the strip's intrinsic content height so it can size-to-fit up to a cap.
 private struct StripHeightKey: PreferenceKey {
     nonisolated(unsafe) static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
-}
-
-private struct MaybeScheduledSendBar: View {
-    @EnvironmentObject var appState: AppState
-    let action: AgentAction
-    @State private var now = Date()
-    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text("SENDING IN \(secondsRemaining)s")
-                .font(Theme.mono(10.5, weight: .semibold))
-                .tracking(0.7)
-                .foregroundStyle(Theme.signal)
-                .monospacedDigit()
-            Button("UNDO") { appState.undoAutoSend(action) }
-                .buttonStyle(WireActionStyle())
-        }
-        .onReceive(ticker) { now = $0 }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Scheduled send")
-        .accessibilityValue("\(secondsRemaining) seconds remaining")
-    }
-
-    private var secondsRemaining: Int {
-        guard let fireAt = action.scheduledAt else { return 0 }
-        return max(0, Int(fireAt.timeIntervalSince(now).rounded(.up)))
-    }
 }

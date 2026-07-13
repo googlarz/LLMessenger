@@ -31,22 +31,6 @@ struct ActFeedView: View {
     var body: some View {
         let items = self.items
         VStack(spacing: 0) {
-            // "What needs my attention now?" — moved here from DeskView's shared
-            // header so it only shows on the Act tab, not on Digest/Activity too.
-            TodaySummaryView(layout: layout)
-            Rule()
-
-            if appState.productLoveMetrics.shouldShowFirstWeekGuide(suggestionCount: appState.contextSuggestions.count) {
-                FirstWeekGuideView(
-                    metrics: appState.productLoveMetrics,
-                    suggestions: appState.contextSuggestions,
-                    onAcceptSuggestion: { appState.acceptContextSuggestion($0) },
-                    onDismissSuggestion: { appState.dismissContextSuggestion($0) },
-                    onPermanentDismiss: { appState.dismissFirstWeekGuide() }
-                )
-                Rule()
-            }
-
             Group {
                 if items.isEmpty {
                     emptyState
@@ -206,12 +190,11 @@ struct ActFeedView: View {
 
     private var emptyState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "checkmark.circle")
+            Image(systemName: appState.briefs.isEmpty ? "ellipsis.circle" : "checkmark.circle")
                 .font(Theme.sans(28, weight: .thin))
                 .foregroundStyle(Theme.textTertiary.opacity(0.4))
                 .padding(.bottom, 2)
-            WireLabel("Act", color: Theme.textPrimary)
-            Text("You're clear")
+            Text(appState.briefs.isEmpty ? "No actions yet" : "You're clear")
                 .font(Theme.display(21))
                 .foregroundStyle(Theme.textPrimary)
             Group {
@@ -240,6 +223,9 @@ struct ActFeedView: View {
     }
 
     private var emptyDetail: String {
+        if appState.briefs.isEmpty {
+            return "Actions will appear here after your first digest."
+        }
         if let next = appState.nextPollDate {
             return "Nothing needs you right now. Leave it here; next check \(next.actRelativeLabel)."
         }
@@ -429,6 +415,9 @@ private struct ActCardRow: View {
                 Text(relativeTime)
                     .font(Theme.mono(10))
                     .foregroundStyle(Theme.textTertiary)
+            }
+            if case .agentAction(let action) = item, action.isMaybe {
+                WireLabel("Maybe", color: Theme.standby)
             }
         }
     }
