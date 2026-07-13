@@ -137,10 +137,225 @@ final class BriefEngineScalabilityTests: XCTestCase {
         }
         let engine = BriefEngine(database: database, client: client, model: "test", basePrompt: "BASE")
 
-        _ = try await engine.processNewMessages()
+        let briefIDs = try await engine.processNewMessageBatch()
 
         XCTAssertEqual(client.generationPrompts.count, BriefEngine.maximumAutomaticJobsPerRun)
+        XCTAssertEqual(briefIDs.count, BriefEngine.maximumAutomaticJobsPerRun)
         XCTAssertFalse(try BriefRepository(database: database).fetchUnattachedMessages().isEmpty)
+    }
+
+    func testBulkPromptDataUsesConstantQueryCount() throws {
+        let database = try makeDatabase()
+        let repository = BriefRepository(database: database)
+        let now = Date()
+        var requests: [BriefPromptRequest] = []
+
+        try database.dbQueue.write { db in
+            var brief = Brief(
+                createdAt: now.addingTimeInterval(-300),
+                status: BriefStatus.ready.rawValue,
+                services: #"["telegram"]"#,
+                notificationText: "Earlier brief"
+            )
+            try brief.insert(db)
+            let briefID = try XCTUnwrap(brief.id)
+
+            for index in 0..<40 {
+                let conversationID = "conversation-\(index)"
+                let before = now.addingTimeInterval(Double(index))
+                let context = ConversationContext(
+                    service: "telegram",
+                    conversationId: conversationID,
+                    label: "Contact \(index)",
+                    priorityHint: "auto",
+                    updatedAt: now
+                )
+                try context.insert(db)
+                try ConversationState(
+                    service: "telegram",
+                    conversationId: conversationID,
+                    lastSeenMessageId: "old-\(index)",
+                    lastSummarizedMessageId: "old-\(index)",
+                    rollingSummary: "Earlier summary \(index)",
+                    participants: nil,
+                    knownEntities: nil,
+                    unresolvedActions: nil,
+                    lastBriefCardId: "card-\(index)",
+                    prioritySignals: nil,
+                    sourceMessageIds: nil,
+                    updatedAt: now
+                ).insert(db)
+                try BriefCardRecord(
+                    id: "card-\(index)",
+                    briefId: briefID,
+                    service: "telegram",
+                    conversationId: conversationID,
+                    conversationTitle: conversationID,
+                    headline: "Earlier headline \(index)",
+                    priority: "low",
+                    summary: "Earlier summary \(index)",
+                    actionItems: "[]",
+                    callbackText: nil,
+                    sourceMessageIds: #"["old"]"#,
+                    createdAt: now
+                ).insert(db)
+                var message = Message(
+                    briefId: briefID,
+                    service: "telegram",
+                    conversationId: conversationID,
+                    messageId: "old-\(index)",
+                    sender: "Sender",
+                    text: "Earlier context",
+                    timestamp: before.addingTimeInterval(-60),
+                    isSent: false
+                )
+                try message.insert(db)
+                requests.append(BriefPromptRequest(
+                    service: "telegram",
+                    conversationID: conversationID,
+                    before: before,
+                    since: before.addingTimeInterval(-3_600),
+                    recentMessageLimit: 20
+                ))
+            }
+        }
+
+        var selectCount = 0
+        database.dbQueue.writeWithoutTransaction { db in
+            db.trace { event in
+                if case let .statement(statement) = event,
+                   statement.sql.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .uppercased().hasPrefix("SELECT") {
+                    selectCount += 1
+                }
+            }
+        }
+        let promptData = try repository.fetchBriefPromptData(for: requests)
+        database.dbQueue.writeWithoutTransaction { db in db.trace(options: []) }
+
+        XCTAssertLessThanOrEqual(selectCount, 4)
+        XCTAssertEqual(promptData.contexts.count, 40)
+        XCTAssertEqual(promptData.states.count, 40)
+        XCTAssertEqual(promptData.previousCards.count, 40)
+        XCTAssertEqual(promptData.recentMessages.count, 40)
+        XCTAssertTrue(promptData.recentMessages.values.allSatisfy { $0.count == 1 })
+    }
+
+    func testConversationContextBulkFetchHandlesMoreThanSQLiteExpressionDepth() throws {
+        let database = try makeDatabase()
+        let repository = BriefRepository(database: database)
+        let keys = (0..<1_100).map {
+            BriefConversationKey(service: "telegram", conversationID: "large-inbox-\($0)")
+        }
+
+        try database.dbQueue.write { db in
+            for key in keys {
+                try ConversationContext(
+                    service: key.service,
+                    conversationId: key.conversationID,
+                    label: key.conversationID,
+                    priorityHint: "auto",
+                    updatedAt: Date()
+                ).insert(db)
+            }
+        }
+
+        let contexts = try repository.fetchConversationContexts(for: keys)
+
+        XCTAssertEqual(contexts.count, keys.count)
+    }
+
+    func testManualSummaryOnlyAttachesCoveredPromptConversations() async throws {
+        let database = try makeDatabase()
+        try insertMessage(database, conversationID: "covered", messageID: "manual-covered")
+        try insertMessage(database, conversationID: "omitted", messageID: "manual-omitted")
+        let client = PromptReflectingBriefClient()
+        client.omittedConversations = ["omitted"]
+        let engine = BriefEngine(database: database, client: client, model: "test", basePrompt: "BASE")
+
+        _ = try await engine.summarizeLast(hours: 24, adapters: [:])
+
+        let messages = try await database.dbQueue.read { db in
+            try Message.order(Column("messageId")).fetchAll(db)
+        }
+        XCTAssertNotNil(messages.first { $0.messageId == "manual-covered" }?.briefId)
+        XCTAssertNil(messages.first { $0.messageId == "manual-omitted" }?.briefId)
+    }
+
+    func testManualSummaryRespectsGlobalPromptBudgetAndLeavesOverflowUnattached() async throws {
+        let database = try makeDatabase()
+        let largeText = String(repeating: "abcdefghij", count: 500)
+        for index in 0..<24 {
+            try insertMessage(
+                database,
+                conversationID: "manual-large-\(index)",
+                messageID: "manual-large-message-\(index)",
+                text: largeText,
+                timestamp: Date().addingTimeInterval(Double(index))
+            )
+        }
+        let client = PromptReflectingBriefClient()
+        let engine = BriefEngine(database: database, client: client, model: "test", basePrompt: "BASE")
+
+        _ = try await engine.summarizeLast(hours: 24, adapters: [:])
+
+        let prompt = try XCTUnwrap(client.generationPrompts.first)
+        XCTAssertLessThanOrEqual(
+            TokenEstimator.estimate(prompt),
+            BriefEngine.maximumAutomaticUserPromptTokens
+        )
+        let attachedIDs = try await database.dbQueue.read { db in
+            try String.fetchAll(db, sql: "SELECT messageId FROM messages WHERE briefId IS NOT NULL")
+        }
+        XCTAssertEqual(Set(attachedIDs), client.promptedMessageIDs)
+        XCTAssertFalse(try BriefRepository(database: database).fetchUnattachedMessages().isEmpty)
+    }
+
+    func testOversizedSingleMessageMakesProgressWithinPromptBudget() async throws {
+        let database = try makeDatabase()
+        try insertMessage(
+            database,
+            conversationID: "oversized",
+            messageID: "oversized-message",
+            text: String(repeating: "0123456789", count: 20_000)
+        )
+        let client = PromptReflectingBriefClient()
+        let engine = BriefEngine(database: database, client: client, model: "test", basePrompt: "BASE")
+
+        let briefID = try await engine.processNewMessages()
+
+        XCTAssertNotNil(briefID)
+        let prompt = try XCTUnwrap(client.generationPrompts.first)
+        XCTAssertLessThanOrEqual(
+            TokenEstimator.estimate(prompt),
+            BriefEngine.maximumAutomaticUserPromptTokens
+        )
+        let stored = try await database.dbQueue.read { db in
+            try Message.filter(Column("messageId") == "oversized-message").fetchOne(db)
+        }
+        XCTAssertNotNil(stored?.briefId)
+    }
+
+    func testServiceScopedUnattachedFetchIsLimitedAndOldestFirst() throws {
+        let database = try makeDatabase()
+        let start = Date()
+        for index in 0..<25 {
+            try insertMessage(
+                database,
+                conversationID: "limited",
+                messageID: "limited-\(index)",
+                timestamp: start.addingTimeInterval(Double(index))
+            )
+        }
+
+        let messages = try BriefRepository(database: database).fetchUnattachedMessages(
+            service: "telegram",
+            since: start.addingTimeInterval(-1),
+            limit: 10
+        )
+
+        XCTAssertEqual(messages.count, 10)
+        XCTAssertEqual(messages.map(\.messageId), (0..<10).map { "limited-\($0)" })
     }
 }
 

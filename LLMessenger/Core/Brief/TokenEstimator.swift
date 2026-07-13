@@ -25,6 +25,13 @@ enum TokenEstimator {
         texts.reduce(0) { $0 + estimate($1) }
     }
 
+    static func truncated(_ text: String, toTokenBudget tokenBudget: Int) -> String {
+        guard estimate(text) > tokenBudget else { return text }
+        let marker = "\n[Message truncated to fit prompt]"
+        let characterBudget = max(0, Int(Double(max(1, tokenBudget)) * charsPerToken) - marker.count)
+        return String(text.prefix(characterBudget)) + marker
+    }
+
     /// Selects the most recent messages from a chronologically-sorted (oldest
     /// first) array that fit within `tokenBudget`, walking backward from the
     /// newest. Replaces a blind `.suffix(n)` row-count cap: a thread of short

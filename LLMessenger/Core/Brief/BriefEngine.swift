@@ -56,7 +56,13 @@ final class BriefEngine {
 
     @discardableResult
     func processNewMessages(adapters: [String: any MessengerAdapter] = [:]) async throws -> Int64? {
-        guard !briefingInFlight else { return nil }
+        (try await processNewMessageBatch(adapters: adapters)).last
+    }
+
+    /// Runs a bounded automatic drain and returns every brief created during it.
+    /// The legacy single-ID entry point returns the latest ID for compatibility.
+    func processNewMessageBatch(adapters: [String: any MessengerAdapter] = [:]) async throws -> [Int64] {
+        guard !briefingInFlight else { return [] }
         briefingInFlight = true
         defer { briefingInFlight = false }
 
@@ -71,22 +77,28 @@ final class BriefEngine {
             }
         }
 
-        var latestBriefID: Int64?
+        var briefIDs: [Int64] = []
         var processedJobs = 0
         while processedJobs < Self.maximumAutomaticJobsPerRun,
               let outcome = try await processNextAutomaticBriefJob(adapters: adapters) {
             processedJobs += 1
             if let briefID = outcome.briefID {
-                latestBriefID = briefID
+                briefIDs.append(briefID)
             }
             guard outcome.jobCompleted else { break }
         }
-        return latestBriefID
+        return briefIDs
     }
 
     private struct AutomaticBriefOutcome {
         var briefID: Int64?
         var jobCompleted: Bool
+    }
+
+    private struct ConversationPromptMetadata {
+        var context: ConversationContext?
+        var state: ConversationState?
+        var previousCard: BriefCardRecord?
     }
 
     /// Processes one immutable job snapshot. The public entry point drains a
@@ -103,15 +115,17 @@ final class BriefEngine {
         // Privacy-excluded conversations never enter a durable job snapshot: a
         // cloud client must not persist work that it is not allowed to process.
         let clientIsCloud = self.client.isCloud
-        let initiallyExcludedConversations: Set<String> = Set(
-            Dictionary(grouping: candidateMessages, by: { $0.service }).flatMap { service, msgs in
-                Set(msgs.map { $0.conversationId })
-                    .filter { self.isExcludedByPrivacy(service: service, conversationId: $0, clientIsCloud: clientIsCloud) }
-                    .map { "\(service)|\($0)" }
-            }
-        )
+        let candidateKeys = Array(Set(candidateMessages.map {
+            BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+        }))
+        let candidateContexts = try repository.fetchConversationContexts(for: candidateKeys)
+        let initiallyExcludedConversations = Set(candidateKeys.filter {
+            isExcludedByPrivacy(context: candidateContexts[$0], clientIsCloud: clientIsCloud)
+        })
         let eligibleMessages = candidateMessages.filter {
-            !initiallyExcludedConversations.contains("\($0.service)|\($0.conversationId)")
+            !initiallyExcludedConversations.contains(
+                BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+            )
         }
         let selectedMessages = selectAutomaticJobMessages(eligibleMessages)
         guard let snapshot = try repository.claimAutomaticBriefJob(
@@ -136,15 +150,17 @@ final class BriefEngine {
         // ever) or local_only (cloud client only) are excluded from the brief entirely. Their
         // text must never enter threadText, and their messages must stay unattached so they
         // are not lost. Keys are "service|conversationId" (same convention as elsewhere).
-        let excludedConversations: Set<String> = Set(
-            Dictionary(grouping: snapshotMessages, by: { $0.service }).flatMap { service, msgs in
-                Set(msgs.map { $0.conversationId })
-                    .filter { self.isExcludedByPrivacy(service: service, conversationId: $0, clientIsCloud: clientIsCloud) }
-                    .map { "\(service)|\($0)" }
-            }
-        )
+        let snapshotKeys = Array(Set(snapshotMessages.map {
+            BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+        }))
+        let snapshotContexts = try repository.fetchConversationContexts(for: snapshotKeys)
+        let excludedConversations = Set(snapshotKeys.filter {
+            isExcludedByPrivacy(context: snapshotContexts[$0], clientIsCloud: clientIsCloud)
+        })
         let privacyExcludedMessages = snapshotMessages.filter {
-            excludedConversations.contains("\($0.service)|\($0.conversationId)")
+            excludedConversations.contains(
+                BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+            )
         }
         if !privacyExcludedMessages.isEmpty {
             _ = try repository.skipBriefJobMessages(
@@ -154,12 +170,45 @@ final class BriefEngine {
             )
         }
         let messages = snapshotMessages.filter {
-            !excludedConversations.contains("\($0.service)|\($0.conversationId)")
+            !excludedConversations.contains(
+                BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+            )
         }
         if messages.isEmpty {
             jobFinalized = true
             return AutomaticBriefOutcome(briefID: nil, jobCompleted: true)
         }
+
+        let eligibleCandidatesByKey = Dictionary(grouping: eligibleMessages) {
+            BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+        }
+        let omittedNewMessageCounts = Dictionary(uniqueKeysWithValues:
+            Dictionary(grouping: messages) {
+                BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+            }.compactMap { key, selectedMessages -> (BriefConversationKey, Int)? in
+                guard let firstSelected = selectedMessages.sorted(by: messageSortAscending).first else {
+                    return nil
+                }
+                let omitted = eligibleCandidatesByKey[key]?.count {
+                    messageSortAscending($0, firstSelected)
+                } ?? 0
+                return (key, omitted)
+            }
+        )
+
+        let promptRequests = Dictionary(grouping: messages) {
+            BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+        }.compactMap { key, conversationMessages -> BriefPromptRequest? in
+            guard let firstDate = conversationMessages.map(\.timestamp).min() else { return nil }
+            return BriefPromptRequest(
+                service: key.service,
+                conversationID: key.conversationID,
+                before: firstDate,
+                since: firstDate.addingTimeInterval(-recentContextWindow),
+                recentMessageLimit: maxRecentContextMessages
+            )
+        }
+        let promptData = try repository.fetchBriefPromptData(for: promptRequests)
 
         // Step 2: Group messages by service
         let messagesByService = Dictionary(grouping: messages, by: { $0.service })
@@ -206,9 +255,15 @@ final class BriefEngine {
                 group.addTask {
                     do {
                         let byConversation: [String: [Message]] = Dictionary(grouping: serviceMessages, by: { $0.conversationId })
-                            .filter { convId, _ in !excludedConversations.contains("\(service)|\(convId)") }
+                            .filter { convId, _ in
+                                !excludedConversations.contains(
+                                    BriefConversationKey(service: service, conversationID: convId)
+                                )
+                            }
                         let contexts = byConversation.keys.compactMap {
-                            try? self.repository.fetchConversationContext(service: service, conversationId: $0)
+                            promptData.contexts[
+                                BriefConversationKey(service: service, conversationID: $0)
+                            ]
                         }
                         let systemPrompt = PromptBuilder.build(
                             mode: .summarizer,
@@ -231,25 +286,25 @@ final class BriefEngine {
                         // buildConversationBlock prepends recentContext messages to the prompt —
                         // if the LLM cites one of those IDs in sourceMessageIds, it must be in
                         // the allowlist, otherwise every card in an active conversation gets rejected.
-                        var allPromptMessages: [Message] = serviceMessages
+                        var allPromptMessages: [Message] = []
                         let contextBudgetPerConversation = automaticContextTokenBudget
                             / max(1, rankedConvIds.count)
                         for convId in rankedConvIds {
                             let convMessages = (byConversation[convId] ?? []).sorted { $0.timestamp < $1.timestamp }
-                            let firstDate = convMessages.first?.timestamp ?? Date()
-                            let rawContextMessages = (try? self.repository.fetchRecentContextMessages(
-                                service: service,
-                                conversationID: convId,
-                                before: firstDate,
-                                since: firstDate.addingTimeInterval(-self.recentContextWindow),
-                                limit: self.maxRecentContextMessages
-                            )) ?? []
+                            let promptNewMessages = convMessages.map {
+                                self.boundedPromptMessage($0, tokenBudget: self.perConversationTokenBudget)
+                            }
+                            let key = BriefConversationKey(service: service, conversationID: convId)
+                            let rawContextMessages = promptData.recentMessages[key] ?? []
                             let contextMessages = TokenEstimator.selectWithinBudget(
                                 rawContextMessages,
                                 tokenBudget: contextBudgetPerConversation,
                                 text: \.text
-                            )
+                            ).map {
+                                self.boundedPromptMessage($0, tokenBudget: contextBudgetPerConversation)
+                            }
                             allPromptMessages.append(contentsOf: contextMessages)
+                            allPromptMessages.append(contentsOf: promptNewMessages)
 
                             let convHeader = convMessages.first?.conversationName
                                 ?? signalAdapter?.groupName(for: convId)
@@ -259,10 +314,15 @@ final class BriefEngine {
                                 service: service,
                                 conversationID: convId,
                                 conversationTitle: convHeader,
-                                newMessages: convMessages,
-                                omittedNewMessageCount: 0,
+                                newMessages: promptNewMessages,
+                                omittedNewMessageCount: omittedNewMessageCounts[key] ?? 0,
                                 recentContextMessages: contextMessages,
                                 metadataCharacterLimit: automaticMetadataCharacterLimit,
+                                promptMetadata: ConversationPromptMetadata(
+                                    context: promptData.contexts[key],
+                                    state: promptData.states[key],
+                                    previousCard: promptData.previousCards[key]
+                                ),
                                 dateFormatter: dateFormatter,
                                 senderNameResolver: { sender in
                                     let resolved = signalAdapter?.contactName(for: sender)
@@ -377,8 +437,10 @@ final class BriefEngine {
         // Context-aware ordering: surface high-priority-context conversations first and push
         // low/noise-dominated ones to the end. Pure helper; falls back to LLM priority when no
         // context overrides exist.
-        let cardContexts = allCards.compactMap {
-            try? repository.fetchConversationContext(service: $0.service, conversationId: $0.conversationId)
+        let cardContexts = allCards.compactMap { card in
+            promptData.contexts[
+                BriefConversationKey(service: card.service, conversationID: card.conversationId)
+            ]
         }
         allCards = DigestOrdering.order(cards: allCards, contexts: cardContexts).map { $0.card.withCollapsed($0.collapsed) }
 
@@ -442,7 +504,11 @@ final class BriefEngine {
         }
         jobFinalized = true
 
-        try persistConversationStates(allCards, sourceMessagesByService: sourceMessagesByService)
+        try persistConversationStates(
+            allCards,
+            sourceMessagesByService: sourceMessagesByService,
+            existingStates: promptData.states
+        )
         updateContactProfiles(from: allCards)
 
         return AutomaticBriefOutcome(
@@ -510,6 +576,11 @@ final class BriefEngine {
         let model2 = self.model
         let basePrompt2 = self.basePrompt
         let briefLanguage2 = SettingsRepository().loadBriefLanguage()
+        let manualContextTokenBudget = Self.automaticContextTokenBudget
+        let manualMetadataCharacterLimit = Self.automaticMetadataCharacterLimit
+        let maximumManualConversations = Self.maximumConversationsPerAutomaticJob
+        let maximumManualCandidateMessages = Self.maximumAutomaticCandidateMessages
+        let maximumManualUserPromptTokens = Self.maximumAutomaticUserPromptTokens
 
         let results = await withTaskGroup(of: ServiceResult?.self) { group in
             // Collect service IDs from both live adapters and DB (covers adapters that failed to start).
@@ -548,36 +619,29 @@ final class BriefEngine {
                             let totalMsgs = result.conversations.reduce(0) { $0 + $1.messages.count }
                             print("[BriefEngine] \(serviceID): adapter returned \(result.conversations.count) conversations, \(totalMsgs) messages")
                             newlyStored = try self.repository.storeMessages(from: result, service: serviceID)
-                            // Fetch ALL messages in the window PLUS the 24h context window that
-                            // buildConversationBlock prepends before the first new message.
-                            // Without this, the LLM can reference context message IDs that are
-                            // outside 'since' and decodeAndValidateBrief rejects the whole service.
-                            let sourceSince = since.addingTimeInterval(-self.recentContextWindow)
-                            sourceMessages = try self.repository.fetchMessages(service: serviceID, since: sourceSince)
                             // Only show the LLM messages that haven't been briefed yet.
-                            // Already-briefed messages become recentContext via buildConversationBlock;
-                            // showing them as "new" causes the LLM to re-create the same cards.
-                            let briefedIDs = Set(sourceMessages.filter { $0.briefId != nil }.map(\.messageId))
+                            // Recent context is loaded separately by fetchBriefPromptData.
+                            let unattachedIDs = Set(newlyStored.map(\.messageId))
                             let filteredConvs = result.conversations.compactMap { conv -> AdapterConversation? in
-                                let fresh = conv.messages.filter { !briefedIDs.contains($0.id) }
+                                let fresh = conv.messages.filter { unattachedIDs.contains($0.id) }
                                 guard !fresh.isEmpty else { return nil }
                                 return AdapterConversation(id: conv.id, name: conv.name, type: conv.type, messages: fresh)
                             }
                             guard !filteredConvs.isEmpty else { return nil }
+                            sourceMessages = newlyStored
                             conversations = filteredConvs
                         } else {
                             // Adapter unavailable or empty — use messages already stored by the poll loop.
-                            let sourceSince = since.addingTimeInterval(-self.recentContextWindow)
-                            let dbMessages = try self.repository.fetchMessages(service: serviceID, since: sourceSince)
-                            // Only attach unattached messages; already-briefed ones are included
-                            // in sourceMessages for validation but must not have their briefId
-                            // reassigned to this new brief.
-                            let unattached = dbMessages.filter { $0.timestamp > since && $0.briefId == nil }
+                            let unattached = try self.repository.fetchUnattachedMessages(
+                                service: serviceID,
+                                since: since,
+                                limit: maximumManualCandidateMessages
+                            )
                             let dbCount = unattached.count
                             print("[BriefEngine] \(serviceID): using DB fallback, \(dbCount) unattached messages in window (adapter: \(adapterResult == nil ? "nil" : "empty"))")
                             guard !unattached.isEmpty else { return nil }
                             newlyStored = unattached
-                            sourceMessages = dbMessages
+                            sourceMessages = unattached
                             // Build conversations from unattached messages only so the LLM sees
                             // only what hasn't been briefed yet.
                             var byConv: [String: [Message]] = [:]
@@ -598,21 +662,114 @@ final class BriefEngine {
                         // any text reaches the prompt. Their newly-stored messages are filtered out
                         // of the attach set below so they stay unattached rather than being lost.
                         let isCloud = client2.isCloud
-                        let excludedIDs = Set(conversations.map { $0.id }).filter {
-                            self.isExcludedByPrivacy(service: serviceID, conversationId: $0, clientIsCloud: isCloud)
+                        let conversationKeys = conversations.map {
+                            BriefConversationKey(service: serviceID, conversationID: $0.id)
                         }
-                        let allowedConversations = conversations.filter { !excludedIDs.contains($0.id) }
+                        let privacyContexts = try self.repository.fetchConversationContexts(for: conversationKeys)
+                        let excludedIDs = Set(conversations.map { $0.id }).filter { conversationID in
+                            let key = BriefConversationKey(service: serviceID, conversationID: conversationID)
+                            return self.isExcludedByPrivacy(
+                                context: privacyContexts[key],
+                                clientIsCloud: isCloud
+                            )
+                        }
+                        let allowedConversations = conversations
+                            .filter { !excludedIDs.contains($0.id) }
+                            .sorted { lhs, rhs in
+                                let lhsDate = lhs.messages.map(\.timestamp).min() ?? .distantFuture
+                                let rhsDate = rhs.messages.map(\.timestamp).min() ?? .distantFuture
+                                return lhsDate == rhsDate ? lhs.id < rhs.id : lhsDate < rhsDate
+                            }
+                            .prefix(maximumManualConversations)
                         guard !allowedConversations.isEmpty else { return nil }
-                        let attachableNewlyStored = newlyStored.filter { !excludedIDs.contains($0.conversationId) }
 
                         let recent = try self.repository.recentEpisodicSummaries(service: serviceID, limit: 3)
                         let corrections = (try? self.repository.fetchRecentPriorityCorrections(limit: 6)) ?? []
                         let correctionTuples = corrections.map {
                             (headline: $0.cardHeadline, llmPriority: $0.llmPriority, userPriority: $0.userPriority)
                         }
-                        let contexts = Set(allowedConversations.map { $0.id }).compactMap {
-                            try? self.repository.fetchConversationContext(service: serviceID, conversationId: $0)
+
+                        let promptRequests = allowedConversations.compactMap { conversation -> BriefPromptRequest? in
+                            guard let firstDate = conversation.messages.map(\.timestamp).min() else { return nil }
+                            return BriefPromptRequest(
+                                service: serviceID,
+                                conversationID: conversation.id,
+                                before: firstDate,
+                                since: firstDate.addingTimeInterval(-self.recentContextWindow),
+                                recentMessageLimit: self.maxRecentContextMessages
+                            )
                         }
+                        let promptData = try self.repository.fetchBriefPromptData(for: promptRequests)
+                        let sourceMessagesByID = Dictionary(
+                            sourceMessages.map { ($0.messageId, $0) },
+                            uniquingKeysWith: { first, _ in first }
+                        )
+
+                        var conversationBlocks: [String] = []
+                        var promptedNewMessages: [Message] = []
+                        var allPromptMessages: [Message] = []
+                        var promptedKeys: [BriefConversationKey] = []
+                        let contextBudgetPerConversation = manualContextTokenBudget
+                            / max(1, allowedConversations.count)
+                        for conv in allowedConversations {
+                            let sorted = conv.messages.sorted { $0.timestamp < $1.timestamp }
+                            let capped = TokenEstimator.selectWithinBudget(
+                                sorted, tokenBudget: self.perConversationTokenBudget, text: \.text)
+                            guard !capped.isEmpty else { continue }
+                            let omitted = sorted.count - capped.count
+                            let key = BriefConversationKey(service: serviceID, conversationID: conv.id)
+                            let newMessages = capped.map { adapterMessage in
+                                sourceMessagesByID[adapterMessage.id] ?? Message(
+                                    id: nil,
+                                    briefId: nil,
+                                    service: serviceID,
+                                    conversationId: conv.id,
+                                    conversationName: conv.name,
+                                    messageId: adapterMessage.id,
+                                    sender: adapterMessage.sender,
+                                    text: adapterMessage.text,
+                                    timestamp: adapterMessage.timestamp,
+                                    isSent: adapterMessage.isFromMe
+                                )
+                            }.map {
+                                self.boundedPromptMessage($0, tokenBudget: self.perConversationTokenBudget)
+                            }
+                            let contextMessages = TokenEstimator.selectWithinBudget(
+                                promptData.recentMessages[key] ?? [],
+                                tokenBudget: contextBudgetPerConversation,
+                                text: \.text
+                            ).map {
+                                self.boundedPromptMessage($0, tokenBudget: contextBudgetPerConversation)
+                            }
+                            let block = try self.buildConversationBlock(
+                                service: serviceID,
+                                conversationID: conv.id,
+                                conversationTitle: conv.name,
+                                newMessages: newMessages,
+                                omittedNewMessageCount: omitted,
+                                recentContextMessages: contextMessages,
+                                metadataCharacterLimit: manualMetadataCharacterLimit,
+                                promptMetadata: ConversationPromptMetadata(
+                                    context: promptData.contexts[key],
+                                    state: promptData.states[key],
+                                    previousCard: promptData.previousCards[key]
+                                ),
+                                dateFormatter: dateFormatter,
+                                senderNameResolver: { $0 }
+                            )
+                            let candidateThread = (conversationBlocks + [block]).joined(separator: "\n\n")
+                            guard TokenEstimator.estimate(candidateThread) <= maximumManualUserPromptTokens else {
+                                break
+                            }
+                            conversationBlocks.append(block)
+                            promptedNewMessages.append(contentsOf: newMessages)
+                            allPromptMessages.append(contentsOf: contextMessages)
+                            allPromptMessages.append(contentsOf: newMessages)
+                            promptedKeys.append(key)
+                        }
+                        let threadText = conversationBlocks.joined(separator: "\n\n")
+                        guard !threadText.isEmpty else { return nil }
+                        let contexts = promptedKeys.compactMap { promptData.contexts[$0] }
                         let systemPrompt = PromptBuilder.build(
                             mode: .summarizer,
                             basePrompt: basePrompt2,
@@ -624,41 +781,6 @@ final class BriefEngine {
                             briefLanguage: briefLanguage2
                         )
 
-                        var conversationBlocks: [String] = []
-                        var msgCount = 0
-                        for conv in allowedConversations {
-                            let sorted = conv.messages.sorted { $0.timestamp < $1.timestamp }
-                            let capped = TokenEstimator.selectWithinBudget(
-                                sorted, tokenBudget: self.perConversationTokenBudget, text: \.text)
-                            let omitted = sorted.count - capped.count
-                            let block = try self.buildConversationBlock(
-                                service: serviceID,
-                                conversationID: conv.id,
-                                conversationTitle: conv.name,
-                                newMessages: capped.map {
-                                    Message(
-                                        id: nil,
-                                        briefId: nil,
-                                        service: serviceID,
-                                        conversationId: conv.id,
-                                        conversationName: conv.name,
-                                        messageId: $0.id,
-                                        sender: $0.sender,
-                                        text: $0.text,
-                                        timestamp: $0.timestamp,
-                                        isSent: $0.isFromMe
-                                    )
-                                },
-                                omittedNewMessageCount: omitted,
-                                dateFormatter: dateFormatter,
-                                senderNameResolver: { $0 }
-                            )
-                            conversationBlocks.append(block)
-                            msgCount += sorted.count
-                        }
-                        let threadText = conversationBlocks.joined(separator: "\n\n")
-                        guard !threadText.isEmpty else { return nil }
-
                         let response = try await client2.complete(
                             model: model2,
                             messages: [
@@ -669,13 +791,28 @@ final class BriefEngine {
                         )
 
                         do {
-                            let parsed = try self.decodeAndValidateBrief(response.text, service: serviceID, sourceMessages: sourceMessages)
+                            let parsed = try self.decodeAndValidateBrief(
+                                response.text,
+                                service: serviceID,
+                                sourceMessages: allPromptMessages
+                            )
+                            let coveredConversations = Set(parsed.cards.map(\.conversationId))
+                            let promptedCoveredIDs = Set(promptedNewMessages.compactMap { message -> String? in
+                                coveredConversations.contains(message.conversationId) ? message.messageId : nil
+                            })
+                            let succeededMessages = newlyStored.filter {
+                                promptedCoveredIDs.contains($0.messageId)
+                            }
                             return ServiceResult(
                                 service: serviceID,
                                 cards: parsed.cards,
-                                stats: (parsed.totalMessages ?? msgCount, parsed.totalThreads ?? 0, parsed.totalPeople ?? 0),
-                                sourceMessages: sourceMessages,
-                                newlyStored: attachableNewlyStored,
+                                stats: (
+                                    succeededMessages.count,
+                                    coveredConversations.count,
+                                    Set(succeededMessages.map(\.sender)).count
+                                ),
+                                sourceMessages: allPromptMessages,
+                                newlyStored: succeededMessages,
                                 success: true
                             )
                         } catch {
@@ -899,7 +1036,8 @@ final class BriefEngine {
 
     private func persistConversationStates(
         _ cards: [BriefCard],
-        sourceMessagesByService: [String: [String: Message]]
+        sourceMessagesByService: [String: [String: Message]],
+        existingStates suppliedStates: [BriefConversationKey: ConversationState]? = nil
     ) throws {
         let now = Date()
         // Group cards by conversation. The LLM is instructed to emit one card per
@@ -910,6 +1048,13 @@ final class BriefEngine {
             grouping: cards,
             by: { "\($0.service)|\($0.conversationId)" }
         )
+        let conversationKeys = grouped.values.compactMap { cards -> BriefConversationKey? in
+            guard let card = cards.first else { return nil }
+            return BriefConversationKey(service: card.service, conversationID: card.conversationId)
+        }
+        let existingStates = try suppliedStates
+            ?? repository.fetchConversationStates(for: conversationKeys)
+        var statesToPersist: [ConversationState] = []
         for (_, convCards) in grouped {
             guard let firstCard = convCards.first else { continue }
             let service = firstCard.service
@@ -921,7 +1066,9 @@ final class BriefEngine {
                 .sorted(by: messageSortAscending)
             let latestMessageID = conversationMessages.last?.messageId
             let participants = Array(Set(conversationMessages.map { $0.sender })).sorted()
-            let existing = try repository.fetchConversationState(service: service, conversationID: convId)
+            let existing = existingStates[
+                BriefConversationKey(service: service, conversationID: convId)
+            ]
 
             // Merge action items from all cards, preserving order and deduplicating.
             var allActionItems: [String] = []
@@ -967,8 +1114,9 @@ final class BriefEngine {
                 sourceMessageIds: try encodeStringArray(allSourceIDs),
                 updatedAt: now
             )
-            try repository.upsertConversationState(state)
+            statesToPersist.append(state)
         }
+        try repository.upsertConversationStates(statesToPersist)
     }
 
     private nonisolated func priorityRank(_ priority: String) -> Int {
@@ -980,8 +1128,9 @@ final class BriefEngine {
         }
     }
 
-    /// Selects a bounded, oldest-first input slice. Only selected rows enter a
-    /// new durable job, so every row owned by that job is present in its prompt.
+    /// Selects a bounded input slice, keeping the newest messages that fit in
+    /// each included conversation. Only selected rows enter a durable job, so
+    /// every row owned by that job is present in its prompt.
     private func selectAutomaticJobMessages(_ messages: [Message]) -> [Message] {
         var selected: [Message] = []
         let byService = Dictionary(grouping: messages, by: \.service)
@@ -1005,7 +1154,7 @@ final class BriefEngine {
                     .sorted(by: messageSortAscending)
                 var conversationTokens = 0
                 var conversationSelection: [Message] = []
-                for message in conversationMessages {
+                for message in conversationMessages.reversed() {
                     guard selected.count + conversationSelection.count < Self.maximumAutomaticJobMessages else { break }
                     let cost = TokenEstimator.estimate(message.text)
                     let fitsConversation = conversationTokens + cost <= perConversationTokenBudget
@@ -1025,7 +1174,7 @@ final class BriefEngine {
                 }
 
                 guard !conversationSelection.isEmpty else { break }
-                selected.append(contentsOf: conversationSelection)
+                selected.append(contentsOf: conversationSelection.reversed())
                 serviceTokens += conversationTokens
                 selectedConversations += 1
             }
@@ -1034,14 +1183,12 @@ final class BriefEngine {
         return selected.sorted(by: messageSortAscending)
     }
 
-    /// Per-conversation privacy gate shared by both brief paths. A conversation is
-    /// excluded from the brief — its message text never reaches the LLM — when it is
-    /// marked never_draft (no LLM ever) or local_only while the client is a cloud
-    /// provider. Mirrors CommitmentDeriver.derive and AgentEngine.proposeReply.
-    private nonisolated func isExcludedByPrivacy(service: String, conversationId: String, clientIsCloud: Bool) -> Bool {
-        let ctx = (try? repository.fetchConversationContext(service: service, conversationId: conversationId)) ?? nil
-        if ctx?.privacyOverride == "never_draft" { return true }
-        if ctx?.privacyOverride == "local_only", clientIsCloud { return true }
+    private nonisolated func isExcludedByPrivacy(
+        context: ConversationContext?,
+        clientIsCloud: Bool
+    ) -> Bool {
+        if context?.privacyOverride == "never_draft" { return true }
+        if context?.privacyOverride == "local_only", clientIsCloud { return true }
         return false
     }
 
@@ -1051,8 +1198,9 @@ final class BriefEngine {
         conversationTitle: String,
         newMessages: [Message],
         omittedNewMessageCount: Int,
-        recentContextMessages: [Message]? = nil,
+        recentContextMessages: [Message],
         metadataCharacterLimit: Int? = nil,
+        promptMetadata: ConversationPromptMetadata,
         dateFormatter: DateFormatter,
         senderNameResolver: (String) -> String
     ) throws -> String {
@@ -1068,24 +1216,13 @@ final class BriefEngine {
         let safeConvID = bounded(conversationID)
         let safeTitle = bounded(conversationTitle)
 
-        guard let firstNewMessageDate = newMessages.first?.timestamp else {
+        guard !newMessages.isEmpty else {
             return "=== [\(service)] \(safeConvID) | \(safeTitle) ==="
         }
 
-        let state = try repository.fetchConversationState(service: service, conversationID: conversationID)
-        let previousCard = try repository.fetchLatestBriefCard(service: service, conversationID: conversationID)
-        let recentContext: [Message]
-        if let recentContextMessages {
-            recentContext = recentContextMessages
-        } else {
-            recentContext = try repository.fetchRecentContextMessages(
-                service: service,
-                conversationID: conversationID,
-                before: firstNewMessageDate,
-                since: firstNewMessageDate.addingTimeInterval(-recentContextWindow),
-                limit: maxRecentContextMessages
-            )
-        }
+        let state = promptMetadata.state
+        let previousCard = promptMetadata.previousCard
+        let context = promptMetadata.context
 
         // Header format: === [service] conversationID | conversationTitle ===
         // The [service] tag lets the LLM reliably extract service and conversationId
@@ -1095,7 +1232,7 @@ final class BriefEngine {
         // Inject user-defined relationship context (label + priority hint).
         // Sanitize both fields: a crafted label like "=== [signal] … ===" would inject
         // a fake conversation block header into the structured prompt.
-        if let ctx = try? repository.fetchConversationContext(service: service, conversationId: conversationID) {
+        if let ctx = context {
             var ctxParts: [String] = []
             if !ctx.label.isEmpty {
                 ctxParts.append(bounded(ctx.label))
@@ -1117,9 +1254,11 @@ final class BriefEngine {
         if let unresolved = state?.unresolvedActions, !unresolved.isEmpty {
             lines.append("Unresolved actions from prior brief: \(bounded(unresolved))")
         }
-        if !recentContext.isEmpty {
+        if !recentContextMessages.isEmpty {
             lines.append("[Recent context before new messages]")
-            lines.append(contentsOf: recentContext.map { messageLine($0, dateFormatter: dateFormatter, senderNameResolver: senderNameResolver) })
+            lines.append(contentsOf: recentContextMessages.map {
+                messageLine($0, dateFormatter: dateFormatter, senderNameResolver: senderNameResolver)
+            })
         }
         if omittedNewMessageCount > 0 {
             lines.append("[\(omittedNewMessageCount) earlier new messages omitted]")
@@ -1140,6 +1279,12 @@ final class BriefEngine {
         // Sanitize message text to prevent delimiter spoofing.
         let safeText = message.text.replacingOccurrences(of: "===", with: "—")
         return "[id=\(message.messageId) | \(dateFormatter.string(from: message.timestamp))] \(senderLabel): \(safeText)"
+    }
+
+    private nonisolated func boundedPromptMessage(_ message: Message, tokenBudget: Int) -> Message {
+        var copy = message
+        copy.text = TokenEstimator.truncated(message.text, toTokenBudget: tokenBudget)
+        return copy
     }
 
     private nonisolated func messageSortAscending(_ lhs: Message, _ rhs: Message) -> Bool {
@@ -1208,9 +1353,9 @@ final class BriefEngine {
     // MARK: - Contact Profile Updates
 
     private func updateContactProfiles(from cards: [BriefCard]) {
-        for card in cards {
+        let profiles = cards.map { card in
             let displayName = card.conversationTitle ?? card.conversationId
-            let profile = ContactProfile(
+            return ContactProfile(
                 id: nil,
                 service: card.service,
                 conversationId: card.conversationId,
@@ -1220,7 +1365,9 @@ final class BriefEngine {
                 pendingAsk: card.actionItems.first,
                 updatedAt: Date()
             )
-            try? database.dbQueue.write { db in
+        }
+        try? database.dbQueue.write { db in
+            for profile in profiles {
                 try profile.upsert(db)
             }
         }

@@ -88,6 +88,19 @@ final class DatabaseIntegrityTests: XCTestCase {
         }
     }
 
+    func testBriefPromptHotPathIndexesExist() throws {
+        let db = try makeDB()
+        let indexes = try db.dbQueue.read { database in
+            Set(try String.fetchAll(
+                database,
+                sql: "SELECT name FROM sqlite_master WHERE type = 'index'"
+            ))
+        }
+
+        XCTAssertTrue(indexes.contains("messages_on_briefId_isSent_service_timestamp"))
+        XCTAssertTrue(indexes.contains("briefCards_on_service_conversation_createdAt"))
+    }
+
     // MARK: - Duplicate message constraint
 
     func testDuplicateServiceMessageIdIsRejectedByUniqueConstraint() throws {

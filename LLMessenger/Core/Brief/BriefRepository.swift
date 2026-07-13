@@ -13,6 +13,30 @@ enum BriefRepositoryError: Error, LocalizedError {
     }
 }
 
+struct BriefConversationKey: Hashable {
+    var service: String
+    var conversationID: String
+}
+
+struct BriefPromptRequest {
+    var service: String
+    var conversationID: String
+    var before: Date
+    var since: Date
+    var recentMessageLimit: Int
+
+    var key: BriefConversationKey {
+        BriefConversationKey(service: service, conversationID: conversationID)
+    }
+}
+
+struct BriefPromptData {
+    var contexts: [BriefConversationKey: ConversationContext]
+    var states: [BriefConversationKey: ConversationState]
+    var previousCards: [BriefConversationKey: BriefCardRecord]
+    var recentMessages: [BriefConversationKey: [Message]]
+}
+
 struct BriefRepository {
     let database: AppDatabase
 
@@ -42,6 +66,19 @@ struct BriefRepository {
                 request = request.limit(limit)
             }
             return try request.fetchAll(db)
+        }
+    }
+
+    func fetchUnattachedMessages(service: String, since: Date, limit: Int) throws -> [Message] {
+        try database.dbQueue.read { db in
+            try Message
+                .filter(Column("briefId") == nil)
+                .filter(Column("isSent") == false)
+                .filter(Column("service") == service)
+                .filter(Column("timestamp") > since)
+                .order(Column("timestamp").asc)
+                .limit(max(1, limit))
+                .fetchAll(db)
         }
     }
 
@@ -548,6 +585,118 @@ struct BriefRepository {
         }
     }
 
+    /// Loads all conversation metadata needed to build brief prompts with a
+    /// fixed number of SQL statements. Automatic jobs cap requests at 500, well
+    /// below SQLite's host-parameter limit on supported macOS releases.
+    func fetchBriefPromptData(for requests: [BriefPromptRequest]) throws -> BriefPromptData {
+        let requestsByKey = Dictionary(requests.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        let uniqueRequests = Array(requestsByKey.values)
+        guard !uniqueRequests.isEmpty else {
+            return BriefPromptData(contexts: [:], states: [:], previousCards: [:], recentMessages: [:])
+        }
+
+        return try database.dbQueue.read { db in
+            let pairValues = uniqueRequests.map { _ in "(?, ?)" }.joined(separator: ", ")
+            let pairArguments = StatementArguments(uniqueRequests.flatMap { request -> [String] in
+                [request.service, request.conversationID]
+            })
+
+            let contexts = try ConversationContext.fetchAll(
+                db,
+                sql: """
+                    WITH requested(service, conversationId) AS (VALUES \(pairValues))
+                    SELECT contexts.*
+                    FROM conversationContexts contexts
+                    JOIN requested USING (service, conversationId)
+                    """,
+                arguments: pairArguments
+            )
+            let states = try ConversationState.fetchAll(
+                db,
+                sql: """
+                    WITH requested(service, conversationId) AS (VALUES \(pairValues))
+                    SELECT states.*
+                    FROM conversationState states
+                    JOIN requested USING (service, conversationId)
+                    """,
+                arguments: pairArguments
+            )
+            let previousCards = try BriefCardRecord.fetchAll(
+                db,
+                sql: """
+                    WITH requested(service, conversationId) AS (VALUES \(pairValues))
+                    SELECT * FROM (
+                        SELECT briefCards.*,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY service, conversationId
+                                   ORDER BY createdAt DESC
+                               ) AS promptRowNumber
+                        FROM briefCards
+                        JOIN requested USING (service, conversationId)
+                    )
+                    WHERE promptRowNumber = 1
+                    """,
+                arguments: pairArguments
+            )
+
+            let messageValues = uniqueRequests.map { _ in "(?, ?, ?, ?, ?)" }.joined(separator: ", ")
+            var messageArguments: [DatabaseValueConvertible] = []
+            for request in uniqueRequests {
+                messageArguments.append(request.service)
+                messageArguments.append(request.conversationID)
+                messageArguments.append(request.before)
+                messageArguments.append(request.since)
+                messageArguments.append(max(1, request.recentMessageLimit))
+            }
+            let recentMessages = try Message.fetchAll(
+                db,
+                sql: """
+                    WITH requested(service, conversationId, beforeDate, sinceDate, messageLimit) AS (
+                        VALUES \(messageValues)
+                    )
+                    SELECT * FROM (
+                        SELECT messages.*,
+                               requested.messageLimit AS promptMessageLimit,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY messages.service, messages.conversationId
+                                   ORDER BY messages.timestamp DESC
+                               ) AS promptRowNumber
+                        FROM messages
+                        JOIN requested USING (service, conversationId)
+                        WHERE messages.briefId IS NOT NULL
+                          AND messages.timestamp < requested.beforeDate
+                          AND messages.timestamp >= requested.sinceDate
+                    )
+                    WHERE promptRowNumber <= promptMessageLimit
+                    ORDER BY service, conversationId, timestamp ASC
+                    """,
+                arguments: StatementArguments(messageArguments)
+            )
+
+            let recentByKey = Dictionary(grouping: recentMessages) {
+                BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+            }.mapValues { messages in
+                let requestLimit = requestsByKey[
+                    BriefConversationKey(service: messages[0].service, conversationID: messages[0].conversationId)
+                ]?.recentMessageLimit ?? messages.count
+                return Array(messages.suffix(max(1, requestLimit)))
+            }
+
+            return BriefPromptData(
+                contexts: Dictionary(uniqueKeysWithValues: contexts.map {
+                    (BriefConversationKey(service: $0.service, conversationID: $0.conversationId), $0)
+                }),
+                states: Dictionary(uniqueKeysWithValues: states.map {
+                    (BriefConversationKey(service: $0.service, conversationID: $0.conversationId), $0)
+                }),
+                previousCards: Dictionary(uniqueKeysWithValues: previousCards.map {
+                    (BriefConversationKey(service: $0.service, conversationID: $0.conversationId), $0)
+                }),
+                recentMessages: recentByKey
+            )
+        }
+    }
+
     func fetchAllBriefs() throws -> [Brief] {
         try database.dbQueue.read { db in
             try Brief
@@ -732,12 +881,45 @@ struct BriefRepository {
         }
     }
 
+    func upsertConversationStates(_ states: [ConversationState]) throws {
+        guard !states.isEmpty else { return }
+        try database.dbQueue.write { db in
+            for state in states {
+                try state.save(db)
+            }
+        }
+    }
+
     func fetchConversationState(service: String, conversationID: String) throws -> ConversationState? {
         try database.dbQueue.read { db in
             try ConversationState
                 .filter(Column("service") == service)
                 .filter(Column("conversationId") == conversationID)
                 .fetchOne(db)
+        }
+    }
+
+    func fetchConversationStates(
+        for keys: [BriefConversationKey]
+    ) throws -> [BriefConversationKey: ConversationState] {
+        let uniqueKeys = Array(Set(keys))
+        guard !uniqueKeys.isEmpty else { return [:] }
+        return try database.dbQueue.read { db in
+            let values = uniqueKeys.map { _ in "(?, ?)" }.joined(separator: ", ")
+            let arguments = StatementArguments(uniqueKeys.flatMap { [$0.service, $0.conversationID] })
+            let states = try ConversationState.fetchAll(
+                db,
+                sql: """
+                    WITH requested(service, conversationId) AS (VALUES \(values))
+                    SELECT states.*
+                    FROM conversationState states
+                    JOIN requested USING (service, conversationId)
+                    """,
+                arguments: arguments
+            )
+            return Dictionary(uniqueKeysWithValues: states.map {
+                (BriefConversationKey(service: $0.service, conversationID: $0.conversationId), $0)
+            })
         }
     }
 
@@ -947,7 +1129,7 @@ struct BriefRepository {
     }
 
     func deleteConversationContext(service: String, conversationId: String) throws {
-        try database.dbQueue.write { db in
+        _ = try database.dbQueue.write { db in
             try ConversationContext
                 .filter(Column("service") == service && Column("conversationId") == conversationId)
                 .deleteAll(db)
@@ -961,25 +1143,32 @@ struct BriefRepository {
     }
 
     func fetchConversationContexts(for pairs: [(service: String, conversationId: String)]) throws -> [ConversationContext] {
-        let unique = Array(Set(pairs.map { "\($0.service)|\($0.conversationId)" }))
-        guard !unique.isEmpty else { return [] }
+        Array(try fetchConversationContexts(for: pairs.map {
+            BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+        }).values)
+    }
 
+    func fetchConversationContexts(
+        for keys: [BriefConversationKey]
+    ) throws -> [BriefConversationKey: ConversationContext] {
+        let uniqueKeys = Array(Set(keys))
+        guard !uniqueKeys.isEmpty else { return [:] }
         return try database.dbQueue.read { db in
-            var contexts: [ConversationContext] = []
-            for batchStart in stride(from: 0, to: unique.count, by: 250) {
-                let batch = Array(unique[batchStart..<min(batchStart + 250, unique.count)])
-                let placeholders = batch.map { _ in "(service = ? AND conversationId = ?)" }.joined(separator: " OR ")
-                let args = StatementArguments(batch.flatMap { key -> [String] in
-                    let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
-                    return [parts.first ?? "", parts.count > 1 ? parts[1] : ""]
-                })
-                contexts.append(contentsOf: try ConversationContext.fetchAll(
-                    db,
-                    sql: "SELECT * FROM conversationContexts WHERE \(placeholders)",
-                    arguments: args
-                ))
-            }
-            return contexts
+            let values = uniqueKeys.map { _ in "(?, ?)" }.joined(separator: ", ")
+            let arguments = StatementArguments(uniqueKeys.flatMap { [$0.service, $0.conversationID] })
+            let contexts = try ConversationContext.fetchAll(
+                db,
+                sql: """
+                    WITH requested(service, conversationId) AS (VALUES \(values))
+                    SELECT contexts.*
+                    FROM conversationContexts contexts
+                    JOIN requested USING (service, conversationId)
+                    """,
+                arguments: arguments
+            )
+            return Dictionary(uniqueKeysWithValues: contexts.map {
+                (BriefConversationKey(service: $0.service, conversationID: $0.conversationId), $0)
+            })
         }
     }
 

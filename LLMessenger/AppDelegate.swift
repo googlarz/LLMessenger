@@ -135,20 +135,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     do {
                         self.appState?.briefGenerationState = .summarizing
-                        let newID = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
-                        if let id = newID {
+                        let newIDs = try await self.briefEngine?.processNewMessageBatch(
+                            adapters: self.appState?.adapters ?? [:]
+                        ) ?? []
+                        if let id = newIDs.last {
                             self.appState?.lastError = nil
                             self.appState?.selectedBriefID = id
                             let brief = try? self.appState?.repository.fetchBrief(id: id)
-                            // Notification firewall: routine briefs stay silent;
-                            // only high-priority items earn an interruption.
-                            let settingsRepo = SettingsRepository()
-                            if settingsRepo.loadFirewallEnabled() && self.highPriorityCardCount(brief: brief) == 0 {
-                                settingsRepo.incrementFirewallHeldBack(by: 1)
-                            } else {
-                                let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
-                                self.notificationManager?.post(briefID: id, title: title, body: body)
-                            }
                             let cards: [BriefCardRecord]
                             if let dbQueue = self.database?.dbQueue {
                                 cards = (try? await dbQueue.read { db in
@@ -159,7 +152,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             }
                             WidgetDataProvider.write(briefID: id, cards: cards, openingSummary: brief?.openingSummary)
                         }
-                        self.appState?.briefGenerationState = newID == nil ? .noNewMessages : .complete
+                        for id in newIDs {
+                            let brief = try? self.appState?.repository.fetchBrief(id: id)
+                            // Notification firewall: routine briefs stay silent;
+                            // only high-priority items earn an interruption.
+                            let settingsRepo = SettingsRepository()
+                            if settingsRepo.loadFirewallEnabled() && self.highPriorityCardCount(brief: brief) == 0 {
+                                settingsRepo.incrementFirewallHeldBack(by: 1)
+                            } else {
+                                let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
+                                self.notificationManager?.post(briefID: id, title: title, body: body)
+                            }
+                        }
+                        self.appState?.briefGenerationState = newIDs.isEmpty ? .noNewMessages : .complete
                     } catch {
                         self.appState?.lastError = error.localizedDescription
                         self.appState?.briefGenerationState = .failed
@@ -368,13 +373,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menuBarController?.setLoading(true)
                 self.appState?.briefGenerationState = .summarizing
                 do {
-                    let newID = try await self.briefEngine?.processNewMessages(adapters: self.appState?.adapters ?? [:])
+                    let newIDs = try await self.briefEngine?.processNewMessageBatch(
+                        adapters: self.appState?.adapters ?? [:]
+                    ) ?? []
                     self.appState?.lastError = nil
-                    self.appState?.briefGenerationState = newID == nil ? .noNewMessages : .complete
+                    self.appState?.briefGenerationState = newIDs.isEmpty ? .noNewMessages : .complete
                     self.appState?.refreshBriefs()
                     self.appState?.nextPollDate = self.pollEngine?.nextFireDate
                     self.menuBarController?.setLoading(false)
-                    if let id = newID {
+                    for id in newIDs {
                         let brief = try? self.appState?.repository.fetchBrief(id: id)
                         let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "New messages")
                         self.notificationManager?.post(briefID: id, title: title, body: body)
@@ -511,20 +518,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self, let engine = self.briefEngine, let state = self.appState else { return }
                 state.briefGenerationState = .summarizing
                 do {
-                    let newID = try await engine.processNewMessages(adapters: state.adapters)
-                    state.briefGenerationState = newID == nil ? .noNewMessages : .complete
+                    let newIDs = try await engine.processNewMessageBatch(adapters: state.adapters)
+                    state.briefGenerationState = newIDs.isEmpty ? .noNewMessages : .complete
                     state.refreshBriefs()
-                    if let id = newID {
+                    let settingsRepo = SettingsRepository()
+                    let heldBack = settingsRepo.loadFirewallHeldBack()
+                    for (index, id) in newIDs.enumerated() {
                         let brief = try? state.repository.fetchBrief(id: id)
                         let (title, body) = self.highPriorityNotification(brief: brief, defaultTitle: "Morning Brief")
                         // Surface what the firewall silenced since the last digest.
-                        let settingsRepo = SettingsRepository()
-                        let heldBack = settingsRepo.loadFirewallHeldBack()
-                        let digestBody = heldBack > 0
+                        let digestBody = heldBack > 0 && index == newIDs.count - 1
                             ? "\(body) · \(heldBack) routine update\(heldBack == 1 ? "" : "s") held back"
                             : body
-                        settingsRepo.resetFirewallHeldBack()
                         self.notificationManager?.post(briefID: id, title: title, body: digestBody)
+                    }
+                    if !newIDs.isEmpty {
+                        settingsRepo.resetFirewallHeldBack()
                     }
                 } catch {
                     state.briefGenerationState = .failed

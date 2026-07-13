@@ -581,6 +581,18 @@ final class AppDatabase: @unchecked Sendable {
                 columns: ["briefId", "isSent", "timestamp"]
             )
         }
+        migrator.registerMigration("v32_brief_prompt_indexes") { db in
+            try db.create(
+                index: "messages_on_briefId_isSent_service_timestamp",
+                on: "messages",
+                columns: ["briefId", "isSent", "service", "timestamp"]
+            )
+            try db.create(
+                index: "briefCards_on_service_conversation_createdAt",
+                on: "briefCards",
+                columns: ["service", "conversationId", "createdAt"]
+            )
+        }
         try migrator.migrate(dbQueue)
 
         // A process cannot still own a running job after this database has been
