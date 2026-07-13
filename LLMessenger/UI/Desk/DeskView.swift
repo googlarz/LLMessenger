@@ -1,8 +1,8 @@
 // LLMessenger/UI/Desk/DeskView.swift
 //
-// Persistent left-panel sidebar: Act (primary) / Digest / Activity.
-// Act is the default — it merges agent proposals + owed replies.
-// Digest lists the brief archive. Activity shows the audit trail.
+// Persistent navigation rail: Act (primary) / Digests / Activity. Each selection
+// drives the entire main content area (see ContentView) — the rail itself carries
+// no content of its own, matching the Mail/Notes/Finder sidebar-selection pattern.
 
 import SwiftUI
 
@@ -18,82 +18,71 @@ enum DeskLayout {
     }
 }
 
-struct DeskView: View {
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var chatViewModel: ChatViewModel
-    let layout: DeskLayout
-    @State private var selectedTab: DeskTab
+enum AppSection: String, CaseIterable {
+    case act
+    case digests
+    case activity
 
-    init(layout: DeskLayout = .regular, selectedTab: DeskTab = .act) {
-        self.layout = layout
-        _selectedTab = State(initialValue: selectedTab)
+    var label: String {
+        switch self {
+        case .act: return "Act"
+        case .digests: return "Digests"
+        case .activity: return "Activity"
+        }
     }
 
-    enum DeskTab: String, CaseIterable {
-        case act      = "Act"
-        case digest   = "Digest"
-        case activity = "Activity"
+    var icon: String {
+        switch self {
+        case .act: return "bolt.fill"
+        case .digests: return "tray.full.fill"
+        case .activity: return "clock.arrow.circlepath"
+        }
+    }
+
+    var helpText: String {
+        switch self {
+        case .act: return "What needs you now."
+        case .digests: return "What happened in your messages."
+        case .activity: return "What changed or was sent."
+        }
+    }
+}
+
+struct DeskView: View {
+    @EnvironmentObject var appState: AppState
+    @Binding var selectedTab: AppSection
+
+    init(selectedTab: Binding<AppSection> = .constant(.act)) {
+        self._selectedTab = selectedTab
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if appState.isDemoTransitioning {
-                DemoTransitionBanner()
-                Rule()
-            } else if appState.hasDelegatedLanes {
-                DelegationKillSwitchBanner()
-                Rule()
-            }
-
-            tabBar
-            Rule()
-
-            Group {
-                switch selectedTab {
-                case .act:
-                    VStack(spacing: 0) {
-                        // Current work belongs to Act. It should not crowd the archive or audit log.
-                        ToDoStripView(layout: layout)
-                        ActFeedView(layout: layout)
-                    }
-                case .digest:
-                    BriefListView()
-                case .activity:
-                    ActivityView()
-                }
-            }
-            .id(selectedTab)
-            .transition(.opacity)
-        }
-        .onAppear { appState.refreshTasks() }
-    }
-
-    private var tabBar: some View {
-        HStack(spacing: 12) {
-            ForEach(DeskTab.allCases, id: \.self) { tab in
-                DeskTabButton(
-                    tab: tab,
-                    isSelected: selectedTab == tab,
-                    badge: badge(for: tab),
-                    keyEquivalent: keyForTab(tab)
+        VStack(spacing: 2) {
+            ForEach(AppSection.allCases, id: \.self) { section in
+                DeskRailButton(
+                    section: section,
+                    isSelected: selectedTab == section,
+                    badge: badge(for: section),
+                    keyEquivalent: keyForSection(section)
                 ) {
-                    withAnimation(Theme.quick) { selectedTab = tab }
+                    withAnimation(Theme.quick) { selectedTab = section }
                 }
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, layout.gutter)
-        .padding(.top, 12)
-        .padding(.bottom, 0)
-        .background(Theme.sidebar)
+        .padding(.horizontal, 10)
+        .padding(.top, 14)
+        .onAppear { appState.refreshTasks() }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Sidebar")
     }
 
-    private func badge(for tab: DeskTab) -> String? {
-        switch tab {
+    private func badge(for section: AppSection) -> String? {
+        switch section {
         case .act:
             let count = appState.attentionProjection.actBadgeCount
             return count > 0 ? "\(count)" : nil
-        case .digest:
+        case .digests:
             let cal = Calendar.current
             let todayCount = appState.briefs.filter { cal.isDateInToday($0.createdAt) }.count
             return todayCount > 0 ? "\(todayCount)" : nil
@@ -102,28 +91,17 @@ struct DeskView: View {
         }
     }
 
-    private func keyForTab(_ tab: DeskTab) -> KeyEquivalent {
-        switch tab {
+    private func keyForSection(_ section: AppSection) -> KeyEquivalent {
+        switch section {
         case .act:      return "1"
-        case .digest:   return "2"
+        case .digests:  return "2"
         case .activity: return "3"
         }
     }
 }
 
-extension DeskView.DeskTab {
-    var helpText: String {
-        switch self {
-        case .act: return "What needs you now."
-        case .digest: return "What happened in your messages."
-        case .activity: return "What changed or was sent."
-        }
-    }
-
-}
-
-private struct DeskTabButton: View {
-    let tab: DeskView.DeskTab
+private struct DeskRailButton: View {
+    let section: AppSection
     let isSelected: Bool
     let badge: String?          // nil = no badge; non-nil = numeric count shown
     let keyEquivalent: KeyEquivalent
@@ -132,45 +110,57 @@ private struct DeskTabButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 6) {
-                HStack(spacing: 5) {
-                    Text(tab.rawValue.uppercased())
-                        .font(Theme.mono(10.5, weight: .semibold))
-                        .tracking(0.7)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .foregroundStyle(isSelected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary))
-
-                    if let badge {
-                        Text(badge)
-                            .font(Theme.mono(9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(
-                                Capsule().fill(isSelected ? Theme.signal : Theme.signal.opacity(0.7))
-                            )
-                    }
+            HStack(spacing: 8) {
+                Image(systemName: section.icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 16)
+                    .foregroundStyle(iconColor)
+                Text(section.label)
+                    .font(Theme.sans(12.5, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(textColor)
+                Spacer(minLength: 4)
+                if let badge {
+                    Text(badge)
+                        .font(Theme.mono(9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule().fill(isSelected ? Theme.signal : Theme.signal.opacity(0.7))
+                        )
                 }
-                .padding(.bottom, 8)
-
-                (isSelected ? Theme.textPrimary : (isHovered ? Theme.textTertiary : Color.clear))
-                    .frame(height: 1.5)
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .fill(isSelected ? Theme.surfaceHigh : (isHovered ? Theme.surfaceHigh.opacity(0.5) : Color.clear))
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .keyboardShortcut(keyEquivalent, modifiers: .command)
-        .help(tab.helpText)
-        .accessibilityHint(tab.helpText)
+        .help(section.helpText)
+        .accessibilityHint(section.helpText)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
+    }
+
+    private var iconColor: Color {
+        isSelected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary)
+    }
+
+    private var textColor: Color {
+        isSelected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary)
     }
 }
 
 // MARK: - Demo transition banner
 
 /// Shown for ~4 seconds while demo data is replaced by the first real sync.
-private struct DemoTransitionBanner: View {
+struct DemoTransitionBanner: View {
     var body: some View {
         HStack(spacing: 8) {
             ProgressView().scaleEffect(0.7).frame(width: 14)
@@ -191,7 +181,7 @@ private struct DemoTransitionBanner: View {
 
 /// Always-visible safety bar when at least one conversation has auto-send delegation.
 /// Lets the user pause all auto-sends in one tap without hunting through the menu bar.
-private struct DelegationKillSwitchBanner: View {
+struct DelegationKillSwitchBanner: View {
     @AppStorage(AgentDelegation.killSwitchKey) private var disabled = false
 
     var body: some View {

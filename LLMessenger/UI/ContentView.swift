@@ -4,11 +4,17 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var chatViewModel: ChatViewModel
-    // Desk panel (Act/Digest/Activity) — shown on the left alongside the brief.
-    @State private var deskCollapsed = false
+    // Sidebar rail + main content, persisted across launches.
+    @AppStorage("selectedSection") private var selectedSection: AppSection = .act
+    @AppStorage("sidebarCollapsed") private var deskCollapsed = false
     @State private var showMedia = false
     @State private var showShortcuts = false
     var onRetryService: ((String) -> Void)? = nil
+
+    /// Below this width, the sidebar rail auto-hides so the remaining columns
+    /// (e.g. digest archive + reader) get the room instead of everything squeezing.
+    private static let narrowWindowThreshold: CGFloat = 900
+    private static let railWidth: CGFloat = 190
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,14 +53,22 @@ struct ContentView: View {
                 Rule()
             }
 
+            if appState.isDemoTransitioning {
+                DemoTransitionBanner()
+                Rule()
+            } else if appState.hasDelegatedLanes {
+                DelegationKillSwitchBanner()
+                Rule()
+            }
+
             GeometryReader { proxy in
-                let layout = deskLayout(for: proxy.size.width)
-                let deskWidth = deskWidth(for: proxy.size.width, layout: layout)
+                let hideSidebar = deskCollapsed || proxy.size.width < Self.narrowWindowThreshold
                 HStack(spacing: 0) {
-                    // Persistent sidebar — Act, Digest archive, and Activity.
-                    if !deskCollapsed {
-                        DeskView(layout: layout)
-                            .frame(width: deskWidth)
+                    // Persistent navigation rail — Act, Digests, Activity. Content-free;
+                    // the selected section drives everything to its right.
+                    if !hideSidebar {
+                        DeskView(selectedTab: $selectedSection)
+                            .frame(width: Self.railWidth)
                             .background(Theme.sidebar)
                             .transition(.move(edge: .leading).combined(with: .opacity))
 
@@ -62,14 +76,8 @@ struct ContentView: View {
                             .transition(.opacity)
                     }
 
-                    // Main content — brief reader (always visible)
-                    if appState.selectedBrief != nil {
-                        ChatPanelView()
-                            .background(Theme.bg)
-                    } else {
-                        NoBriefPlaceholder(deskCollapsed: $deskCollapsed)
-                            .background(Theme.bg)
-                    }
+                    sectionContent(width: proxy.size.width)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     if showMedia {
                         Theme.border.frame(width: Theme.hairline)
@@ -88,8 +96,8 @@ struct ContentView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("LLMessenger main window")
         .ignoresSafeArea(.all, edges: .top)
-        // Scoped document shortcuts. J/K belongs to the Act feed while Desk is open;
-        // when Desk is hidden, the reader owns J/K for digest navigation.
+        // Scoped document shortcuts. J/K navigates digests only while the Digests
+        // section is open — Act owns its own selection via ActFeedView.
         .background {
             KeyboardShortcutMonitor(isEnabled: true) { event in
                 let key = event.normalizedKey
@@ -97,7 +105,7 @@ struct ContentView: View {
                     showShortcuts.toggle()
                     return true
                 }
-                guard deskCollapsed, event.hasNoCommandOptionControl else { return false }
+                guard selectedSection == .digests, event.hasNoCommandOptionControl else { return false }
                 if key == "j" {
                     navigateBriefs(offset: 1)
                     return true
@@ -116,6 +124,7 @@ struct ContentView: View {
         }
         .animation(Theme.spring, value: deskCollapsed)
         .animation(Theme.spring, value: showMedia)
+        .animation(Theme.spring, value: selectedSection)
         // Auto-select the latest brief the first time briefs arrive.
         .onChange(of: appState.briefs.count) { _, count in
             if appState.selectedBriefID == nil, count > 0 {
@@ -146,21 +155,42 @@ struct ContentView: View {
         withAnimation(Theme.quick) { appState.selectedBriefID = briefs[target].id }
     }
 
-    private func deskLayout(for width: CGFloat) -> DeskLayout {
-        width < 980 ? .compact : .regular
-    }
-
-    private func deskWidth(for width: CGFloat, layout: DeskLayout) -> CGFloat {
-        switch layout {
-        case .compact:
-            return min(300, max(272, width * 0.30))
-        case .regular:
-            return min(380, max(320, width * 0.28))
-        }
+    /// Middle column width for the Digests archive list (when Digests is selected).
+    private func archiveWidth(for width: CGFloat) -> CGFloat {
+        min(380, max(320, width * 0.28))
     }
 
     private func mediaWidth(for width: CGFloat) -> CGFloat {
         min(300, max(240, width * 0.22))
+    }
+
+    /// Routes the main content area to match the sidebar's selected section — the
+    /// fix for the core navigation bug: selection and content were previously
+    /// unrelated (the reader always showed regardless of which tab was active).
+    @ViewBuilder
+    private func sectionContent(width: CGFloat) -> some View {
+        switch selectedSection {
+        case .act:
+            ActWorkspaceView()
+                .background(Theme.bg)
+        case .digests:
+            HStack(spacing: 0) {
+                BriefListView()
+                    .frame(width: archiveWidth(for: width))
+                    .background(Theme.sidebar)
+                Theme.border.frame(width: Theme.hairline)
+                if appState.selectedBrief != nil {
+                    ChatPanelView()
+                        .background(Theme.bg)
+                } else {
+                    NoBriefPlaceholder()
+                        .background(Theme.bg)
+                }
+            }
+        case .activity:
+            ActivityView()
+                .background(Theme.bg)
+        }
     }
 }
 
@@ -168,7 +198,6 @@ struct ContentView: View {
 
 private struct NoBriefPlaceholder: View {
     @EnvironmentObject var appState: AppState
-    @Binding var deskCollapsed: Bool
 
     var body: some View {
         // First run (never had a brief) → an alive "preparing" skeleton that morphs into the
@@ -185,18 +214,11 @@ private struct NoBriefPlaceholder: View {
                 Text("Nothing open")
                     .font(Theme.display(22))
                     .foregroundStyle(Theme.textSecondary)
-                Text("Open a digest with J/K, ⌘[ / ⌘], or pick one from the inbox.")
+                Text("Open a digest with J/K, ⌘[ / ⌘], or pick one from the archive.")
                     .font(Theme.sans(12.5))
                     .foregroundStyle(Theme.textTertiary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 280)
-                if deskCollapsed {
-                    Button("Open inbox") {
-                        withAnimation(Theme.spring) { deskCollapsed = false }
-                    }
-                    .buttonStyle(PaperButtonStyle())
-                    .padding(.top, 4)
-                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

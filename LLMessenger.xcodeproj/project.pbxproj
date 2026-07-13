@@ -206,6 +206,7 @@
 		D38909CE1DF78A4D8B35A96A /* BriefEngineScalabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886FC08E8D7D2E253EB3B57A /* BriefEngineScalabilityTests.swift */; };
 		D3E2D898475FF1A5557529FB /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7132694084B04D0191F7CC /* KeychainStore.swift */; };
 		D49BA4B9E524B043E9C52A22 /* ConversationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 764C95853B55B31A7FDBCA54 /* ConversationState.swift */; };
+		D5BE7C49EE846FE54C95A595 /* ActWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FA265B0CB8860C10F546DFC /* ActWorkspaceView.swift */; };
 		D609CAF8C4BC8524218E0A75 /* OllamaClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62EF6B3B6345490B504E7D0C /* OllamaClientTests.swift */; };
 		D7440257CB16E1F273051C37 /* ContactDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D78D8C5FBB6C644B1FC0188C /* ContactDirectory.swift */; };
 		DDD9824CD60147EBF1967C48 /* CalendarActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A2D6A6C121F74FC1F43D4AF /* CalendarActionTests.swift */; };
@@ -399,6 +400,7 @@
 		7D0942C43F58EB4A94C42A00 /* PinBriefTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinBriefTests.swift; sourceTree = "<group>"; };
 		7F4D7FF728EC51F8B6275D4E /* LLMessengerWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LLMessengerWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7F5BB626620371FC45763894 /* ContextBiasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextBiasTests.swift; sourceTree = "<group>"; };
+		7FA265B0CB8860C10F546DFC /* ActWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActWorkspaceView.swift; sourceTree = "<group>"; };
 		7FF44075180AC57CB53A4859 /* ContextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextEditor.swift; sourceTree = "<group>"; };
 		806576F921F0C0A99AB00DC3 /* AutoLaunchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoLaunchManager.swift; sourceTree = "<group>"; };
 		81F98163F2B0DC06E29DF2EB /* LLMProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderTests.swift; sourceTree = "<group>"; };
@@ -691,6 +693,7 @@
 			isa = PBXGroup;
 			children = (
 				E9C4728BC854087743AC6F15 /* ActFeedView.swift */,
+				7FA265B0CB8860C10F546DFC /* ActWorkspaceView.swift */,
 				82F51082EA658ADA13BCA52B /* AttentionProjection.swift */,
 				61E60396E1F50C65B7337E04 /* CommandBar.swift */,
 				659D4E43E49E2A7C786664D1 /* CommitmentsView.swift */,
@@ -1224,6 +1227,7 @@
 			files = (
 				9B30345F5A5A20571E4BE12D /* AboutSettingsTab.swift in Sources */,
 				1F656903F16B668B1D56C644 /* ActFeedView.swift in Sources */,
+				D5BE7C49EE846FE54C95A595 /* ActWorkspaceView.swift in Sources */,
 				7B0DF6BFD9331018D7098753 /* ActionAuditLog.swift in Sources */,
 				7E863AF099CFA909875807EA /* ActivityView.swift in Sources */,
 				C89FD3096D3C59B89CC4AD8B /* AgentAction.swift in Sources */,

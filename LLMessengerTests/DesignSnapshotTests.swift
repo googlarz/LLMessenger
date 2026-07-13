@@ -285,6 +285,37 @@ final class DesignSnapshotTests: XCTestCase {
         try render(view, size: size, name: "compact-window")
     }
 
+    /// Digests section: rail + archive (middle column) + selected digest (detail
+    /// column) — the three-column layout from the navigation rebuild.
+    func testSnapshotDigestsSection() throws {
+        UserDefaults.standard.set(AppSection.digests.rawValue, forKey: "selectedSection")
+        defer { UserDefaults.standard.removeObject(forKey: "selectedSection") }
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        let view = ContentView()
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: 1180, height: 780)
+            .background(Theme.bg)
+        try render(view, size: NSSize(width: 1180, height: 780), name: "digests-section")
+    }
+
+    /// DoD gate: no clipping at 860x520, including the three-column Digests layout
+    /// where the sidebar rail should auto-collapse to leave archive + detail.
+    func testSnapshotCompactDigests() throws {
+        UserDefaults.standard.set(AppSection.digests.rawValue, forKey: "selectedSection")
+        defer { UserDefaults.standard.removeObject(forKey: "selectedSection") }
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        let size = NSSize(width: 860, height: 520)
+        let view = ContentView()
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: size.width, height: size.height)
+            .background(Theme.bg)
+        try render(view, size: size, name: "compact-digests")
+    }
+
     func testSnapshotSidebar() throws {
         let state = try makeFixtureState()
         let chat = state.makeChatViewModel()
@@ -339,11 +370,13 @@ final class DesignSnapshotTests: XCTestCase {
         try render(view, size: NSSize(width: 1180, height: 780), name: "empty-state")
     }
 
-    /// v2.1 headline: the Act surface — the agent's prepared action queue.
+    /// v2.1 headline: the Act surface — the agent's prepared action queue,
+    /// now full-width per the navigation rebuild (no longer squeezed beside
+    /// an unrelated digest reader).
     func testSnapshotAct() throws {
         let state = try makeFixtureState()
         let chat = state.makeChatViewModel()
-        let view = DeskView()
+        let view = ActWorkspaceView()
             .environmentObject(state)
             .environmentObject(chat)
             .frame(width: 760, height: 300)
@@ -351,12 +384,12 @@ final class DesignSnapshotTests: XCTestCase {
         try render(view, size: NSSize(width: 760, height: 300), name: "act")
     }
 
-    /// v2.0 headline: the Owed Replies surface inside the real Desk chrome —
-    /// "who's waiting on you?", ranked by who matters.
+    /// v2.0 headline: the Owed Replies surface — "who's waiting on you?", ranked
+    /// by who matters.
     func testSnapshotOwed() throws {
         let state = try makeFixtureState()
         let chat = state.makeChatViewModel()
-        let view = DeskView()
+        let view = ActWorkspaceView()
             .environmentObject(state)
             .environmentObject(chat)
             .frame(width: 760, height: 560)
@@ -368,12 +401,26 @@ final class DesignSnapshotTests: XCTestCase {
         let state = try makeFixtureState()
         let chat = state.makeChatViewModel()
         let size = NSSize(width: 360, height: 700)
-        let view = DeskView(selectedTab: .activity)
+        let view = ActivityView()
+            .environmentObject(state)
+            .environmentObject(chat)
+            .frame(width: size.width, height: size.height)
+            .background(Theme.bg)
+        try render(view, size: size, name: "activity")
+    }
+
+    /// The persistent navigation rail — content-free, drives the main content
+    /// area via selection (see ContentView.sectionContent).
+    func testSnapshotNavRail() throws {
+        let state = try makeFixtureState()
+        let chat = state.makeChatViewModel()
+        let size = NSSize(width: 190, height: 700)
+        let view = DeskView(selectedTab: .constant(.digests))
             .environmentObject(state)
             .environmentObject(chat)
             .frame(width: size.width, height: size.height)
             .background(Theme.sidebar)
-        try render(view, size: size, name: "activity")
+        try render(view, size: size, name: "nav-rail")
     }
 
     /// Launch-film frame renderer — NOT part of the normal suite (env-gated).
@@ -389,8 +436,8 @@ final class DesignSnapshotTests: XCTestCase {
         let size = NSSize(width: 820, height: 760)
         let state = try makeFixtureState()
         let chat = state.makeChatViewModel()
-        func desk() -> some View {
-            DeskView()
+        func actWorkspace() -> some View {
+            ActWorkspaceView()
                 .environmentObject(state)
                 .environmentObject(chat)
                 .frame(width: size.width, height: size.height)
@@ -398,7 +445,7 @@ final class DesignSnapshotTests: XCTestCase {
         }
 
         // Beat 1 — the queue, pending. (Two takes; assembly holds the shot.)
-        try render(desk(), size: size, name: "film-01-queue")
+        try render(actWorkspace(), size: size, name: "film-01-queue")
 
         // Beat 2 — the Coach reply is approved: staged with a 5s undo window.
         // Fixed scheduledAt + advancing wall clock = real draining frames.
@@ -407,7 +454,7 @@ final class DesignSnapshotTests: XCTestCase {
         state.agentActions[1].scheduledWindow = 5
         state.agentActions[1].scheduledAt = Date().addingTimeInterval(5.4)
         for i in 0..<8 {
-            try render(desk(), size: size, name: String(format: "film-02-countdown-%02d", i))
+            try render(actWorkspace(), size: size, name: String(format: "film-02-countdown-%02d", i))
         }
 
         // Beat 3 — UNDO: back to pending, nothing sent.
@@ -415,7 +462,7 @@ final class DesignSnapshotTests: XCTestCase {
         state.agentActions[1].scheduledAt = nil
         state.agentActions[1].scheduledKind = nil
         state.agentActions[1].scheduledWindow = nil
-        try render(desk(), size: size, name: "film-03-undone")
+        try render(actWorkspace(), size: size, name: "film-03-undone")
     }
 
     /// About tab incl. the in-app "What's new" release notes section.
