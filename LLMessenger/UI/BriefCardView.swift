@@ -63,6 +63,7 @@ struct BriefCardView: View {
 
     @State private var bodyExpanded = false
     @State private var evidenceExpanded = false
+    @State private var trustExpanded = false
     @State private var showLabelEditor = false
     @State private var showPriorityEditor = false
     @State private var labelEditText = ""
@@ -348,20 +349,6 @@ struct BriefCardView: View {
         } else if isHigh {
             chips.append(("Review needed", Theme.signal))
         }
-        if let reason = card.reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty {
-            chips.append((reason, Theme.textSecondary))
-        }
-        switch card.grounding {
-        case "context":
-            chips.append(("Uses prior context", Theme.standby))
-        case "inferred":
-            chips.append(("Inference", Theme.standby))
-        default:
-            break
-        }
-        if chips.isEmpty && !card.sourceMessageIds.isEmpty {
-            chips.append(("Directly sourced", Theme.textTertiary))
-        }
         chips.append((confidenceLabel.text, confidenceLabel.color))
         return chips
     }
@@ -456,14 +443,7 @@ struct BriefCardView: View {
             .padding(.top, 3)
         }
 
-        TrustExplanationView(
-            reason: trustReason,
-            sourceCount: card.sourceMessageIds.count,
-            quoteCount: card.quotes.count,
-            grounding: card.grounding,
-            confidenceText: confidenceText,
-            context: effectiveContext
-        )
+        trustDisclosure
 
         actionBar
             .padding(.top, 4)
@@ -497,6 +477,48 @@ struct BriefCardView: View {
 
     // MARK: - Action bar
 
+    private var trustDisclosure: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(Theme.spring) { trustExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.shield")
+                            .font(.system(size: 10, weight: .medium))
+                        Text("WHY THIS CARD")
+                            .font(Theme.mono(9.5, weight: .semibold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                            .rotationEffect(.degrees(trustExpanded ? 180 : 0))
+                    }
+                    .foregroundStyle(trustExpanded ? Theme.textSecondary : Theme.textTertiary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(trustExpanded ? "Hide why this card was included" : "Show why this card was included")
+                .accessibilityLabel("Why this card")
+                .accessibilityValue(trustExpanded ? "Expanded" : "Collapsed")
+                .accessibilityHint(trustExpanded ? "Hides trust details" : "Shows trust details")
+
+                Rule()
+            }
+
+            if trustExpanded {
+                TrustExplanationView(
+                    reason: trustReason,
+                    sourceCount: card.sourceMessageIds.count,
+                    quoteCount: card.quotes.count,
+                    grounding: card.grounding,
+                    confidenceText: confidenceText,
+                    context: effectiveContext
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.top, 4)
+    }
+
     private var actionBar: some View {
         BriefCardActionBar(
             sourceCount: card.sourceMessageIds.count,
@@ -504,11 +526,25 @@ struct BriefCardView: View {
             messageCount: card.counts.messages,
             evidenceExpanded: evidenceExpanded,
             isHandled: isHandled,
+            draftOptionsLoading: chatViewModel.quickRepliesLoading.contains(card.id),
+            draftOptionsFailed: chatViewModel.quickRepliesFailed.contains(card.id),
             onToggleEvidence: toggleEvidence,
             onAskDetail: askForDetails,
             onReply: prepareReply,
+            onDraftOptions: generateDraftOptions,
             onToggleHandled: toggleHandled
         )
+    }
+
+    private func generateDraftOptions() {
+        Task {
+            await chatViewModel.generateQuickReplies(
+                cardID: card.id,
+                service: card.service,
+                convId: card.conversationId,
+                convName: card.conversation ?? ""
+            )
+        }
     }
 
     private func toggleEvidence() {
@@ -658,19 +694,14 @@ private struct TrustExplanationView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                WireLabel("Why this card", color: Theme.textSecondary)
-                Rule()
-            }
             trustRow("Reason", reason)
             trustRow("Confidence", confidenceText)
             trustRow("Evidence", evidenceText)
             trustRow("Memory", memoryText)
             trustRow("Privacy", privacyText)
         }
-        .padding(.top, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Why this card. \(reason). \(confidenceText). \(evidenceText). \(memoryText). \(privacyText).")
+        .accessibilityLabel("\(reason). \(confidenceText). \(evidenceText). \(memoryText). \(privacyText).")
     }
 
     private var evidenceText: String {
@@ -832,7 +863,6 @@ private struct QuickReplyRow: View {
 
     var body: some View {
         let isLoading = chatViewModel.quickRepliesLoading.contains(card.id)
-        let isFailed = chatViewModel.quickRepliesFailed.contains(card.id)
         let replies = chatViewModel.quickReplies[card.id] ?? []
         let convName = card.conversation ?? ""
 
@@ -859,22 +889,6 @@ private struct QuickReplyRow: View {
                 .padding(.vertical, 2)
             }
             .padding(.top, 2)
-        } else if card.priority == "high" || card.priority == "med" || !card.actions.isEmpty {
-            // "DRAFT REPLIES" (AI writes options) vs the card's "REPLY" (you compose).
-            // The chips above say "Use draft" because they fill the composer, not send.
-            Button(isFailed ? "RETRY DRAFTS" : "DRAFT REPLIES") {
-                Task {
-                    await chatViewModel.generateQuickReplies(
-                        cardID: card.id,
-                        service: card.service,
-                        convId: card.conversationId,
-                        convName: convName
-                    )
-                }
-            }
-            .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
-            .padding(.top, 1)
-            .help("Generate one-tap reply drafts in your style")
         }
     }
 }

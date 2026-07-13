@@ -6,10 +6,14 @@ struct BriefCardActionBar: View {
     let messageCount: Int
     let evidenceExpanded: Bool
     let isHandled: Bool
+    let draftOptionsLoading: Bool
+    let draftOptionsFailed: Bool
     let onToggleEvidence: () -> Void
     let onAskDetail: () -> Void
     let onReply: () -> Void
+    let onDraftOptions: () -> Void
     let onToggleHandled: () -> Void
+    @State private var showingMore = false
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -26,6 +30,7 @@ struct BriefCardActionBar: View {
             divider
             replyButton
             Spacer(minLength: 0)
+            moreButton
             doneButton
         }
     }
@@ -37,6 +42,7 @@ struct BriefCardActionBar: View {
                 divider
                 detailButton
                 Spacer(minLength: 0)
+                moreButton
                 doneButton
             }
             evidenceButton
@@ -81,6 +87,29 @@ struct BriefCardActionBar: View {
         }
         .buttonStyle(WireActionStyle(tint: isHandled ? Theme.textTertiary : Theme.ok))
         .help(isHandled ? "Put this card back in the active digest" : "Mark this card as handled")
+    }
+
+    private var moreButton: some View {
+        Button {
+            showingMore.toggle()
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showingMore) {
+            Button(draftOptionsFailed ? "Retry draft options" : "Generate draft options") {
+                showingMore = false
+                onDraftOptions()
+            }
+            .buttonStyle(WireActionStyle())
+            .disabled(draftOptionsLoading)
+            .padding(12)
+        }
+        .help("More reply options")
+        .accessibilityLabel("More reply options")
     }
 
     private var divider: some View {
