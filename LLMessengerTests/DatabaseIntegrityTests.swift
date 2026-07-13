@@ -286,6 +286,85 @@ final class DatabaseIntegrityTests: XCTestCase {
         XCTAssertNotNil(db2)
     }
 
+    func testEveryHistoricalMigrationBoundaryUpgradesToCurrentSchema() throws {
+        let current = try makeDB()
+        let identifiers = try current.dbQueue.read { database in
+            try String.fetchAll(
+                database,
+                sql: "SELECT identifier FROM grdb_migrations ORDER BY rowid"
+            )
+        }
+        XCTAssertFalse(identifiers.isEmpty)
+
+        for identifier in identifiers {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("migration-\(identifier)-\(UUID().uuidString).db")
+            defer { removeDatabaseFiles(at: url) }
+
+            var historical: DatabaseQueue? = try DatabaseQueue(path: url.path)
+            try AppDatabase.makeMigrator().migrate(
+                try XCTUnwrap(historical),
+                upTo: identifier
+            )
+            historical = nil
+
+            let upgraded = try AppDatabase(path: url.path)
+            try upgraded.integrityCheck()
+            let applied = try upgraded.dbQueue.read { database in
+                try String.fetchAll(
+                    database,
+                    sql: "SELECT identifier FROM grdb_migrations ORDER BY rowid"
+                )
+            }
+            XCTAssertEqual(applied, identifiers, "Upgrade failed from \(identifier)")
+        }
+    }
+
+    func testV1DataSurvivesUpgradeToCurrentSchema() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("migration-v1-data-\(UUID().uuidString).db")
+        defer { removeDatabaseFiles(at: url) }
+
+        var historical: DatabaseQueue? = try DatabaseQueue(path: url.path)
+        try AppDatabase.makeMigrator().migrate(try XCTUnwrap(historical), upTo: "v1_schema")
+        try historical?.write { database in
+            try database.execute(
+                sql: """
+                    INSERT INTO messages
+                        (service, conversationId, messageId, sender, text, timestamp, isSent)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: ["signal", "legacy-conversation", "legacy-message", "Alice", "Keep me", Date(), false]
+            )
+            try database.execute(
+                sql: """
+                    INSERT INTO serviceConfig
+                        (service, enabled, pollIntervalMinutes, fetchMode, fetchLimit, privacyMode)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                arguments: ["signal", true, 30, "time", 50, "eager"]
+            )
+        }
+        historical = nil
+
+        let upgraded = try AppDatabase(path: url.path)
+        let message = try upgraded.dbQueue.read { database in
+            try Message.filter(Column("messageId") == "legacy-message").fetchOne(database)
+        }
+        XCTAssertEqual(message?.text, "Keep me")
+        let config = try upgraded.dbQueue.read { database in
+            try ServiceConfig.fetchOne(database, key: "signal")
+        }
+        XCTAssertEqual(config?.pollIntervalSeconds, 900)
+        XCTAssertEqual(config?.privacyMode, "eager")
+    }
+
+    private func removeDatabaseFiles(at url: URL) {
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(atPath: url.path + suffix)
+        }
+    }
+
     func testCascadedDeleteRemovesSources() throws {
         // briefCards → briefs (onDelete: .cascade)
         // briefCardSources → briefCards (onDelete: .cascade)

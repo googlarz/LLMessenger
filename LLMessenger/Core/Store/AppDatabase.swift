@@ -65,7 +65,7 @@ final class AppDatabase: @unchecked Sendable {
         try migrate()
     }
 
-    private func migrate() throws {
+    static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
         // WARNING: erases all user data whenever migrations change during DEBUG builds.
         // Uncomment when you need a clean slate during development. Keep commented to preserve data.
@@ -631,7 +631,11 @@ final class AppDatabase: @unchecked Sendable {
 
             try Self.backfillCanonicalBriefCards(in: db)
         }
-        try migrator.migrate(dbQueue)
+        return migrator
+    }
+
+    private func migrate() throws {
+        try Self.makeMigrator().migrate(dbQueue)
 
         // A process cannot still own a running job after this database has been
         // reopened. Put interrupted work back in the queue for immediate replay.

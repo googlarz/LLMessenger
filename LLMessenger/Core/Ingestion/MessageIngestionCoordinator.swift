@@ -31,6 +31,11 @@ enum MessageIngestionError: LocalizedError {
 /// It serializes adapter access per service and publishes each inserted message once.
 actor MessageIngestionCoordinator {
     typealias NewMessagesHandler = @Sendable ([Message]) async -> Void
+    typealias Persistence = @Sendable (
+        _ result: AdapterFetchResult,
+        _ service: String,
+        _ database: AppDatabase
+    ) throws -> MessageIngestionBatch
 
     private struct ActiveIngestion {
         let id: UUID
@@ -39,11 +44,15 @@ actor MessageIngestionCoordinator {
     }
 
     private let database: AppDatabase
+    private let persistence: Persistence
     private var activeByService: [String: ActiveIngestion] = [:]
     private var newMessagesHandler: NewMessagesHandler?
 
-    init(database: AppDatabase) {
+    init(database: AppDatabase, persistence: Persistence? = nil) {
         self.database = database
+        self.persistence = persistence ?? { result, service, database in
+            try Self.persist(result, service: service, database: database)
+        }
     }
 
     func setNewMessagesHandler(_ handler: NewMessagesHandler?) {
@@ -65,6 +74,7 @@ actor MessageIngestionCoordinator {
 
         let id = UUID()
         let database = self.database
+        let persistence = self.persistence
         let task = Task {
             let result: AdapterFetchResult
             do {
@@ -74,7 +84,7 @@ actor MessageIngestionCoordinator {
             }
 
             do {
-                return try Self.persist(result, service: service, database: database)
+                return try persistence(result, service, database)
             } catch {
                 throw MessageIngestionError.persistence(service: service, underlying: error)
             }

@@ -748,11 +748,58 @@ final class BackendWorkflowE2ETests: XCTestCase {
             "All 3 messages must remain unattached when brief creation fails")
     }
 
-    // 6.2 — Production code fix applied: store() failures now preserve lastCheck so the next
-    // poll re-fetches the same window. Test remains skipped because making store() throw
-    // requires a DB injection wrapper (AppDatabase protocol) that doesn't exist yet.
-    func testPollEngineStoreFailurePreservesLastCheck() throws {
-        throw XCTSkip("Infrastructure gap: forcing store() to throw requires a mockable AppDatabase. Production fix (updateLastCheck: false in store error path) was applied in PollEngine.swift.")
+    // 6.2 — A successful fetch followed by a failed transaction must not move the
+    // service watermark. The next poll must request the same window again.
+    func testPollEngineStoreFailurePreservesLastCheck() async throws {
+        struct InjectedStoreFailure: Error {}
+
+        let db = try makeDB()
+        let originalLastCheck = Date().addingTimeInterval(-3_600)
+        try await db.dbQueue.write { database in
+            let health = ServiceHealth(
+                service: "signal",
+                status: "ok",
+                lastCheck: originalLastCheck,
+                lastError: nil,
+                retryAfter: nil
+            )
+            try health.insert(database)
+        }
+        let ingestion = MessageIngestionCoordinator(
+            database: db,
+            persistence: { _, _, _ in throw InjectedStoreFailure() }
+        )
+        let engine = PollEngine(database: db, ingestionCoordinator: ingestion)
+        let adapter = FakeMessengerAdapter(serviceID: "signal")
+        adapter.addMessage(convId: "c1", msgId: "m1")
+        engine.register(adapter: adapter, config: signalConfig())
+
+        do {
+            try await engine.pollNow(serviceID: "signal")
+            XCTFail("Expected injected persistence failure")
+        } catch let error as MessageIngestionError {
+            XCTAssertTrue(error.isPersistenceFailure)
+        }
+
+        let health = try await db.dbQueue.read { database in
+            try ServiceHealth.fetchOne(database, key: "signal")
+        }
+        XCTAssertEqual(
+            try XCTUnwrap(health?.lastCheck).timeIntervalSince1970,
+            originalLastCheck.timeIntervalSince1970,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(health?.status, "error")
+        let messageCount = try await db.dbQueue.read { try Message.fetchCount($0) }
+        XCTAssertEqual(messageCount, 0)
+        guard case .byTime(let requestedSince) = try XCTUnwrap(adapter.fetchConfigs.first).mode else {
+            return XCTFail("Expected time-based retry window")
+        }
+        XCTAssertEqual(
+            requestedSince.timeIntervalSince1970,
+            originalLastCheck.timeIntervalSince1970,
+            accuracy: 0.001
+        )
     }
 
     // MARK: - Group 7: AppState Observation Contract
