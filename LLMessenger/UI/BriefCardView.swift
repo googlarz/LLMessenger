@@ -82,7 +82,9 @@ struct BriefCardView: View {
     }
 
     private var isHigh: Bool { card.priority == "high" }
-    private var isBodyExpanded: Bool { isHigh || promoted || bodyExpanded }
+    /// Progressive disclosure: only the promoted lead card starts expanded;
+    /// every card (including high priority) can collapse back to ~5 lines.
+    private var isBodyExpanded: Bool { bodyExpanded }
     private var isHandled: Bool {
         guard let briefID else { return false }
         return appState.isCardHandled(briefID: briefID, cardID: card.id)
@@ -113,23 +115,79 @@ struct BriefCardView: View {
             VStack(alignment: .leading, spacing: 9) {
                 stampRow
                 headline
-                actionabilityRow
-                if !isBodyExpanded {
-                    trustInlineLine
-                }
-
                 if isBodyExpanded {
+                    actionabilityRow
                     expandedBody
+                } else {
+                    collapsedSummary
+                    collapsedActionRow
                 }
             }
             .padding(.trailing, Theme.gutter)
         }
         .padding(.leading, 10)
-        .padding(.vertical, isHigh || isBodyExpanded ? 14 : 8)
+        .padding(.vertical, isBodyExpanded ? 14 : 8)
         .background(hovering && !isBodyExpanded ? Theme.surface.opacity(0.5) : Color.clear)
         .opacity(isHandled ? 0.45 : 1)
         .onHover { hovering = $0 }
         .animation(Theme.quick, value: hovering)
+        // The lead card opens expanded; the rest stay ~5 lines until asked.
+        .onAppear { if promoted { bodyExpanded = true } }
+        .onChange(of: card.id) { bodyExpanded = promoted }
+    }
+
+    // MARK: - Collapsed card (≤5 lines: who, headline, two summary lines, one action)
+
+    private var collapsedSummary: some View {
+        Text(card.summary)
+            .font(Theme.sans(12.5))
+            .foregroundStyle(Theme.textPrimary.opacity(isHandled ? 0.5 : 0.8))
+            .lineLimit(2)
+            .lineSpacing(3)
+            .fixedSize(horizontal: false, vertical: true)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(Theme.spring) { bodyExpanded.toggle() }
+            }
+    }
+
+    private var collapsedActionRow: some View {
+        HStack(spacing: 10) {
+            if !isHandled {
+                if card.needsReply {
+                    Button("REPLY") { prepareReply() }
+                        .buttonStyle(WireActionStyle(tint: Theme.signal))
+                        .accessibilityLabel("Reply to \(convName)")
+                } else {
+                    Button("DONE") { toggleHandled() }
+                        .buttonStyle(WireActionStyle(tint: Theme.ok))
+                        .accessibilityLabel("Mark \(convName) done")
+                }
+            }
+            Spacer(minLength: 8)
+            Menu {
+                Button(isBodyExpanded ? "Collapse" : "Show Detail") {
+                    withAnimation(Theme.spring) { bodyExpanded.toggle() }
+                }
+                Button("Sources") {
+                    withAnimation(Theme.spring) {
+                        bodyExpanded = true
+                        evidenceExpanded = true
+                    }
+                }
+                Button("Change Priority…") { showPriorityEditor = true }
+                Divider()
+                Button(isHandled ? "Unfile" : "Mark Done") { toggleHandled() }
+            } label: {
+                Text("MORE")
+                    .font(Theme.mono(10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .accessibilityLabel("More actions for \(convName)")
+        }
     }
 
     // MARK: - Stamp row (always visible)
@@ -224,7 +282,8 @@ struct BriefCardView: View {
                     .help("Brief generated \(t.relativeLabel)")
             }
 
-            if card.counts.messages > 1 {
+            // Counts only where they help a decision — the expanded reading view.
+            if isBodyExpanded, card.counts.messages > 1 {
                 Text("\(card.counts.messages)M · \(card.counts.people)P")
                     .font(Theme.mono(11))
                     .foregroundStyle(Theme.textTertiary)
@@ -267,26 +326,22 @@ struct BriefCardView: View {
                 }
             }
 
-            // High and promoted cards are always-expanded ledes — no collapse affordance.
-            if !isHigh && !promoted {
-                Button {
-                    withAnimation(Theme.spring) { bodyExpanded.toggle() }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(chevronHovered ? Theme.textSecondary : Theme.textTertiary)
-                        .rotationEffect(.degrees(isBodyExpanded ? 180 : 0))
-                }
-                .buttonStyle(.plain)
-                .help(isBodyExpanded ? "Collapse" : "Expand")
-                .accessibilityLabel(isBodyExpanded ? "Collapse details" : "Expand details")
-                .animation(Theme.quick, value: chevronHovered)
-                .onHover { chevronHovered = $0 }
+            Button {
+                withAnimation(Theme.spring) { bodyExpanded.toggle() }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(chevronHovered ? Theme.textSecondary : Theme.textTertiary)
+                    .rotationEffect(.degrees(isBodyExpanded ? 180 : 0))
             }
+            .buttonStyle(.plain)
+            .help(isBodyExpanded ? "Collapse" : "Expand")
+            .accessibilityLabel(isBodyExpanded ? "Collapse details" : "Expand details")
+            .animation(Theme.quick, value: chevronHovered)
+            .onHover { chevronHovered = $0 }
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            guard !isHigh && !promoted else { return }
             withAnimation(Theme.spring) { bodyExpanded.toggle() }
         }
     }
@@ -317,7 +372,6 @@ struct BriefCardView: View {
             .fixedSize(horizontal: false, vertical: true)
             .contentShape(Rectangle())
             .onTapGesture {
-                guard !isHigh && !promoted else { return }
                 withAnimation(Theme.spring) { bodyExpanded.toggle() }
             }
     }
@@ -361,33 +415,6 @@ struct BriefCardView: View {
             return ("Context assisted", Theme.standby)
         }
         return ("High confidence", Theme.ok)
-    }
-
-    private var trustInlineLine: some View {
-        Text(trustSentence)
-            .font(Theme.sans(11.5))
-            .foregroundStyle(Theme.textTertiary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .accessibilityLabel(trustSentence)
-    }
-
-    private var trustSentence: String {
-        var parts: [String] = []
-        if let reason = card.reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty {
-            parts.append(reason)
-        } else if card.needsReply {
-            parts.append("Direct reply likely needed")
-        } else {
-            parts.append("Included for awareness")
-        }
-        if !card.sourceMessageIds.isEmpty {
-            parts.append("\(card.sourceMessageIds.count) local source\(card.sourceMessageIds.count == 1 ? "" : "s")")
-        }
-        if card.grounding == "context" {
-            parts.append("uses your context")
-        }
-        return parts.joined(separator: " · ")
     }
 
     // MARK: - Expanded body

@@ -199,20 +199,23 @@ struct BriefProseView: View {
             if parsedJSON != nil {
                 stillBrokenNotice
 
+                // Progressive disclosure: exactly ONE card — the first of the first
+                // non-empty section — opens expanded; everything else stays compact.
                 if !replyNeededCards.isEmpty {
                     let total = numberedVisibleCards.count
                     let labelText = noiseCards.isEmpty
                         ? "Needs reply"
                         : "Needs reply · \(replyNeededCards.count) of \(total)"
                     sectionLabel(labelText, color: Theme.signal)
-                    entries(replyNeededCards, startIndex: 0)
+                    entries(replyNeededCards, startIndex: 0, promotedCount: 1)
                 }
 
                 if !reviewCards.isEmpty {
                     let topPadding: CGFloat = replyNeededCards.isEmpty ? 0 : 18
                     sectionLabel("Needs review", color: Theme.signal)
                         .padding(.top, topPadding)
-                    entries(reviewCards, startIndex: replyNeededCards.count)
+                    entries(reviewCards, startIndex: replyNeededCards.count,
+                            promotedCount: replyNeededCards.isEmpty ? 1 : 0)
                 }
 
                 if !otherCards.isEmpty {
@@ -220,7 +223,6 @@ struct BriefProseView: View {
                     let otherLabel = leadCount == 0 ? "This round" : "The rest"
                     sectionLabel(otherLabel, color: Theme.textTertiary)
                         .padding(.top, leadCount == 0 ? 0 : 18)
-                    // Promote the lead card to lede weight when there are no action-required cards.
                     entries(otherCards, startIndex: leadCount,
                             promotedCount: leadCount == 0 ? 1 : 0)
                 }
