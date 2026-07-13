@@ -132,6 +132,7 @@ final class AppState: ObservableObject {
     @Published var lastError: String?
     @Published var userReceipt: UserReceipt?
     @Published var briefGenerationState: BriefGenerationState = .cached
+    @Published var briefPipelineHealth: BriefPipelineHealth = .healthy
     /// Keys of cards the user has marked as handled. Format: "\(briefID):\(cardID)".
     /// Persisted to UserDefaults so state survives app restarts.
     /// Number of messages/threads held back (not surfaced in the brief) this round.

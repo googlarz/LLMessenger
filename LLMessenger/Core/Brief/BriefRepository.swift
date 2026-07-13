@@ -214,6 +214,79 @@ struct BriefRepository {
         }
     }
 
+    func fetchBriefPipelineHealth() throws -> BriefPipelineHealth {
+        try database.dbQueue.read { db in
+            let failed = BriefJobStatus.failed.rawValue
+            let partial = BriefJobStatus.partial.rawValue
+            let deadLetter = BriefJobStatus.deadLetter.rawValue
+            let automatic = BriefJobKind.automatic.rawValue
+            let pending = BriefJobMessageStatus.pending.rawValue
+            let row = try Row.fetchOne(db, sql: """
+                SELECT
+                    COALESCE(SUM(CASE
+                        WHEN j.status = ? OR (j.status = ? AND j.lastError IS NOT NULL) THEN 1
+                        ELSE 0
+                    END), 0) AS retryingJobCount,
+                    COALESCE(SUM(CASE WHEN j.status = ? THEN 1 ELSE 0 END), 0) AS deadLetterJobCount,
+                    (
+                        SELECT COUNT(*)
+                        FROM briefJobMessages jm
+                        JOIN briefJobs pendingJob ON pendingJob.id = jm.jobId
+                        WHERE pendingJob.kind = ?
+                          AND jm.status = ?
+                          AND (
+                            pendingJob.status IN (?, ?)
+                            OR (pendingJob.status = ? AND pendingJob.lastError IS NOT NULL)
+                          )
+                    ) AS pendingMessageCount,
+                    (
+                        SELECT lastError
+                        FROM briefJobs recentJob
+                        WHERE recentJob.kind = ?
+                          AND recentJob.lastError IS NOT NULL
+                          AND recentJob.status IN (?, ?, ?)
+                        ORDER BY recentJob.updatedAt DESC
+                        LIMIT 1
+                    ) AS latestError
+                FROM briefJobs j
+                WHERE j.kind = ?
+            """, arguments: [
+                failed, partial, deadLetter,
+                automatic, pending, failed, deadLetter, partial,
+                automatic, failed, partial, deadLetter,
+                automatic
+            ])
+            guard let row else { return .healthy }
+            return BriefPipelineHealth(
+                retryingJobCount: row["retryingJobCount"],
+                deadLetterJobCount: row["deadLetterJobCount"],
+                pendingMessageCount: row["pendingMessageCount"],
+                latestError: row["latestError"]
+            )
+        }
+    }
+
+    /// Explicitly restores exhausted automatic work to the queue. Completed
+    /// message rows remain completed; only pending rows are replayed.
+    @discardableResult
+    func retryDeadLetterBriefJobs(now: Date = Date()) throws -> Int {
+        try database.dbQueue.write { db in
+            try db.execute(sql: """
+                UPDATE briefJobs
+                SET status = ?, updatedAt = ?, startedAt = NULL, completedAt = NULL,
+                    nextAttemptAt = ?, attemptCount = 0, lastError = NULL
+                WHERE kind = ? AND status = ?
+            """, arguments: [
+                BriefJobStatus.queued.rawValue,
+                now,
+                now,
+                BriefJobKind.automatic.rawValue,
+                BriefJobStatus.deadLetter.rawValue
+            ])
+            return db.changesCount
+        }
+    }
+
     func markBriefJobFailed(jobID: Int64, error: String, now: Date = Date()) throws {
         try database.dbQueue.write { db in
             let attemptCount = try Int.fetchOne(

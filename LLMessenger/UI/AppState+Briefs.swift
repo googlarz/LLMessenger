@@ -33,10 +33,12 @@ extension AppState {
             guard let self else { return }
             do {
                 let fetched = try self.repository.fetchRecentBriefs(limit: limit, including: selectedID)
+                let pipelineHealth = try self.repository.fetchBriefPipelineHealth()
                 let healthMap = (try? settingsRepo.loadAllServiceHealth()) ?? [:]
                 let heldBack = settingsRepo.loadFirewallHeldBack()
                 await MainActor.run {
                     self.briefs = fetched
+                    self.briefPipelineHealth = pipelineHealth
                     self.serviceHealthMap = healthMap
                     self.heldBackCount = heldBack
                     self.recomputeNowState()
@@ -50,6 +52,24 @@ extension AppState {
             } catch {
                 await MainActor.run { self.lastError = self.friendly(error) }
             }
+        }
+    }
+
+    @discardableResult
+    func retryBlockedBriefJobs() -> Int {
+        do {
+            let count = try repository.retryDeadLetterBriefJobs()
+            briefPipelineHealth = .healthy
+            lastError = nil
+            if count > 0 {
+                onRequestRefresh?()
+            } else {
+                refreshBriefs()
+            }
+            return count
+        } catch {
+            lastError = friendly(error)
+            return 0
         }
     }
 

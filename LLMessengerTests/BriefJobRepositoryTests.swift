@@ -164,4 +164,101 @@ final class BriefJobRepositoryTests: XCTestCase {
         XCTAssertNotNil(job.completedAt)
         XCTAssertNil(try repository.claimAutomaticBriefJob(messages: [message], now: now))
     }
+
+    func testPipelineHealthCountsRetryingAndDeadLetterMessages() throws {
+        let database = try AppDatabase(inMemory: true)
+        let repository = BriefRepository(database: database)
+        let start = Date(timeIntervalSince1970: 3_000)
+        let retryingMessage = try insertMessage(database, id: "retrying", at: start)
+        let retrying = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: [retryingMessage], now: start))
+        try repository.markBriefJobFailed(
+            jobID: try XCTUnwrap(retrying.job.id),
+            error: "provider offline",
+            now: start
+        )
+
+        let blockedMessage = try insertMessage(database, id: "blocked", at: start.addingTimeInterval(1))
+        var now = start.addingTimeInterval(1)
+        for attempt in 1...BriefRepository.maximumBriefJobAttempts {
+            let snapshot = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: [blockedMessage], now: now))
+            try repository.markBriefJobFailed(
+                jobID: try XCTUnwrap(snapshot.job.id),
+                error: "quota exhausted",
+                now: now
+            )
+            now = now.addingTimeInterval(BriefRepository.retryDelay(afterAttempt: attempt) + 1)
+        }
+
+        let health = try repository.fetchBriefPipelineHealth()
+        XCTAssertEqual(health.retryingJobCount, 1)
+        XCTAssertEqual(health.deadLetterJobCount, 1)
+        XCTAssertEqual(health.pendingMessageCount, 2)
+        XCTAssertEqual(health.latestError, "quota exhausted")
+    }
+
+    func testExplicitRetryRestoresDeadLetterJobAndPreservesPendingRows() throws {
+        let database = try AppDatabase(inMemory: true)
+        let repository = BriefRepository(database: database)
+        let start = Date(timeIntervalSince1970: 4_000)
+        let message = try insertMessage(database, id: "preserved", at: start)
+        var now = start
+
+        for attempt in 1...BriefRepository.maximumBriefJobAttempts {
+            let snapshot = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: [message], now: now))
+            try repository.markBriefJobFailed(
+                jobID: try XCTUnwrap(snapshot.job.id),
+                error: "offline",
+                now: now
+            )
+            now = now.addingTimeInterval(BriefRepository.retryDelay(afterAttempt: attempt) + 1)
+        }
+
+        XCTAssertEqual(try repository.retryDeadLetterBriefJobs(now: now), 1)
+        let restored = try XCTUnwrap(repository.fetchBriefJobs().first)
+        XCTAssertEqual(restored.jobStatus, .queued)
+        XCTAssertEqual(restored.attemptCount, 0)
+        XCTAssertEqual(restored.nextAttemptAt, now)
+        XCTAssertNil(restored.completedAt)
+        XCTAssertNil(restored.lastError)
+
+        let claimed = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: [], now: now))
+        XCTAssertEqual(claimed.job.attemptCount, 1)
+        XCTAssertEqual(claimed.messages.map(\.messageId), ["preserved"])
+    }
+
+    @MainActor
+    func testAppStatePublishesPipelineHealthAndDispatchesRepair() async throws {
+        let database = try AppDatabase(inMemory: true)
+        let repository = BriefRepository(database: database)
+        let start = Date(timeIntervalSince1970: 5_000)
+        let message = try insertMessage(database, id: "visible", at: start)
+        var now = start
+
+        for attempt in 1...BriefRepository.maximumBriefJobAttempts {
+            let snapshot = try XCTUnwrap(repository.claimAutomaticBriefJob(messages: [message], now: now))
+            try repository.markBriefJobFailed(
+                jobID: try XCTUnwrap(snapshot.job.id),
+                error: "unavailable",
+                now: now
+            )
+            now = now.addingTimeInterval(BriefRepository.retryDelay(afterAttempt: attempt) + 1)
+        }
+
+        let state = AppState(
+            database: database,
+            llmClient: MockLLMClient(),
+            llmModel: "test",
+            basePrompt: "BASE"
+        )
+        await state.refreshBriefs().value
+        XCTAssertEqual(state.briefPipelineHealth.deadLetterJobCount, 1)
+        XCTAssertEqual(state.briefPipelineHealth.pendingMessageCount, 1)
+
+        var dispatched = false
+        state.onRequestRefresh = { dispatched = true }
+        XCTAssertEqual(state.retryBlockedBriefJobs(), 1)
+        XCTAssertTrue(dispatched)
+        XCTAssertEqual(state.briefPipelineHealth, .healthy)
+        XCTAssertEqual(try repository.fetchBriefJobs().first?.jobStatus, .queued)
+    }
 }

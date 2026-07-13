@@ -35,6 +35,13 @@ struct ContentView: View {
                 Rule()
             }
 
+            if appState.briefPipelineHealth.hasIssues {
+                BriefPipelineBanner(health: appState.briefPipelineHealth) {
+                    appState.retryBlockedBriefJobs()
+                }
+                Rule()
+            }
+
             if let receipt = appState.userReceipt {
                 ReceiptBanner(receipt: receipt, onDismiss: { appState.clearReceipt() })
                 Rule()
@@ -617,6 +624,60 @@ private struct NoticeBanner: View {
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 9)
         .background(Theme.signalWash)
+    }
+}
+
+private struct BriefPipelineBanner: View {
+    let health: BriefPipelineHealth
+    let onRetry: () -> Void
+    @State private var retryHovered = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Theme.signal.frame(width: 2)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
+            VStack(alignment: .leading, spacing: 3) {
+                WireLabel(title, color: Theme.signal)
+                Text(message)
+                    .font(Theme.sans(12.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            if health.deadLetterJobCount > 0 {
+                Button(action: onRetry) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(retryHovered ? Theme.textPrimary : Theme.signal)
+                        .frame(width: 26, height: 26)
+                        .background(
+                            RoundedRectangle(cornerRadius: Theme.controlRadius)
+                                .fill(retryHovered ? Theme.surfaceHigh : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Retry preserved digest messages")
+                .accessibilityLabel("Retry preserved digest messages")
+                .onHover { retryHovered = $0 }
+            }
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 9)
+        .background(Theme.signalWash)
+    }
+
+    private var title: String {
+        health.deadLetterJobCount > 0 ? "Digest pipeline paused" : "Digest retry scheduled"
+    }
+
+    private var message: String {
+        let count = health.pendingMessageCount
+        let noun = count == 1 ? "message is" : "messages are"
+        if health.deadLetterJobCount > 0 {
+            return "\(count) \(noun) preserved after repeated AI failures. Retry when the provider is available."
+        }
+        return "\(count) \(noun) preserved and will be retried automatically."
     }
 }
 

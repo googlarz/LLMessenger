@@ -61,3 +61,21 @@ struct BriefJobSnapshot {
     var job: BriefJob
     var messages: [Message]
 }
+
+struct BriefPipelineHealth: Equatable {
+    var retryingJobCount: Int
+    var deadLetterJobCount: Int
+    var pendingMessageCount: Int
+    var latestError: String?
+
+    static let healthy = BriefPipelineHealth(
+        retryingJobCount: 0,
+        deadLetterJobCount: 0,
+        pendingMessageCount: 0,
+        latestError: nil
+    )
+
+    var hasIssues: Bool {
+        retryingJobCount > 0 || deadLetterJobCount > 0
+    }
+}
