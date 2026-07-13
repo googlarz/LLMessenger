@@ -352,7 +352,9 @@ final class BriefEngine {
                                 LLMMessage(role: .system, content: systemPrompt),
                                 LLMMessage(role: .user,   content: threadText)
                             ],
-                            maxTokens: 4000
+                            maxTokens: 4000,
+                            purpose: .briefSummarization,
+                            service: service
                         )
 
                         if let parsed = try? self.decodeAndValidateBrief(response.text, service: service, sourceMessages: allPromptMessages) {
@@ -787,7 +789,9 @@ final class BriefEngine {
                                 LLMMessage(role: .system, content: systemPrompt),
                                 LLMMessage(role: .user,   content: threadText)
                             ],
-                            maxTokens: 16000
+                            maxTokens: 16000,
+                            purpose: .briefSummarization,
+                            service: serviceID
                         )
 
                         do {

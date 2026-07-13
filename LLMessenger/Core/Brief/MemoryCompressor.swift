@@ -40,7 +40,11 @@ struct MemoryCompressor {
         ]
 
         let response = try await client.complete(
-            model: model, messages: llmMessages, maxTokens: 350
+            model: model,
+            messages: llmMessages,
+            maxTokens: 350,
+            purpose: .memoryCompression,
+            briefId: brief.id
         )
 
         var updated = brief

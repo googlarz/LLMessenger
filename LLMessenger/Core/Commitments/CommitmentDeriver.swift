@@ -158,7 +158,14 @@ struct CommitmentDeriver {
         ]
 
         // Let a network/LLM error propagate so the caller skips advancing the watermark.
-        let response = try await llmClient.complete(model: llmModel, messages: llmMessages, maxTokens: 500)
+        let response = try await llmClient.complete(
+            model: llmModel,
+            messages: llmMessages,
+            maxTokens: 500,
+            purpose: .commitmentExtraction,
+            service: service,
+            conversationId: messages.first?.conversationId
+        )
         return decodeAndValidate(response.text)
     }
 

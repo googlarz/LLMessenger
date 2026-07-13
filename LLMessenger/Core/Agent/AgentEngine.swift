@@ -257,7 +257,14 @@ actor AgentEngine {
         ]
 
         // Let a network/LLM error propagate so the caller skips advancing the watermark.
-        let response = try await llmClient.complete(model: llmModel, messages: llmMessages, maxTokens: 400)
+        let response = try await llmClient.complete(
+            model: llmModel,
+            messages: llmMessages,
+            maxTokens: 400,
+            purpose: .scheduleDetection,
+            service: last.service,
+            conversationId: last.conversationId
+        )
 
         let items = Self.decodeSchedule(response.text)
         return items.compactMap { item in
@@ -357,7 +364,14 @@ actor AgentEngine {
 
         let response: LLMResponse
         do {
-            response = try await llmClient.complete(model: llmModel, messages: messages, maxTokens: 400)
+            response = try await llmClient.complete(
+                model: llmModel,
+                messages: messages,
+                maxTokens: 400,
+                purpose: .agentReplyDraft,
+                service: reply.service,
+                conversationId: reply.conversationId
+            )
         } catch {
             return nil
         }

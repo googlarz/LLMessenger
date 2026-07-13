@@ -3,6 +3,18 @@ import SwiftUI
 import ServiceManagement
 import GRDB
 
+private struct LLMUsageSummary: Identifiable {
+    var id: String { provider }
+    let provider: String
+    let inputK: Int
+    let outputK: Int
+    let runs: Int
+    let failures: Int
+    let averageDurationMs: Int
+    let truncatedRuns: Int
+    let cost: Double
+}
+
 struct AISettingsTab: View {
     var database: AppDatabase? = nil
 
@@ -14,7 +26,7 @@ struct AISettingsTab: View {
     @State private var launchAtLogin: Bool = false
     @State private var saveStatus: String = ""
     @State private var testState: TestState = .idle
-    @State private var usageRows: [(provider: String, inputK: Int, outputK: Int, cost: Double)] = []
+    @State private var usageRows: [LLMUsageSummary] = []
     @State private var isLocalOnlyMode: Bool = SettingsRepository().loadLocalOnlyMode()
 
     private let repo = SettingsRepository()
@@ -201,7 +213,7 @@ struct AISettingsTab: View {
 
     private var usageSection: some View {
         section("Usage This Month") {
-            ForEach(usageRows, id: \.provider) { row in
+            ForEach(usageRows, id: \.provider) { (row: LLMUsageSummary) in
                 HStack {
                     Text(row.provider)
                         .font(Theme.sans(12))
@@ -210,6 +222,14 @@ struct AISettingsTab: View {
                     Text("\(row.inputK)k in / \(row.outputK)k out")
                         .font(Theme.mono(11))
                         .foregroundStyle(Theme.textTertiary)
+                    Text("\(row.runs)x · \(row.averageDurationMs)ms")
+                        .font(Theme.mono(11))
+                        .foregroundStyle(row.failures > 0 ? Theme.standby : Theme.textTertiary)
+                    if row.truncatedRuns > 0 {
+                        Text("\(row.truncatedRuns) fit")
+                            .font(Theme.mono(11))
+                            .foregroundStyle(Theme.standby)
+                    }
                     Text("est. $\(String(format: "%.4f", row.cost))")
                         .font(Theme.mono(11))
                         .foregroundStyle(Theme.textSecondary)
@@ -233,6 +253,7 @@ struct AISettingsTab: View {
 
     private struct ClientSpec {
         let client: LLMClient
+        let provider: LLMProvider
         let model: String
         let label: String
     }
@@ -241,25 +262,25 @@ struct AISettingsTab: View {
         guard let provider = LLMProvider(rawValue: selectedProviderRaw) else { return nil }
         switch provider {
         case .appleIntelligence:
-            return ClientSpec(client: provider.makeClient(apiKey: nil),
+            return ClientSpec(client: provider.makeClient(apiKey: nil), provider: provider,
                               model: provider.defaultModel,
                               label: "On-Device / Apple Intelligence")
         case .anthropic:
             let key = anthropicKey.trimmingCharacters(in: .whitespaces)
             guard !key.isEmpty else { return nil }
-            return ClientSpec(client: provider.makeClient(apiKey: key),
+            return ClientSpec(client: provider.makeClient(apiKey: key), provider: provider,
                               model: provider.defaultModel,
                               label: "\(provider.displayName) / \(provider.defaultModel)")
         case .openai:
             let key = openAIKey.trimmingCharacters(in: .whitespaces)
             guard !key.isEmpty else { return nil }
-            return ClientSpec(client: provider.makeClient(apiKey: key),
+            return ClientSpec(client: provider.makeClient(apiKey: key), provider: provider,
                               model: provider.defaultModel,
                               label: "\(provider.displayName) / \(provider.defaultModel)")
         case .ollama:
             let model = ollamaModel.trimmingCharacters(in: .whitespaces)
             let m = model.isEmpty ? provider.defaultModel : model
-            return ClientSpec(client: provider.makeClient(apiKey: nil),
+            return ClientSpec(client: provider.makeClient(apiKey: nil), provider: provider,
                               model: m,
                               label: "Ollama / \(m)")
         }
@@ -269,10 +290,21 @@ struct AISettingsTab: View {
         guard let spec = currentClientSpec else { return }
         testState = .running
         do {
-            _ = try await spec.client.complete(
+            let client: any LLMClient = if let database {
+                LLMGateway(
+                    database: database,
+                    client: spec.client,
+                    provider: spec.provider,
+                    model: spec.model
+                )
+            } else {
+                spec.client
+            }
+            _ = try await client.complete(
                 model: spec.model,
                 messages: [LLMMessage(role: .user, content: "Reply with just the word OK.")],
-                maxTokens: 10
+                maxTokens: 10,
+                purpose: .settingsConnection
             )
             testState = .success(spec.label)
         } catch {
@@ -319,13 +351,21 @@ struct AISettingsTab: View {
             let backend: String
             let totalInput: Int
             let totalOutput: Int
+            let runs: Int
+            let failures: Int
+            let averageDurationMs: Int
+            let truncatedRuns: Int
         }
 
         let rows = (try? await db.dbQueue.read { dbConn in
             try UsageRow.fetchAll(dbConn, sql: """
                 SELECT backend,
                        COALESCE(SUM(inputTokenEstimate), 0)  AS totalInput,
-                       COALESCE(SUM(outputTokenEstimate), 0) AS totalOutput
+                       COALESCE(SUM(outputTokenEstimate), 0) AS totalOutput,
+                       COUNT(*) AS runs,
+                       COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failures,
+                       COALESCE(CAST(AVG(durationMs) AS INTEGER), 0) AS averageDurationMs,
+                       COALESCE(SUM(CASE WHEN wasTruncated = 1 THEN 1 ELSE 0 END), 0) AS truncatedRuns
                 FROM llmRuns
                 WHERE startedAt >= ?
                 GROUP BY backend
@@ -342,7 +382,16 @@ struct AISettingsTab: View {
             } else {
                 cost = 0
             }
-            return (provider: row.backend, inputK: row.totalInput / 1000, outputK: row.totalOutput / 1000, cost: cost)
+            return LLMUsageSummary(
+                provider: row.backend,
+                inputK: row.totalInput / 1000,
+                outputK: row.totalOutput / 1000,
+                runs: row.runs,
+                failures: row.failures,
+                averageDurationMs: row.averageDurationMs,
+                truncatedRuns: row.truncatedRuns,
+                cost: cost
+            )
         }
     }
 

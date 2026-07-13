@@ -195,7 +195,9 @@ final class ChatViewModel: ObservableObject {
                 LLMMessage(role: .system, content: systemPrompt),
                 LLMMessage(role: .user, content: rawInput)
             ],
-            maxTokens: 450
+            maxTokens: 450,
+            purpose: .intentRouting,
+            briefId: brief.id
         )
 
         if let route = decodeIntentRoute(from: response.text) {
@@ -344,7 +346,11 @@ final class ChatViewModel: ObservableObject {
             let response = try await appState.llmClient.complete(
                 model: appState.llmModel,
                 messages: messages,
-                maxTokens: 400
+                maxTokens: 400,
+                purpose: .replyRevision,
+                briefId: brief.id,
+                service: draftRef.draft.serviceID,
+                conversationId: draftRef.draft.conversationID
             )
             let revised = stripDraftPrefix(response.text.trimmingCharacters(in: .whitespacesAndNewlines))
             updateDraft(id: draftRef.id, text: revised)
@@ -496,7 +502,9 @@ final class ChatViewModel: ObservableObject {
             let response = try await appState.llmClient.complete(
                 model: appState.llmModel,
                 messages: llmMessages,
-                maxTokens: 600
+                maxTokens: 600,
+                purpose: .chatAnswer,
+                briefId: brief.id
             )
             let responseText = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -633,7 +641,7 @@ final class ChatViewModel: ObservableObject {
     /// Generates 3 style-matched reply options for a card on demand.
     /// The user's sent messages in that conversation are used as a style reference.
     func generateQuickReplies(cardID: String, service: String, convId: String, convName: String) async {
-        guard currentBrief != nil else { return }
+        guard let brief = currentBrief else { return }
         guard !quickRepliesLoading.contains(cardID) else { return }
 
         let ctx = (try? appState.repository.fetchConversationContext(service: service, conversationId: convId)) ?? nil
@@ -687,7 +695,11 @@ final class ChatViewModel: ObservableObject {
                     LLMMessage(role: .system, content: systemPrompt),
                     LLMMessage(role: .user, content: userContent)
                 ],
-                maxTokens: 700
+                maxTokens: 700,
+                purpose: .quickReply,
+                briefId: brief.id,
+                service: service,
+                conversationId: convId
             )
             let replies = decodeQuickReplies(from: response.text)
             if replies.isEmpty {
@@ -787,7 +799,11 @@ final class ChatViewModel: ObservableObject {
             let response = try await appState.llmClient.complete(
                 model: appState.llmModel,
                 messages: llmMessages,
-                maxTokens: 400
+                maxTokens: 400,
+                purpose: .replyDraft,
+                briefId: brief.id,
+                service: service,
+                conversationId: convId
             )
             let responseText = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
             let draftText = stripDraftPrefix(responseText)

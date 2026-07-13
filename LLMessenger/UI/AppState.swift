@@ -184,9 +184,9 @@ final class AppState: ObservableObject {
     let database: AppDatabase
     let repository: BriefRepository
     let llmClient: LLMClient
-    let llmModel: String
-    let llmProvider: LLMProvider?
-    let isLLMConfigured: Bool
+    @Published var llmModel: String
+    @Published var llmProvider: LLMProvider?
+    @Published var isLLMConfigured: Bool
     let basePrompt: String
     var adapters: [String: any MessengerAdapter] = [:]
     var onOpenSettings: (() -> Void)?
@@ -230,6 +230,16 @@ final class AppState: ObservableObject {
         self.isLLMConfigured = isLLMConfigured
         self.basePrompt = basePrompt
         self.productLoveMetrics = ProductLoveMetricStore.markActiveToday()
+    }
+
+    func updateLLMConfiguration(
+        model: String,
+        provider: LLMProvider?,
+        isConfigured: Bool
+    ) {
+        llmModel = model
+        llmProvider = provider
+        self.isLLMConfigured = isConfigured
     }
 
     var briefGroups: [BriefListGroup] {

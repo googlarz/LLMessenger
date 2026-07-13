@@ -160,7 +160,10 @@ Conversation:
             let response = try await llmClient.complete(
                 model: llmModel,
                 messages: [LLMMessage(role: .user, content: prompt)],
-                maxTokens: 200
+                maxTokens: 200,
+                purpose: .realtimeTriage,
+                service: service,
+                conversationId: conversationId
             )
             let parsed = try parseTriageJSON(response.text)
             let biased = ContextBias.applyTopicBias(to: parsed, newestText: newest.text, context: context)

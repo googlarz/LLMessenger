@@ -39,7 +39,10 @@ struct ContextParser {
         let response = try await llmClient.complete(
             model: model,
             messages: [LLMMessage(role: .user, content: prompt)],
-            maxTokens: 400
+            maxTokens: 400,
+            purpose: .contextParsing,
+            service: service,
+            conversationId: conversationId
         )
         let parsed = try parseJSON(response.text)
         return merge(parsed, onto: existing, service: service, conversationId: conversationId)

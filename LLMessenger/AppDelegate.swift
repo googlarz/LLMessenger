@@ -37,6 +37,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var realtimeMonitor: RealtimeMonitor?
     var realtimeKillSwitchObserver: NSKeyValueObservation?
     var agentEngine: AgentEngine?
+    var llmGateway: LLMGateway?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
@@ -77,13 +78,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             let llm = resolvedProvider()
+            let gateway = LLMGateway(
+                database: db,
+                client: llm.client,
+                provider: llm.provider,
+                model: llm.model
+            )
+            llmGateway = gateway
 
             let savedPrompt = SettingsRepository(database: db).loadBasePrompt()
             let basePrompt = savedPrompt.isEmpty ? PromptBuilder.defaultBasePrompt : savedPrompt
 
             let state = AppState(
                 database: db,
-                llmClient: llm.client,
+                llmClient: gateway,
                 llmModel: llm.model,
                 llmProvider: llm.provider,
                 isLLMConfigured: llm.isConfigured,
@@ -93,7 +101,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             briefEngine = BriefEngine(
                 database: db,
-                client: llm.client,
+                client: gateway,
                 model: llm.model,
                 basePrompt: basePrompt
             )
@@ -463,7 +471,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     let llm = self.resolvedProvider()
-                    self.briefEngine?.client = llm.client
+                    self.llmGateway?.update(
+                        client: llm.client,
+                        provider: llm.provider,
+                        model: llm.model
+                    )
+                    self.appState?.updateLLMConfiguration(
+                        model: llm.model,
+                        provider: llm.provider,
+                        isConfigured: llm.isConfigured
+                    )
                 }
             }
 
@@ -476,7 +493,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                           let engine = self.pollEngine, let state = self.appState
                     else { return }
                     let llm = self.resolvedProvider()
-                    self.briefEngine?.client = llm.client
+                    self.llmGateway?.update(
+                        client: llm.client,
+                        provider: llm.provider,
+                        model: llm.model
+                    )
+                    state.updateLLMConfiguration(
+                        model: llm.model,
+                        provider: llm.provider,
+                        isConfigured: llm.isConfigured
+                    )
 
                     if SettingsRepository().loadLocalOnlyMode() {
                         engine.unregister(serviceID: "slack")
@@ -544,7 +570,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 db: db,
                 ingestionCoordinator: engine.ingestionCoordinator,
                 notificationManager: notifications,
-                llmClient: llm.client,
+                llmClient: gateway,
                 llmModel: llm.model,
                 rulesProvider: {
                     (try? await db.dbQueue.read { db in try PriorityRule.fetchAll(db) }) ?? []
@@ -576,7 +602,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Agent (P1) — proposes actions you approve. Mirrors realtimeMonitor wiring.
             let agent = AgentEngine(
                 db: db,
-                llmClient: llm.client,
+                llmClient: gateway,
                 llmModel: llm.model,
                 repository: state.repository,
                 rulesProvider: {

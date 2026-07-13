@@ -16,6 +16,10 @@ struct LLMRunRecord: Codable, FetchableRecord, MutablePersistableRecord {
     var responseHash: String?
     var inputTokenEstimate: Int?
     var outputTokenEstimate: Int?
+    var purpose: String = LLMRequestPurpose.unspecified.rawValue
+    var durationMs: Int?
+    var requestedMaxTokens: Int?
+    var wasTruncated: Bool = false
 
     static let databaseTableName = "llmRuns"
 

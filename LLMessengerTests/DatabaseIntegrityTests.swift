@@ -115,6 +115,16 @@ final class DatabaseIntegrityTests: XCTestCase {
         }
     }
 
+    func testLLMRunsHavePerformanceTelemetryColumns() throws {
+        let db = try makeDB()
+        try db.dbQueue.read { database in
+            let columns = Set(try database.columns(in: "llmRuns").map(\.name))
+            XCTAssertTrue(columns.isSuperset(of: [
+                "purpose", "durationMs", "requestedMaxTokens", "wasTruncated"
+            ]))
+        }
+    }
+
     // MARK: - Duplicate message constraint
 
     func testDuplicateServiceMessageIdIsRejectedByUniqueConstraint() throws {

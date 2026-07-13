@@ -604,6 +604,15 @@ final class AppDatabase: @unchecked Sendable {
                 unique: true
             )
         }
+        migrator.registerMigration("v34_llm_run_telemetry") { db in
+            try db.alter(table: "llmRuns") { table in
+                table.add(column: "purpose", .text).notNull().defaults(to: "unspecified")
+                table.add(column: "durationMs", .integer)
+                table.add(column: "requestedMaxTokens", .integer)
+                table.add(column: "wasTruncated", .boolean).notNull().defaults(to: false)
+            }
+            try db.create(index: "llmRuns_on_purpose", on: "llmRuns", columns: ["purpose"])
+        }
         try migrator.migrate(dbQueue)
 
         // A process cannot still own a running job after this database has been

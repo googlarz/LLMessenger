@@ -89,7 +89,12 @@ struct CommandRouter {
 
         let response: LLMResponse
         do {
-            response = try await llmClient.complete(model: llmModel, messages: messages, maxTokens: 80)
+            response = try await llmClient.complete(
+                model: llmModel,
+                messages: messages,
+                maxTokens: 80,
+                purpose: .commandRouting
+            )
         } catch {
             return .unknown
         }
