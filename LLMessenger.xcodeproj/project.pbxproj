@@ -11,7 +11,6 @@
 		051BE19FFE796E11D9312A4E /* DeepIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 276519F649E84201C4C1D365 /* DeepIntegrationTests.swift */; };
 		063C043389D79C067A736989 /* AgentEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D2C5BFE2A21CFE268EF5F9D /* AgentEngine.swift */; };
 		0A29CB4614513C5DD5552425 /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5153C5FA624AF8042F72A30 /* AppStateTests.swift */; };
-		0A7DCD94D775FE5316621F49 /* ToDoStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE19C5C01E7AEEC0899BB197 /* ToDoStripView.swift */; };
 		0AA8FC1D3F625AABF5777C9F /* SubprocessAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */; };
 		0B6747556DAC812373FD0745 /* SlackAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F863A1D7C0B0D2C9C06967 /* SlackAdapterTests.swift */; };
 		0B8874C2588D57BA25D4E669 /* iMessageAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E475368B062471E6196742F /* iMessageAdapterTests.swift */; };
@@ -502,7 +501,6 @@
 		EBD22DF77EE0F38928663192 /* InstructionsSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructionsSettingsTab.swift; sourceTree = "<group>"; };
 		ECE52D0D8A3301486D6FFA45 /* LLMessengerFocusFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerFocusFilter.swift; sourceTree = "<group>"; };
 		EDE41EDF41C22A31636E8F7B /* OwedReplyDeriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwedReplyDeriver.swift; sourceTree = "<group>"; };
-		EE19C5C01E7AEEC0899BB197 /* ToDoStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToDoStripView.swift; sourceTree = "<group>"; };
 		EE76AF586A612F980FC97D19 /* PromptBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilderTests.swift; sourceTree = "<group>"; };
 		EF5FFF27A6A0EF9C4A19C28C /* ReplyVoiceSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyVoiceSampler.swift; sourceTree = "<group>"; };
 		F0A44ACF0445A86BBF07D51E /* QuickReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReply.swift; sourceTree = "<group>"; };
@@ -804,7 +802,6 @@
 				E43E417C20E15D0D48AFF4A8 /* DeskView.swift */,
 				FE5E1EA01A8AD1590CFFCCAC /* ProductLoveMetrics.swift */,
 				BE36F3EB93AE51102F819B4C /* ProductOutcomeStats.swift */,
-				EE19C5C01E7AEEC0899BB197 /* ToDoStripView.swift */,
 				965F7ECAE366317C866E354B /* WeeklyRecapView.swift */,
 			);
 			path = Desk;
@@ -1371,7 +1368,6 @@
 				7485667FD9BB75A498987D0F /* TelegramSignInView.swift in Sources */,
 				40B16522FD6D885CF5BA5741 /* Theme.swift in Sources */,
 				A4AAEAA892F516B7F9D4B3B7 /* ThreadView.swift in Sources */,
-				0A7DCD94D775FE5316621F49 /* ToDoStripView.swift in Sources */,
 				88412F7018C6EDABAF99EBCA /* TokenEstimator.swift in Sources */,
 				BCB8920954E2D52C91A6B62B /* TriageEngine.swift in Sources */,
 				6CB1E724272C6BD1E16753CC /* TriageEvent.swift in Sources */,

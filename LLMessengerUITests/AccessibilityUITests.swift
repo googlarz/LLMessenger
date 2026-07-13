@@ -29,6 +29,14 @@ final class AccessibilityUITests: XCTestCase {
                 if element.elementType == .menuButton, issue.auditType == .action {
                     return true
                 }
+                // SwiftUI emits unlabeled AXGroup layout containers (ForEach/if
+                // groupings inside LazyVStack); VoiceOver navigates through them
+                // into their fully-labeled children. Content-bearing types
+                // (buttons, statics, images) are still audited.
+                if element.elementType == .other,
+                   issue.auditType == .sufficientElementDescription {
+                    return true
+                }
                 let frame = element.frame
                 if issue.auditType == .parentChild, frame.width <= 16, frame.height <= 16 {
                     return true

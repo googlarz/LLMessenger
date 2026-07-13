@@ -1,8 +1,10 @@
 // LLMessenger/UI/Act/ActFeedView.swift
 //
-// Unified action feed — agent proposals + owed replies in one ranked list.
+// Single ranked work queue: Needs your decision / Ready to send / Waiting on
+// others / Later. Each row answers who, what, why now, and one primary action.
 // Two semantic colours: red = someone is waiting on you, grey = self-directed.
 // Keyboard-first: J/K to move, Return = approve, S = skip, E = edit.
+// ⌘-click multi-selects; batch approval appears only for 2+ compatible sends.
 
 import SwiftUI
 
@@ -16,6 +18,8 @@ struct ActFeedView: View {
     @State private var selectedIndex: Int? = nil
     @State private var resolvedInSession = 0
     @State private var editingItemId: String? = nil
+    /// ⌘-click multi-selection for batch approval of compatible sends.
+    @State private var multiSelectedIds: Set<String> = []
 
     init(layout: DeskLayout = .regular) {
         self.layout = layout
@@ -25,14 +29,57 @@ struct ActFeedView: View {
     // feedContent's ForEach/animation, and onChange all read this same array,
     // which previously meant ~4 sorts per render pass.
     var items: [ActItem] {
-        appState.attentionProjection.actItems
+        queueSections.flatMap(\.items)
+    }
+
+    /// The four-section queue. Items keep their global attention rank inside
+    /// each section; sections order by how urgently the user is needed.
+    private var queueSections: [(title: String, items: [ActItem])] {
+        var decision: [ActItem] = []
+        var ready: [ActItem] = []
+        var later: [ActItem] = []
+        for item in appState.attentionProjection.actItems {
+            if item.isStale {
+                later.append(item)
+                continue
+            }
+            switch item {
+            case .agentAction(let action):
+                if action.isMaybe || action.riskEnum == .high {
+                    decision.append(item)
+                } else {
+                    ready.append(item)
+                }
+            case .owedReply:
+                // No draft exists yet — the user decides what (or whether) to say.
+                decision.append(item)
+            }
+        }
+        return [
+            ("Needs your decision", decision),
+            ("Ready to send", ready),
+            ("Later", later),
+        ].filter { !$0.1.isEmpty }.map { (title: $0.0, items: $0.1) }
+    }
+
+    private var theyOweCommitments: [Commitment] {
+        appState.attentionProjection.commitments.filter { $0.directionEnum != .iOwe }
+    }
+
+    private var iOweCommitments: [Commitment] {
+        appState.attentionProjection.commitments.filter { $0.directionEnum == .iOwe }
+    }
+
+    private var isQueueEmpty: Bool {
+        appState.attentionProjection.actItems.isEmpty
+            && appState.attentionProjection.promiseCount == 0
     }
 
     var body: some View {
         let items = self.items
         VStack(spacing: 0) {
             Group {
-                if items.isEmpty {
+                if isQueueEmpty {
                     emptyState
                 } else {
                     feedContent(items: items)
@@ -89,39 +136,49 @@ struct ActFeedView: View {
 
     private func feedContent(items: [ActItem]) -> some View {
         VStack(spacing: 0) {
-            safetyNote
-            Rule()
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        if pendingLowRiskActionsCount > 0 {
-                            batchBar
-                            Rule()
-                        }
-                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                            let isEditingThisCard = Binding<Bool>(
-                                get: { editingItemId == item.id },
-                                set: { if $0 { editingItemId = item.id } else if editingItemId == item.id { editingItemId = nil } }
-                            )
+                        let sections = queueSections
+                        ForEach(sections, id: \.title) { section in
                             VStack(spacing: 0) {
-                                Button { selectedIndex = index } label: {
-                                    ActCardRow(
-                                        item: item,
-                                        layout: layout,
-                                        isSelected: selectedIndex == index,
-                                        isEditingExternal: isEditingThisCard,
-                                        onResolved: { resolvedInSession += 1 }
-                                    )
-                                    .id(item.id)
+                                sectionHeader(section.title,
+                                              color: section.title == "Later" ? Theme.textTertiary : Theme.signal)
+                                ForEach(section.items, id: \.id) { item in
+                                    let index = items.firstIndex { $0.id == item.id } ?? 0
+                                    actRow(item: item, index: index)
                                 }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel(item.accessibilitySummary)
-                                Rule()
                             }
-                            .transition(.asymmetric(
-                                insertion: .opacity,
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel(section.title)
+                        }
+
+                        if !theyOweCommitments.isEmpty {
+                            VStack(spacing: 0) {
+                                sectionHeader("Waiting on others", color: Theme.textTertiary)
+                                ForEach(theyOweCommitments) { c in
+                                    commitmentRow(c)
+                                    Rule()
+                                }
+                            }
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel("Waiting on others")
+                        }
+
+                        if !iOweCommitments.isEmpty || !appState.attentionProjection.tasks.isEmpty {
+                            VStack(spacing: 0) {
+                                sectionHeader("Later · promises and tasks", color: Theme.textTertiary)
+                                ForEach(iOweCommitments) { c in
+                                    commitmentRow(c)
+                                    Rule()
+                                }
+                                ForEach(appState.attentionProjection.tasks, id: \.id) { t in
+                                    taskRow(t)
+                                    Rule()
+                                }
+                            }
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel("Later, promises and tasks")
                         }
                     }
                     .animation(Theme.spring, value: items.map { $0.id })
@@ -134,56 +191,183 @@ struct ActFeedView: View {
                     }
                 }
             }
-        }
-    }
 
-    private var safetyNote: some View {
-        HStack {
-            Image(systemName: "lock.shield")
-                .font(.system(size: 10))
-                .foregroundStyle(Theme.textTertiary)
-            Text(safetyLine)
-                .font(Theme.sans(11))
-                .foregroundStyle(Theme.textTertiary)
-                .lineLimit(layout == .compact ? 2 : 1)
-            Spacer()
-        }
-        .padding(.horizontal, layout.gutter)
-        .padding(.vertical, 7)
-        .background(Theme.surfaceHigh.opacity(0.35))
-    }
-
-    private var batchBar: some View {
-        let lowRiskCount = pendingLowRiskActionsCount
-        return HStack {
-            Text("\(lowRiskCount) low-risk send\(lowRiskCount == 1 ? "" : "s") ready")
-                .font(Theme.mono(10))
-                .foregroundStyle(Theme.textTertiary)
-                .lineLimit(layout == .compact ? 2 : 1)
-            Spacer()
-            Button("Queue \(lowRiskCount)") {
-                appState.batchApproveLowRisk()
-                resolvedInSession += lowRiskCount
+            // Batch approval surfaces only once 2+ compatible sends are ⌘-selected —
+            // it is not a permanent strip over the queue. The safety window is stated
+            // here, where it's relevant to the send.
+            if batchSelectedActions.count >= 2 {
+                Rule()
+                batchSelectionBar
             }
-            .buttonStyle(WireActionStyle(tint: Theme.standby))
-            .accessibilityLabel("Queue \(lowRiskCount) low-risk send\(lowRiskCount == 1 ? "" : "s")")
-            .accessibilityHint("Each send waits 5 seconds and can be undone before it sends.")
+        }
+    }
+
+    private func actRow(item: ActItem, index: Int) -> some View {
+        let isEditingThisCard = Binding<Bool>(
+            get: { editingItemId == item.id },
+            set: { if $0 { editingItemId = item.id } else if editingItemId == item.id { editingItemId = nil } }
+        )
+        return VStack(spacing: 0) {
+            Button {
+                if NSEvent.modifierFlags.contains(.command) {
+                    toggleMultiSelect(item)
+                } else {
+                    multiSelectedIds.removeAll()
+                    selectedIndex = index
+                }
+            } label: {
+                ActCardRow(
+                    item: item,
+                    layout: layout,
+                    isSelected: selectedIndex == index,
+                    isEditingExternal: isEditingThisCard,
+                    onResolved: { resolvedInSession += 1 }
+                )
+                .id(item.id)
+            }
+            .buttonStyle(.plain)
+            .background(multiSelectedIds.contains(item.id) ? Theme.standby.opacity(0.08) : Color.clear)
+            .accessibilityLabel(item.accessibilitySummary)
+            Rule()
+        }
+        .transition(.asymmetric(
+            insertion: .opacity,
+            removal: .move(edge: .trailing).combined(with: .opacity)
+        ))
+    }
+
+    private func sectionHeader(_ title: String, color: Color) -> some View {
+        HStack {
+            WireLabel(title, color: color)
+            Spacer()
         }
         .padding(.horizontal, layout.gutter)
-        .padding(.vertical, 8)
+        .padding(.vertical, 9)
+        .background(Theme.surfaceHigh.opacity(0.5))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityLabel(title)
     }
 
-    private var pendingLowRiskActionsCount: Int {
-        appState.agentActions.filter {
-            $0.statusEnum == .pending && $0.riskEnum == .low && !$0.isMaybe
-        }.count
-    }
+    // MARK: - Multi-select batch approval
 
-    private var safetyLine: String {
-        if appState.hasDelegatedLanes {
-            return "Manual sends wait 5s. Delegated lanes wait 30s and can be paused."
+    /// ⌘-selected actions that can be batch-queued: pending drafted sends,
+    /// not "maybe", not high-risk. Anything else is incompatible and keeps
+    /// the batch bar hidden.
+    private var batchSelectedActions: [AgentAction] {
+        items.compactMap { item -> AgentAction? in
+            guard multiSelectedIds.contains(item.id),
+                  case .agentAction(let action) = item,
+                  action.statusEnum == .pending,
+                  !action.isMaybe,
+                  action.riskEnum != .high,
+                  action.kindEnum == .reply || action.kindEnum == .ack
+            else { return nil }
+            return action
         }
-        return "Manual sends stage for 5s before sending."
+    }
+
+    private var batchSelectionBar: some View {
+        let actions = batchSelectedActions
+        return HStack {
+            Text("\(actions.count) sends selected · each waits 5s and can be undone")
+                .font(Theme.sans(11.5))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(2)
+            Spacer()
+            Button("QUEUE \(actions.count)") {
+                for action in actions {
+                    appState.stageManualApprove(action)
+                }
+                resolvedInSession += actions.count
+                multiSelectedIds.removeAll()
+            }
+            .buttonStyle(PrimaryActionStyle(tint: Theme.standby))
+            .accessibilityLabel("Queue \(actions.count) selected sends")
+            .accessibilityHint("Each send waits 5 seconds and can be undone before it sends.")
+            Button("CANCEL") { multiSelectedIds.removeAll() }
+                .buttonStyle(WireActionStyle())
+        }
+        .padding(.horizontal, layout.gutter)
+        .padding(.vertical, 10)
+        .background(Theme.standby.opacity(0.06))
+    }
+
+    private func toggleMultiSelect(_ item: ActItem) {
+        if multiSelectedIds.contains(item.id) {
+            multiSelectedIds.remove(item.id)
+        } else {
+            multiSelectedIds.insert(item.id)
+        }
+    }
+
+    // MARK: - Commitment / task rows (the former to-do strip, folded into the queue)
+
+    private func commitmentRow(_ c: Commitment) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(c.directionEnum == .iOwe ? "YOU" : "THEM")
+                .font(Theme.mono(9, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: layout == .compact ? 42 : 36, alignment: .leading)
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(c.what)
+                    .font(Theme.bodyFont)
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(layout == .compact ? 2 : nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(c.conversationName)
+                    .font(Theme.mono(10))
+                    .foregroundStyle(Theme.textTertiary)
+                    .lineLimit(1)
+            }
+            .layoutPriority(1)
+            Spacer()
+            Button { appState.markCommitmentFulfilled(c) } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+                .buttonStyle(.plain)
+                .help(c.directionEnum == .iOwe ? "Mark done" : "Mark received")
+                .accessibilityLabel(c.directionEnum == .iOwe
+                    ? "Mark done, you delivered: \(c.what)"
+                    : "Mark received, they delivered: \(c.what)")
+        }
+        .padding(.horizontal, layout.gutter)
+        .padding(.vertical, 9)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(c.directionEnum == .iOwe ? "You owe" : "They owe"): \(c.what), \(c.conversationName)")
+    }
+
+    private func taskRow(_ t: BriefTask) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("—")
+                .font(Theme.bodyFont)
+                .foregroundStyle(Theme.textTertiary)
+            Text(t.text)
+                .font(Theme.bodyFont)
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(layout == .compact ? 2 : nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+            Spacer()
+            Button { if let id = t.id { appState.completeTask(id) } } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+                .buttonStyle(.plain)
+                .help("Mark done")
+                .accessibilityLabel("Complete task: \(t.text)")
+        }
+        .padding(.horizontal, layout.gutter)
+        .padding(.vertical, 9)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Task: \(t.text)")
     }
 
     // MARK: - Empty state
