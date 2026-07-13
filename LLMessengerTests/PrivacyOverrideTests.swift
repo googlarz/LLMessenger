@@ -6,9 +6,11 @@ import GRDB
 /// Spy that records calls and declares itself a cloud client.
 private final class CloudSpyLLMClient: LLMClient {
     var callCount = 0
+    var requestedModels: [String] = []
     var isLocal: Bool { false }
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
         callCount += 1
+        requestedModels.append(model)
         return LLMResponse(text: """
         {"priority":"high","needsReply":true,"reason":"Urgent"}
         """, inputTokens: 1, outputTokens: 1)
@@ -44,7 +46,12 @@ final class PrivacyOverrideTests: XCTestCase {
         try await saveContext(db, privacyOverride: "local_only")
         let spy = CloudSpyLLMClient()
         let nm = await NotificationManager()
-        let engine = TriageEngine(db: db, llmClient: spy, notificationManager: nm)
+        let engine = TriageEngine(
+            db: db,
+            llmClient: spy,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
 
         try await engine.triage(
             service: "imessage", conversationId: "conv1",
@@ -66,7 +73,12 @@ final class PrivacyOverrideTests: XCTestCase {
         try await saveContext(db, privacyOverride: nil)
         let spy = CloudSpyLLMClient()
         let nm = await NotificationManager()
-        let engine = TriageEngine(db: db, llmClient: spy, notificationManager: nm)
+        let engine = TriageEngine(
+            db: db,
+            llmClient: spy,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
 
         try await engine.triage(
             service: "imessage", conversationId: "conv1",
@@ -74,9 +86,34 @@ final class PrivacyOverrideTests: XCTestCase {
         )
 
         XCTAssertEqual(spy.callCount, 1, "Cloud client should be used for normal conversations")
+        XCTAssertEqual(spy.requestedModels, ["selected-model"])
 
         let events = try await db.dbQueue.read { grdb in try TriageEvent.fetchAll(grdb) }
         XCTAssertEqual(events.count, 1)
         XCTAssertEqual(events[0].triggeredBy, "llm")
+    }
+
+    func testNeverDraftConversationNeverReachesAnyLLMClient() async throws {
+        let db = try makeDB()
+        try await saveContext(db, privacyOverride: "never_draft")
+        let spy = CloudSpyLLMClient()
+        let nm = await NotificationManager()
+        let engine = TriageEngine(
+            db: db,
+            llmClient: spy,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
+
+        try await engine.triage(
+            service: "imessage", conversationId: "conv1",
+            conversationName: "Alice", messages: makeMessages(), rules: []
+        )
+
+        XCTAssertEqual(spy.callCount, 0)
+        let events = try await db.dbQueue.read { grdb in try TriageEvent.fetchAll(grdb) }
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events[0].triggeredBy, "privacy")
+        XCTAssertTrue(events[0].reason.contains("automatic triage disabled"))
     }
 }

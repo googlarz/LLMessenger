@@ -10,10 +10,16 @@ final class TriageMockLLMClient: LLMClient {
     {"priority":"high","needsReply":true,"reason":"Urgent request"}
     """
     var callCount = 0
+    var requestedModels: [String] = []
     var shouldFail = false
+    var responseDelayNanoseconds: UInt64 = 0
 
     func complete(model: String, messages: [LLMMessage], maxTokens: Int) async throws -> LLMResponse {
         callCount += 1
+        requestedModels.append(model)
+        if responseDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: responseDelayNanoseconds)
+        }
         if shouldFail { throw LLMError.networkFailed("mock failure") }
         return LLMResponse(text: stubbedResponse, inputTokens: 10, outputTokens: 10)
     }
@@ -72,7 +78,12 @@ final class TriageEngineTests: XCTestCase {
         let db = try makeDB()
         let mockLLM = TriageMockLLMClient()
         let nm = await NotificationManager()
-        let engine = TriageEngine(db: db, llmClient: mockLLM, notificationManager: nm)
+        let engine = TriageEngine(
+            db: db,
+            llmClient: mockLLM,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
         let rule = makeRule(contactPattern: "Alice", alwaysNotify: true)
         let messages = makeMessages()
 
@@ -99,7 +110,12 @@ final class TriageEngineTests: XCTestCase {
         let db = try makeDB()
         let mockLLM = TriageMockLLMClient()
         let nm = await NotificationManager()
-        let engine = TriageEngine(db: db, llmClient: mockLLM, notificationManager: nm)
+        let engine = TriageEngine(
+            db: db,
+            llmClient: mockLLM,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
         let rule = makeRule(keywordPattern: "Hello", suppress: true)
         let messages = makeMessages()
 
@@ -126,7 +142,12 @@ final class TriageEngineTests: XCTestCase {
         let db = try makeDB()
         let mockLLM = TriageMockLLMClient()
         let nm = await NotificationManager()
-        let engine = TriageEngine(db: db, llmClient: mockLLM, notificationManager: nm)
+        let engine = TriageEngine(
+            db: db,
+            llmClient: mockLLM,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
         let messages = makeMessages()
 
         try await engine.triage(
@@ -138,6 +159,7 @@ final class TriageEngineTests: XCTestCase {
         )
 
         XCTAssertEqual(mockLLM.callCount, 1, "LLM should be called when no rule matches")
+        XCTAssertEqual(mockLLM.requestedModels, ["selected-model"])
 
         let events = try await db.dbQueue.read { db in try TriageEvent.fetchAll(db) }
         XCTAssertEqual(events.count, 1)
@@ -153,7 +175,12 @@ final class TriageEngineTests: XCTestCase {
         let mockLLM = TriageMockLLMClient()
         mockLLM.shouldFail = true
         let nm = await NotificationManager()
-        let engine = TriageEngine(db: db, llmClient: mockLLM, notificationManager: nm)
+        let engine = TriageEngine(
+            db: db,
+            llmClient: mockLLM,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
         let messages = makeMessages()
 
         try await engine.triage(
@@ -171,5 +198,67 @@ final class TriageEngineTests: XCTestCase {
         XCTAssertEqual(events[0].reason, "Triage unavailable")
         XCTAssertEqual(events[0].triggeredBy, "fallback")
         XCTAssertFalse(events[0].notified)
+    }
+
+    func testRepeatedMessageIsTriagedOnlyOnce() async throws {
+        let db = try makeDB()
+        let mockLLM = TriageMockLLMClient()
+        let nm = await NotificationManager()
+        let engine = TriageEngine(
+            db: db,
+            llmClient: mockLLM,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
+        let messages = makeMessages()
+
+        for _ in 0..<2 {
+            try await engine.triage(
+                service: "imessage",
+                conversationId: "conv1",
+                conversationName: "Alice",
+                messages: messages,
+                rules: []
+            )
+        }
+
+        XCTAssertEqual(mockLLM.callCount, 1)
+        let events = try await db.dbQueue.read { db in try TriageEvent.fetchAll(db) }
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events[0].messageId, "msg0")
+    }
+
+    func testOverlappingMessageIsTriagedOnlyOnce() async throws {
+        let db = try makeDB()
+        let mockLLM = TriageMockLLMClient()
+        mockLLM.responseDelayNanoseconds = 50_000_000
+        let nm = await NotificationManager()
+        let engine = TriageEngine(
+            db: db,
+            llmClient: mockLLM,
+            llmModel: "selected-model",
+            notificationManager: nm
+        )
+        let messages = makeMessages()
+
+        async let first: Void = engine.triage(
+            service: "imessage",
+            conversationId: "conv1",
+            conversationName: "Alice",
+            messages: messages,
+            rules: []
+        )
+        async let second: Void = engine.triage(
+            service: "imessage",
+            conversationId: "conv1",
+            conversationName: "Alice",
+            messages: messages,
+            rules: []
+        )
+        _ = try await (first, second)
+
+        XCTAssertEqual(mockLLM.callCount, 1)
+        let events = try await db.dbQueue.read { db in try TriageEvent.fetchAll(db) }
+        XCTAssertEqual(events.count, 1)
     }
 }

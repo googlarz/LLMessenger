@@ -79,7 +79,9 @@ final class ContextBiasTests: XCTestCase {
         let nm = await NotificationManager()
         let ctx = makeContext(keySenders: ["Alice"])
         try await db.dbQueue.write { try ctx.insert($0) }
-        let engine = TriageEngine(db: db, llmClient: mockLLM, notificationManager: nm)
+        let engine = TriageEngine(
+            db: db, llmClient: mockLLM, llmModel: "selected-model", notificationManager: nm
+        )
 
         try await engine.triage(
             service: "imessage", conversationId: "conv1", conversationName: "Alice",
@@ -98,7 +100,9 @@ final class ContextBiasTests: XCTestCase {
         let db = try makeDB()
         let mockLLM = TriageMockLLMClient()  // default stub: high / needsReply / "Urgent request"
         let nm = await NotificationManager()
-        let engine = TriageEngine(db: db, llmClient: mockLLM, notificationManager: nm)
+        let engine = TriageEngine(
+            db: db, llmClient: mockLLM, llmModel: "selected-model", notificationManager: nm
+        )
 
         try await engine.triage(
             service: "imessage", conversationId: "conv1", conversationName: "Alice",
@@ -121,7 +125,9 @@ final class ContextBiasTests: XCTestCase {
         let nm = await NotificationManager()
         let ctx = makeContext(noiseTopics: ["memes"])
         try await db.dbQueue.write { try ctx.insert($0) }
-        let engine = TriageEngine(db: db, llmClient: mockLLM, notificationManager: nm)
+        let engine = TriageEngine(
+            db: db, llmClient: mockLLM, llmModel: "selected-model", notificationManager: nm
+        )
 
         try await engine.triage(
             service: "imessage", conversationId: "conv1", conversationName: "Alice",

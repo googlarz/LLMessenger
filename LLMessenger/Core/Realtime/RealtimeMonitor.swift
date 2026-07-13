@@ -5,8 +5,7 @@ import GRDB
 actor RealtimeMonitor {
     private let adapters: [String: any MessengerAdapter]
     private let db: AppDatabase
-    private let notificationManager: NotificationManager
-    private let llmClient: any LLMClient
+    private let triageEngine: TriageEngine
     private let rulesProvider: @Sendable () async -> [PriorityRule]
 
     private var running = false
@@ -37,12 +36,17 @@ actor RealtimeMonitor {
         db: AppDatabase,
         notificationManager: NotificationManager,
         llmClient: any LLMClient,
+        llmModel: String,
         rulesProvider: @escaping @Sendable () async -> [PriorityRule]
     ) {
         self.adapters = adapters
         self.db = db
-        self.notificationManager = notificationManager
-        self.llmClient = llmClient
+        self.triageEngine = TriageEngine(
+            db: db,
+            llmClient: llmClient,
+            llmModel: llmModel,
+            notificationManager: notificationManager
+        )
         self.rulesProvider = rulesProvider
     }
 
@@ -172,8 +176,7 @@ actor RealtimeMonitor {
         messages: [Message]
     ) async {
         let rules = await rulesProvider()
-        let engine = TriageEngine(db: db, llmClient: llmClient, notificationManager: notificationManager)
-        try? await engine.triage(
+        try? await triageEngine.triage(
             service: serviceID,
             conversationId: conversationId,
             conversationName: conversationName,

@@ -593,6 +593,17 @@ final class AppDatabase: @unchecked Sendable {
                 columns: ["service", "conversationId", "createdAt"]
             )
         }
+        migrator.registerMigration("v33_triage_message_identity") { db in
+            try db.alter(table: "triageEvents") { table in
+                table.add(column: "messageId", .text)
+            }
+            try db.create(
+                index: "triageEvents_on_service_messageId",
+                on: "triageEvents",
+                columns: ["service", "messageId"],
+                unique: true
+            )
+        }
         try migrator.migrate(dbQueue)
 
         // A process cannot still own a running job after this database has been

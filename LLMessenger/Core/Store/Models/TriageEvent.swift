@@ -5,6 +5,7 @@ struct TriageEvent: Codable, FetchableRecord, PersistableRecord, Identifiable {
     var id: Int64?
     var service: String
     var conversationId: String
+    var messageId: String? = nil
     var priority: String       // "high" | "medium" | "low"
     var needsReply: Bool
     var reason: String

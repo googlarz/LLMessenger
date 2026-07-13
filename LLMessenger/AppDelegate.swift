@@ -548,6 +548,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 db: db,
                 notificationManager: notifications,
                 llmClient: llm.client,
+                llmModel: llm.model,
                 rulesProvider: {
                     (try? await db.dbQueue.read { db in try PriorityRule.fetchAll(db) }) ?? []
                 }

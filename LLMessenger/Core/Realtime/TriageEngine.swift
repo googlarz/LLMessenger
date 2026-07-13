@@ -5,11 +5,19 @@ import GRDB
 actor TriageEngine {
     private let db: AppDatabase
     private let llmClient: any LLMClient
+    private let llmModel: String
     private let notificationManager: NotificationManager
+    private var inFlightMessageKeys: Set<String> = []
 
-    init(db: AppDatabase, llmClient: any LLMClient, notificationManager: NotificationManager) {
+    init(
+        db: AppDatabase,
+        llmClient: any LLMClient,
+        llmModel: String,
+        notificationManager: NotificationManager
+    ) {
         self.db = db
         self.llmClient = llmClient
+        self.llmModel = llmModel
         self.notificationManager = notificationManager
     }
 
@@ -21,6 +29,26 @@ actor TriageEngine {
         rules: [PriorityRule]
     ) async throws {
         guard let newest = messages.max(by: { $0.timestamp < $1.timestamp }) else { return }
+        let messageKey = "\(service)\u{1F}\(newest.messageId)"
+        guard inFlightMessageKeys.insert(messageKey).inserted else { return }
+        defer { inFlightMessageKeys.remove(messageKey) }
+
+        let alreadyTriaged = try await db.dbQueue.read { database in
+            try TriageEvent
+                .filter(Column("service") == service)
+                .filter(Column("messageId") == newest.messageId)
+                .fetchCount(database) > 0
+        }
+        guard !alreadyTriaged else { return }
+
+        // Privacy is loaded before any path can reach the LLM. Deterministic
+        // local rules may still notify, but never_draft always blocks inference.
+        let context = try? await db.dbQueue.read { database in
+            try ConversationContext.fetchOne(
+                database,
+                key: ["service": service, "conversationId": conversationId]
+            )
+        }
 
         if let match = RuleEvaluator.evaluate(
             contactName: conversationName,
@@ -31,10 +59,11 @@ actor TriageEngine {
             switch match.action {
             case .alwaysNotify:
                 let pattern = match.rule.contactPattern ?? match.rule.keywordPattern ?? ""
-                var event = TriageEvent(
+                let event = TriageEvent(
                     id: nil,
                     service: service,
                     conversationId: conversationId,
+                    messageId: newest.messageId,
                     priority: "high",
                     needsReply: true,
                     reason: "Rule: \(pattern)",
@@ -42,15 +71,17 @@ actor TriageEngine {
                     notified: true,
                     createdAt: Date()
                 )
-                try await db.dbQueue.write { db in try event.insert(db) }
-                await fireNotification(title: conversationName, body: "Rule: \(pattern)")
+                if try await persistIfNew(event) {
+                    await fireNotification(title: conversationName, body: "Rule: \(pattern)")
+                }
                 return
 
             case .suppress:
-                var event = TriageEvent(
+                let event = TriageEvent(
                     id: nil,
                     service: service,
                     conversationId: conversationId,
+                    messageId: newest.messageId,
                     priority: "low",
                     needsReply: false,
                     reason: "Suppressed by rule",
@@ -58,7 +89,7 @@ actor TriageEngine {
                     notified: false,
                     createdAt: Date()
                 )
-                try await db.dbQueue.write { db in try event.insert(db) }
+                _ = try await persistIfNew(event)
                 return
 
             case .setPriority:
@@ -67,36 +98,36 @@ actor TriageEngine {
             }
         }
 
-        // Load conversation context (v2 "Understand" fields) for deterministic biasing.
-        let context = try? await db.dbQueue.read { db in
-            try ConversationContext.fetchOne(db, key: ["service": service, "conversationId": conversationId])
-        }
-
-        // Per-conversation privacy: local_only conversations must never reach a cloud LLM.
-        // If the active client is cloud, skip LLM triage entirely and persist a safe event.
-        if context?.privacyOverride == "local_only", llmClient.isCloud {
-            var event = TriageEvent(
+        let inferenceBlocked = context?.privacyOverride == "never_draft"
+            || (context?.privacyOverride == "local_only" && llmClient.isCloud)
+        if inferenceBlocked {
+            let heldLocal = context?.privacyOverride == "local_only"
+            let event = TriageEvent(
                 id: nil,
                 service: service,
                 conversationId: conversationId,
+                messageId: newest.messageId,
                 priority: "medium",
                 needsReply: false,
-                reason: "Held local — cloud triage disabled for this conversation",
+                reason: heldLocal
+                    ? "Held local — cloud triage disabled for this conversation"
+                    : "Private conversation — automatic triage disabled",
                 triggeredBy: "privacy",
                 notified: false,
                 createdAt: Date()
             )
-            try await db.dbQueue.write { db in try event.insert(db) }
+            _ = try await persistIfNew(event)
             return
         }
 
         // Strong context signal: newest sender is a key sender → short-circuit before the LLM.
         if let context,
            let keySender = ContextBias.matchingKeySender(sender: newest.sender, context: context) {
-            var event = TriageEvent(
+            let event = TriageEvent(
                 id: nil,
                 service: service,
                 conversationId: conversationId,
+                messageId: newest.messageId,
                 priority: "high",
                 needsReply: true,
                 reason: "Key sender: \(keySender)",
@@ -104,8 +135,9 @@ actor TriageEngine {
                 notified: true,
                 createdAt: Date()
             )
-            try await db.dbQueue.write { db in try event.insert(db) }
-            await fireNotification(title: conversationName, body: "Key sender: \(keySender)")
+            if try await persistIfNew(event) {
+                await fireNotification(title: conversationName, body: "Key sender: \(keySender)")
+            }
             return
         }
 
@@ -123,16 +155,17 @@ Conversation:
 
         do {
             let response = try await llmClient.complete(
-                model: "gpt-4o-mini",
+                model: llmModel,
                 messages: [LLMMessage(role: .user, content: prompt)],
                 maxTokens: 200
             )
             let parsed = try parseTriageJSON(response.text)
             let biased = ContextBias.applyTopicBias(to: parsed, newestText: newest.text, context: context)
-            var event = TriageEvent(
+            let event = TriageEvent(
                 id: nil,
                 service: service,
                 conversationId: conversationId,
+                messageId: newest.messageId,
                 priority: biased.priority,
                 needsReply: biased.needsReply,
                 reason: biased.reason,
@@ -140,15 +173,15 @@ Conversation:
                 notified: biased.needsReply,
                 createdAt: Date()
             )
-            try await db.dbQueue.write { db in try event.insert(db) }
-            if biased.needsReply {
+            if try await persistIfNew(event), biased.needsReply {
                 await fireNotification(title: conversationName, body: biased.reason)
             }
         } catch {
-            var event = TriageEvent(
+            let event = TriageEvent(
                 id: nil,
                 service: service,
                 conversationId: conversationId,
+                messageId: newest.messageId,
                 priority: "medium",
                 needsReply: false,
                 reason: "Triage unavailable",
@@ -156,7 +189,15 @@ Conversation:
                 notified: false,
                 createdAt: Date()
             )
-            try await db.dbQueue.write { db in try event.insert(db) }
+            _ = try await persistIfNew(event)
+        }
+    }
+
+    private func persistIfNew(_ event: TriageEvent) async throws -> Bool {
+        try await db.dbQueue.write { database in
+            let event = event
+            try event.insert(database, onConflict: .ignore)
+            return database.changesCount > 0
         }
     }
 

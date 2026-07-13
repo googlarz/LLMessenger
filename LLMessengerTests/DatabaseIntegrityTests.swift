@@ -101,6 +101,20 @@ final class DatabaseIntegrityTests: XCTestCase {
         XCTAssertTrue(indexes.contains("briefCards_on_service_conversation_createdAt"))
     }
 
+    func testTriageEventsHaveDurableMessageIdentity() throws {
+        let db = try makeDB()
+        try db.dbQueue.read { database in
+            let columns = try database.columns(in: "triageEvents").map(\.name)
+            XCTAssertTrue(columns.contains("messageId"))
+
+            let indexes = Set(try String.fetchAll(
+                database,
+                sql: "SELECT name FROM sqlite_master WHERE type = 'index'"
+            ))
+            XCTAssertTrue(indexes.contains("triageEvents_on_service_messageId"))
+        }
+    }
+
     // MARK: - Duplicate message constraint
 
     func testDuplicateServiceMessageIdIsRejectedByUniqueConstraint() throws {
