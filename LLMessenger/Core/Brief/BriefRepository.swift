@@ -30,6 +30,158 @@ struct BriefRepository {
         }
     }
 
+    // MARK: - Durable Brief Jobs
+
+    /// Claims the oldest replayable automatic job, or snapshots `messages` into
+    /// a new job. Messages arriving after this transaction belong to a later job.
+    func claimAutomaticBriefJob(messages: [Message], now: Date = Date()) throws -> BriefJobSnapshot? {
+        try database.dbQueue.write { db in
+            let replayable = [
+                BriefJobStatus.queued.rawValue,
+                BriefJobStatus.partial.rawValue,
+                BriefJobStatus.failed.rawValue
+            ]
+            let placeholders = replayable.map { _ in "?" }.joined(separator: ",")
+            var job = try BriefJob.fetchOne(
+                db,
+                sql: """
+                    SELECT * FROM briefJobs
+                    WHERE kind = ? AND status IN (\(placeholders))
+                    ORDER BY createdAt ASC
+                    LIMIT 1
+                """,
+                arguments: StatementArguments([BriefJobKind.automatic.rawValue] + replayable)
+            )
+
+            if job == nil {
+                let snapshotMessages = messages.filter { $0.id != nil && $0.briefId == nil && !$0.isSent }
+                guard !snapshotMessages.isEmpty else { return nil }
+
+                var newJob = BriefJob(
+                    id: nil,
+                    kind: BriefJobKind.automatic.rawValue,
+                    status: BriefJobStatus.queued.rawValue,
+                    createdAt: now,
+                    updatedAt: now,
+                    startedAt: nil,
+                    completedAt: nil,
+                    attemptCount: 0,
+                    lastError: nil
+                )
+                try newJob.insert(db)
+                guard let jobID = newJob.id else {
+                    throw DatabaseError(message: "claimAutomaticBriefJob: no rowid after insert")
+                }
+                for message in snapshotMessages {
+                    guard let messageRowID = message.id else { continue }
+                    let item = BriefJobMessage(
+                        jobId: jobID,
+                        messageRowId: messageRowID,
+                        status: BriefJobMessageStatus.pending.rawValue,
+                        completedAt: nil,
+                        briefId: nil
+                    )
+                    try item.insert(db)
+                }
+                job = newJob
+            }
+
+            guard var claimed = job, let jobID = claimed.id else { return nil }
+            let pendingMessages = try Message.fetchAll(db, sql: """
+                SELECT m.*
+                FROM messages m
+                JOIN briefJobMessages j ON j.messageRowId = m.id
+                WHERE j.jobId = ? AND j.status = ? AND m.briefId IS NULL
+                ORDER BY m.timestamp ASC
+            """, arguments: [jobID, BriefJobMessageStatus.pending.rawValue])
+
+            if pendingMessages.isEmpty {
+                try db.execute(sql: """
+                    UPDATE briefJobs
+                    SET status = ?, updatedAt = ?, completedAt = ?, lastError = NULL
+                    WHERE id = ?
+                """, arguments: [BriefJobStatus.succeeded.rawValue, now, now, jobID])
+                return nil
+            }
+
+            claimed.status = BriefJobStatus.running.rawValue
+            claimed.updatedAt = now
+            claimed.startedAt = now
+            claimed.completedAt = nil
+            claimed.attemptCount += 1
+            claimed.lastError = nil
+            try claimed.update(db)
+            return BriefJobSnapshot(job: claimed, messages: pendingMessages)
+        }
+    }
+
+    func fetchBriefJobs() throws -> [BriefJob] {
+        try database.dbQueue.read { db in
+            try BriefJob.order(Column("createdAt").asc).fetchAll(db)
+        }
+    }
+
+    func fetchBriefJobMessages(jobID: Int64) throws -> [BriefJobMessage] {
+        try database.dbQueue.read { db in
+            try BriefJobMessage
+                .filter(Column("jobId") == jobID)
+                .order(Column("messageRowId").asc)
+                .fetchAll(db)
+        }
+    }
+
+    func markBriefJobFailed(jobID: Int64, error: String, now: Date = Date()) throws {
+        try database.dbQueue.write { db in
+            try db.execute(sql: """
+                UPDATE briefJobs
+                SET status = ?, updatedAt = ?, completedAt = NULL, lastError = ?
+                WHERE id = ?
+            """, arguments: [BriefJobStatus.failed.rawValue, now, String(error.prefix(1000)), jobID])
+        }
+    }
+
+    /// Completes the successful subset and leaves the remaining snapshot rows
+    /// pending. This participates in the same transaction that stores the brief.
+    static func completeBriefJob(
+        jobID: Int64,
+        messages: [Message],
+        briefID: Int64,
+        failedServices: Set<String>,
+        now: Date = Date(),
+        db: Database
+    ) throws {
+        let rowIDs = messages.compactMap(\.id)
+        if !rowIDs.isEmpty {
+            let placeholders = rowIDs.map { _ in "?" }.joined(separator: ",")
+            var arguments: [DatabaseValueConvertible] = [
+                BriefJobMessageStatus.succeeded.rawValue, now, briefID, jobID
+            ]
+            arguments.append(contentsOf: rowIDs)
+            try db.execute(sql: """
+                UPDATE briefJobMessages
+                SET status = ?, completedAt = ?, briefId = ?
+                WHERE jobId = ? AND messageRowId IN (\(placeholders))
+            """, arguments: StatementArguments(arguments))
+        }
+
+        let pending = try Int.fetchOne(db, sql: """
+            SELECT COUNT(*) FROM briefJobMessages WHERE jobId = ? AND status = ?
+        """, arguments: [jobID, BriefJobMessageStatus.pending.rawValue]) ?? 0
+        let status = pending == 0 ? BriefJobStatus.succeeded : BriefJobStatus.partial
+        let failureText = failedServices.isEmpty ? nil : failedServices.sorted().joined(separator: ", ")
+        try db.execute(sql: """
+            UPDATE briefJobs
+            SET status = ?, updatedAt = ?, completedAt = ?, lastError = ?
+            WHERE id = ?
+        """, arguments: [
+            status.rawValue,
+            now,
+            status == .succeeded ? now : nil,
+            failureText,
+            jobID
+        ])
+    }
+
     func storeSentMessage(service: String, conversationID: String, text: String) throws {
         try database.dbQueue.write { db in
             var record = Message(

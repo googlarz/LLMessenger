@@ -94,6 +94,7 @@
 		5F54EE7EAB1F99DEE6B0AC0E /* NotificationManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 330592143EFDC8AF2BC51E83 /* NotificationManagerTests.swift */; };
 		5F8880FE230505FF8474C699 /* DigestScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A80874CD0D61038ECEAB9A2 /* DigestScheduler.swift */; };
 		60955B6BBC9E53B442135E2F /* ProductOutcomeStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE36F3EB93AE51102F819B4C /* ProductOutcomeStats.swift */; };
+		60D5289472C16DB610DC8540 /* BriefJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = D107220D4EE83DB014D6FCB4 /* BriefJob.swift */; };
 		6515871374A6975B0B2432DF /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 874EAADE41BC00D431B7655A /* SettingsWindowController.swift */; };
 		6590441FCAED6F40B1C1E6A9 /* SystemInvariantTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F27CBD218CE0D49903AC0ECE /* SystemInvariantTests.swift */; };
 		6697FB8260477417E96C5758 /* UpdateCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D725694A67BD078C05B411 /* UpdateCheckerTests.swift */; };
@@ -132,6 +133,7 @@
 		88412F7018C6EDABAF99EBCA /* TokenEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E0C2BDE4D0C62F27A1106B /* TokenEstimator.swift */; };
 		89D9474481B146BB8EFB761C /* BriefEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 306739C4ABE143E1957D677D /* BriefEngineTests.swift */; };
 		8B40D06E6D17AB8291CD30E4 /* GlossaryPromptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF1E29FE25174068D1BB2B5 /* GlossaryPromptTests.swift */; };
+		8B7D6DAB56D994507C15AACC /* BriefJobRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A4F0D995065E8EC1935EB31 /* BriefJobRepositoryTests.swift */; };
 		8D3B2820A3C08333F7ECBEFB /* ActionQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8342ED2F825C2C81001D644A /* ActionQueueTests.swift */; };
 		8E82BD8645B6E2387841985B /* PromptBuilderContextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C5381692DFFC5AF4B8A0F6 /* PromptBuilderContextTests.swift */; };
 		8F6E46E1E8A362D1B0918AE5 /* MessengerAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */; };
@@ -350,6 +352,7 @@
 		66D9CFBB9722856E912EABC7 /* FrontendRobustnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontendRobustnessTests.swift; sourceTree = "<group>"; };
 		6780A88A868BFC2F3FBB1A56 /* ContactProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactProfileView.swift; sourceTree = "<group>"; };
 		68447CD013DEC23E5A0DEFFD /* LLMHTTPHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMHTTPHelper.swift; sourceTree = "<group>"; };
+		6A4F0D995065E8EC1935EB31 /* BriefJobRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefJobRepositoryTests.swift; sourceTree = "<group>"; };
 		6BC6FDFCFADDCEE5A74B7FB0 /* OllamaModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaModelPicker.swift; sourceTree = "<group>"; };
 		6BC84610C1FBB1A47EE9B2A4 /* SlackAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAdapter.swift; sourceTree = "<group>"; };
 		6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepositoryExtendedTests.swift; sourceTree = "<group>"; };
@@ -437,6 +440,7 @@
 		CC762565E52A3E618204CC24 /* BriefEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefEngine.swift; sourceTree = "<group>"; };
 		CC8AFC142FA3DB7BF2E8C360 /* ContextParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextParserTests.swift; sourceTree = "<group>"; };
 		CEB475651CD2CEBBB7A66D36 /* SlackAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAPIClient.swift; sourceTree = "<group>"; };
+		D107220D4EE83DB014D6FCB4 /* BriefJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefJob.swift; sourceTree = "<group>"; };
 		D1C53599E26085F5DEAF82B4 /* CalendarActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarActor.swift; sourceTree = "<group>"; };
 		D2154C9B35956879197B12AC /* SubprocessAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubprocessAdapterTests.swift; sourceTree = "<group>"; };
 		D2355EB0CABB60EE291A0AC3 /* DiagnosticsReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsReporter.swift; sourceTree = "<group>"; };
@@ -675,6 +679,7 @@
 				C8B86E6E485D934BB3558CD3 /* BackendWorkflowE2ETests.swift */,
 				B748E0A7F24D6131687A769E /* BriefEngineHistoryTests.swift */,
 				306739C4ABE143E1957D677D /* BriefEngineTests.swift */,
+				6A4F0D995065E8EC1935EB31 /* BriefJobRepositoryTests.swift */,
 				C581342159C8F31C26BDE07C /* BriefJSONTests.swift */,
 				6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */,
 				9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */,
@@ -1002,6 +1007,7 @@
 				3982B388A984024FBEEA9C82 /* Brief.swift */,
 				1551568E73E6646226FE66C3 /* BriefCardRecord.swift */,
 				5B7AAA3D7B964F21F64A8D29 /* BriefCardSource.swift */,
+				D107220D4EE83DB014D6FCB4 /* BriefJob.swift */,
 				748D805868C6F537868D8D7E /* ContactProfile.swift */,
 				26D15D68069F866198719ECA /* ConversationContext.swift */,
 				764C95853B55B31A7FDBCA54 /* ConversationState.swift */,
@@ -1161,6 +1167,7 @@
 				FB19EB3855A919C4B8DCB7C4 /* BriefEngine.swift in Sources */,
 				FAF9F38106756444BDB2FAAA /* BriefHeaderView.swift in Sources */,
 				2837CF2B8EB456AA3092F0D4 /* BriefJSON.swift in Sources */,
+				60D5289472C16DB610DC8540 /* BriefJob.swift in Sources */,
 				0CC29365B40814D25473FD1D /* BriefLearningRow.swift in Sources */,
 				B47F50B3DD0A86EE369C8549 /* BriefListView.swift in Sources */,
 				5A7F8A5FF820AE804CFC2BEC /* BriefProseView.swift in Sources */,
@@ -1297,6 +1304,7 @@
 				732196ED36CB2969112FCCB1 /* BriefEngineHistoryTests.swift in Sources */,
 				89D9474481B146BB8EFB761C /* BriefEngineTests.swift in Sources */,
 				3E22F31FF9FE520E6770954B /* BriefJSONTests.swift in Sources */,
+				8B7D6DAB56D994507C15AACC /* BriefJobRepositoryTests.swift in Sources */,
 				BAB6F302E2FD6409D2BEEAA5 /* BriefRepositoryExtendedTests.swift in Sources */,
 				74A17FE1D2ED74716D433271 /* BriefRepositoryTests.swift in Sources */,
 				DDD9824CD60147EBF1967C48 /* CalendarActionTests.swift in Sources */,

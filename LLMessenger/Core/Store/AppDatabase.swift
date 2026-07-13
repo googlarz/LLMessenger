@@ -534,6 +534,47 @@ final class AppDatabase: @unchecked Sendable {
             // rather than staying permanently stuck.
             try db.execute(sql: "UPDATE briefs SET episodicSummary = NULL WHERE episodicSummary = ''")
         }
+        migrator.registerMigration("v30_durable_brief_jobs") { db in
+            try db.create(table: "briefJobs") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("kind", .text).notNull()
+                t.column("status", .text).notNull()
+                t.column("createdAt", .datetime).notNull()
+                t.column("updatedAt", .datetime).notNull()
+                t.column("startedAt", .datetime)
+                t.column("completedAt", .datetime)
+                t.column("attemptCount", .integer).notNull().defaults(to: 0)
+                t.column("lastError", .text)
+            }
+
+            try db.create(table: "briefJobMessages") { t in
+                t.column("jobId", .integer).notNull().references("briefJobs", onDelete: .cascade)
+                t.column("messageRowId", .integer).notNull().references("messages", onDelete: .cascade)
+                t.column("status", .text).notNull().defaults(to: BriefJobMessageStatus.pending.rawValue)
+                t.column("completedAt", .datetime)
+                t.column("briefId", .integer).references("briefs", onDelete: .setNull)
+                t.primaryKey(["jobId", "messageRowId"])
+            }
+
+            try db.create(index: "briefJobs_on_status_createdAt",
+                          on: "briefJobs", columns: ["status", "createdAt"])
+            try db.create(index: "briefJobMessages_on_job_status",
+                          on: "briefJobMessages", columns: ["jobId", "status"])
+            try db.execute(sql: """
+                CREATE UNIQUE INDEX briefJobMessages_on_pending_message
+                ON briefJobMessages(messageRowId)
+                WHERE status = 'pending'
+            """)
+        }
         try migrator.migrate(dbQueue)
+
+        // A process cannot still own a running job after this database has been
+        // reopened. Put interrupted work back in the queue for immediate replay.
+        try dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE briefJobs SET status = ?, updatedAt = ? WHERE status = ?",
+                arguments: [BriefJobStatus.queued.rawValue, Date(), BriefJobStatus.running.rawValue]
+            )
+        }
     }
 }

@@ -26,7 +26,9 @@ final class DatabaseIntegrityTests: XCTestCase {
             d.tableExists("serviceConfig") &&
             d.tableExists("serviceHealth") &&
             d.tableExists("briefCardSources") &&
-            d.tableExists("llmRuns")
+            d.tableExists("llmRuns") &&
+            d.tableExists("briefJobs") &&
+            d.tableExists("briefJobMessages")
         }
         XCTAssertTrue(tables, "All expected tables must exist after AppDatabase migration")
     }
