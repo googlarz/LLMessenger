@@ -120,9 +120,9 @@ struct BriefListGrouper {
 @MainActor
 final class AppState: ObservableObject {
     @Published var isDemoTransitioning = false   // true during demo→real morph window
-    @Published var briefs: [Brief] = []
-    @Published var briefCardsByBriefID: [Int64: [BriefCard]] = [:]
-    @Published var tasks: [BriefTask] = []
+    @Published var briefs: [Brief] = [] { didSet { recomputeAttentionProjection() } }
+    @Published var briefCardsByBriefID: [Int64: [BriefCard]] = [:] { didSet { recomputeAttentionProjection() } }
+    @Published var tasks: [BriefTask] = [] { didSet { recomputeAttentionProjection() } }
     @Published var selectedBriefID: Int64?
     /// Live adapter status, pushed by AppDelegate on every poll event. Source of
     /// truth for all status reads. `serviceHealthMap` (DB rows, loaded in
@@ -141,18 +141,18 @@ final class AppState: ObservableObject {
     /// True when any high-priority card from today is unhandled.
     @Published var nowNeedsAttention: Bool = false
     /// Conversations where the user owes a reply (derived, not stored).
-    @Published var owedReplies: [OwedReply] = []
+    @Published var owedReplies: [OwedReply] = [] { didSet { recomputeAttentionProjection() } }
     @Published var owedCount: Int = 0
 
     /// Pending agent-proposed actions (the Act queue) and their count.
-    @Published var agentActions: [AgentAction] = []
+    @Published var agentActions: [AgentAction] = [] { didSet { recomputeAttentionProjection() } }
     @Published var actionsReadyCount: Int = 0
     /// True when at least one conversation has delegation configured.
     /// Drives the always-visible kill switch in the menu bar.
     @Published var hasDelegatedLanes: Bool = false
 
     /// Open commitments (the ledger) and their count.
-    @Published var commitments: [Commitment] = []
+    @Published var commitments: [Commitment] = [] { didSet { recomputeAttentionProjection() } }
     @Published var commitmentsCount: Int = 0
 
     // Stored state for the P2 delegation section (AppState+Delegation.swift) —
@@ -173,7 +173,8 @@ final class AppState: ObservableObject {
     // The five vars below were `private(set)` before AppState was split into
     // extension files; setters are internal only so those extensions can write.
     // Views must treat them as read-only — mutate via the AppState+*.swift funcs.
-    @Published var conversationContextsByKey: [String: ConversationContext] = [:]
+    @Published var conversationContextsByKey: [String: ConversationContext] = [:] { didSet { recomputeAttentionProjection() } }
+    @Published var attentionProjection: AttentionProjection = .empty
     @Published var productOutcomeStats: ProductOutcomeStats = .empty
     @Published var productLoveMetrics: ProductLoveMetrics = ProductLoveMetricStore.load()
     @Published var briefFetchLimit = 500
@@ -181,7 +182,7 @@ final class AppState: ObservableObject {
     @Published var handledCardKeys: Set<String> = {
         let saved = UserDefaults.standard.stringArray(forKey: "handledCardKeys") ?? []
         return Set(saved)
-    }()
+    }() { didSet { recomputeAttentionProjection() } }
 
     let database: AppDatabase
     let repository: BriefRepository
@@ -263,6 +264,16 @@ final class AppState: ObservableObject {
             totalThreads: fallback?.totalThreads ?? cards.reduce(0) { $0 + $1.counts.threads },
             totalPeople: fallback?.totalPeople ?? cards.reduce(0) { $0 + $1.counts.people },
             cards: cards
+        )
+    }
+
+    func effectivePriority(for card: BriefCard) -> String {
+        AttentionRanker.effectivePriority(
+            card.priority,
+            context: cachedConversationContext(
+                service: card.service,
+                conversationId: card.conversationId
+            )
         )
     }
 

@@ -259,7 +259,22 @@ struct BriefListView: View {
                 let key = "\(item.card.service)|\(item.card.conversationId)"
                 return seen.insert(key).inserted
             }
-            await MainActor.run { needsReplyCards = deduped }
+            await MainActor.run {
+                needsReplyCards = deduped.sorted { lhs, rhs in
+                    let leftContext = appState.cachedConversationContext(
+                        service: lhs.card.service,
+                        conversationId: lhs.card.conversationId
+                    )
+                    let rightContext = appState.cachedConversationContext(
+                        service: rhs.card.service,
+                        conversationId: rhs.card.conversationId
+                    )
+                    let leftScore = AttentionRanker.score(card: lhs.card, context: leftContext)
+                    let rightScore = AttentionRanker.score(card: rhs.card, context: rightContext)
+                    if leftScore != rightScore { return leftScore > rightScore }
+                    return lhs.briefCreatedAt > rhs.briefCreatedAt
+                }
+            }
         }
     }
 

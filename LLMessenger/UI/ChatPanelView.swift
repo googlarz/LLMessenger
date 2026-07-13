@@ -35,7 +35,7 @@ struct ChatPanelView: View {
             let briefs = json.cards.count
             let threads = json.total_threads ?? json.cards.reduce(0) { $0 + $1.counts.threads }
             let people = json.total_people ?? json.cards.reduce(0) { $0 + $1.counts.people }
-            let highPriority = json.cards.filter { $0.priority == "high" }.count
+            let highPriority = json.cards.filter { appState.effectivePriority(for: $0) == "high" }.count
             return (totalMsgs, svcs, briefs, threads, people, highPriority, failed)
         }
         let svcs = Set(msgs.map(\.service)).count

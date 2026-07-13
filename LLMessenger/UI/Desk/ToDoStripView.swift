@@ -21,8 +21,10 @@ struct ToDoStripView: View {
     /// Hard ceiling: past this the strip scrolls so it can't swallow the tab panel below.
     private let maxStripHeight: CGFloat = 248
 
-    private var maybeActions: [AgentAction] { appState.agentActions.filter { $0.isMaybe } }
-    private var hasToDo: Bool { !appState.commitments.isEmpty || !appState.tasks.isEmpty }
+    private var maybeActions: [AgentAction] { appState.attentionProjection.maybeActions }
+    private var hasToDo: Bool {
+        !appState.attentionProjection.commitments.isEmpty || !appState.attentionProjection.tasks.isEmpty
+    }
     private var hasContent: Bool { hasToDo || !maybeActions.isEmpty }
 
     var body: some View {
@@ -32,11 +34,11 @@ struct ToDoStripView: View {
                     VStack(spacing: 0) {
                         if hasToDo {
                             sectionHeader("To do", color: Theme.signal)
-                            ForEach(appState.commitments) { c in
+                            ForEach(appState.attentionProjection.commitments) { c in
                                 commitmentRow(c)
                                 Rule()
                             }
-                            ForEach(appState.tasks, id: \.id) { t in
+                            ForEach(appState.attentionProjection.tasks, id: \.id) { t in
                                 taskRow(t)
                                 Rule()
                             }

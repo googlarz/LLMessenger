@@ -97,6 +97,139 @@ final class FrontendRobustnessTests: XCTestCase {
         XCTAssertEqual(sorted.map(\.name), ["fresh", "stale"])
     }
 
+    func testActItemSorterUsesComparableScoresAcrossItemKinds() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        let action = AgentAction(
+            id: 1,
+            kind: AgentActionKind.calendarHold.rawValue,
+            service: "calendar",
+            conversationId: "self-directed",
+            conversationName: "Calendar",
+            title: "Hold time",
+            payload: "{}",
+            reasoning: "fixture",
+            confidence: 1,
+            riskLevel: AgentActionRisk.low.rawValue,
+            status: AgentActionStatus.pending.rawValue,
+            createdAt: now.addingTimeInterval(-60),
+            resolvedAt: nil
+        )
+        let owed = OwedReply(
+            service: "signal",
+            conversationId: "alice",
+            conversationName: "Alice",
+            triggerMessageId: "m1",
+            triggerText: "Can you confirm?",
+            triggeredAt: now.addingTimeInterval(-120),
+            reason: "needs reply",
+            priorityRank: 2
+        )
+
+        let sorted = ActItemSorter.sort(
+            [.agentAction(action), .owedReply(owed)],
+            now: now,
+            contextFor: { _, _ in nil }
+        )
+
+        XCTAssertEqual(sorted.map(\.name), ["Alice", "Calendar"])
+    }
+
+    func testAttentionProjectionDeduplicatesOwedReplyCoveredByDraft() {
+        let now = Date(timeIntervalSince1970: 20_000)
+        let draft = AgentAction(
+            id: 1,
+            kind: AgentActionKind.reply.rawValue,
+            service: "signal",
+            conversationId: "alice",
+            conversationName: "Alice",
+            title: "Reply to Alice",
+            payload: AgentAction.encodeReplyPayload("Yes"),
+            reasoning: "fixture",
+            confidence: 0.8,
+            riskLevel: AgentActionRisk.low.rawValue,
+            status: AgentActionStatus.pending.rawValue,
+            createdAt: now,
+            resolvedAt: nil
+        )
+        func owed(_ conversationID: String) -> OwedReply {
+            OwedReply(
+                service: "signal",
+                conversationId: conversationID,
+                conversationName: conversationID.capitalized,
+                triggerMessageId: "\(conversationID)-message",
+                triggerText: "Question",
+                triggeredAt: now,
+                reason: "needs reply",
+                priorityRank: 2
+            )
+        }
+
+        let projection = AttentionProjection.build(
+            briefs: [],
+            cardsByBriefID: [:],
+            handledCardKeys: [],
+            actions: [draft],
+            owedReplies: [owed("alice"), owed("bob")],
+            commitments: [],
+            tasks: [],
+            contextsByKey: [:],
+            now: now
+        )
+
+        XCTAssertEqual(projection.actBadgeCount, 2)
+        XCTAssertEqual(projection.waitingConversationCount, 2)
+        XCTAssertEqual(projection.owedRepliesWithoutDrafts.map(\.conversationId), ["bob"])
+    }
+
+    func testAppStateAttentionProjectionTracksCanonicalHandledCards() throws {
+        let state = makeAppState(db: try makeDB())
+        let briefID: Int64 = 91_001
+        let cardID = "attention-\(UUID().uuidString)"
+        let brief = Brief(
+            id: briefID,
+            createdAt: Date(),
+            status: "ready",
+            services: #"["signal"]"#,
+            openingSummary: nil,
+            notificationText: "Digest"
+        )
+        let card = BriefCard(
+            id: cardID,
+            service: "signal",
+            conversationId: "alice",
+            conversationTitle: "Alice",
+            headline: "Needs review",
+            priority: "low",
+            counts: .zero,
+            summary: "Review",
+            callback: nil,
+            actionItems: [],
+            quotes: [],
+            sourceMessageIds: ["m1"]
+        )
+
+        state.handledCardKeys = []
+        state.conversationContextsByKey = [
+            "signal|alice": ConversationContext(
+                service: "signal",
+                conversationId: "alice",
+                label: "VIP",
+                priorityHint: "high",
+                updatedAt: Date()
+            )
+        ]
+        state.briefCardsByBriefID = [briefID: [card]]
+        state.briefs = [brief]
+        XCTAssertEqual(state.attentionProjection.todayHighPriorityUnhandledCount, 1)
+        XCTAssertEqual(state.attentionProjection.latestDigest.reviewCount, 1)
+        XCTAssertEqual(state.attentionProjection.latestDigest.quietCount, 0)
+        XCTAssertTrue(state.nowNeedsAttention)
+
+        state.handledCardKeys.insert("\(briefID):\(cardID)")
+        XCTAssertEqual(state.attentionProjection.todayHighPriorityUnhandledCount, 0)
+        XCTAssertFalse(state.nowNeedsAttention)
+    }
+
     func testProductOutcomeStatsCountsRecentBriefsHandledCardsAndAudits() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let recentID: Int64 = 42

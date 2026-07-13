@@ -142,11 +142,15 @@ struct BriefProseView: View {
     }
 
     private var reviewCards: [NumberedBriefCard] {
-        numberedVisibleCards.filter { !$0.card.needsReply && $0.card.priority == "high" }
+        numberedVisibleCards.filter {
+            !$0.card.needsReply && effectivePriority(for: $0.card) == "high"
+        }
     }
 
     private var otherCards: [NumberedBriefCard] {
-        numberedVisibleCards.filter { !$0.card.needsReply && $0.card.priority != "high" && !isNoise($0.card) }
+        numberedVisibleCards.filter {
+            !$0.card.needsReply && effectivePriority(for: $0.card) != "high" && !isNoise($0.card)
+        }
     }
 
     private var noiseCards: [NumberedBriefCard] {
@@ -160,7 +164,15 @@ struct BriefProseView: View {
     private func isNoise(_ card: BriefCard) -> Bool {
         // A high-priority card is never folded into the noise strip — otherwise it
         // would render in both "Needs you" and the FYI strip and be double-counted.
-        !card.needsReply && card.priority != "high" && (card.collapsed || card.priority == "low")
+        let priority = effectivePriority(for: card)
+        return !card.needsReply && priority != "high" && (card.collapsed || priority == "low")
+    }
+
+    private func effectivePriority(for card: BriefCard) -> String {
+        AttentionRanker.effectivePriority(
+            card.priority,
+            context: contextCache["\(card.service)|\(card.conversationId)"]
+        )
     }
 
     private var visibleMessages: [Message] {

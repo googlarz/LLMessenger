@@ -109,7 +109,7 @@ struct DeskView: View {
     private func badge(for tab: DeskTab) -> String? {
         switch tab {
         case .act:
-            let count = appState.actionsReadyCount + appState.owedCount
+            let count = appState.attentionProjection.actBadgeCount
             return count > 0 ? "\(count)" : nil
         case .digest:
             let cal = Calendar.current

@@ -38,8 +38,8 @@ extension AppState {
                 let healthMap = (try? settingsRepo.loadAllServiceHealth()) ?? [:]
                 let heldBack = settingsRepo.loadFirewallHeldBack()
                 await MainActor.run {
-                    self.briefs = fetched
                     self.briefCardsByBriefID = cardsByBriefID
+                    self.briefs = fetched
                     self.briefPipelineHealth = pipelineHealth
                     self.serviceHealthMap = healthMap
                     self.heldBackCount = heldBack
@@ -225,17 +225,21 @@ extension AppState {
     }
 
     func recomputeNowState() {
-        let cal = Calendar.current
-        let todayHighUnhandled = briefs
-            .filter { cal.isDateInToday($0.createdAt) && $0.archivedAt == nil }
-            .contains { brief in
-                guard let json = briefJSON(for: brief)
-                else { return false }
-                return json.cards.contains { card in
-                    card.priority == "high" &&
-                    !isCardHandled(briefID: brief.id ?? -1, cardID: card.id)
-                }
-            }
-        nowNeedsAttention = todayHighUnhandled
+        recomputeAttentionProjection()
+    }
+
+    func recomputeAttentionProjection(now: Date = Date()) {
+        attentionProjection = AttentionProjection.build(
+            briefs: briefs,
+            cardsByBriefID: briefCardsByBriefID,
+            handledCardKeys: handledCardKeys,
+            actions: agentActions,
+            owedReplies: owedReplies,
+            commitments: commitments,
+            tasks: tasks,
+            contextsByKey: conversationContextsByKey,
+            now: now
+        )
+        nowNeedsAttention = attentionProjection.todayHighPriorityUnhandledCount > 0
     }
 }

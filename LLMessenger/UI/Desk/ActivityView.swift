@@ -24,9 +24,9 @@ struct ActivityView: View {
                 Rule()
 
                 ExecutiveQueuesView(
-                    owedReplies: appState.owedReplies,
-                    commitments: appState.commitments,
-                    tasks: appState.tasks,
+                    owedReplies: appState.attentionProjection.owedRepliesWithoutDrafts,
+                    commitments: appState.attentionProjection.commitments,
+                    tasks: appState.attentionProjection.tasks,
                     actions: appState.agentActions
                 )
                 Rule()

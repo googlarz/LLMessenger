@@ -88,9 +88,11 @@ extension AppState {
 
     func mergeConversationContexts(_ contexts: [ConversationContext]) {
         guard !contexts.isEmpty else { return }
+        var merged = conversationContextsByKey
         for context in contexts {
-            conversationContextsByKey[conversationContextKey(service: context.service, conversationId: context.conversationId)] = context
+            merged[conversationContextKey(service: context.service, conversationId: context.conversationId)] = context
         }
+        conversationContextsByKey = merged
     }
 
     func fetchConversationContext(service: String, conversationId: String) -> ConversationContext? {

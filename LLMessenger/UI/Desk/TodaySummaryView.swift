@@ -5,19 +5,19 @@ struct TodaySummaryView: View {
     let layout: DeskLayout
 
     private var activeActions: Int {
-        appState.agentActions.filter { !$0.isMaybe }.count
+        appState.attentionProjection.readyActionCount
     }
 
     private var promiseCount: Int {
-        appState.commitments.count + appState.tasks.count
+        appState.attentionProjection.promiseCount
     }
 
     private var waitingCount: Int {
-        appState.owedCount
+        appState.attentionProjection.waitingConversationCount
     }
 
     private var isClear: Bool {
-        waitingCount == 0 && activeActions == 0 && promiseCount == 0
+        appState.attentionProjection.isClear
     }
 
     private var latestBrief: Brief? {
@@ -25,13 +25,8 @@ struct TodaySummaryView: View {
     }
 
     private var latestDigestStats: (reply: Int, review: Int, quiet: Int) {
-        guard let json = latestBrief.flatMap({ appState.briefJSON(for: $0) }) else {
-            return (0, 0, 0)
-        }
-        let reply = json.cards.filter(\.needsReply).count
-        let review = json.cards.filter { !$0.needsReply && $0.priority == "high" }.count
-        let quiet = json.cards.filter { !$0.needsReply && ($0.priority == "low" || $0.collapsed) }.count
-        return (reply, review, quiet)
+        let digest = appState.attentionProjection.latestDigest
+        return (digest.replyCount, digest.reviewCount, digest.quietCount)
     }
 
     var body: some View {

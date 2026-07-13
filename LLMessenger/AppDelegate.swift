@@ -894,7 +894,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// back to the generic title/body and may be held by the firewall.
     private func highPriorityCardCount(brief: Brief?) -> Int {
         guard let cards = brief.flatMap({ canonicalCards(for: $0) }) else { return 0 }
-        return cards.filter { $0.needsReply || $0.priority == "high" }.count
+        return cards.filter {
+            $0.needsReply || appState?.effectivePriority(for: $0) == "high"
+        }.count
     }
 
     private func highPriorityNotification(brief: Brief?, defaultTitle: String) -> (title: String, body: String) {
@@ -903,7 +905,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return (defaultTitle, defaultBody)
         }
         let replyCards = cards.filter(\.needsReply)
-        let reviewCards = cards.filter { !$0.needsReply && $0.priority == "high" }
+        let reviewCards = cards.filter {
+            !$0.needsReply && appState?.effectivePriority(for: $0) == "high"
+        }
         let interruptingCards = replyCards + reviewCards
         guard !interruptingCards.isEmpty, let topCard = interruptingCards.first else {
             return (defaultTitle, defaultBody)
