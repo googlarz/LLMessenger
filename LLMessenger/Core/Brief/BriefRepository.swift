@@ -28,17 +28,20 @@ struct BriefRepository {
         )
     }
 
-    func fetchUnattachedMessages() throws -> [Message] {
+    func fetchUnattachedMessages(limit: Int? = nil) throws -> [Message] {
         // Exclude messages older than 7 days — they won't improve a current brief and
         // would silently bloat the LLM prompt on every cycle until attached or pruned.
         let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
         return try database.dbQueue.read { db in
-            try Message
+            var request = Message
                 .filter(Column("briefId") == nil)
                 .filter(Column("isSent") == false)
                 .filter(Column("timestamp") >= cutoff)
                 .order(Column("timestamp").asc)
-                .fetchAll(db)
+            if let limit {
+                request = request.limit(limit)
+            }
+            return try request.fetchAll(db)
         }
     }
 
@@ -46,7 +49,11 @@ struct BriefRepository {
 
     /// Claims the oldest replayable automatic job, or snapshots `messages` into
     /// a new job. Messages arriving after this transaction belong to a later job.
-    func claimAutomaticBriefJob(messages: [Message], now: Date = Date()) throws -> BriefJobSnapshot? {
+    func claimAutomaticBriefJob(
+        messages: [Message],
+        now: Date = Date(),
+        messageLimit: Int? = nil
+    ) throws -> BriefJobSnapshot? {
         try database.dbQueue.write { db in
             let replayable = [
                 BriefJobStatus.queued.rawValue,
@@ -118,13 +125,21 @@ struct BriefRepository {
             }
 
             guard var claimed = job, let jobID = claimed.id else { return nil }
-            let pendingMessages = try Message.fetchAll(db, sql: """
+            var pendingSQL = """
                 SELECT m.*
                 FROM messages m
                 JOIN briefJobMessages j ON j.messageRowId = m.id
                 WHERE j.jobId = ? AND j.status = ? AND m.briefId IS NULL
                 ORDER BY m.timestamp ASC
-            """, arguments: [jobID, BriefJobMessageStatus.pending.rawValue])
+            """
+            if let messageLimit {
+                pendingSQL += " LIMIT \(max(1, messageLimit))"
+            }
+            let pendingMessages = try Message.fetchAll(
+                db,
+                sql: pendingSQL,
+                arguments: [jobID, BriefJobMessageStatus.pending.rawValue]
+            )
 
             if pendingMessages.isEmpty {
                 try db.execute(sql: """

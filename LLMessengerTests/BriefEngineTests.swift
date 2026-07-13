@@ -178,8 +178,8 @@ final class BriefEngineTests: XCTestCase {
         let retriedBriefID = try await engine.processNewMessages()
 
         XCTAssertNotNil(retriedBriefID)
-        XCTAssertEqual(succeedingMock.callCount, 3,
-                       "Expected two generation calls plus compression between completed jobs")
+        XCTAssertEqual(succeedingMock.callCount, 2,
+                       "Compression must run once per cycle, not between drained jobs")
         let jobs = try repository.fetchBriefJobs()
         let completedJob = try XCTUnwrap(jobs.first)
         XCTAssertEqual(completedJob.id, failedJob.id)

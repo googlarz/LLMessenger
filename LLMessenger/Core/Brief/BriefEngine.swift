@@ -12,6 +12,14 @@ enum BriefEngineValidationError: Error {
 
 @MainActor
 final class BriefEngine {
+    static let maximumAutomaticUserPromptTokens = 20_000
+    static let maximumAutomaticJobsPerRun = 3
+    static let maximumAutomaticCandidateMessages = 2_000
+    static let maximumAutomaticJobMessages = 500
+    private static let automaticNewMessageTokenBudget = 10_000
+    private static let automaticContextTokenBudget = 4_000
+    private static let maximumConversationsPerAutomaticJob = 30
+    private static let automaticMetadataCharacterLimit = 200
     private let maxRecentContextMessages = 20
     private let recentContextWindow: TimeInterval = 24 * 3600
     /// Per-conversation budget for TokenEstimator.selectWithinBudget — replaces
@@ -52,8 +60,22 @@ final class BriefEngine {
         briefingInFlight = true
         defer { briefingInFlight = false }
 
+        // Compression is cycle-level work. Draining multiple immutable jobs must
+        // not multiply this extra LLM call for every brief created in the cycle.
+        if let previous = try repository.fetchOldestUncompressedBrief(), let previousID = previous.id {
+            let compressor = MemoryCompressor(client: client, model: model, basePrompt: basePrompt)
+            do {
+                try await compressor.compress(briefID: previousID, repository: repository)
+            } catch {
+                try? repository.markCompressionFailed(briefID: previousID)
+            }
+        }
+
         var latestBriefID: Int64?
-        while let outcome = try await processNextAutomaticBriefJob(adapters: adapters) {
+        var processedJobs = 0
+        while processedJobs < Self.maximumAutomaticJobsPerRun,
+              let outcome = try await processNextAutomaticBriefJob(adapters: adapters) {
+            processedJobs += 1
             if let briefID = outcome.briefID {
                 latestBriefID = briefID
             }
@@ -74,7 +96,9 @@ final class BriefEngine {
         adapters: [String: any MessengerAdapter]
     ) async throws -> AutomaticBriefOutcome? {
 
-        let candidateMessages = try repository.fetchUnattachedMessages()
+        let candidateMessages = try repository.fetchUnattachedMessages(
+            limit: Self.maximumAutomaticCandidateMessages
+        )
 
         // Privacy-excluded conversations never enter a durable job snapshot: a
         // cloud client must not persist work that it is not allowed to process.
@@ -89,9 +113,14 @@ final class BriefEngine {
         let eligibleMessages = candidateMessages.filter {
             !initiallyExcludedConversations.contains("\($0.service)|\($0.conversationId)")
         }
-        guard let snapshot = try repository.claimAutomaticBriefJob(messages: eligibleMessages, now: now()),
+        let selectedMessages = selectAutomaticJobMessages(eligibleMessages)
+        guard let snapshot = try repository.claimAutomaticBriefJob(
+            messages: selectedMessages,
+            now: now(),
+            messageLimit: Self.maximumAutomaticJobMessages
+        ),
               let jobID = snapshot.job.id else { return nil }
-        let snapshotMessages = snapshot.messages
+        let snapshotMessages = selectAutomaticJobMessages(snapshot.messages)
         var jobFinalized = false
         defer {
             if !jobFinalized {
@@ -100,17 +129,6 @@ final class BriefEngine {
                     error: "Brief generation interrupted before commit",
                     now: now()
                 )
-            }
-        }
-
-        // Step 1: Compress oldest uncompressed Brief (non-fatal; oldest-first avoids starvation).
-        // On failure, write an empty-string sentinel so the same brief is not retried every cycle.
-        if let prev = try repository.fetchOldestUncompressedBrief(), let prevID = prev.id {
-            let compressor = MemoryCompressor(client: client, model: model, basePrompt: basePrompt)
-            do {
-                try await compressor.compress(briefID: prevID, repository: repository)
-            } catch {
-                try? repository.markCompressionFailed(briefID: prevID)
             }
         }
 
@@ -158,13 +176,15 @@ final class BriefEngine {
         var parsedServices: Set<String> = []
         var failedServices: Set<String> = []
         var sourceMessagesByService: [String: [String: Message]] = [:]
+        var succeededMessages: [Message] = []
 
         struct ServiceResult {
             let service: String
             let cards: [BriefCard]
             let stats: (messages: Int, threads: Int, people: Int)
             let sourceMessages: [String: Message]
-            let success: Bool
+            let succeededMessages: [Message]
+            let hadFailures: Bool
         }
 
         // Snapshot @MainActor properties before entering the task group so child tasks
@@ -173,6 +193,9 @@ final class BriefEngine {
         let model = self.model
         let basePrompt = self.basePrompt
         let briefLanguage = SettingsRepository().loadBriefLanguage()
+        let automaticContextTokenBudget = Self.automaticContextTokenBudget
+        let automaticMetadataCharacterLimit = Self.automaticMetadataCharacterLimit
+        let maximumAutomaticUserPromptTokens = Self.maximumAutomaticUserPromptTokens
 
         let results = await withTaskGroup(of: ServiceResult?.self) { group in
             for service in services {
@@ -196,10 +219,12 @@ final class BriefEngine {
                             conversationContexts: contexts,
                             briefLanguage: briefLanguage
                         )
-                        let maxConversations = 30
                         let rankedConvIds = byConversation.keys
-                            .sorted { (byConversation[$0]?.count ?? 0) > (byConversation[$1]?.count ?? 0) }
-                            .prefix(maxConversations)
+                            .sorted {
+                                let lhsDate = byConversation[$0]?.map(\.timestamp).min() ?? .distantFuture
+                                let rhsDate = byConversation[$1]?.map(\.timestamp).min() ?? .distantFuture
+                                return lhsDate == rhsDate ? $0 < $1 : lhsDate < rhsDate
+                            }
 
                         var conversationBlocks: [String] = []
                         // Collect context messages so their IDs are valid in decodeAndValidateBrief.
@@ -207,31 +232,37 @@ final class BriefEngine {
                         // if the LLM cites one of those IDs in sourceMessageIds, it must be in
                         // the allowlist, otherwise every card in an active conversation gets rejected.
                         var allPromptMessages: [Message] = serviceMessages
+                        let contextBudgetPerConversation = automaticContextTokenBudget
+                            / max(1, rankedConvIds.count)
                         for convId in rankedConvIds {
                             let convMessages = (byConversation[convId] ?? []).sorted { $0.timestamp < $1.timestamp }
-                            let capped = TokenEstimator.selectWithinBudget(
-                                convMessages, tokenBudget: self.perConversationTokenBudget, text: \.text)
-                            let firstDate = capped.first?.timestamp ?? Date()
-                            let contextMessages = (try? self.repository.fetchRecentContextMessages(
+                            let firstDate = convMessages.first?.timestamp ?? Date()
+                            let rawContextMessages = (try? self.repository.fetchRecentContextMessages(
                                 service: service,
                                 conversationID: convId,
                                 before: firstDate,
                                 since: firstDate.addingTimeInterval(-self.recentContextWindow),
                                 limit: self.maxRecentContextMessages
                             )) ?? []
+                            let contextMessages = TokenEstimator.selectWithinBudget(
+                                rawContextMessages,
+                                tokenBudget: contextBudgetPerConversation,
+                                text: \.text
+                            )
                             allPromptMessages.append(contentsOf: contextMessages)
 
                             let convHeader = convMessages.first?.conversationName
                                 ?? signalAdapter?.groupName(for: convId)
                                 ?? signalAdapter?.contactName(for: convId)
                                 ?? convId
-                            let omitted = convMessages.count - capped.count
                             let block = try self.buildConversationBlock(
                                 service: service,
                                 conversationID: convId,
                                 conversationTitle: convHeader,
-                                newMessages: capped,
-                                omittedNewMessageCount: omitted,
+                                newMessages: convMessages,
+                                omittedNewMessageCount: 0,
+                                recentContextMessages: contextMessages,
+                                metadataCharacterLimit: automaticMetadataCharacterLimit,
                                 dateFormatter: dateFormatter,
                                 senderNameResolver: { sender in
                                     let resolved = signalAdapter?.contactName(for: sender)
@@ -244,6 +275,16 @@ final class BriefEngine {
                         // make no LLM call (an empty prompt would send nothing useful to the cloud).
                         guard !conversationBlocks.isEmpty else { return nil }
                         let threadText = conversationBlocks.joined(separator: "\n\n")
+                        guard TokenEstimator.estimate(threadText) <= maximumAutomaticUserPromptTokens else {
+                            return ServiceResult(
+                                service: service,
+                                cards: [],
+                                stats: (0, 0, 0),
+                                sourceMessages: [:],
+                                succeededMessages: [],
+                                hadFailures: true
+                            )
+                        }
 
                         let response = try await client.complete(
                             model: model,
@@ -255,20 +296,45 @@ final class BriefEngine {
                         )
 
                         if let parsed = try? self.decodeAndValidateBrief(response.text, service: service, sourceMessages: allPromptMessages) {
+                            let coveredConversations = Set(parsed.cards.map(\.conversationId))
+                            let coveredMessages = serviceMessages.filter {
+                                coveredConversations.contains($0.conversationId)
+                            }
+                            let sourceMessages = Dictionary(
+                                allPromptMessages.map { ($0.messageId, $0) },
+                                uniquingKeysWith: { first, _ in first }
+                            )
                             return ServiceResult(
                                 service: service,
                                 cards: parsed.cards,
-                                stats: (parsed.totalMessages ?? serviceMessages.count, parsed.totalThreads ?? 0, parsed.totalPeople ?? 0),
-                                // uniquingKeysWith: keeps the first occurrence when Signal produces
-                                // duplicate messageIds (same sender+timestamp), preventing a crash.
-                                sourceMessages: Dictionary(serviceMessages.map { ($0.messageId, $0) }, uniquingKeysWith: { a, _ in a }),
-                                success: true
+                                stats: (
+                                    coveredMessages.count,
+                                    coveredConversations.count,
+                                    Set(coveredMessages.map(\.sender)).count
+                                ),
+                                sourceMessages: sourceMessages,
+                                succeededMessages: coveredMessages,
+                                hadFailures: coveredMessages.count != serviceMessages.count
                             )
                         } else {
-                            return ServiceResult(service: service, cards: [], stats: (0, 0, 0), sourceMessages: [:], success: false)
+                            return ServiceResult(
+                                service: service,
+                                cards: [],
+                                stats: (0, 0, 0),
+                                sourceMessages: [:],
+                                succeededMessages: [],
+                                hadFailures: true
+                            )
                         }
                     } catch {
-                        return ServiceResult(service: service, cards: [], stats: (0, 0, 0), sourceMessages: [:], success: false)
+                        return ServiceResult(
+                            service: service,
+                            cards: [],
+                            stats: (0, 0, 0),
+                            sourceMessages: [:],
+                            succeededMessages: [],
+                            hadFailures: true
+                        )
                     }
                 }
             }
@@ -281,14 +347,16 @@ final class BriefEngine {
         }
 
         for res in results {
-            if res.success {
+            if !res.succeededMessages.isEmpty {
                 parsedServices.insert(res.service)
                 sourceMessagesByService[res.service] = res.sourceMessages
+                succeededMessages.append(contentsOf: res.succeededMessages)
                 totalMessages += res.stats.messages
                 totalThreads += res.stats.threads
                 totalPeople += res.stats.people
                 allCards.append(contentsOf: res.cards)
-            } else {
+            }
+            if res.hadFailures {
                 failedServices.insert(res.service)
             }
         }
@@ -323,7 +391,7 @@ final class BriefEngine {
         let openingSummary = try encodeBriefJSON(merged)
 
         // Step 5: Create the Brief and attach messages
-        let notificationText = "\(messages.count) new messages · \(services.joined(separator: ", "))"
+        let notificationText = "\(succeededMessages.count) new messages · \(Array(parsedServices).sorted().joined(separator: ", "))"
         let servicesJSON = (try? String(data: JSONSerialization.data(withJSONObject: Array(parsedServices).sorted()), encoding: .utf8)) ?? "[]"
         let failedJSON = failedServices.isEmpty ? nil : (try? String(data: JSONSerialization.data(withJSONObject: Array(failedServices).sorted()), encoding: .utf8))
         let brief = Brief(
@@ -336,14 +404,10 @@ final class BriefEngine {
             notificationText: notificationText,
             episodicSummary: nil
         )
-        // Only attach messages from services whose LLM response parsed successfully.
-        // Messages from failed services stay unattached for the next poll cycle.
-        // Privacy-excluded conversations also stay unattached — they were never sent to the
-        // LLM, so attaching them would silently drop them from every future brief.
-        let messagesToAttach = messages.filter {
-            parsedServices.contains($0.service)
-                && !excludedConversations.contains("\($0.service)|\($0.conversationId)")
-        }
+        // Completion is conversation-exact: only messages from conversations
+        // represented by a validated card are attached. Omitted conversations
+        // remain pending in the durable job for a later retry.
+        let messagesToAttach = succeededMessages
 
         // Build record arrays on the main actor before entering the transaction closure.
         let (cardRecords, cardSources) = try buildBriefCardRecords(
@@ -710,7 +774,10 @@ final class BriefEngine {
         let parsed = try JSONDecoder().decode(BriefJSON.self, from: data)
         guard !parsed.cards.isEmpty else { throw BriefEngineValidationError.emptyCards }
 
-        let sourceIDs = Set(sourceMessages.map(\.messageId))
+        let sourceMessagesByID = Dictionary(
+            sourceMessages.map { ($0.messageId, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         var validCards: [BriefCard] = []
         for card in parsed.cards {
             guard card.service == service else {
@@ -718,7 +785,10 @@ final class BriefEngine {
                 continue
             }
 
-            let validSourceIDs = card.sourceMessageIds.filter { !$0.isEmpty && sourceIDs.contains($0) }
+            let validSourceIDs = card.sourceMessageIds.filter { messageID in
+                guard !messageID.isEmpty, let source = sourceMessagesByID[messageID] else { return false }
+                return source.conversationId == card.conversationId
+            }
             let droppedCount = card.sourceMessageIds.count - validSourceIDs.count
             if droppedCount > 0 {
                 print("[BriefEngine] card \(card.id): dropped \(droppedCount) unknown sourceMessageIds")
@@ -729,8 +799,8 @@ final class BriefEngine {
             }
 
             let validQuotes = card.quotes.filter { q in
-                guard let mid = q.messageId else { return false }
-                return sourceIDs.contains(mid)
+                guard let mid = q.messageId, let source = sourceMessagesByID[mid] else { return false }
+                return source.conversationId == card.conversationId
             }
             if validQuotes.count < card.quotes.count {
                 print("[BriefEngine] card \(card.id): dropped \(card.quotes.count - validQuotes.count) unknown quotes")
@@ -910,6 +980,60 @@ final class BriefEngine {
         }
     }
 
+    /// Selects a bounded, oldest-first input slice. Only selected rows enter a
+    /// new durable job, so every row owned by that job is present in its prompt.
+    private func selectAutomaticJobMessages(_ messages: [Message]) -> [Message] {
+        var selected: [Message] = []
+        let byService = Dictionary(grouping: messages, by: \.service)
+
+        for service in byService.keys.sorted() {
+            let serviceMessages = byService[service] ?? []
+            let byConversation = Dictionary(grouping: serviceMessages, by: \.conversationId)
+            let conversationIDs = byConversation.keys.sorted { lhs, rhs in
+                let lhsDate = byConversation[lhs]?.map(\.timestamp).min() ?? .distantFuture
+                let rhsDate = byConversation[rhs]?.map(\.timestamp).min() ?? .distantFuture
+                return lhsDate == rhsDate ? lhs < rhs : lhsDate < rhsDate
+            }
+
+            var serviceTokens = 0
+            var selectedConversations = 0
+            for conversationID in conversationIDs {
+                guard selectedConversations < Self.maximumConversationsPerAutomaticJob,
+                      selected.count < Self.maximumAutomaticJobMessages else { break }
+
+                let conversationMessages = (byConversation[conversationID] ?? [])
+                    .sorted(by: messageSortAscending)
+                var conversationTokens = 0
+                var conversationSelection: [Message] = []
+                for message in conversationMessages {
+                    guard selected.count + conversationSelection.count < Self.maximumAutomaticJobMessages else { break }
+                    let cost = TokenEstimator.estimate(message.text)
+                    let fitsConversation = conversationTokens + cost <= perConversationTokenBudget
+                    let fitsService = serviceTokens + conversationTokens + cost
+                        <= Self.automaticNewMessageTokenBudget
+                    if fitsConversation && fitsService {
+                        conversationSelection.append(message)
+                        conversationTokens += cost
+                    } else if conversationSelection.isEmpty && selectedConversations == 0 {
+                        // One oversized message still has to make progress. The final
+                        // prompt guard prevents accidental multi-message overflow.
+                        conversationSelection.append(message)
+                        conversationTokens += cost
+                    } else {
+                        break
+                    }
+                }
+
+                guard !conversationSelection.isEmpty else { break }
+                selected.append(contentsOf: conversationSelection)
+                serviceTokens += conversationTokens
+                selectedConversations += 1
+            }
+        }
+
+        return selected.sorted(by: messageSortAscending)
+    }
+
     /// Per-conversation privacy gate shared by both brief paths. A conversation is
     /// excluded from the brief — its message text never reaches the LLM — when it is
     /// marked never_draft (no LLM ever) or local_only while the client is a cloud
@@ -927,12 +1051,22 @@ final class BriefEngine {
         conversationTitle: String,
         newMessages: [Message],
         omittedNewMessageCount: Int,
+        recentContextMessages: [Message]? = nil,
+        metadataCharacterLimit: Int? = nil,
         dateFormatter: DateFormatter,
         senderNameResolver: (String) -> String
     ) throws -> String {
+        func bounded(_ value: String) -> String {
+            let sanitized = value.replacingOccurrences(of: "===", with: "—")
+            guard let metadataCharacterLimit, sanitized.count > metadataCharacterLimit else {
+                return sanitized
+            }
+            return String(sanitized.prefix(metadataCharacterLimit))
+        }
+
         // Sanitize user-supplied strings to prevent delimiter spoofing in the structured prompt.
-        let safeConvID = conversationID.replacingOccurrences(of: "===", with: "—")
-        let safeTitle = conversationTitle.replacingOccurrences(of: "===", with: "—")
+        let safeConvID = bounded(conversationID)
+        let safeTitle = bounded(conversationTitle)
 
         guard let firstNewMessageDate = newMessages.first?.timestamp else {
             return "=== [\(service)] \(safeConvID) | \(safeTitle) ==="
@@ -940,13 +1074,18 @@ final class BriefEngine {
 
         let state = try repository.fetchConversationState(service: service, conversationID: conversationID)
         let previousCard = try repository.fetchLatestBriefCard(service: service, conversationID: conversationID)
-        let recentContext = try repository.fetchRecentContextMessages(
-            service: service,
-            conversationID: conversationID,
-            before: firstNewMessageDate,
-            since: firstNewMessageDate.addingTimeInterval(-recentContextWindow),
-            limit: maxRecentContextMessages
-        )
+        let recentContext: [Message]
+        if let recentContextMessages {
+            recentContext = recentContextMessages
+        } else {
+            recentContext = try repository.fetchRecentContextMessages(
+                service: service,
+                conversationID: conversationID,
+                before: firstNewMessageDate,
+                since: firstNewMessageDate.addingTimeInterval(-recentContextWindow),
+                limit: maxRecentContextMessages
+            )
+        }
 
         // Header format: === [service] conversationID | conversationTitle ===
         // The [service] tag lets the LLM reliably extract service and conversationId
@@ -959,12 +1098,10 @@ final class BriefEngine {
         if let ctx = try? repository.fetchConversationContext(service: service, conversationId: conversationID) {
             var ctxParts: [String] = []
             if !ctx.label.isEmpty {
-                let safeLabel = ctx.label.replacingOccurrences(of: "===", with: "—")
-                ctxParts.append(safeLabel)
+                ctxParts.append(bounded(ctx.label))
             }
             if ctx.priorityHint != "auto" {
-                let safePriority = ctx.priorityHint.replacingOccurrences(of: "===", with: "—")
-                ctxParts.append("priority override: \(safePriority)")
+                ctxParts.append("priority override: \(bounded(ctx.priorityHint))")
             }
             if !ctxParts.isEmpty {
                 lines.append("Context: \(ctxParts.joined(separator: " · "))")
@@ -972,13 +1109,13 @@ final class BriefEngine {
         }
 
         if let summary = state?.rollingSummary, !summary.isEmpty {
-            lines.append("Previous summary: \(summary)")
+            lines.append("Previous summary: \(bounded(summary))")
         }
         if let previousHeadline = previousCard?.headline, !previousHeadline.isEmpty {
-            lines.append("Previous brief card: \(previousHeadline)")
+            lines.append("Previous brief card: \(bounded(previousHeadline))")
         }
         if let unresolved = state?.unresolvedActions, !unresolved.isEmpty {
-            lines.append("Unresolved actions from prior brief: \(unresolved)")
+            lines.append("Unresolved actions from prior brief: \(bounded(unresolved))")
         }
         if !recentContext.isEmpty {
             lines.append("[Recent context before new messages]")
