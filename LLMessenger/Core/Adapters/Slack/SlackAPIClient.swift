@@ -34,12 +34,11 @@ enum SlackAPIError: Error, LocalizedError {
 /// Rate limiting: Slack publishes per-method tiers (T3 = ~50/min). We serialise calls
 /// per (workspace, method) with a 1.2s minimum gap, which keeps us well under T3 while
 /// trading throughput for safety.
-final class SlackAPIClient {
-    let workspace: SlackWorkspace
+actor SlackAPIClient {
+    nonisolated let workspace: SlackWorkspace
     private let session: URLSession
     private let baseURL = URL(string: "https://slack.com/api/")!
     private var lastCallByMethod: [String: Date] = [:]
-    private let lock = NSLock()
     private let minGap: TimeInterval = 1.2
 
     init(workspace: SlackWorkspace, session: URLSession = .shared) {
@@ -214,18 +213,18 @@ final class SlackAPIClient {
             (data, response) = try await session.data(for: req)
         } catch {
             let ms = Int(Date().timeIntervalSince(start) * 1000)
-            NetworkAuditLog.shared.record(provider: "Slack", request: req,
-                                          status: nil, durationMs: ms, error: error)
+            NetworkAuditLog.record(provider: "Slack", request: req,
+                                   status: nil, durationMs: ms, error: error)
             throw error
         }
         let durationMs = Int(Date().timeIntervalSince(start) * 1000)
         guard let http = response as? HTTPURLResponse else {
-            NetworkAuditLog.shared.record(provider: "Slack", request: req,
-                                          status: nil, durationMs: durationMs, error: nil)
+            NetworkAuditLog.record(provider: "Slack", request: req,
+                                   status: nil, durationMs: durationMs, error: nil)
             throw AdapterError.invalidResponse
         }
-        NetworkAuditLog.shared.record(provider: "Slack", request: req,
-                                      status: http.statusCode, durationMs: durationMs, error: nil)
+        NetworkAuditLog.record(provider: "Slack", request: req,
+                               status: http.statusCode, durationMs: durationMs, error: nil)
         if http.statusCode == 429 {
             guard attempt < 3 else { throw AdapterError.invalidResponse }
             // Honor Retry-After if present, otherwise wait 2s.
@@ -258,7 +257,6 @@ final class SlackAPIClient {
 
     private func pace(method: String) async throws {
         let now = Date()
-        lock.lock()
         let last = lastCallByMethod[method]
         let wait: TimeInterval
         if let last {
@@ -268,7 +266,6 @@ final class SlackAPIClient {
             wait = 0
         }
         lastCallByMethod[method] = now.addingTimeInterval(wait)
-        lock.unlock()
         if wait > 0 {
             try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
         }

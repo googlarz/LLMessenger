@@ -102,7 +102,7 @@ struct ContentView: View {
         }
         .background(Theme.bg)
         .ignoresSafeArea(.all, edges: .top)
-        .onChange(of: showSearch) { searching in
+        .onChange(of: showSearch) { _, searching in
             if searching { withAnimation(Theme.spring) { sidebarCollapsed = false } }
         }
         // Scoped document shortcuts. J/K belongs to the Act feed while Desk is open;
@@ -135,7 +135,7 @@ struct ContentView: View {
         .animation(Theme.spring, value: deskCollapsed)
         .animation(Theme.spring, value: showMedia)
         // Auto-select the latest brief the first time briefs arrive.
-        .onChange(of: appState.briefs.count) { count in
+        .onChange(of: appState.briefs.count) { _, count in
             if appState.selectedBriefID == nil, count > 0 {
                 appState.selectedBriefID = appState.briefs
                     .sorted { $0.createdAt > $1.createdAt }

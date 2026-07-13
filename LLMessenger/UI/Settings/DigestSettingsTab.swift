@@ -34,7 +34,7 @@ struct DigestSettingsTab: View {
                             .labelsHidden()
                             .accessibilityLabel("Schedule morning digest")
                             .toggleStyle(.switch)
-                            .onChange(of: settings.enabled) { _ in save() }
+                            .onChange(of: settings.enabled) { _, _ in save() }
                     }
 
                     if settings.enabled {
@@ -50,7 +50,7 @@ struct DigestSettingsTab: View {
                                         .frame(width: 40)
                                     Stepper("", value: $settings.hour, in: 0...23)
                                         .labelsHidden()
-                                        .onChange(of: settings.hour) { _ in save() }
+                                        .onChange(of: settings.hour) { _, _ in save() }
                                 }
                             }
 
@@ -71,7 +71,7 @@ struct DigestSettingsTab: View {
                                         set: { settings.minute = ($0 / 15) * 15 }
                                     ), in: 0...59, step: 15)
                                     .labelsHidden()
-                                    .onChange(of: settings.minute) { _ in save() }
+                                    .onChange(of: settings.minute) { _, _ in save() }
                                 }
                             }
 
@@ -113,7 +113,7 @@ struct DigestSettingsTab: View {
                             .labelsHidden()
                             .accessibilityLabel("Only interrupt for what matters")
                             .toggleStyle(.switch)
-                            .onChange(of: firewallEnabled) { enabled in
+                            .onChange(of: firewallEnabled) { _, enabled in
                                 settingsRepo.saveFirewallEnabled(enabled)
                             }
                     }

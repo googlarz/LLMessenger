@@ -19,12 +19,12 @@ struct ThreadView: View {
                 }
                 .padding(.vertical, 8)
             }
-            .onChange(of: chatViewModel.threadItems.count) { _ in
+            .onChange(of: chatViewModel.threadItems.count) { _, _ in
                 if let last = chatViewModel.threadItems.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
-            .onChange(of: chatViewModel.isLoading) { loading in
+            .onChange(of: chatViewModel.isLoading) { _, loading in
                 if loading {
                     withAnimation { proxy.scrollTo("loading", anchor: .bottom) }
                 }

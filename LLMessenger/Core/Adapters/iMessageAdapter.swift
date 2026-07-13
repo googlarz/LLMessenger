@@ -371,8 +371,12 @@ final class iMessageAdapter: MessengerAdapter {
 
     static func extractTextFromAttributedBody(_ data: Data) -> String? {
         // chat.db stores attributedBody as a legacy typedstream (NSArchiver/NSUnarchiver),
-        // NOT NSKeyedArchiver. NSKeyedUnarchiver always throws on this format.
-        guard let obj = NSUnarchiver.unarchiveObject(with: data),
+        // not NSKeyedArchiver. Foundation has no modern typedstream replacement,
+        // so invoke the legacy decoder dynamically without binding to its deprecated API.
+        let selector = NSSelectorFromString("unarchiveObjectWithData:")
+        guard let unarchiver = NSClassFromString("NSUnarchiver") as? NSObject.Type,
+              unarchiver.responds(to: selector),
+              let obj = unarchiver.perform(selector, with: data)?.takeUnretainedValue(),
               let attrStr = obj as? NSAttributedString else { return nil }
         let text = attrStr.string.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text

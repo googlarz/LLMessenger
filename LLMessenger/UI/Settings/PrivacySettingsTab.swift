@@ -39,8 +39,8 @@ struct PrivacySettingsTab: View {
             }
             .toggleStyle(.switch)
             .tint(Theme.ok)
-            .onChange(of: localOnlyMode) {
-                repo.saveLocalOnlyMode($0)
+            .onChange(of: localOnlyMode) { _, enabled in
+                repo.saveLocalOnlyMode(enabled)
                 NotificationCenter.default.post(name: .privacyModeDidChange, object: nil)
                 NotificationCenter.default.post(name: .llmProviderDidChange, object: nil)
             }
@@ -60,7 +60,9 @@ struct PrivacySettingsTab: View {
             }
             .toggleStyle(.switch)
             .tint(Theme.ok)
-            .onChange(of: sanitizeBeforeSend) { repo.saveSanitizeBeforeSend($0) }
+            .onChange(of: sanitizeBeforeSend) { _, enabled in
+                repo.saveSanitizeBeforeSend(enabled)
+            }
         }
         .padding(.vertical, 14)
     }

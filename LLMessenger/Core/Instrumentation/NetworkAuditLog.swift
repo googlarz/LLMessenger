@@ -41,7 +41,7 @@ final class NetworkAuditLog: ObservableObject {
 
     /// Convenience: derive an Entry from a URLRequest and timing info, then record.
     /// Safe to call from any thread — it dispatches the publish onto MainActor.
-    nonisolated func record(
+    nonisolated static func record(
         provider: String,
         request: URLRequest,
         status: Int?,
@@ -62,7 +62,7 @@ final class NetworkAuditLog: ObservableObject {
             isLocal: isLocal
         )
         Task { @MainActor in
-            NetworkAuditLog.shared.record(entry)
+            shared.record(entry)
         }
     }
 

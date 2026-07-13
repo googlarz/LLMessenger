@@ -19,14 +19,14 @@ func executeLLMRequest(
         (data, response) = try await session.data(for: request)
     } catch {
         let ms = Int(Date().timeIntervalSince(start) * 1000)
-        NetworkAuditLog.shared.record(provider: provider, request: request,
-                                      status: nil, durationMs: ms, error: error)
+        NetworkAuditLog.record(provider: provider, request: request,
+                               status: nil, durationMs: ms, error: error)
         throw LLMError.networkFailed(mapNetworkError?(error) ?? error.localizedDescription)
     }
     guard let http = response as? HTTPURLResponse else { throw LLMError.invalidResponse }
     let durationMs = Int(Date().timeIntervalSince(start) * 1000)
-    NetworkAuditLog.shared.record(provider: provider, request: request,
-                                  status: http.statusCode, durationMs: durationMs, error: nil)
+    NetworkAuditLog.record(provider: provider, request: request,
+                           status: http.statusCode, durationMs: durationMs, error: nil)
     if http.statusCode == 429 {
         let retryAfter = http.value(forHTTPHeaderField: "retry-after").flatMap { Int($0) }
         throw LLMError.rateLimited(retryAfter: retryAfter)

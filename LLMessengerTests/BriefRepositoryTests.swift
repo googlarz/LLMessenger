@@ -36,11 +36,11 @@ final class BriefRepositoryTests: XCTestCase {
                                          sender: "A", text: "recent attached", timestamp: recent, isSent: false)
             try attachedRecent.insert(db)
 
-            var oldEvent = TriageEvent(service: "telegram", conversationId: "c1", priority: "low",
+            let oldEvent = TriageEvent(service: "telegram", conversationId: "c1", priority: "low",
                                        needsReply: false, reason: "x", triggeredBy: "rule",
                                        notified: true, createdAt: old)
             try oldEvent.insert(db)
-            var recentEvent = TriageEvent(service: "telegram", conversationId: "c1", priority: "low",
+            let recentEvent = TriageEvent(service: "telegram", conversationId: "c1", priority: "low",
                                           needsReply: false, reason: "x", triggeredBy: "rule",
                                           notified: true, createdAt: recent)
             try recentEvent.insert(db)

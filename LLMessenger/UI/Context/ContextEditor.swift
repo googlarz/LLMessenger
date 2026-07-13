@@ -129,13 +129,13 @@ struct ContextEditor: View {
                     Toggle("Auto-acknowledge (\u{201C}got it\u{201D} / \u{201C}thanks\u{201D})", isOn: $autoAck)
                         .font(Theme.sans(13))
                         .foregroundStyle(Theme.textPrimary)
-                        .onChange(of: autoAck) { enabled in
+                        .onChange(of: autoAck) { _, enabled in
                             if enabled { requestAutoSendConfirmation(.ack) }
                         }
                     Toggle("Auto-RSVP (yes / no to invites)", isOn: $autoRSVP)
                         .font(Theme.sans(13))
                         .foregroundStyle(Theme.textPrimary)
-                        .onChange(of: autoRSVP) { enabled in
+                        .onChange(of: autoRSVP) { _, enabled in
                             if enabled { requestAutoSendConfirmation(.rsvp) }
                         }
                 }
