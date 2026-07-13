@@ -19,7 +19,7 @@ Free. Open source. On-device AI. Your messages never have to leave your Mac, and
 
 [**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [Quick start](#quick-start) · [The agent](#it-doesnt-just-tell-you--it-acts) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
 
-![LLMessenger screenshot](docs/screenshot.png)
+![LLMessenger digest — one card expanded, the rest compact until you ask](docs/screenshot.png)
 
 <sub>Screenshots in this README use synthetic demo conversations from the test fixture, not personal message data.</sub>
 
@@ -53,9 +53,9 @@ Every card explains why it is there, which local source messages back it, whethe
 
 ## It doesn't just tell you — it acts
 
-Older versions *told you* what needed doing. Now an agent runs quietly in the background and **prepares the doing** — it drafts each reply in your voice for that conversation, lines up follow-ups and RSVPs, and presents them as a queue you clear with one tap. **Approve**, **Edit**, or **Skip** — nothing is ever sent without you.
+Older versions *told you* what needed doing. Now an agent runs quietly in the background and **prepares the doing** — it drafts each reply in your voice for that conversation, lines up follow-ups and RSVPs, and ranks them into one queue: **Needs your decision → Ready to send → Waiting on others → Later.** Each row shows who, what, and why now. **Approve**, **Edit**, or **Skip** — nothing is ever sent without you.
 
-![The Act queue — the agent's prepared actions, one tap each](docs/act.png)
+![The Act queue — ranked, one primary action per row](docs/act.png)
 
 - **Talk to it.** Type or say *"handle the easy ones"*, *"what do I owe people?"*, *"catch me up"* — speech is recognized on-device.
 - **Delegate the boring lanes (optional).** Turn on auto-send for a specific conversation and a specific low-risk action — "auto-acknowledge from my team", "auto-RSVP". It's **off by default**, restricted to safe templated replies, never a new recipient or anything with a link or money, and every auto-send waits 30 seconds with an **Undo** and lands in an audit log. A crafted message *can't* trigger or grant it — delegation is something only you set.
@@ -63,11 +63,11 @@ Older versions *told you* what needed doing. Now an agent runs quietly in the ba
 
 ## Never drop someone who matters
 
-The firewall protects you from what's coming *in*. **Owed Replies** protects the relationships going *out* — it surfaces the people still waiting on you, ranked by who counts, so a question from Mum or your kid's coach never gets buried under work chatter.
+The firewall protects you from what's coming *in*. The queue's **Needs your decision** and **Ready to send** sections protect the relationships going *out* — the people still waiting on you surface there, ranked by who counts, so a question from Mum or your kid's coach never gets buried under work chatter. **Waiting on others** flips it: what you're still owed.
 
 Digest cards separate **urgency** from **actionability**: a low-stakes family question can still be marked reply-needed without being inflated into an emergency.
 
-![Owed Replies — who's waiting on you, ranked by who matters](docs/owed.png)
+![The same queue, scrolled further — who's waiting on you, and who you're waiting on](docs/owed.png)
 
 It learns who matters from your own behavior, or you can just tell it: *"this is my son's basketball team — the coach posts about training and games, flag those, ignore the rest."* That per-conversation **context** then sharpens every triage decision and every digest. Conversations you mark private are never sent to a cloud model.
 
@@ -318,7 +318,22 @@ xcodebuild -scheme LLMessenger test    # keep them green
 - [ ] WhatsApp adapter (pending viable local API)
 
 <details>
-<summary>Shipped (v1.4 – v2.2.4)</summary>
+<summary>Shipped (v1.4 – v2.3.0)</summary>
+
+**v2.3.0** — the Mac-native redesign:
+- ✅ **Navigation rebuilt** — content-free sidebar (Act / Digests / Activity) drives the whole window; Act and Activity go full-width, Digests pairs the archive with the open digest
+- ✅ **Native title-bar toolbar** + a real macOS menu bar — search, refresh, service status, digest back/forward, and every command with a shortcut (previously missing entirely)
+- ✅ **Progressive digest cards** — default view is headline + two lines + one action; only the top card opens expanded
+- ✅ **Ask panel** — the AI conversation is opt-in from the toolbar, closed by default, so reading never looks like composing
+- ✅ **Act is one ranked queue** — Needs your decision / Ready to send / Waiting on others / Later, with ⌘-click batch approval
+- ✅ Settings consolidated 7 panes → 5; Reduce Motion and Increase Contrast honored app-wide; no text below 10pt
+- ✅ Feedback scaled to significance — toolbar spinner for routine refresh, floating toasts that don't displace content
+
+**v2.2.5 – v2.2.7** — internal hardening:
+- ✅ Act tab leads with what needs you; retrospective stats moved to Activity; first-week guide dismisses for good
+- ✅ Fixed several runtime crash-risk force-unwraps in the message adapters and poll pipeline
+- ✅ Brief JSON cached instead of re-decoded on every render; menu bar rebuilds coalesced to one per refresh
+- ✅ In-app "What's new" section in the About tab
 
 **v2.2.4** — trust, demo, and product-love pass:
 - ✅ Demo-first onboarding lets new users explore the command center before connecting real accounts
