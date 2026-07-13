@@ -233,16 +233,18 @@ final class BriefEngineTests: XCTestCase {
         XCTAssertEqual(jobs.count, 2)
         XCTAssertTrue(jobs.allSatisfy { $0.jobStatus == .succeeded })
         XCTAssertTrue(try repository.fetchUnattachedMessages().isEmpty)
-        let jobInputs = try await db.dbQueue.read { db in
+        // Map rows to Sendable tuples inside the read — GRDB Row can't cross
+        // the isolation boundary under strict concurrency.
+        let jobInputs: [(jobId: Int64, messageId: String)] = try await db.dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT j.jobId, m.messageId
                 FROM briefJobMessages j
                 JOIN messages m ON m.id = j.messageRowId
                 ORDER BY j.jobId, m.messageId
-            """)
+            """).map { ($0["jobId"] as Int64, $0["messageId"] as String) }
         }
-        let inputsByJob = Dictionary(grouping: jobInputs, by: { $0["jobId"] as Int64 })
-            .mapValues { $0.map { $0["messageId"] as String } }
+        let inputsByJob = Dictionary(grouping: jobInputs, by: { $0.jobId })
+            .mapValues { $0.map(\.messageId) }
         XCTAssertEqual(inputsByJob[try XCTUnwrap(jobs[0].id)], ["m0", "m1"])
         XCTAssertEqual(inputsByJob[try XCTUnwrap(jobs[1].id)], ["m2"])
     }
