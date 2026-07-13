@@ -817,6 +817,15 @@ struct BriefRepository {
         }
     }
 
+    func fetchContactProfile(service: String, conversationId: String) throws -> ContactProfile? {
+        try database.dbQueue.read { db in
+            try ContactProfile
+                .filter(Column("service") == service)
+                .filter(Column("conversationId") == conversationId)
+                .fetchOne(db)
+        }
+    }
+
     func setPinned(briefID: Int64, pinned: Bool) throws {
         try database.dbQueue.write { db in
             try db.execute(

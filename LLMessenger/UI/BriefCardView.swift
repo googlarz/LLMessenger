@@ -172,13 +172,13 @@ struct BriefCardView: View {
                     privacyOverride: $labelEditPrivacy,
                     onSave: {
                         let label = labelEditText.trimmingCharacters(in: .whitespaces)
-                        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
+                        let previous = effectiveContext
                         saveContext(label: label, priorityHint: labelEditHint, privacyOverride: labelEditPrivacy)
                         showContextReceipt("Conversation context saved.", previous: previous)
                         showLabelEditor = false
                     },
                     onMarkVIP: {
-                        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
+                        let previous = effectiveContext
                         saveContext(label: labelEditText.isEmpty ? "VIP" : labelEditText,
                                     priorityHint: "high",
                                     privacyOverride: labelEditPrivacy)
@@ -187,7 +187,7 @@ struct BriefCardView: View {
                         showLabelEditor = false
                     },
                     onQuiet: {
-                        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
+                        let previous = effectiveContext
                         saveContext(label: labelEditText.isEmpty ? "quiet" : labelEditText,
                                     priorityHint: "low",
                                     privacyOverride: labelEditPrivacy)
@@ -518,7 +518,7 @@ struct BriefCardView: View {
     }
 
     private func teachFutureBriefs(priority: String, label: String) {
-        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
+        let previous = effectiveContext
         appState.savePriorityCorrection(
             service: card.service,
             conversationId: card.conversationId,
@@ -532,7 +532,7 @@ struct BriefCardView: View {
     }
 
     private func markNotReply() {
-        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
+        let previous = effectiveContext
         appState.savePriorityCorrection(
             service: card.service,
             conversationId: card.conversationId,
@@ -549,7 +549,7 @@ struct BriefCardView: View {
     }
 
     private func quietThread() {
-        let previous = appState.fetchConversationContext(service: card.service, conversationId: card.conversationId)
+        let previous = effectiveContext
         saveContext(label: effectiveContext?.label ?? "", priorityHint: "low")
         appState.recordQuietedThread()
         if let briefID, !isHandled {

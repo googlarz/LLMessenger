@@ -63,16 +63,24 @@ struct ContactProfileView: View {
     }
 
     private func loadProfile() async {
-        profile = appState.contactDirectory.loadProfile(service: service, conversationId: conversationId)
-        recentCards = await loadRecentCards()
-    }
-
-    private func loadRecentCards() async -> [BriefCardRecord] {
-        (try? appState.repository.fetchRecentBriefCards(
-            service: service,
-            conversationId: conversationId,
-            limit: 5
-        )) ?? []
+        let repository = appState.repository
+        let service = service
+        let conversationId = conversationId
+        let result = await Task.detached(priority: .userInitiated) {
+            let profile = try? repository.fetchContactProfile(
+                service: service,
+                conversationId: conversationId
+            )
+            let cards = (try? repository.fetchRecentBriefCards(
+                service: service,
+                conversationId: conversationId,
+                limit: 5
+            )) ?? []
+            return (profile, cards)
+        }.value
+        guard !Task.isCancelled else { return }
+        profile = result.0
+        recentCards = result.1
     }
 }
 

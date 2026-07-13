@@ -358,17 +358,20 @@ struct BriefListView: View {
             try? await Task.sleep(nanoseconds: 200_000_000)
             guard !Task.isCancelled else { return }
             do {
-                let msgResults = try appState.repository.searchMessages(query: query)
-                let briefResults = try appState.repository.searchBriefs(query: query)
+                let repository = appState.repository
+                let (msgResults, briefResults) = try await Task.detached(priority: .userInitiated) {
+                    (
+                        try repository.searchMessages(query: query),
+                        try repository.searchBriefs(query: query)
+                    )
+                }.value
                 guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    searchResults = msgResults
-                    searchBriefResults = briefResults
-                    isSearching = false
-                }
+                searchResults = msgResults
+                searchBriefResults = briefResults
+                isSearching = false
             } catch {
                 guard !Task.isCancelled else { return }
-                await MainActor.run { isSearching = false }
+                isSearching = false
             }
         }
     }
