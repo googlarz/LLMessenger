@@ -124,7 +124,7 @@ final class AdversarialResponseTests: XCTestCase {
         XCTAssertNotNil(result, "Markdown-wrapped JSON must be stripped and parsed — LLMs routinely ignore format instructions")
     }
 
-    // MARK: - Schema violations caught by BriefEngine.decodeAndValidateBrief
+    // MARK: - Schema violations caught by BriefOutputProcessor.decodeAndValidate
 
     func testEmptyCardsArrayProducesNoBrief() async throws {
         let db = try makeDB()

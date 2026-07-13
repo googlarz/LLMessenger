@@ -249,7 +249,7 @@ struct BriefQuote: Codable {
 //
 // LLMs routinely violate "JSON only": markdown fences, preamble ("Here is your brief:"),
 // trailing prose, trailing commas, truncated output. ONE shared lenient path is used by
-// both the engine (BriefEngine.decodeAndValidateBrief) and the render fallback
+// both the engine (BriefOutputProcessor.decodeAndValidate) and the render fallback
 // (BriefProseView) so the two decoders never diverge.
 extension BriefJSON {
     /// Best-effort extraction of a JSON payload from raw model output: strips a fenced code

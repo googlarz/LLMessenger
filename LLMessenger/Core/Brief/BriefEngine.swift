@@ -2,14 +2,6 @@
 import Foundation
 import GRDB
 
-enum BriefEngineValidationError: Error {
-    case emptyCards
-    case wrongService(cardId: String, service: String)
-    case missingSourceMessageIds(cardId: String)
-    case unknownSourceMessageId(cardId: String, messageId: String)
-    case unknownQuoteMessageId(cardId: String, messageId: String)
-}
-
 @MainActor
 final class BriefEngine {
     static let maximumAutomaticUserPromptTokens = 20_000
@@ -95,12 +87,6 @@ final class BriefEngine {
         var jobCompleted: Bool
     }
 
-    private struct ConversationPromptMetadata {
-        var context: ConversationContext?
-        var state: ConversationState?
-        var previousCard: BriefCardRecord?
-    }
-
     /// Processes one immutable job snapshot. The public entry point drains a
     /// later snapshot only after this one fully succeeds; partial jobs wait for
     /// the next trigger instead of retrying a failed provider in a hot loop.
@@ -120,7 +106,10 @@ final class BriefEngine {
         }))
         let candidateContexts = try repository.fetchConversationContexts(for: candidateKeys)
         let initiallyExcludedConversations = Set(candidateKeys.filter {
-            isExcludedByPrivacy(context: candidateContexts[$0], clientIsCloud: clientIsCloud)
+            BriefPromptAssembler.isExcludedByPrivacy(
+                context: candidateContexts[$0],
+                clientIsCloud: clientIsCloud
+            )
         })
         let eligibleMessages = candidateMessages.filter {
             !initiallyExcludedConversations.contains(
@@ -155,7 +144,10 @@ final class BriefEngine {
         }))
         let snapshotContexts = try repository.fetchConversationContexts(for: snapshotKeys)
         let excludedConversations = Set(snapshotKeys.filter {
-            isExcludedByPrivacy(context: snapshotContexts[$0], clientIsCloud: clientIsCloud)
+            BriefPromptAssembler.isExcludedByPrivacy(
+                context: snapshotContexts[$0],
+                clientIsCloud: clientIsCloud
+            )
         })
         let privacyExcludedMessages = snapshotMessages.filter {
             excludedConversations.contains(
@@ -186,11 +178,13 @@ final class BriefEngine {
             Dictionary(grouping: messages) {
                 BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
             }.compactMap { key, selectedMessages -> (BriefConversationKey, Int)? in
-                guard let firstSelected = selectedMessages.sorted(by: messageSortAscending).first else {
+                guard let firstSelected = selectedMessages.sorted(
+                    by: BriefPromptAssembler.messageSortAscending
+                ).first else {
                     return nil
                 }
                 let omitted = eligibleCandidatesByKey[key]?.count {
-                    messageSortAscending($0, firstSelected)
+                    BriefPromptAssembler.messageSortAscending($0, firstSelected)
                 } ?? 0
                 return (key, omitted)
             }
@@ -282,8 +276,8 @@ final class BriefEngine {
                             }
 
                         var conversationBlocks: [String] = []
-                        // Collect context messages so their IDs are valid in decodeAndValidateBrief.
-                        // buildConversationBlock prepends recentContext messages to the prompt —
+                        // Collect context messages so their IDs are valid in output validation.
+                        // The assembler prepends recentContext messages to the prompt —
                         // if the LLM cites one of those IDs in sourceMessageIds, it must be in
                         // the allowlist, otherwise every card in an active conversation gets rejected.
                         var allPromptMessages: [Message] = []
@@ -292,7 +286,10 @@ final class BriefEngine {
                         for convId in rankedConvIds {
                             let convMessages = (byConversation[convId] ?? []).sorted { $0.timestamp < $1.timestamp }
                             let promptNewMessages = convMessages.map {
-                                self.boundedPromptMessage($0, tokenBudget: self.perConversationTokenBudget)
+                                BriefPromptAssembler.boundedPromptMessage(
+                                    $0,
+                                    tokenBudget: self.perConversationTokenBudget
+                                )
                             }
                             let key = BriefConversationKey(service: service, conversationID: convId)
                             let rawContextMessages = promptData.recentMessages[key] ?? []
@@ -301,7 +298,10 @@ final class BriefEngine {
                                 tokenBudget: contextBudgetPerConversation,
                                 text: \.text
                             ).map {
-                                self.boundedPromptMessage($0, tokenBudget: contextBudgetPerConversation)
+                                BriefPromptAssembler.boundedPromptMessage(
+                                    $0,
+                                    tokenBudget: contextBudgetPerConversation
+                                )
                             }
                             allPromptMessages.append(contentsOf: contextMessages)
                             allPromptMessages.append(contentsOf: promptNewMessages)
@@ -310,7 +310,7 @@ final class BriefEngine {
                                 ?? signalAdapter?.groupName(for: convId)
                                 ?? signalAdapter?.contactName(for: convId)
                                 ?? convId
-                            let block = try self.buildConversationBlock(
+                            let block = BriefPromptAssembler.buildConversationBlock(
                                 service: service,
                                 conversationID: convId,
                                 conversationTitle: convHeader,
@@ -318,7 +318,7 @@ final class BriefEngine {
                                 omittedNewMessageCount: omittedNewMessageCounts[key] ?? 0,
                                 recentContextMessages: contextMessages,
                                 metadataCharacterLimit: automaticMetadataCharacterLimit,
-                                promptMetadata: ConversationPromptMetadata(
+                                promptMetadata: BriefConversationPromptMetadata(
                                     context: promptData.contexts[key],
                                     state: promptData.states[key],
                                     previousCard: promptData.previousCards[key]
@@ -357,7 +357,11 @@ final class BriefEngine {
                             service: service
                         )
 
-                        if let parsed = try? self.decodeAndValidateBrief(response.text, service: service, sourceMessages: allPromptMessages) {
+                        if let parsed = try? BriefOutputProcessor.decodeAndValidate(
+                            response.text,
+                            service: service,
+                            sourceMessages: allPromptMessages
+                        ) {
                             let coveredConversations = Set(parsed.cards.map(\.conversationId))
                             let coveredMessages = serviceMessages.filter {
                                 coveredConversations.contains($0.conversationId)
@@ -452,7 +456,7 @@ final class BriefEngine {
             totalPeople: totalPeople,
             cards: allCards
         )
-        let openingSummary = try encodeBriefJSON(merged)
+        let openingSummary = try BriefOutputProcessor.encodeBriefJSON(merged)
 
         // Step 5: Create the Brief and attach messages
         let notificationText = "\(succeededMessages.count) new messages · \(Array(parsedServices).sorted().joined(separator: ", "))"
@@ -474,8 +478,11 @@ final class BriefEngine {
         let messagesToAttach = succeededMessages
 
         // Build record arrays on the main actor before entering the transaction closure.
-        let (cardRecords, cardSources) = try buildBriefCardRecords(
-            allCards, briefID: 0, sourceMessagesByService: sourceMessagesByService
+        let (cardRecords, cardSources) = try BriefOutputProcessor.buildCardRecords(
+            allCards,
+            briefID: 0,
+            sourceMessagesByService: sourceMessagesByService,
+            now: now()
         )
         let failedServicesSnapshot = failedServices
 
@@ -670,7 +677,7 @@ final class BriefEngine {
                         let privacyContexts = try self.repository.fetchConversationContexts(for: conversationKeys)
                         let excludedIDs = Set(conversations.map { $0.id }).filter { conversationID in
                             let key = BriefConversationKey(service: serviceID, conversationID: conversationID)
-                            return self.isExcludedByPrivacy(
+                            return BriefPromptAssembler.isExcludedByPrivacy(
                                 context: privacyContexts[key],
                                 clientIsCloud: isCloud
                             )
@@ -734,16 +741,22 @@ final class BriefEngine {
                                     isSent: adapterMessage.isFromMe
                                 )
                             }.map {
-                                self.boundedPromptMessage($0, tokenBudget: self.perConversationTokenBudget)
+                                BriefPromptAssembler.boundedPromptMessage(
+                                    $0,
+                                    tokenBudget: self.perConversationTokenBudget
+                                )
                             }
                             let contextMessages = TokenEstimator.selectWithinBudget(
                                 promptData.recentMessages[key] ?? [],
                                 tokenBudget: contextBudgetPerConversation,
                                 text: \.text
                             ).map {
-                                self.boundedPromptMessage($0, tokenBudget: contextBudgetPerConversation)
+                                BriefPromptAssembler.boundedPromptMessage(
+                                    $0,
+                                    tokenBudget: contextBudgetPerConversation
+                                )
                             }
-                            let block = try self.buildConversationBlock(
+                            let block = BriefPromptAssembler.buildConversationBlock(
                                 service: serviceID,
                                 conversationID: conv.id,
                                 conversationTitle: conv.name,
@@ -751,7 +764,7 @@ final class BriefEngine {
                                 omittedNewMessageCount: omitted,
                                 recentContextMessages: contextMessages,
                                 metadataCharacterLimit: manualMetadataCharacterLimit,
-                                promptMetadata: ConversationPromptMetadata(
+                                promptMetadata: BriefConversationPromptMetadata(
                                     context: promptData.contexts[key],
                                     state: promptData.states[key],
                                     previousCard: promptData.previousCards[key]
@@ -795,7 +808,7 @@ final class BriefEngine {
                         )
 
                         do {
-                            let parsed = try self.decodeAndValidateBrief(
+                            let parsed = try BriefOutputProcessor.decodeAndValidate(
                                 response.text,
                                 service: serviceID,
                                 sourceMessages: allPromptMessages
@@ -861,7 +874,7 @@ final class BriefEngine {
             totalPeople: totalPeople,
             cards: allCards
         )
-        let openingSummary = try encodeBriefJSON(merged)
+        let openingSummary = try BriefOutputProcessor.encodeBriefJSON(merged)
 
         let servicesJSON = (try? String(data: JSONSerialization.data(withJSONObject: activeServices), encoding: .utf8)) ?? "[]"
         let failedJSON = failedServices.isEmpty ? nil : (try? String(data: JSONSerialization.data(withJSONObject: failedServices), encoding: .utf8))
@@ -877,8 +890,11 @@ final class BriefEngine {
             windowStart: since
         )
         // Build record arrays on the main actor before entering the transaction closure.
-        let (cardRecords2, cardSources2) = try buildBriefCardRecords(
-            allCards, briefID: 0, sourceMessagesByService: sourceMessagesByService
+        let (cardRecords2, cardSources2) = try BriefOutputProcessor.buildCardRecords(
+            allCards,
+            briefID: 0,
+            sourceMessagesByService: sourceMessagesByService,
+            now: now()
         )
 
         // Capture messagesToAttach in a local let so the @Sendable write closure can capture it.
@@ -905,155 +921,6 @@ final class BriefEngine {
         updateContactProfiles(from: allCards)
 
         return briefID
-    }
-
-    private nonisolated func decodeAndValidateBrief(_ text: String, service: String, sourceMessages: [Message]) throws -> BriefJSON {
-        let cleanText = BriefJSON.extractJSONPayload(from: text)
-        guard let data = cleanText.data(using: .utf8) else {
-            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid UTF-8"))
-        }
-        let parsed = try JSONDecoder().decode(BriefJSON.self, from: data)
-        guard !parsed.cards.isEmpty else { throw BriefEngineValidationError.emptyCards }
-
-        let sourceMessagesByID = Dictionary(
-            sourceMessages.map { ($0.messageId, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        var validCards: [BriefCard] = []
-        for card in parsed.cards {
-            guard card.service == service else {
-                print("[BriefEngine] skipping card \(card.id): wrong service \(card.service)")
-                continue
-            }
-
-            let validSourceIDs = card.sourceMessageIds.filter { messageID in
-                guard !messageID.isEmpty, let source = sourceMessagesByID[messageID] else { return false }
-                return source.conversationId == card.conversationId
-            }
-            let droppedCount = card.sourceMessageIds.count - validSourceIDs.count
-            if droppedCount > 0 {
-                print("[BriefEngine] card \(card.id): dropped \(droppedCount) unknown sourceMessageIds")
-            }
-            guard !validSourceIDs.isEmpty else {
-                print("[BriefEngine] skipping card \(card.id): no valid sourceMessageIds")
-                continue
-            }
-
-            let validQuotes = card.quotes.filter { q in
-                guard let mid = q.messageId, let source = sourceMessagesByID[mid] else { return false }
-                return source.conversationId == card.conversationId
-            }
-            if validQuotes.count < card.quotes.count {
-                print("[BriefEngine] card \(card.id): dropped \(card.quotes.count - validQuotes.count) unknown quotes")
-            }
-
-            validCards.append(BriefCard(
-                id: card.id,
-                service: card.service,
-                conversationId: card.conversationId,
-                conversationTitle: card.conversationTitle,
-                headline: card.headline,
-                priority: card.priority,
-                counts: card.counts,
-                summary: card.summary,
-                callback: card.callback,
-                needsReply: card.needsReply,
-                reason: card.reason,
-                grounding: card.grounding,
-                actionItems: card.actionItems,
-                quotes: validQuotes,
-                sourceMessageIds: validSourceIDs
-            ))
-        }
-
-        guard !validCards.isEmpty else { throw BriefEngineValidationError.emptyCards }
-
-        return BriefJSON(
-            totalMessages: parsed.totalMessages,
-            totalThreads: parsed.totalThreads,
-            totalPeople: parsed.totalPeople,
-            cards: validCards
-        )
-    }
-
-    /// Builds card records and source records in memory. Called inside the atomic transaction.
-    private nonisolated func buildBriefCardRecords(
-        _ cards: [BriefCard],
-        briefID: Int64,
-        sourceMessagesByService: [String: [String: Message]]
-    ) throws -> (cardRecords: [BriefCardRecord], sources: [BriefCardSource]) {
-        let now = Date()
-        var cardRecords: [BriefCardRecord] = []
-        var allSources: [BriefCardSource] = []
-
-        for (position, card) in cards.enumerated() {
-            // Always generate a fresh UUID — the LLM-produced card.id is reused across
-            // brief runs for the same conversation, causing UNIQUE constraint failures.
-            let cardID = UUID().uuidString
-
-            // Validate before adding — mirrors the guard inside insertBriefCard.
-            guard !card.sourceMessageIds.isEmpty else {
-                print("[BriefEngine] buildBriefCardRecords: skipping card \(cardID) (\(card.service)/\(card.conversationId)): no source message IDs")
-                continue
-            }
-
-            let record = BriefCardRecord(
-                id: cardID,
-                briefId: briefID,
-                service: card.service,
-                conversationId: card.conversationId,
-                conversationTitle: card.conversationTitle,
-                headline: card.headline,
-                priority: card.priority,
-                summary: card.summary,
-                needsReply: card.needsReply,
-                reason: card.reason,
-                grounding: card.grounding,
-                actionItems: try encodeStringArray(card.actionItems),
-                callbackText: card.callback,
-                sourceMessageIds: try encodeStringArray(card.sourceMessageIds),
-                createdAt: now,
-                logicalId: card.id,
-                position: position,
-                messageCount: card.counts.messages,
-                threadCount: card.counts.threads,
-                peopleCount: card.counts.people,
-                quotes: try encodeJSON(card.quotes),
-                collapsed: card.collapsed
-            )
-
-            let quoteMessageIDs = Set(card.quotes.compactMap(\.messageId))
-            let sources = card.sourceMessageIds.map { messageID in
-                let message = sourceMessagesByService[card.service]?[messageID]
-                let quote = card.quotes.first { $0.messageId == messageID }
-                return BriefCardSource(
-                    id: nil,
-                    briefCardId: cardID,
-                    messageRowId: message?.id,
-                    service: card.service,
-                    messageId: messageID,
-                    sourceRole: quoteMessageIDs.contains(messageID) ? BriefCardSourceRole.quote.rawValue : BriefCardSourceRole.newMessage.rawValue,
-                    quoteText: quote?.text,
-                    createdAt: now
-                )
-            }
-
-            cardRecords.append(record)
-            allSources.append(contentsOf: sources)
-        }
-
-        return (cardRecords, allSources)
-    }
-
-    private nonisolated func encodeJSON<Value: Encodable>(_ value: Value) throws -> String {
-        let data = try JSONEncoder().encode(value)
-        guard let json = String(data: data, encoding: .utf8) else {
-            throw EncodingError.invalidValue(
-                value,
-                .init(codingPath: [], debugDescription: "Unable to encode UTF-8 JSON")
-            )
-        }
-        return json
     }
 
     private func persistConversationStates(
@@ -1085,7 +952,7 @@ final class BriefEngine {
             let serviceMessages = sourceMessagesByService[service].map { Array($0.values) } ?? []
             let conversationMessages = serviceMessages
                 .filter { $0.conversationId == convId }
-                .sorted(by: messageSortAscending)
+                .sorted(by: BriefPromptAssembler.messageSortAscending)
             let latestMessageID = conversationMessages.last?.messageId
             let participants = Array(Set(conversationMessages.map { $0.sender })).sorted()
             let existing = existingStates[
@@ -1173,7 +1040,7 @@ final class BriefEngine {
                       selected.count < Self.maximumAutomaticJobMessages else { break }
 
                 let conversationMessages = (byConversation[conversationID] ?? [])
-                    .sorted(by: messageSortAscending)
+                    .sorted(by: BriefPromptAssembler.messageSortAscending)
                 var conversationTokens = 0
                 var conversationSelection: [Message] = []
                 for message in conversationMessages.reversed() {
@@ -1202,128 +1069,7 @@ final class BriefEngine {
             }
         }
 
-        return selected.sorted(by: messageSortAscending)
-    }
-
-    private nonisolated func isExcludedByPrivacy(
-        context: ConversationContext?,
-        clientIsCloud: Bool
-    ) -> Bool {
-        if context?.privacyOverride == "never_draft" { return true }
-        if context?.privacyOverride == "local_only", clientIsCloud { return true }
-        return false
-    }
-
-    private nonisolated func buildConversationBlock(
-        service: String,
-        conversationID: String,
-        conversationTitle: String,
-        newMessages: [Message],
-        omittedNewMessageCount: Int,
-        recentContextMessages: [Message],
-        metadataCharacterLimit: Int? = nil,
-        promptMetadata: ConversationPromptMetadata,
-        dateFormatter: DateFormatter,
-        senderNameResolver: (String) -> String
-    ) throws -> String {
-        func bounded(_ value: String) -> String {
-            let sanitized = value.replacingOccurrences(of: "===", with: "—")
-            guard let metadataCharacterLimit, sanitized.count > metadataCharacterLimit else {
-                return sanitized
-            }
-            return String(sanitized.prefix(metadataCharacterLimit))
-        }
-
-        // Sanitize user-supplied strings to prevent delimiter spoofing in the structured prompt.
-        let safeConvID = bounded(conversationID)
-        let safeTitle = bounded(conversationTitle)
-
-        guard !newMessages.isEmpty else {
-            return "=== [\(service)] \(safeConvID) | \(safeTitle) ==="
-        }
-
-        let state = promptMetadata.state
-        let previousCard = promptMetadata.previousCard
-        let context = promptMetadata.context
-
-        // Header format: === [service] conversationID | conversationTitle ===
-        // The [service] tag lets the LLM reliably extract service and conversationId
-        // without guessing from the opaque ID format.
-        var lines: [String] = ["=== [\(service)] \(safeConvID) | \(safeTitle) ==="]
-
-        // Inject user-defined relationship context (label + priority hint).
-        // Sanitize both fields: a crafted label like "=== [signal] … ===" would inject
-        // a fake conversation block header into the structured prompt.
-        if let ctx = context {
-            var ctxParts: [String] = []
-            if !ctx.label.isEmpty {
-                ctxParts.append(bounded(ctx.label))
-            }
-            if ctx.priorityHint != "auto" {
-                ctxParts.append("priority override: \(bounded(ctx.priorityHint))")
-            }
-            if !ctxParts.isEmpty {
-                lines.append("Context: \(ctxParts.joined(separator: " · "))")
-            }
-        }
-
-        if let summary = state?.rollingSummary, !summary.isEmpty {
-            lines.append("Previous summary: \(bounded(summary))")
-        }
-        if let previousHeadline = previousCard?.headline, !previousHeadline.isEmpty {
-            lines.append("Previous brief card: \(bounded(previousHeadline))")
-        }
-        if let unresolved = state?.unresolvedActions, !unresolved.isEmpty {
-            lines.append("Unresolved actions from prior brief: \(bounded(unresolved))")
-        }
-        if !recentContextMessages.isEmpty {
-            lines.append("[Recent context before new messages]")
-            lines.append(contentsOf: recentContextMessages.map {
-                messageLine($0, dateFormatter: dateFormatter, senderNameResolver: senderNameResolver)
-            })
-        }
-        if omittedNewMessageCount > 0 {
-            lines.append("[\(omittedNewMessageCount) earlier new messages omitted]")
-        }
-        lines.append("[New messages]")
-        lines.append(contentsOf: newMessages.map { messageLine($0, dateFormatter: dateFormatter, senderNameResolver: senderNameResolver) })
-        return lines.joined(separator: "\n")
-    }
-
-    private nonisolated func messageLine(
-        _ message: Message,
-        dateFormatter: DateFormatter,
-        senderNameResolver: (String) -> String
-    ) -> String {
-        // [YOU] marks your own sent messages so the LLM can detect reply state and assign
-        // priority correctly — threads where YOU sent last are rarely urgent.
-        let senderLabel = message.isSent ? "YOU" : senderNameResolver(message.sender)
-        // Sanitize message text to prevent delimiter spoofing.
-        let safeText = message.text.replacingOccurrences(of: "===", with: "—")
-        return "[id=\(message.messageId) | \(dateFormatter.string(from: message.timestamp))] \(senderLabel): \(safeText)"
-    }
-
-    private nonisolated func boundedPromptMessage(_ message: Message, tokenBudget: Int) -> Message {
-        var copy = message
-        copy.text = TokenEstimator.truncated(message.text, toTokenBudget: tokenBudget)
-        return copy
-    }
-
-    private nonisolated func messageSortAscending(_ lhs: Message, _ rhs: Message) -> Bool {
-        if lhs.timestamp != rhs.timestamp {
-            return lhs.timestamp < rhs.timestamp
-        }
-        if lhs.messageId != rhs.messageId {
-            return lhs.messageId < rhs.messageId
-        }
-        return (lhs.id ?? 0) < (rhs.id ?? 0)
-    }
-
-    private nonisolated func encodeBriefJSON(_ briefJSON: BriefJSON) throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(briefJSON)
-        return String(data: data, encoding: .utf8) ?? "{}"
+        return selected.sorted(by: BriefPromptAssembler.messageSortAscending)
     }
 
     private nonisolated func encodeStringArray(_ values: [String]) throws -> String {
