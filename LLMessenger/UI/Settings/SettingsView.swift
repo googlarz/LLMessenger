@@ -2,36 +2,30 @@
 import SwiftUI
 
 enum SettingsPane: Int, CaseIterable, Identifiable {
-    case ai
+    case aiPrivacy
     case services
-    case privacy
-    case instructions
-    case rules
-    case digest
+    case behavior
+    case schedule
     case about
 
     var id: Int { rawValue }
 
     var title: String {
         switch self {
-        case .ai: return "AI"
+        case .aiPrivacy: return "AI & Privacy"
         case .services: return "Services"
-        case .privacy: return "Privacy"
-        case .instructions: return "Instructions"
-        case .rules: return "Rules"
-        case .digest: return "Digest"
+        case .behavior: return "Behavior"
+        case .schedule: return "Schedule"
         case .about: return "About"
         }
     }
 
     var symbol: String {
         switch self {
-        case .ai: return "sparkles"
+        case .aiPrivacy: return "sparkles"
         case .services: return "point.3.connected.trianglepath.dotted"
-        case .privacy: return "lock.shield"
-        case .instructions: return "text.alignleft"
-        case .rules: return "list.bullet.rectangle"
-        case .digest: return "clock"
+        case .behavior: return "slider.horizontal.3"
+        case .schedule: return "clock"
         case .about: return "info.circle"
         }
     }
@@ -46,7 +40,7 @@ final class SettingsPaneSelection: ObservableObject {
     }
 
     init(defaults: UserDefaults = .standard) {
-        pane = SettingsPane(rawValue: defaults.integer(forKey: Self.defaultsKey)) ?? .ai
+        pane = SettingsPane(rawValue: defaults.integer(forKey: Self.defaultsKey)) ?? .aiPrivacy
     }
 }
 
@@ -71,23 +65,58 @@ struct SettingsView: View {
     @ViewBuilder
     private var tabContent: some View {
         switch selection.pane {
-        case .ai:
-            AISettingsTab(database: database)
+        case .aiPrivacy:
+            SubTabbedPane(tabs: ["AI", "Privacy"]) { sub in
+                if sub == 0 {
+                    AISettingsTab(database: database)
+                } else {
+                    PrivacySettingsTab()
+                }
+            }
         case .services:
             ServiceSettingsTab(database: database,
                                onBuild7DaySummaries: onBuild7DaySummaries,
                                onSyncContacts: onSyncContacts,
                                onRetryService: onRetryService)
-        case .privacy:
-            PrivacySettingsTab()
-        case .instructions:
-            InstructionsSettingsTab()
-        case .rules:
-            RulesSettingsTab(database: database)
-        case .digest:
+        case .behavior:
+            SubTabbedPane(tabs: ["Instructions", "Priority Rules"]) { sub in
+                if sub == 0 {
+                    InstructionsSettingsTab()
+                } else {
+                    RulesSettingsTab(database: database)
+                }
+            }
+        case .schedule:
             DigestSettingsTab(onScheduleChanged: onScheduleChanged)
         case .about:
             AboutSettingsTab(database: database, onRunSetup: onRunSetup)
+        }
+    }
+}
+
+/// A pane hosting two closely-related settings surfaces behind a segmented
+/// control, so the window keeps five top-level panes without discarding any
+/// existing settings UI.
+private struct SubTabbedPane<Content: View>: View {
+    let tabs: [String]
+    @ViewBuilder let content: (Int) -> Content
+    @State private var sub = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("", selection: $sub) {
+                ForEach(Array(tabs.enumerated()), id: \.offset) { idx, title in
+                    Text(title).tag(idx)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 280)
+            .padding(.top, 12)
+            .padding(.bottom, 6)
+            content(sub)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(sub)
         }
     }
 }
