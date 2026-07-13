@@ -893,18 +893,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// silence: direct reply needed first, then high-priority review. Routine digests fall
     /// back to the generic title/body and may be held by the firewall.
     private func highPriorityCardCount(brief: Brief?) -> Int {
-        guard let cards = brief.flatMap({ BriefJSON.decodedCached(for: $0) })?.cards else { return 0 }
+        guard let cards = brief.flatMap({ canonicalCards(for: $0) }) else { return 0 }
         return cards.filter { $0.needsReply || $0.priority == "high" }.count
     }
 
     private func highPriorityNotification(brief: Brief?, defaultTitle: String) -> (title: String, body: String) {
         let defaultBody = brief?.notificationText ?? "You have new messages"
-        guard let parsed = brief.flatMap({ BriefJSON.decodedCached(for: $0) })
-        else {
+        guard let cards = brief.flatMap({ canonicalCards(for: $0) }) else {
             return (defaultTitle, defaultBody)
         }
-        let replyCards = parsed.cards.filter(\.needsReply)
-        let reviewCards = parsed.cards.filter { !$0.needsReply && $0.priority == "high" }
+        let replyCards = cards.filter(\.needsReply)
+        let reviewCards = cards.filter { !$0.needsReply && $0.priority == "high" }
         let interruptingCards = replyCards + reviewCards
         guard !interruptingCards.isEmpty, let topCard = interruptingCards.first else {
             return (defaultTitle, defaultBody)
@@ -919,6 +918,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let reason = notificationReason(for: topCard)
         return (title, "\(topCard.headline) · \(reason)")
+    }
+
+    private func canonicalCards(for brief: Brief) -> [BriefCard]? {
+        if let id = brief.id,
+           let records = try? appState?.repository.fetchBriefCards(briefID: id),
+           !records.isEmpty {
+            return records.map(\.briefCard)
+        }
+        return BriefJSON.decodedCached(for: brief)?.cards
     }
 
     private func notificationReason(for card: BriefCard) -> String {

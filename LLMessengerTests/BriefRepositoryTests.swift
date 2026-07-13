@@ -600,4 +600,105 @@ final class BriefRepositoryTests: XCTestCase {
 
         XCTAssertGreaterThan(id, 0)
     }
+
+    @MainActor
+    func testCanonicalCardBackfillPreservesIdentityAndOverridesStaleSummary() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let canonicalCard = BriefCard(
+            id: "logical-card",
+            service: "signal",
+            conversationId: "conversation",
+            conversationTitle: "Alice",
+            headline: "Canonical headline",
+            priority: "high",
+            counts: BriefCardCounts(messages: 4, threads: 1, people: 2),
+            summary: "Canonical summary",
+            callback: "Earlier context",
+            needsReply: true,
+            reason: "Direct question",
+            grounding: "direct",
+            actionItems: ["Reply today"],
+            quotes: [BriefQuote(messageId: "m1", from: "Alice", time: "10:00", text: "Can you help?")],
+            sourceMessageIds: ["m1"],
+            collapsed: true
+        )
+        let summary = try XCTUnwrap(String(
+            data: JSONEncoder().encode(BriefJSON(
+                totalMessages: 4,
+                totalThreads: 1,
+                totalPeople: 2,
+                cards: [canonicalCard]
+            )),
+            encoding: .utf8
+        ))
+        let briefID = try repo.insertBrief(Brief(
+            createdAt: Date(),
+            status: "ready",
+            services: #"["signal"]"#,
+            openingSummary: summary,
+            notificationText: "Digest"
+        ))
+        try repo.insertBriefCard(BriefCardRecord(
+            id: "storage-row",
+            briefId: briefID,
+            service: "signal",
+            conversationId: "conversation",
+            conversationTitle: "Alice",
+            headline: canonicalCard.headline,
+            priority: canonicalCard.priority,
+            summary: canonicalCard.summary,
+            needsReply: canonicalCard.needsReply,
+            reason: canonicalCard.reason,
+            grounding: canonicalCard.grounding,
+            actionItems: #"["Reply today"]"#,
+            callbackText: canonicalCard.callback,
+            sourceMessageIds: #"["m1"]"#,
+            createdAt: Date()
+        ))
+
+        try await db.dbQueue.write { database in
+            try AppDatabase.backfillCanonicalBriefCards(in: database)
+        }
+        let backfilled = try XCTUnwrap(repo.fetchBriefCards(briefID: briefID).first)
+        XCTAssertEqual(backfilled.logicalId, "logical-card")
+        XCTAssertEqual(backfilled.messageCount, 4)
+        XCTAssertEqual(backfilled.threadCount, 1)
+        XCTAssertEqual(backfilled.peopleCount, 2)
+        XCTAssertTrue(backfilled.collapsed)
+        XCTAssertEqual(backfilled.briefCard.quotes.first?.text, "Can you help?")
+
+        let staleCard = BriefCard(
+            id: "stale-json-id",
+            service: canonicalCard.service,
+            conversationId: canonicalCard.conversationId,
+            conversationTitle: canonicalCard.conversationTitle,
+            headline: "Stale JSON headline",
+            priority: "low",
+            counts: .zero,
+            summary: "Stale",
+            callback: nil,
+            actionItems: [],
+            quotes: [],
+            sourceMessageIds: ["m1"]
+        )
+        var brief = try XCTUnwrap(repo.fetchBrief(id: briefID))
+        brief.openingSummary = try String(
+            data: JSONEncoder().encode(BriefJSON(
+                totalMessages: 99,
+                totalThreads: 99,
+                totalPeople: 99,
+                cards: [staleCard]
+            )),
+            encoding: .utf8
+        )
+        try repo.update(brief: brief)
+
+        let state = AppState(database: db, llmClient: MockLLMClient(), llmModel: "test", basePrompt: "BASE")
+        await state.refreshBriefs().value
+        let content = try XCTUnwrap(state.briefs.first.flatMap { state.briefJSON(for: $0) })
+        XCTAssertEqual(content.cards.first?.id, "logical-card")
+        XCTAssertEqual(content.cards.first?.headline, "Canonical headline")
+        XCTAssertEqual(content.cards.first?.actionItems, ["Reply today"])
+    }
 }

@@ -19,6 +19,13 @@ struct BriefProseView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
     let brief: Brief
     let messages: [Message]
+    let canonicalJSON: BriefJSON?
+
+    init(brief: Brief, messages: [Message], canonicalJSON: BriefJSON? = nil) {
+        self.brief = brief
+        self.messages = messages
+        self.canonicalJSON = canonicalJSON
+    }
 
     @State private var filter: String = "all"
     @State private var showingTimeline: TimelineTarget? = nil
@@ -48,7 +55,7 @@ struct BriefProseView: View {
         if parsedCache.briefID == brief.id, parsedCache.briefID != nil {
             return parsedCache.json
         }
-        return Self.decodeBriefJSON(brief)
+        return canonicalJSON ?? Self.decodeBriefJSON(brief)
     }
 
     private static func decodeBriefJSON(_ brief: Brief) -> BriefJSON? {
@@ -58,7 +65,7 @@ struct BriefProseView: View {
     }
 
     private func refreshCaches() {
-        let json = Self.decodeBriefJSON(brief)
+        let json = canonicalJSON ?? Self.decodeBriefJSON(brief)
         parsedCache = (brief.id, json)
         let sortedMessages = messages.sorted { $0.timestamp < $1.timestamp }
         messageCache = (brief.id, messages.count, sortedMessages, Dictionary(grouping: sortedMessages, by: \.service))
@@ -239,6 +246,9 @@ struct BriefProseView: View {
             refreshCaches()
             appeared = false
             withAnimation { appeared = true }
+        }
+        .onChange(of: canonicalJSON?.cards.map(\.id)) {
+            refreshCaches()
         }
         // H key: file the first unhandled card visible in the current filter.
         .background {

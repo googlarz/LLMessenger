@@ -1029,8 +1029,20 @@ struct BriefRepository {
         try database.dbQueue.read { db in
             try BriefCardRecord
                 .filter(Column("briefId") == briefID)
-                .order(Column("createdAt").asc)
+                .order(Column("position").asc, Column("createdAt").asc)
                 .fetchAll(db)
+        }
+    }
+
+    func fetchBriefCards(briefIDs: [Int64]) throws -> [Int64: [BriefCard]] {
+        guard !briefIDs.isEmpty else { return [:] }
+        return try database.dbQueue.read { db in
+            let records = try BriefCardRecord
+                .filter(briefIDs.contains(Column("briefId")))
+                .order(Column("briefId").asc, Column("position").asc, Column("createdAt").asc)
+                .fetchAll(db)
+            return Dictionary(grouping: records, by: \.briefId)
+                .mapValues { $0.map(\.briefCard) }
         }
     }
 

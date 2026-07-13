@@ -253,7 +253,7 @@ enum DemoSeeder {
         var jsonCards: [[String: Any]] = []
         var totalMessages = 0, totalPeople = Set<String>()
 
-        for card in cards {
+        for (position, card) in cards.enumerated() {
             let cardID = "demo-\(card.service)-\(card.conversationId)-\(briefID)"
             var sourceMessageIds: [String] = []
             var quotes: [[String: String]] = []
@@ -300,7 +300,14 @@ enum DemoSeeder {
                 actionItems: try jsonString(card.actions),
                 callbackText: card.callback,
                 sourceMessageIds: try jsonString(sourceMessageIds),
-                createdAt: createdAt
+                createdAt: createdAt,
+                logicalId: cardID,
+                position: position,
+                messageCount: card.messages.count,
+                threadCount: 1,
+                peopleCount: Set(card.messages.map(\.sender)).count,
+                quotes: try jsonString(quotes),
+                collapsed: false
             ))
 
             try repo.insertBriefCardSources(insertedRows.map { row in

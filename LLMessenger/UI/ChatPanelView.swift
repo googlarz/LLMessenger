@@ -29,7 +29,7 @@ struct ChatPanelView: View {
             return s != nil && s != .ok
         }
 
-        if let json = appState.selectedBrief.flatMap({ BriefJSON.decodedCached(for: $0) }) {
+        if let json = appState.selectedBrief.flatMap({ appState.briefJSON(for: $0) }) {
             let totalMsgs = json.total_messages ?? msgs.count
             let svcs = Set(json.cards.map(\.service)).count
             let briefs = json.cards.count
@@ -71,7 +71,11 @@ struct ChatPanelView: View {
                             Rule()
                                 .padding(.horizontal, Theme.gutter)
 
-                            BriefProseView(brief: brief, messages: briefMessages)
+                            BriefProseView(
+                                brief: brief,
+                                messages: briefMessages,
+                                canonicalJSON: appState.briefJSON(for: brief)
+                            )
                                 .id(brief.id)
                                 .transition(.opacity)
                         }

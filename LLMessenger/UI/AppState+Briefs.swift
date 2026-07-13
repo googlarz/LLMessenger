@@ -33,11 +33,13 @@ extension AppState {
             guard let self else { return }
             do {
                 let fetched = try self.repository.fetchRecentBriefs(limit: limit, including: selectedID)
+                let cardsByBriefID = try self.repository.fetchBriefCards(briefIDs: fetched.compactMap(\.id))
                 let pipelineHealth = try self.repository.fetchBriefPipelineHealth()
                 let healthMap = (try? settingsRepo.loadAllServiceHealth()) ?? [:]
                 let heldBack = settingsRepo.loadFirewallHeldBack()
                 await MainActor.run {
                     self.briefs = fetched
+                    self.briefCardsByBriefID = cardsByBriefID
                     self.briefPipelineHealth = pipelineHealth
                     self.serviceHealthMap = healthMap
                     self.heldBackCount = heldBack
@@ -145,7 +147,7 @@ extension AppState {
 
     func markAllHandled(briefID: Int64) {
         guard let brief = briefs.first(where: { $0.id == briefID }),
-              let json = BriefJSON.decodedCached(for: brief) else { return }
+              let json = briefJSON(for: brief) else { return }
         for card in json.cards {
             markCardHandled(briefID: briefID, cardID: card.id)
         }
@@ -227,7 +229,7 @@ extension AppState {
         let todayHighUnhandled = briefs
             .filter { cal.isDateInToday($0.createdAt) && $0.archivedAt == nil }
             .contains { brief in
-                guard let json = BriefJSON.decodedCached(for: brief)
+                guard let json = briefJSON(for: brief)
                 else { return false }
                 return json.cards.contains { card in
                     card.priority == "high" &&

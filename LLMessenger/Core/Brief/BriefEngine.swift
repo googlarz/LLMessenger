@@ -986,7 +986,7 @@ final class BriefEngine {
         var cardRecords: [BriefCardRecord] = []
         var allSources: [BriefCardSource] = []
 
-        for card in cards {
+        for (position, card) in cards.enumerated() {
             // Always generate a fresh UUID — the LLM-produced card.id is reused across
             // brief runs for the same conversation, causing UNIQUE constraint failures.
             let cardID = UUID().uuidString
@@ -1012,7 +1012,14 @@ final class BriefEngine {
                 actionItems: try encodeStringArray(card.actionItems),
                 callbackText: card.callback,
                 sourceMessageIds: try encodeStringArray(card.sourceMessageIds),
-                createdAt: now
+                createdAt: now,
+                logicalId: card.id,
+                position: position,
+                messageCount: card.counts.messages,
+                threadCount: card.counts.threads,
+                peopleCount: card.counts.people,
+                quotes: try encodeJSON(card.quotes),
+                collapsed: card.collapsed
             )
 
             let quoteMessageIDs = Set(card.quotes.compactMap(\.messageId))
@@ -1036,6 +1043,17 @@ final class BriefEngine {
         }
 
         return (cardRecords, allSources)
+    }
+
+    private nonisolated func encodeJSON<Value: Encodable>(_ value: Value) throws -> String {
+        let data = try JSONEncoder().encode(value)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw EncodingError.invalidValue(
+                value,
+                .init(codingPath: [], debugDescription: "Unable to encode UTF-8 JSON")
+            )
+        }
+        return json
     }
 
     private func persistConversationStates(

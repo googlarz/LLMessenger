@@ -17,6 +17,7 @@ struct ActivityView: View {
             LazyVStack(spacing: 0) {
                 WeeklyRecapView(
                     briefs: appState.briefs,
+                    cardsByBriefID: appState.briefCardsByBriefID,
                     owedCount: appState.owedCount,
                     commitmentsCount: appState.commitmentsCount
                 )

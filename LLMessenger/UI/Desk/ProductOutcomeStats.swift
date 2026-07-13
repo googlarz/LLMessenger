@@ -51,6 +51,7 @@ struct ProductOutcomeStats: Equatable {
 
     static func lastSevenDays(
         briefs: [Brief],
+        cardsByBriefID: [Int64: [BriefCard]] = [:],
         handledCardKeys: Set<String>,
         auditRows: [ActionAuditRecord],
         openCommitmentCount: Int,
@@ -66,11 +67,13 @@ struct ProductOutcomeStats: Equatable {
         var quiet = 0
 
         for brief in recentBriefs {
-            guard let json = BriefJSON.decodedCached(for: brief) else { continue }
-            threads += json.cards.count
-            sourced += json.cards.filter { !$0.sourceMessageIds.isEmpty }.count
-            reply += json.cards.filter(\.needsReply).count
-            quiet += json.cards.filter { !$0.needsReply && ($0.priority == "low" || $0.collapsed) }.count
+            let cards = brief.id.flatMap { cardsByBriefID[$0] }
+                ?? BriefJSON.decodedCached(for: brief)?.cards
+                ?? []
+            threads += cards.count
+            sourced += cards.filter { !$0.sourceMessageIds.isEmpty }.count
+            reply += cards.filter(\.needsReply).count
+            quiet += cards.filter { !$0.needsReply && ($0.priority == "low" || $0.collapsed) }.count
         }
 
         let handled = handledCardKeys.filter { key in

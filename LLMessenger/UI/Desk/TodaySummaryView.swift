@@ -25,7 +25,7 @@ struct TodaySummaryView: View {
     }
 
     private var latestDigestStats: (reply: Int, review: Int, quiet: Int) {
-        guard let json = latestBrief.flatMap({ BriefJSON.decodedCached(for: $0) }) else {
+        guard let json = latestBrief.flatMap({ appState.briefJSON(for: $0) }) else {
             return (0, 0, 0)
         }
         let reply = json.cards.filter(\.needsReply).count

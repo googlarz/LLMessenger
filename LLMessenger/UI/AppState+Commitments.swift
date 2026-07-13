@@ -25,6 +25,7 @@ extension AppState {
 
     func reloadProductOutcomeStats() {
         let briefs = self.briefs
+        let cardsByBriefID = self.briefCardsByBriefID
         let handled = self.handledCardKeys
         let openCommitments = self.commitmentsCount
         let heldBack = self.heldBackCount
@@ -39,6 +40,7 @@ extension AppState {
             }) ?? []
             let stats = ProductOutcomeStats.lastSevenDays(
                 briefs: briefs,
+                cardsByBriefID: cardsByBriefID,
                 handledCardKeys: handled,
                 auditRows: audits,
                 openCommitmentCount: openCommitments,

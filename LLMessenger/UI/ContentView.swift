@@ -492,7 +492,7 @@ private struct FirstRealDigestSuccessView: View {
     }
 
     private var cardStats: (cards: Int, replies: Int, sourced: Int) {
-        guard let json = latestBrief.flatMap({ BriefJSON.decodedCached(for: $0) }) else {
+        guard let json = latestBrief.flatMap({ appState.briefJSON(for: $0) }) else {
             return (0, 0, 0)
         }
         return (

@@ -263,6 +263,13 @@ final class BriefEngineTests: XCTestCase {
         let cards = try repo.fetchBriefCards(briefID: try XCTUnwrap(id))
         XCTAssertEqual(cards.count, 1)
         XCTAssertEqual(cards[0].sourceMessageIds, #"["m0"]"#)
+        XCTAssertEqual(cards[0].logicalId, "telegram-c1-1")
+        XCTAssertEqual(cards[0].position, 0)
+        XCTAssertEqual(cards[0].messageCount, 3)
+        XCTAssertEqual(cards[0].threadCount, 1)
+        XCTAssertEqual(cards[0].peopleCount, 1)
+        XCTAssertEqual(cards[0].briefCard.actionItems, ["Reply to Alice."])
+        XCTAssertEqual(cards[0].briefCard.quotes.first?.messageId, "m0")
 
         let sources = try repo.fetchSources(briefCardID: cards[0].id)
         XCTAssertEqual(sources.count, 1)

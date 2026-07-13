@@ -121,6 +121,7 @@ struct BriefListGrouper {
 final class AppState: ObservableObject {
     @Published var isDemoTransitioning = false   // true during demo→real morph window
     @Published var briefs: [Brief] = []
+    @Published var briefCardsByBriefID: [Int64: [BriefCard]] = [:]
     @Published var tasks: [BriefTask] = []
     @Published var selectedBriefID: Int64?
     /// Live adapter status, pushed by AppDelegate on every poll event. Source of
@@ -250,6 +251,19 @@ final class AppState: ObservableObject {
     var selectedBrief: Brief? {
         guard let id = selectedBriefID else { return nil }
         return briefs.first { $0.id == id }
+    }
+
+    func briefJSON(for brief: Brief) -> BriefJSON? {
+        let fallback = BriefJSON.decodedCached(for: brief)
+        guard let briefID = brief.id,
+              let cards = briefCardsByBriefID[briefID],
+              !cards.isEmpty else { return fallback }
+        return BriefJSON(
+            totalMessages: fallback?.totalMessages ?? cards.reduce(0) { $0 + $1.counts.messages },
+            totalThreads: fallback?.totalThreads ?? cards.reduce(0) { $0 + $1.counts.threads },
+            totalPeople: fallback?.totalPeople ?? cards.reduce(0) { $0 + $1.counts.people },
+            cards: cards
+        )
     }
 
     var unreadCount: Int {

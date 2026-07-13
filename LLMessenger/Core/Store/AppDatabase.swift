@@ -613,6 +613,24 @@ final class AppDatabase: @unchecked Sendable {
             }
             try db.create(index: "llmRuns_on_purpose", on: "llmRuns", columns: ["purpose"])
         }
+        migrator.registerMigration("v35_canonical_brief_cards") { db in
+            try db.alter(table: "briefCards") { table in
+                table.add(column: "logicalId", .text)
+                table.add(column: "position", .integer).notNull().defaults(to: 0)
+                table.add(column: "messageCount", .integer).notNull().defaults(to: 0)
+                table.add(column: "threadCount", .integer).notNull().defaults(to: 0)
+                table.add(column: "peopleCount", .integer).notNull().defaults(to: 0)
+                table.add(column: "quotes", .text).notNull().defaults(to: "[]")
+                table.add(column: "collapsed", .boolean).notNull().defaults(to: false)
+            }
+            try db.create(
+                index: "briefCards_on_briefId_position",
+                on: "briefCards",
+                columns: ["briefId", "position"]
+            )
+
+            try Self.backfillCanonicalBriefCards(in: db)
+        }
         try migrator.migrate(dbQueue)
 
         // A process cannot still own a running job after this database has been
@@ -622,6 +640,47 @@ final class AppDatabase: @unchecked Sendable {
                 sql: "UPDATE briefJobs SET status = ?, updatedAt = ?, nextAttemptAt = NULL WHERE status = ?",
                 arguments: [BriefJobStatus.queued.rawValue, Date(), BriefJobStatus.running.rawValue]
             )
+        }
+    }
+
+    static func backfillCanonicalBriefCards(in db: Database) throws {
+        let briefRows = try Row.fetchAll(db, sql: """
+            SELECT id, openingSummary FROM briefs
+            WHERE openingSummary IS NOT NULL AND openingSummary != ''
+        """)
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        for briefRow in briefRows {
+            guard let briefID = briefRow["id"] as Int64?,
+                  let summary = briefRow["openingSummary"] as String?,
+                  let parsed = BriefJSON.decodeLenient(from: summary) else { continue }
+            let records = try BriefCardRecord
+                .filter(Column("briefId") == briefID)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+            var unused = records
+            for (position, card) in parsed.cards.enumerated() {
+                let sourceSet = Set(card.sourceMessageIds)
+                guard let matchIndex = unused.firstIndex(where: { record in
+                    guard record.service == card.service,
+                          record.conversationId == card.conversationId else { return false }
+                    guard let data = record.sourceMessageIds.data(using: .utf8),
+                          let ids = try? decoder.decode([String].self, from: data) else { return true }
+                    return Set(ids) == sourceSet
+                }) else { continue }
+                let record = unused.remove(at: matchIndex)
+                let quotesData = try encoder.encode(card.quotes)
+                let quotesJSON = String(data: quotesData, encoding: .utf8) ?? "[]"
+                try db.execute(sql: """
+                    UPDATE briefCards
+                    SET logicalId = ?, position = ?, messageCount = ?, threadCount = ?,
+                        peopleCount = ?, quotes = ?, collapsed = ?
+                    WHERE id = ?
+                """, arguments: [
+                    card.id, position, card.counts.messages, card.counts.threads,
+                    card.counts.people, quotesJSON, card.collapsed, record.id
+                ])
+            }
         }
     }
 }

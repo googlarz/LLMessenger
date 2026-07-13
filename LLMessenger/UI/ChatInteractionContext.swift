@@ -25,6 +25,7 @@ struct ChatInteractionContext {
     let messages: [Message]
 
     init(brief: Brief,
+         briefCards: [BriefCard]? = nil,
          messages: [Message],
          threadItems: [ThreadItem],
          conversationTuples: [(service: String, convId: String, name: String)]) {
@@ -34,7 +35,7 @@ struct ChatInteractionContext {
                                 convId: conv.convId,
                                 name: conv.name)
         }
-        self.cards = Self.decodeCards(from: brief).enumerated().map { index, card in
+        self.cards = (briefCards ?? Self.decodeCards(from: brief)).enumerated().map { index, card in
             ChatBriefCardRef(number: index + 1, card: card)
         }
         self.drafts = threadItems.compactMap { item -> (UUID, ReplyDraft)? in
