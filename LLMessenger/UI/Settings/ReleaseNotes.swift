@@ -17,6 +17,18 @@ struct ReleaseNote: Identifiable {
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
         ReleaseNote(
+            version: "2.3.0",
+            title: "The Mac-native redesign",
+            highlights: [
+                "New navigation: a proper sidebar (Act, Digests, Activity) where every selection drives the main content — Act and Activity go full-width, Digests pairs the archive with the open digest.",
+                "Native title-bar toolbar with search, refresh, service status, and digest back/forward — plus a real macOS menu bar with every command and shortcut.",
+                "Digest cards start compact (headline, two lines, one action) and expand on demand; only the top card opens expanded.",
+                "Reading is reading: the AI composer is now an Ask panel you open from the toolbar, and the disclaimer moved into the status popover.",
+                "Act is one ranked queue — Needs your decision, Ready to send, Waiting on others, Later — with ⌘-click multi-select for batch sends.",
+                "Settings consolidated to five panes. Reduce Motion and Increase Contrast are honored everywhere; no text renders below 10pt.",
+                "Calmer feedback: refresh is a toolbar spinner and confirmations are floating toasts that never push your content around."
+            ]),
+        ReleaseNote(
             version: "2.2.7",
             title: "Cleaner internals, faster Desk, in-app release notes",
             highlights: [
