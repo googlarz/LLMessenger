@@ -136,11 +136,17 @@ struct ChatPanelView: View {
                 }
             }
 
-            // Footer: countdown + disclaimer
+            // Footer: passive next-digest countdown only. The AI disclaimer moved
+            // to the service/privacy status popover after initial consent.
             BriefFooterView()
 
-            Rule()
-            ChatInputView()
+            // Ask panel — closed by default so reading has one purpose. Opens from
+            // the toolbar Ask button; stays open while a conversation is active.
+            // Demo/unconfigured states keep their banner (it carries the exit CTA).
+            if showComposer {
+                Rule()
+                ChatInputView()
+            }
         }
         // Sync chatViewModel with appState whenever the selected brief changes.
         // Menu-bar and notification paths set selectedBriefID directly without
@@ -152,6 +158,14 @@ struct ChatPanelView: View {
                 appState.markAsOpen(briefID: id)
             }
         }
+    }
+
+    private var showComposer: Bool {
+        DemoSeeder.isActive
+            || !appState.isLLMConfigured
+            || appState.askPanelOpen
+            || !aiItems.isEmpty
+            || chatViewModel.isLoading
     }
 
     @ViewBuilder
@@ -189,30 +203,29 @@ private struct BriefFooterView: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        Rule(color: Theme.border.opacity(0.6))
         // Refresh every 60s — no need for a per-second ticker here.
         TimelineView(.periodic(from: .now, by: 60)) { _ in
-            Text(footerText.uppercased())
-                .font(Theme.mono(11))
-                .tracking(1.0)
-                .foregroundStyle(Theme.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 7)
+            if !footerText.isEmpty {
+                Rule(color: Theme.border.opacity(0.6))
+                Text(footerText.uppercased())
+                    .font(Theme.mono(11))
+                    .tracking(1.0)
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 7)
+            }
         }
     }
 
+    // Provenance ("AI-generated · may miss nuance") lives in the service/privacy
+    // status popover — routine reading shouldn't carry a permanent disclaimer.
     private var footerText: String {
-        var parts: [String] = []
-        if let next = appState.nextPollDate {
-            let secs = max(0, Int(next.timeIntervalSinceNow))
-            if secs > 0 {
-                let mins = Int(ceil(Double(secs) / 60.0))
-                parts.append(mins <= 1 ? "Next digest soon" : "Next digest ~\(mins)m")
-            }
-        }
-        parts.append("AI-generated · may miss nuance")
-        return parts.joined(separator: "  ·  ")
+        guard let next = appState.nextPollDate else { return "" }
+        let secs = max(0, Int(next.timeIntervalSinceNow))
+        guard secs > 0 else { return "" }
+        let mins = Int(ceil(Double(secs) / 60.0))
+        return mins <= 1 ? "Next digest soon" : "Next digest ~\(mins)m"
     }
 }

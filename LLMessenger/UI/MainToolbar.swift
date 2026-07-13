@@ -56,6 +56,16 @@ struct MainToolbar: ToolbarContent {
             ToolbarSearchField(appState: appState, selectedSection: $selectedSection)
                 .frame(width: 180)
 
+            if selectedSection == .digests {
+                Button {
+                    withAnimation(Theme.spring) { appState.askPanelOpen.toggle() }
+                } label: {
+                    Label("Ask", systemImage: "text.bubble")
+                        .foregroundStyle(appState.askPanelOpen ? Theme.textPrimary : Color.secondary)
+                }
+                .help(appState.askPanelOpen ? "Close the Ask panel" : "Ask about this digest, or draft a reply")
+            }
+
             Button {
                 appState.onRequestRefresh?()
             } label: {
@@ -76,6 +86,7 @@ struct MainToolbar: ToolbarContent {
                     services: orderedServices,
                     health: appState.serviceHealth,
                     lastChecked: appState.lastCheckedDate,
+                    providerLine: providerLine,
                     onRetry: onRetryService
                 )
             }
@@ -117,6 +128,13 @@ struct MainToolbar: ToolbarContent {
         }
         if appState.serviceHealth.values.contains(.ok) { return "Services connected" }
         return "Service status"
+    }
+
+    /// Persistent AI provenance — replaces the always-on disclaimer footer.
+    private var providerLine: String {
+        guard appState.isLLMConfigured else { return "No AI backend configured" }
+        let where_ = appState.llmClient.isLocal ? "on this Mac" : "via \(appState.llmProvider?.rawValue.capitalized ?? "cloud provider")"
+        return "Digests: \(appState.llmModel) \(where_) · AI-generated, may miss nuance"
     }
 }
 
@@ -178,6 +196,7 @@ struct ServiceStatusPopover: View {
     let services: [String]
     let health: [String: AdapterHealthResult.Status]
     let lastChecked: Date?
+    var providerLine: String? = nil
     let onRetry: ((String) -> Void)?
 
     var body: some View {
@@ -220,6 +239,16 @@ struct ServiceStatusPopover: View {
                 }
                 .frame(height: 34)
                 .padding(.horizontal, 14)
+            }
+
+            if let providerLine {
+                Rule()
+                Text(providerLine)
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
             }
         }
         .frame(width: 260)

@@ -47,15 +47,20 @@ struct ChatInputView: View {
                 }
             }
 
-            HStack(spacing: 14) {
-                WireLabel("Tone")
-                ForEach(["Formal", "Short", "Casual"], id: \.self) { tone in
-                    ToneButton(tone: tone, selected: selectedTone == tone) {
-                        withAnimation(Theme.quick) {
-                            selectedTone = selectedTone == tone ? nil : tone
+            // Tone controls only while actually writing or editing a reply —
+            // an empty panel shouldn't advertise composer controls.
+            if !chatViewModel.inputText.isEmpty || chatViewModel.pendingTarget != nil {
+                HStack(spacing: 14) {
+                    WireLabel("Tone")
+                    ForEach(["Formal", "Short", "Casual"], id: \.self) { tone in
+                        ToneButton(tone: tone, selected: selectedTone == tone) {
+                            withAnimation(Theme.quick) {
+                                selectedTone = selectedTone == tone ? nil : tone
+                            }
                         }
                     }
                 }
+                .transition(.opacity)
             }
 
             HStack(alignment: .bottom, spacing: 10) {

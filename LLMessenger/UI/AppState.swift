@@ -255,6 +255,10 @@ final class AppState: ObservableObject {
         return briefs.first { $0.id == id }
     }
 
+    /// Ask panel (the AI conversation inspector). Closed by default so reading
+    /// a digest doesn't look like composing; opened from the toolbar Ask button.
+    @Published var askPanelOpen = false
+
     // MARK: - Archive search (toolbar-driven)
 
     /// Live query from the window toolbar's search field; BriefListView reacts.
