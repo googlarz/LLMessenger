@@ -32,7 +32,9 @@ func executeLLMRequest(
         throw LLMError.rateLimited(retryAfter: retryAfter)
     }
     if http.statusCode >= 400 {
-        throw LLMError.providerError("HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+        // Provider bodies can echo submitted prompt content. Keep them out of
+        // user-visible errors, logs, crash reports, and support diagnostics.
+        throw LLMError.providerError("HTTP \(http.statusCode)")
     }
     return data
 }

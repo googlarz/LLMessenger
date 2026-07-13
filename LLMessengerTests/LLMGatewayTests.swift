@@ -35,7 +35,8 @@ final class LLMGatewayTests: XCTestCase {
             database: db,
             client: spy,
             provider: .anthropic,
-            model: "current-model"
+            model: "current-model",
+            localOnlyMode: { false }
         )
         let messages = [LLMMessage(role: .user, content: "private prompt text")]
 
@@ -77,7 +78,8 @@ final class LLMGatewayTests: XCTestCase {
             database: db,
             client: spy,
             provider: .openai,
-            model: "gpt-test"
+            model: "gpt-test",
+            localOnlyMode: { false }
         )
 
         do {
@@ -107,7 +109,8 @@ final class LLMGatewayTests: XCTestCase {
             client: spy,
             provider: .ollama,
             model: "local-model",
-            contextTokenLimitOverride: 1_000
+            contextTokenLimitOverride: 1_000,
+            localOnlyMode: { false }
         )
         let messages = [
             LLMMessage(
@@ -146,7 +149,8 @@ final class LLMGatewayTests: XCTestCase {
             database: db,
             client: local,
             provider: .ollama,
-            model: "local-model"
+            model: "local-model",
+            localOnlyMode: { false }
         )
         XCTAssertTrue(gateway.isLocal)
 
@@ -161,5 +165,55 @@ final class LLMGatewayTests: XCTestCase {
 
         XCTAssertTrue(local.requestedModels.isEmpty)
         XCTAssertEqual(cloud.requestedModels, ["cloud-model"])
+    }
+
+    func testLocalOnlyModeBlocksStaleCloudConfigurationAtDispatchBoundary() async throws {
+        let db = try makeDB()
+        let cloud = GatewaySpyClient()
+        let gateway = LLMGateway(
+            database: db,
+            client: cloud,
+            provider: .openai,
+            model: "cloud-model",
+            localOnlyMode: { true }
+        )
+
+        do {
+            _ = try await gateway.complete(
+                model: "ignored",
+                messages: [LLMMessage(role: .user, content: "private message")],
+                maxTokens: 10,
+                purpose: .chatAnswer
+            )
+            XCTFail("Expected local-only egress guard")
+        } catch LLMError.egressBlocked {
+            // Expected.
+        }
+
+        XCTAssertTrue(cloud.requestedMessages.isEmpty)
+        let runCount = try await db.dbQueue.read { try LLMRunRecord.fetchCount($0) }
+        XCTAssertEqual(runCount, 0, "Blocked prompts must not enter provider telemetry")
+    }
+
+    func testLocalOnlyModeStillAllowsOnDeviceClient() async throws {
+        let db = try makeDB()
+        let local = GatewaySpyClient()
+        local.local = true
+        let gateway = LLMGateway(
+            database: db,
+            client: local,
+            provider: .ollama,
+            model: "local-model",
+            localOnlyMode: { true }
+        )
+
+        _ = try await gateway.complete(
+            model: "ignored",
+            messages: [LLMMessage(role: .user, content: "private message")],
+            maxTokens: 10,
+            purpose: .chatAnswer
+        )
+
+        XCTAssertEqual(local.requestedModels, ["local-model"])
     }
 }

@@ -58,7 +58,7 @@ final class NetworkAuditLog: ObservableObject {
             requestBytes: request.httpBody?.count ?? 0,
             status: status,
             durationMs: durationMs,
-            error: error?.localizedDescription,
+            error: NetworkAuditLog.safeErrorDescription(error),
             isLocal: isLocal
         )
         Task { @MainActor in
@@ -77,5 +77,13 @@ final class NetworkAuditLog: ObservableObject {
     private nonisolated static func isLocalhost(_ url: URL?) -> Bool {
         guard let host = url?.host else { return false }
         return host == "127.0.0.1" || host == "localhost" || host == "::1"
+    }
+
+    private nonisolated static func safeErrorDescription(_ error: Error?) -> String? {
+        guard let error else { return nil }
+        if let urlError = error as? URLError {
+            return "URL error \(urlError.errorCode)"
+        }
+        return String(describing: type(of: error))
     }
 }

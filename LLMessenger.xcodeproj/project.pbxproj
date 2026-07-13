@@ -225,6 +225,7 @@
 		EAB0DE7548B574521670DA15 /* SubprocessAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08F728AD5C60C25170C49606 /* SubprocessAdapter.swift */; };
 		EBF9D849F71DA7874D3F96DD /* PollEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91DCC83C90E2B73383588FD1 /* PollEngine.swift */; };
 		EC4191319C9F98C5C2FB639C /* DelegationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064C24212405ABF70C71637 /* DelegationTests.swift */; };
+		ECD3CA8D25D066353BCA220F /* NetworkAuditLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D37D00A1BFAE9E2794015035 /* NetworkAuditLogTests.swift */; };
 		ED026EB71E8074D35FCC0477 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 053BC1D531581B41EE1FF9FC /* GRDB */; };
 		ED0FC5F1C2E7C9A31143532A /* LLMHTTPHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68447CD013DEC23E5A0DEFFD /* LLMHTTPHelper.swift */; };
 		ED58A99EF4403B466D24E7FF /* Brief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3982B388A984024FBEEA9C82 /* Brief.swift */; };
@@ -472,6 +473,7 @@
 		D2355EB0CABB60EE291A0AC3 /* DiagnosticsReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsReporter.swift; sourceTree = "<group>"; };
 		D2E743B88282AE993C10C526 /* BriefProseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefProseView.swift; sourceTree = "<group>"; };
 		D375CCA30EA1A7BE26C8F209 /* SearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchTests.swift; sourceTree = "<group>"; };
+		D37D00A1BFAE9E2794015035 /* NetworkAuditLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkAuditLogTests.swift; sourceTree = "<group>"; };
 		D44051E21B4C330335E6F6A6 /* Commitment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commitment.swift; sourceTree = "<group>"; };
 		D585C9E79CE6C3373CBFD739 /* PromptRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptRegressionTests.swift; sourceTree = "<group>"; };
 		D6257A25865F921D932156CE /* AppState+Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppState+Errors.swift"; sourceTree = "<group>"; };
@@ -750,6 +752,7 @@
 				0035F3076DFE68F7CFF2F8BF /* MemoryCompressorTests.swift */,
 				177F3B29DA8C4252093674D0 /* MessageIngestionCoordinatorTests.swift */,
 				FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */,
+				D37D00A1BFAE9E2794015035 /* NetworkAuditLogTests.swift */,
 				330592143EFDC8AF2BC51E83 /* NotificationManagerTests.swift */,
 				62EF6B3B6345490B504E7D0C /* OllamaClientTests.swift */,
 				182D523105308429E32E1553 /* OwedReplyDeriverTests.swift */,
@@ -1399,6 +1402,7 @@
 				AEC6BDAAE9B2D3A6348B68CB /* MemoryCompressorTests.swift in Sources */,
 				1272F31DDC013BAD64989E63 /* MessageIngestionCoordinatorTests.swift in Sources */,
 				570A01C0F98874233CA618A5 /* MessengerAdapterTypesTests.swift in Sources */,
+				ECD3CA8D25D066353BCA220F /* NetworkAuditLogTests.swift in Sources */,
 				5F54EE7EAB1F99DEE6B0AC0E /* NotificationManagerTests.swift in Sources */,
 				D609CAF8C4BC8524218E0A75 /* OllamaClientTests.swift in Sources */,
 				F9D48610A0E6B5BEB555AA2A /* OwedReplyDeriverTests.swift in Sources */,

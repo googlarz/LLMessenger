@@ -8,7 +8,7 @@ LLMessenger is a personal tool that reads your messages from the messaging servi
 * **Your messages live only on your Mac**, in `~/Library/Application Support/LLMessenger/`.
 * **Cloud egress happens only if you configure it.** With Ollama + no Anthropic/OpenAI key + no Slack: zero message content ever leaves your machine.
 * **API keys and Slack tokens are stored in the macOS Keychain.** They are not written to any plaintext file.
-* **No analytics, no telemetry, no auto-update beacon.** The app does not call home.
+* **No remote analytics or crash upload.** A once-daily, anonymous GitHub release check can be disabled in Settings.
 
 ## Where your data is stored
 
@@ -21,8 +21,8 @@ LLMessenger is a personal tool that reads your messages from the messaging servi
 | Slack history | LLMessenger DB (synced via HTTPS) | LLMessenger |
 | API keys (Anthropic, OpenAI) | macOS Keychain | LLMessenger |
 | Slack OAuth tokens | macOS Keychain (one JSON blob, one entry per workspace) | LLMessenger |
-| Signal phone number | `UserDefaults` (no PII beyond a number you typed) | LLMessenger |
-| Instrumentation events | A local log file. No content, just event names and counts | LLMessenger |
+| Signal phone number | macOS Keychain | LLMessenger |
+| Instrumentation events | Session-local process log. No message content, just event names and bounded metadata | LLMessenger |
 
 Nothing in this table leaves your Mac unless one of the cloud egress paths below fires.
 
@@ -36,17 +36,18 @@ When the app talks to anything that is **not** localhost, it goes to exactly one
 | `https://api.openai.com/v1/chat/completions` | Same as above — only if you configured an OpenAI key (and no Anthropic key) | Same as above |
 | `https://slack.com/api/*` | Slack adapter polls + send — only if you added a Slack workspace | Your OAuth token in the Authorization header; channel/user IDs in queries; outbound messages on `chat.postMessage` |
 | Telegram MTProto servers | Telegram adapter — only if you signed in | Your Telegram session + outbound messages |
+| `https://api.github.com/repos/googlarz/LLMessenger/releases/latest` | At most once daily unless update checks are disabled | App version request metadata only; no message content or account identifier |
 | `http://127.0.0.1:11434` (Ollama) | LLM calls when Ollama is selected | Localhost only — never leaves your Mac |
 | `http://127.0.0.1:7583` (signal-cli daemon) | Signal send | Localhost only — never leaves your Mac |
 
-The first three are also the **only** places where the *content* of your messages can travel: when Anthropic or OpenAI generates a brief, the relevant message text is in the prompt body. When Slack sends a message, your message text goes to Slack's API as part of `chat.postMessage`.
+Anthropic and OpenAI receive relevant message text when they generate a brief or draft. Slack and Telegram receive content when those connected services are polled or when you send through them. The GitHub update check never receives message content.
 
 If you don't want any of that, see "Local-only mode" below.
 
 ## What the app does NOT do
 
 * No analytics, no crash reporter, no telemetry beacon.
-* No auto-update endpoint.
+* No silent download or installation of updates. The optional GitHub request checks release metadata only.
 * No background uploading of any kind.
 * No sharing of one user's data with another user's instance.
 * No use of message content for model training (this is governed by your contract with Anthropic / OpenAI / Slack, not by LLMessenger).
@@ -67,7 +68,7 @@ LLMessenger v2.1 adds an agent that prepares actions — drafted replies, follow
 There is exactly one way the app can send without a per-message tap, and it is entirely under your control:
 
 * **Scoped delegation is opt-in and off by default.** You enable it per conversation, for a specific low-risk action type only (acknowledgements, RSVPs) — in that conversation's Context editor.
-* **The decision to auto-send reads only your settings and structured action fields — never message content.** A single function (`AgentDelegation.decide`) is the only thing that can authorize an automatic send, and it requires *all* of: you delegated that action type for that conversation; the action is low-risk and high-confidence; the recipient is someone you already have a conversation with (never brand-new); and the draft contains no links, monetary amounts, or credential-like text. This means **a crafted or "prompt-injection" message cannot make the app send anything, or enable or widen delegation** — message text is treated as data, never as instruction.
+* **The decision to auto-send reads only your settings and structured action fields — never message content as authorization.** A single function (`AgentDelegation.decide`) is the only thing that can authorize an automatic send, and it requires *all* of: you delegated that action type for that conversation; the action is low-risk and high-confidence; the recipient is someone you already have a conversation with (never brand-new); and the draft contains no links, monetary amounts, or credential-like text. Incoming messages can naturally trigger an acknowledgement or RSVP within a scope you already delegated, but crafted content cannot enable delegation, widen it, bypass a guard, or authorize another action type.
 * **Every auto-send has a 30-second Undo** (cancellable from the menu bar) and is recorded in a local **action audit log** (what, where, why, when). Nothing about it is transmitted anywhere.
 * **A global kill switch** (and the per-conversation toggle) instantly reverts the app to prepare-only — propose, never send.
 * **Voice commands are recognized on-device** (`requiresOnDeviceRecognition`); audio is not uploaded. **Calendar events** are written to your local calendar via EventKit; no calendar data leaves your Mac.
@@ -80,11 +81,11 @@ Settings → About → **Local-only mode** disables every cloud egress path that
 * Skips registering the Slack adapter
 * Telegram is opt-in to begin with; you can simply not connect it
 
-With Ollama running locally, no message content ever leaves your Mac.
+With Ollama running locally, no message content is sent to a cloud AI provider. Connected messaging services still receive the traffic inherent in using them, including replies you approve or delegated sends; disconnect Telegram as well if you want no non-local connector traffic.
 
 ## Network audit log
 
-Settings → About → **Network log** shows every cloud HTTPS call the app made during this session, with timestamp, provider, endpoint path, request size in bytes, and response status. **No message content is recorded.** It's a live verification that the egress table above is the complete story.
+Settings → About → **Network log** shows cloud HTTPS calls made by the built-in LLM, Slack, and update clients during this session, with timestamp, provider, endpoint path, request size in bytes, and response status. Queries, headers, bodies, and provider error bodies are omitted. Telegram runs in a separate process and is not represented in this in-app log.
 
 ## Verifying for yourself
 

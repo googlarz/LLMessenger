@@ -46,8 +46,31 @@ final class UpdateChecker {
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 10
 
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
+        let start = Date()
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            NetworkAuditLog.record(
+                provider: "GitHub Updates",
+                request: request,
+                status: nil,
+                durationMs: Int(Date().timeIntervalSince(start) * 1_000),
+                error: error
+            )
+            return
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode
+        NetworkAuditLog.record(
+            provider: "GitHub Updates",
+            request: request,
+            status: status,
+            durationMs: Int(Date().timeIntervalSince(start) * 1_000),
+            error: nil
+        )
+
+        guard status == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = json["tag_name"] as? String,
               let htmlURL = (json["html_url"] as? String).flatMap(URL.init(string:)),

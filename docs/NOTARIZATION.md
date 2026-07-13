@@ -73,7 +73,11 @@ Each step can also be run individually: `make archive`, `make export`, `make not
 | Entitlement | Reason |
 |---|---|
 | `com.apple.security.network.client` | Outbound HTTPS to Anthropic, OpenAI, Ollama; localhost Signal JSON-RPC |
-| `com.apple.security.cs.disable-library-validation` | PyInstaller Telegram adapter loads Python framework code at runtime |
+| `com.apple.security.device.audio-input` | On-device command dictation after user permission |
+
+Library validation remains enabled for the main app. Telegram and plugin adapters run as
+separate subprocesses, so their runtime libraries do not need a validation bypass in the
+LLMessenger process.
 
 **No app sandbox** — the sandbox (`com.apple.security.app-sandbox`) is intentionally absent.
 The app reads signal-mcp's SQLite database, spawns subprocesses, and reads `~/Library/Messages`.
@@ -111,10 +115,9 @@ LLMessenger.app/
 
 ## Troubleshooting
 
-- **Notarization rejected — library validation**: If a third-party dylib is flagged, ensure
-  `com.apple.security.cs.disable-library-validation` is present (it is).
+- **Notarization rejected — adapter library validation**: Sign and notarize the adapter as
+  its own executable bundle; do not weaken the main app's library validation.
 - **Stapling fails**: Stapler requires an internet connection to verify the notarization record.
 - **`notarytool` profile not found**: Re-run the `store-credentials` command above.
-- **Hardened Runtime rejects Python framework**: The `disable-library-validation` entitlement
-  covers this; no additional `allow-jit` or `allow-unsigned-executable-memory` is needed for
-  PyInstaller bundles.
+- **Hardened Runtime rejects a Python framework**: Fix the adapter's own signing and bundle
+  layout. The main app intentionally does not disable library validation.

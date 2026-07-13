@@ -5,9 +5,6 @@
     <!-- LLM API calls (Anthropic, OpenAI, Ollama) -->
     <key>com.apple.security.network.client</key>
     <true/>
-    <!-- PyInstaller Telegram adapter loads Python framework code at runtime -->
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
     <!-- Microphone access for on-device dictation of agent commands (P5). -->
     <key>com.apple.security.device.audio-input</key>
     <true/>

@@ -240,7 +240,7 @@ final class LLMProviderClientTests: XCTestCase {
         }
     }
 
-    func testOpenAIProviderErrorIncludesStatusAndBody() async throws {
+    func testOpenAIProviderErrorIncludesStatusButNeverBody() async throws {
         ProviderMockURLProtocol.handler = { _ in
             self.status(
                 url: "https://api.openai.com/v1/chat/completions",
@@ -256,7 +256,7 @@ final class LLMProviderClientTests: XCTestCase {
             XCTFail("Expected providerError")
         } catch LLMError.providerError(let message) {
             XCTAssertTrue(message.contains("500"))
-            XCTAssertTrue(message.contains("server exploded"))
+            XCTAssertFalse(message.contains("server exploded"))
         }
     }
 
@@ -459,7 +459,7 @@ final class LLMProviderClientTests: XCTestCase {
         }
     }
 
-    func testAnthropicProviderErrorIncludesStatusAndBody() async throws {
+    func testAnthropicProviderErrorIncludesStatusButNeverBody() async throws {
         ProviderMockURLProtocol.handler = { _ in
             self.status(
                 url: "https://api.anthropic.com/v1/messages",
@@ -475,7 +475,7 @@ final class LLMProviderClientTests: XCTestCase {
             XCTFail("Expected providerError")
         } catch LLMError.providerError(let message) {
             XCTAssertTrue(message.contains("500"))
-            XCTAssertTrue(message.contains("server exploded"))
+            XCTAssertFalse(message.contains("server exploded"))
         }
     }
 

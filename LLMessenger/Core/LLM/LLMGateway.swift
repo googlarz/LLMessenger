@@ -22,6 +22,7 @@ final class LLMGateway: LLMClient, @unchecked Sendable {
     private let database: AppDatabase
     private let lock = NSLock()
     private let contextTokenLimitOverride: Int?
+    private let localOnlyMode: @Sendable () -> Bool
     private var configuration: Configuration
 
     init(
@@ -29,11 +30,15 @@ final class LLMGateway: LLMClient, @unchecked Sendable {
         client: any LLMClient,
         provider: LLMProvider?,
         model: String,
-        contextTokenLimitOverride: Int? = nil
+        contextTokenLimitOverride: Int? = nil,
+        localOnlyMode: @escaping @Sendable () -> Bool = {
+            SettingsRepository().loadLocalOnlyMode()
+        }
     ) {
         self.database = database
         self.configuration = Configuration(client: client, provider: provider, model: model)
         self.contextTokenLimitOverride = contextTokenLimitOverride
+        self.localOnlyMode = localOnlyMode
     }
 
     var isLocal: Bool { snapshot().client.isLocal }
@@ -50,6 +55,9 @@ final class LLMGateway: LLMClient, @unchecked Sendable {
         maxTokens: Int
     ) async throws -> LLMResponse {
         let config = snapshot()
+        guard !localOnlyMode() || config.client.isLocal else {
+            throw LLMError.egressBlocked
+        }
         let model = config.model.isEmpty ? requestedModel : config.model
         let contextLimit = contextTokenLimitOverride
             ?? Self.contextTokenLimit(provider: config.provider)
@@ -273,6 +281,7 @@ final class LLMGateway: LLMClient, @unchecked Sendable {
         case LLMError.missingAPIKey: return "missing_api_key"
         case LLMError.providerError: return "provider"
         case LLMError.rateLimited: return "rate_limited"
+        case LLMError.egressBlocked: return "egress_blocked"
         default: return String(describing: type(of: error))
         }
     }

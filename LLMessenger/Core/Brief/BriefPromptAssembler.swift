@@ -31,7 +31,7 @@ enum BriefPromptAssembler {
         senderNameResolver: (String) -> String
     ) -> String {
         func bounded(_ value: String) -> String {
-            let sanitized = value.replacingOccurrences(of: "===", with: "—")
+            let sanitized = inline(value)
             guard let metadataCharacterLimit, sanitized.count > metadataCharacterLimit else {
                 return sanitized
             }
@@ -104,8 +104,19 @@ enum BriefPromptAssembler {
         dateFormatter: DateFormatter,
         senderNameResolver: (String) -> String
     ) -> String {
-        let senderLabel = message.isSent ? "YOU" : senderNameResolver(message.sender)
-        let safeText = message.text.replacingOccurrences(of: "===", with: "—")
+        let senderLabel = message.isSent ? "YOU" : inline(senderNameResolver(message.sender))
+        let safeText = inline(message.text)
         return "[id=\(message.messageId) | \(dateFormatter.string(from: message.timestamp))] \(senderLabel): \(safeText)"
+    }
+
+    /// Prompt records are line-oriented. Escaping line breaks prevents message
+    /// content from forging conversation headers or additional source records.
+    private static func inline(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\r\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\n")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "===", with: "—")
+            .replacingOccurrences(of: "\0", with: "")
     }
 }

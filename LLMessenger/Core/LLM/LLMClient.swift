@@ -19,6 +19,7 @@ enum LLMError: Error, LocalizedError {
     case missingAPIKey
     case providerError(String)
     case rateLimited(retryAfter: Int?)
+    case egressBlocked
 
     var errorDescription: String? {
         switch self {
@@ -29,6 +30,7 @@ enum LLMError: Error, LocalizedError {
         case .rateLimited(let s):
             if let s { return "Rate limited — retry after \(s)s" }
             return "Rate limited"
+        case .egressBlocked:              return "Cloud AI request blocked by local-only mode"
         }
     }
 }
