@@ -121,7 +121,7 @@ xcodegen generate
 open LLMessenger.xcodeproj   # ⌘R in Xcode 16+
 ```
 
-CI builds and runs all tests on every push. The [release workflow](.github/workflows/release.yml) builds an unsigned `.app` from any tag on a clean runner and publishes a SHA-256 of the binary, so you can verify a downloaded build matches the source.
+CI runs security checks, the full test suite, static analysis, and an unsigned universal archive on every push. The [release workflow](.github/workflows/release.yml) repeats those gates for each tag, verifies the app bundle, and publishes SHA-256 checksums for the packaged app and dSYMs.
 
 </details>
 
@@ -220,9 +220,9 @@ This is the entire trust model — see [`PRIVACY.md`](PRIVACY.md) for the full d
 - **Network audit log** (Settings → Privacy) shows every cloud HTTPS call live — provider, endpoint, status, bytes. Never message content.
 - **Pre-send redaction** (opt-in) strips credit cards, SSNs, IBANs, and emails before anything reaches a cloud LLM.
 - **Keys in the Keychain.** API keys and Slack tokens are never written to plain files.
-- **No telemetry. No analytics. No auto-update beacon.**
+- **No telemetry or analytics.** The optional daily GitHub release check sends no message content and can be disabled in Settings.
 
-Don't trust the README? The [reproducible release workflow](.github/workflows/release.yml) lets anyone rebuild the binary from source on a clean GitHub runner and compare SHA-256 hashes.
+Don't trust the README? The [reproducible release workflow](.github/workflows/release.yml) lets anyone rebuild the packaged app from source on a clean GitHub runner and compare SHA-256 hashes.
 
 ## FAQ
 
