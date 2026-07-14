@@ -34,11 +34,15 @@ struct ActFeedView: View {
 
     /// The four-section queue. Items keep their global attention rank inside
     /// each section; sections order by how urgently the user is needed.
+    /// Honors the sidebar service quick-filter.
     private var queueSections: [(title: String, items: [ActItem])] {
         var decision: [ActItem] = []
         var ready: [ActItem] = []
         var later: [ActItem] = []
-        for item in appState.attentionProjection.actItems {
+        let projected = appState.attentionProjection.actItems.filter {
+            appState.serviceQuickFilter == nil || $0.service == appState.serviceQuickFilter
+        }
+        for item in projected {
             if item.isStale {
                 later.append(item)
                 continue
@@ -62,12 +66,18 @@ struct ActFeedView: View {
         ].filter { !$0.1.isEmpty }.map { (title: $0.0, items: $0.1) }
     }
 
+    private var filteredCommitments: [Commitment] {
+        appState.attentionProjection.commitments.filter {
+            appState.serviceQuickFilter == nil || $0.service == appState.serviceQuickFilter
+        }
+    }
+
     private var theyOweCommitments: [Commitment] {
-        appState.attentionProjection.commitments.filter { $0.directionEnum != .iOwe }
+        filteredCommitments.filter { $0.directionEnum != .iOwe }
     }
 
     private var iOweCommitments: [Commitment] {
-        appState.attentionProjection.commitments.filter { $0.directionEnum == .iOwe }
+        filteredCommitments.filter { $0.directionEnum == .iOwe }
     }
 
     private var isQueueEmpty: Bool {
@@ -140,6 +150,20 @@ struct ActFeedView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         let sections = queueSections
+                        if let filtered = appState.serviceQuickFilter,
+                           sections.isEmpty, theyOweCommitments.isEmpty, iOweCommitments.isEmpty {
+                            HStack(spacing: 8) {
+                                Text("Nothing from \(Theme.serviceName(filtered)) needs you.")
+                                    .font(Theme.sans(12.5))
+                                    .foregroundStyle(Theme.textSecondary)
+                                Button("SHOW ALL") {
+                                    withAnimation(Theme.quick) { appState.serviceQuickFilter = nil }
+                                }
+                                .buttonStyle(WireActionStyle())
+                            }
+                            .padding(.horizontal, layout.gutter)
+                            .padding(.vertical, 16)
+                        }
                         ForEach(sections, id: \.title) { section in
                             VStack(spacing: 0) {
                                 sectionHeader(section.title,

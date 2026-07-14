@@ -259,6 +259,10 @@ final class AppState: ObservableObject {
     /// a digest doesn't look like composing; opened from the toolbar Ask button.
     @Published var askPanelOpen = false
 
+    /// Sidebar service quick-filter (nil = all services). Scopes the Act queue
+    /// and the open digest's cards to one service.
+    @Published var serviceQuickFilter: String? = nil
+
     // MARK: - Archive search (toolbar-driven)
 
     /// Live query from the window toolbar's search field; BriefListView reacts.

@@ -260,6 +260,12 @@ struct BriefProseView: View {
         .onChange(of: canonicalJSON?.cards.map(\.id)) {
             refreshCaches()
         }
+        // Sidebar service quick-filter drives the same per-digest filter as the
+        // in-digest filter line; the local control can still narrow further.
+        .onAppear { if let s = appState.serviceQuickFilter { filter = s } }
+        .onChange(of: appState.serviceQuickFilter) { _, s in
+            withAnimation(Theme.quick) { filter = s ?? "all" }
+        }
         // H key: file the first unhandled card visible in the current filter.
         .background {
             KeyboardShortcutMonitor(isEnabled: true) { event in

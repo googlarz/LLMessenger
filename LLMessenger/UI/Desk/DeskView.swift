@@ -68,6 +68,10 @@ struct DeskView: View {
                     withAnimation(Theme.quick) { selectedTab = section }
                 }
             }
+
+            serviceFilterSection
+                .padding(.top, 18)
+
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
@@ -75,6 +79,51 @@ struct DeskView: View {
         .onAppear { appState.refreshTasks() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sidebar")
+    }
+
+    // MARK: - Service quick-filter
+
+    /// One tap scopes the Act queue and the open digest to a single service.
+    /// Uses counts the projection already computes — no configuration surface.
+    private var serviceFilterSection: some View {
+        VStack(spacing: 2) {
+            HStack {
+                WireLabel("Services")
+                Spacer()
+                if appState.serviceQuickFilter != nil {
+                    Button("ALL") {
+                        withAnimation(Theme.quick) { appState.serviceQuickFilter = nil }
+                    }
+                    .buttonStyle(.plain)
+                    .font(Theme.mono(10, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .help("Clear the service filter")
+                    .accessibilityLabel("Show all services")
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 4)
+
+            ForEach(["imessage", "signal", "telegram", "slack"], id: \.self) { service in
+                ServiceFilterButton(
+                    service: service,
+                    isSelected: appState.serviceQuickFilter == service,
+                    count: actItemCount(for: service)
+                ) {
+                    withAnimation(Theme.quick) {
+                        appState.serviceQuickFilter =
+                            appState.serviceQuickFilter == service ? nil : service
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Service filter")
+    }
+
+    /// Items in the Act queue for this service — the number that matters here.
+    private func actItemCount(for service: String) -> Int {
+        appState.attentionProjection.actItems.filter { $0.service == service }.count
     }
 
     private func badge(for section: AppSection) -> String? {
@@ -97,6 +146,53 @@ struct DeskView: View {
         case .digests:  return "2"
         case .activity: return "3"
         }
+    }
+}
+
+private struct ServiceFilterButton: View {
+    let service: String
+    let isSelected: Bool
+    let count: Int
+    let onTap: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                ServiceStamp(service: service, size: 15)
+                Text(Theme.serviceName(service))
+                    .font(Theme.sans(12, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(textColor)
+                Spacer(minLength: 4)
+                if count > 0 {
+                    Text("\(count)")
+                        .font(Theme.mono(10, weight: .semibold))
+                        .foregroundStyle(isSelected ? Theme.textPrimary : Theme.textTertiary)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .fill(isSelected ? Theme.surfaceHigh : (isHovered ? Theme.surfaceHigh.opacity(0.5) : Color.clear))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(count == 0 && !isSelected ? 0.55 : 1)
+        .help(isSelected
+              ? "Show all services"
+              : "Show only \(Theme.serviceName(service)) in Act and the open digest")
+        .accessibilityLabel("\(Theme.serviceName(service)), \(count) item\(count == 1 ? "" : "s")")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint(isSelected ? "Clears the service filter" : "Filters to this service only")
+        .animation(Theme.quick, value: isHovered)
+        .onHover { isHovered = $0 }
+    }
+
+    private var textColor: Color {
+        isSelected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary)
     }
 }
 
