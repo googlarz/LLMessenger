@@ -49,16 +49,32 @@ struct ConversationTimelineView: View {
                 Spacer()
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
-                            TimelineEntryRow(entry: entry)
-                            if index < entries.count - 1 {
-                                Rule(color: Theme.border.opacity(0.5))
-                                    .padding(.leading, 20)
+                    // Grouped by day, rule only under the day header — not after
+                    // every entry. Entries within a day separate by whitespace
+                    // (18pt between, ≤4pt inside), which is what actually reads
+                    // as "these are distinct" instead of a hairline after every
+                    // paragraph.
+                    LazyVStack(alignment: .leading, spacing: 20) {
+                        ForEach(dayGroups, id: \.day) { group in
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(dayLabel(group.day))
+                                    .font(Theme.labelFont)
+                                    .tracking(Theme.labelTracking)
+                                    .foregroundStyle(Theme.textTertiary)
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 6)
+                                Rule(color: Theme.border.opacity(0.6))
+                                    .padding(.horizontal, 20)
+                                VStack(alignment: .leading, spacing: 14) {
+                                    ForEach(Array(group.entries.enumerated()), id: \.offset) { _, entry in
+                                        TimelineEntryRow(entry: entry)
+                                    }
+                                }
+                                .padding(.top, 12)
                             }
                         }
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 12)
                 }
             }
         }
@@ -71,6 +87,21 @@ struct ConversationTimelineView: View {
         isLoading = true
         entries = (try? repository.fetchConversationTimeline(service: service, conversationID: conversationId)) ?? []
         isLoading = false
+    }
+
+    private var dayGroups: [(day: Date, entries: [(briefDate: Date, card: BriefCardRecord)])] {
+        let cal = Calendar.current
+        let grouped = Dictionary(grouping: entries) { cal.startOfDay(for: $0.briefDate) }
+        return grouped.keys.sorted(by: >).map { day in
+            (day: day, entries: grouped[day]!.sorted { $0.briefDate > $1.briefDate })
+        }
+    }
+
+    private func dayLabel(_ day: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(day) { return "Today" }
+        if cal.isDateInYesterday(day) { return "Yesterday" }
+        return Theme.dayMonthFormatter.string(from: day)
     }
 }
 
@@ -88,24 +119,28 @@ private struct TimelineEntryRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Date + priority row
-            HStack(spacing: 8) {
-                Text(dateStr(entry.briefDate))
-                    .font(Theme.mono(11, weight: .semibold))
-                    .foregroundStyle(Theme.textTertiary)
-                priorityBadge(entry.card.priority)
-                Spacer()
+        VStack(alignment: .leading, spacing: 4) {
+            // Headline is the anchor — the day group header already carries the
+            // date, so this row only needs to say what happened.
+            HStack(alignment: .top, spacing: 8) {
+                Text(entry.card.headline)
+                    .font(Theme.display(14))
+                    .foregroundStyle(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
                 Image(systemName: expanded ? "chevron.up" : "chevron.down")
                     .font(Theme.sans(10, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
+                    .padding(.top, 3)
             }
 
-            // Headline
-            Text(entry.card.headline)
-                .font(Theme.display(14))
-                .foregroundStyle(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+            // Metadata demoted to one quiet line beneath the headline.
+            HStack(spacing: 8) {
+                Text(timeStr(entry.briefDate))
+                    .font(Theme.mono(10.5))
+                    .foregroundStyle(Theme.textTertiary)
+                priorityBadge(entry.card.priority)
+            }
 
             // Collapsible: summary + actions
             if expanded {
@@ -133,7 +168,7 @@ private struct TimelineEntryRow: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 6)
         .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture { withAnimation(Theme.spring) { expanded.toggle() } }
@@ -163,7 +198,7 @@ private struct TimelineEntryRow: View {
         )
     }
 
-    private func dateStr(_ date: Date) -> String {
-        Theme.dayMonthTimeFormatter.string(from: date)
+    private func timeStr(_ date: Date) -> String {
+        Theme.timeFormatter.string(from: date)
     }
 }

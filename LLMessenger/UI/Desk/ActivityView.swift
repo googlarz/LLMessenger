@@ -35,10 +35,16 @@ struct ActivityView: View {
                     if !audits.isEmpty {
                         sectionHeader("Today's events")
                     }
-                    ForEach(events) { event in
-                        eventRow(event)
-                        Rule()
+                    // Rules only bound the section (header above), not every row —
+                    // a hairline after each entry was the "old ledger" look.
+                    // Separation between entries now comes from whitespace: 18pt
+                    // between rows vs. ≤6pt within one, so grouping is unambiguous.
+                    VStack(spacing: 18) {
+                        ForEach(events) { event in
+                            eventRow(event)
+                        }
                     }
+                    .padding(.vertical, 14)
                 }
             }
             .padding(.bottom, 24)
@@ -53,41 +59,44 @@ struct ActivityView: View {
     private var sentSection: some View {
         VStack(spacing: 0) {
             sectionHeader("Sent on your behalf")
-            ForEach(audits, id: \.id) { audit in
-                Rule()
-                sentRow(audit)
+            VStack(spacing: 16) {
+                ForEach(audits, id: \.id) { audit in
+                    sentRow(audit)
+                }
             }
+            .padding(.vertical, 14)
             Rule()
         }
     }
 
     private func sentRow(_ a: ActionAuditRecord) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(timeString(a.createdAt))
-                .font(Theme.mono(11))
-                .foregroundStyle(Theme.textTertiary)
-                .frame(width: 38, alignment: .leading)
-                .padding(.top, 1)
-            ServiceStamp(service: a.service, size: 16)
-            VStack(alignment: .leading, spacing: 3) {
-                Text((displayNames["\(a.service)|\(a.conversationId)"] ?? a.conversationId).uppercased())
-                    .font(Theme.mono(11, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: 4) {
+            // Primary anchor: what happened, in the same serif voice as digest
+            // headlines — one clear thing to read per row, not four lines of
+            // equal weight.
+            Text(a.detail)
+                .font(Theme.display(14))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Metadata demoted to one quiet line beneath it.
+            HStack(spacing: 6) {
+                Text(timeString(a.createdAt))
+                    .font(Theme.mono(10.5))
+                    .foregroundStyle(Theme.textTertiary)
+                ServiceStamp(service: a.service, size: 14)
+                Text(displayNames["\(a.service)|\(a.conversationId)"] ?? a.conversationId)
+                    .font(Theme.sans(11.5))
+                    .foregroundStyle(Theme.textTertiary)
                     .lineLimit(1)
-                Text(a.detail)
-                    .font(Theme.bodyFont)
-                    .foregroundStyle(Theme.textPrimary.opacity(0.85))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                // "Auto-sent" = the agent sent it under a delegated lane; "By you" = you approved it.
+                WireLabel(a.trigger == "delegated" ? "Auto-sent" : "By you",
+                          color: a.trigger == "delegated" ? Theme.standby : Theme.textTertiary)
             }
-            Spacer(minLength: 8)
-            // "Auto-sent" = the agent sent it under a delegated lane; "By you" = you approved it.
-            WireLabel(a.trigger == "delegated" ? "Auto-sent" : "By you",
-                      color: a.trigger == "delegated" ? Theme.standby : Theme.textTertiary)
         }
         .padding(.horizontal, Theme.gutter)
-        .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(a.trigger == "delegated" ? "Auto-sent" : "Sent by you") to \(displayNames["\(a.service)|\(a.conversationId)"] ?? a.conversationId): \(a.detail)")
     }
@@ -192,52 +201,50 @@ private struct ActivityEventRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
-                (event.priority == "high" ? Theme.signal : Color.clear)
-                    .frame(width: 2)
-                    .clipShape(RoundedRectangle(cornerRadius: 1))
+        HStack(alignment: .top, spacing: 10) {
+            (event.priority == "high" ? Theme.signal : Color.clear)
+                .frame(width: 2)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
 
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Text(timeString(event.createdAt))
-                            .font(Theme.mono(11))
-                            .foregroundStyle(Theme.textTertiary)
-
-                        ServiceStamp(service: event.service, size: 16)
-
-                        Text((displayName ?? event.conversationId).uppercased())
-                            .font(Theme.mono(11, weight: .semibold))
-                            .tracking(0.9)
-                            .foregroundStyle(Theme.textSecondary)
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        if event.needsReply {
-                            WireLabel("Reply?", color: Theme.standby)
-                        }
-
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(Theme.textTertiary)
-                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+            VStack(alignment: .leading, spacing: 4) {
+                // Primary anchor: who this is about, in the same serif voice
+                // used everywhere else a conversation is the headline.
+                HStack(spacing: 8) {
+                    Text(displayName ?? event.conversationId)
+                        .font(Theme.display(14))
+                        .foregroundStyle(Theme.textPrimary)
+                        .lineLimit(1)
+                    Spacer()
+                    if event.needsReply {
+                        WireLabel("Reply?", color: Theme.standby)
                     }
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
 
-                    if isExpanded {
-                        Text(event.reason)
-                            .font(Theme.bodyFont)
-                            .foregroundStyle(Theme.textPrimary.opacity(0.88))
-                            .lineSpacing(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, 2)
-                    }
+                // Metadata demoted to one quiet line beneath the anchor.
+                HStack(spacing: 6) {
+                    Text(timeString(event.createdAt))
+                        .font(Theme.mono(10.5))
+                        .foregroundStyle(Theme.textTertiary)
+                    ServiceStamp(service: event.service, size: 14)
+                }
+
+                if isExpanded {
+                    Text(event.reason)
+                        .font(Theme.bodyFont)
+                        .foregroundStyle(Theme.textPrimary.opacity(0.88))
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
                 }
             }
-            .padding(.leading, 8)
-            .padding(.vertical, 10)
-            .padding(.trailing, Theme.gutter)
         }
+        .padding(.leading, 8)
+        .padding(.vertical, 6)
+        .padding(.trailing, Theme.gutter)
         .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
