@@ -17,6 +17,15 @@ struct ReleaseNote: Identifiable {
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
         ReleaseNote(
+            version: "2.3.1",
+            title: "Activity becomes a trend, not just today",
+            highlights: [
+                "Activity now covers the last 14 days instead of just today — a real trail of when things needed you, not a single snapshot.",
+                "Grouped by day: today stays open, older days collapse to a header with a \"N needed you\" count and expand on tap, so two weeks of history isn't a wall of rows.",
+                "Quiet days show no badge at all — the count only appears when something actually needed you, so a clear stretch reads as calm, not as a row of zeros.",
+                "The messy \"old ledger\" look in Activity and per-conversation history is gone: entries now separate by whitespace with one clear headline per row, not a hairline after every line."
+            ]),
+        ReleaseNote(
             version: "2.3.0",
             title: "The Mac-native redesign",
             highlights: [

@@ -11,6 +11,21 @@ struct ActivityView: View {
     @State private var audits: [ActionAuditRecord] = []
     @State private var expandedEventID: Int64? = nil
     @State private var displayNames: [String: String] = [:]
+    /// Days the user has manually expanded, beyond the always-open "today".
+    @State private var expandedDays: Set<Date> = []
+
+    /// How far back the trend goes — long enough to show a real pattern
+    /// (matches the weekly recap's own 7-day window plus a second week),
+    /// short enough that this stays a local SQLite read, not a full scan.
+    private static let windowDays = 14
+
+    private var dayGroups: [(day: Date, events: [TriageEvent])] {
+        let cal = Calendar.current
+        let grouped = Dictionary(grouping: events) { cal.startOfDay(for: $0.createdAt) }
+        return grouped.keys.sorted(by: >).map { day in
+            (day: day, events: grouped[day]!.sorted { $0.createdAt > $1.createdAt })
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -28,20 +43,19 @@ struct ActivityView: View {
                     sentSection
                 }
 
-                // Triage events
+                // Triage events, grouped by day so the trend across the window is
+                // visible — not just today. Today always shows its rows; older
+                // days collapse to a header + "N needed you" count and expand on
+                // tap, so two weeks of history doesn't become a wall of rows.
                 if events.isEmpty && audits.isEmpty {
                     emptyState
                 } else if !events.isEmpty {
                     if !audits.isEmpty {
-                        sectionHeader("Today's events")
+                        sectionHeader("Recent activity")
                     }
-                    // Rules only bound the section (header above), not every row —
-                    // a hairline after each entry was the "old ledger" look.
-                    // Separation between entries now comes from whitespace: 18pt
-                    // between rows vs. ≤6pt within one, so grouping is unambiguous.
-                    VStack(spacing: 18) {
-                        ForEach(events) { event in
-                            eventRow(event)
+                    VStack(spacing: 0) {
+                        ForEach(dayGroups, id: \.day) { group in
+                            dayGroupView(group)
                         }
                     }
                     .padding(.vertical, 14)
@@ -52,6 +66,73 @@ struct ActivityView: View {
         .background(Theme.sidebar)
         .task { await loadEvents() }
         .onChange(of: appState.briefs.count) { Task { await loadEvents() } }
+    }
+
+    // MARK: - Day group
+
+    private func dayGroupView(_ group: (day: Date, events: [TriageEvent])) -> some View {
+        let isToday = Calendar.current.isDateInToday(group.day)
+        let isExpanded = isToday || expandedDays.contains(group.day)
+        let mattered = group.events.filter { $0.priority == "high" || $0.needsReply }.count
+
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                guard !isToday else { return }
+                withAnimation(Theme.spring) {
+                    if expandedDays.contains(group.day) { expandedDays.remove(group.day) }
+                    else { expandedDays.insert(group.day) }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(dayLabel(group.day))
+                        .font(Theme.labelFont)
+                        .tracking(Theme.labelTracking)
+                        .foregroundStyle(Theme.textTertiary)
+                    // Only nonzero counts get a badge — a clear day should read
+                    // as quiet, not compete visually with a day that had 5.
+                    if mattered > 0 {
+                        Text("\(mattered) NEEDED YOU")
+                            .font(Theme.wireMeta)
+                            .tracking(Theme.wireMetaTracking)
+                            .foregroundStyle(Theme.signal)
+                    }
+                    Spacer()
+                    if !isToday {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Theme.textTertiary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    }
+                }
+                .padding(.horizontal, Theme.gutter)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isToday)
+            .accessibilityLabel("\(dayLabel(group.day))\(mattered > 0 ? ", \(mattered) needed you" : "")")
+            .accessibilityAddTraits(isToday ? [] : .isButton)
+            .accessibilityHint(isToday ? "" : (isExpanded ? "Collapse this day" : "Expand this day"))
+
+            if isExpanded {
+                VStack(spacing: 18) {
+                    ForEach(group.events) { event in
+                        eventRow(event)
+                    }
+                }
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+                .transition(.opacity)
+            }
+        }
+        .padding(.bottom, isExpanded ? 8 : 0)
+    }
+
+    private func dayLabel(_ day: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(day) { return "Today" }
+        if cal.isDateInYesterday(day) { return "Yesterday" }
+        return Theme.dayMonthFormatter.string(from: day).uppercased()
     }
 
     // MARK: - Sent-on-your-behalf section
@@ -121,10 +202,10 @@ struct ActivityView: View {
                 .font(.system(size: 28, weight: .thin))
                 .foregroundStyle(Theme.textTertiary.opacity(0.5))
                 .padding(.bottom, 4)
-            // Scoped to "today" — this timeline only queries today's events, so
-            // saying "no activity yet" (unscoped) while the recap above cites
-            // this week's totals read as the app disagreeing with itself.
-            Text("Nothing logged today")
+            // Scoped to the same window this view actually queries (14 days) —
+            // an unscoped claim next to the weekly recap's own numbers read as
+            // the app disagreeing with itself.
+            Text("Nothing logged recently")
                 .font(Theme.display(19))
                 .foregroundStyle(Theme.textSecondary)
             Text("Sends and triage events\nappear here as they happen.")
@@ -157,8 +238,8 @@ struct ActivityView: View {
 
     private func loadEvents() async {
         let db = appState.database.dbQueue
+        let start = Calendar.current.date(byAdding: .day, value: -Self.windowDays, to: Date())!
         let result: ([TriageEvent], [ActionAuditRecord], [String: String]) = (try? await db.read { d in
-            let start = Calendar.current.startOfDay(for: Date())
             let fetched = try TriageEvent
                 .filter(Column("createdAt") >= start)
                 .order(Column("createdAt").desc)

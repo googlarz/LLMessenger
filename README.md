@@ -318,7 +318,13 @@ xcodebuild -scheme LLMessenger test    # keep them green
 - [ ] WhatsApp adapter (pending viable local API)
 
 <details>
-<summary>Shipped (v1.4 – v2.3.0)</summary>
+<summary>Shipped (v1.4 – v2.3.1)</summary>
+
+**v2.3.1** — Activity becomes a trend, not just today:
+- ✅ Activity now covers the last 14 days instead of just today — a real trail of when things needed you
+- ✅ Grouped by day: today stays open, older days collapse to a header with a "N needed you" count and expand on tap
+- ✅ Quiet days show no badge — the count only appears when something actually needed you
+- ✅ Fixed the "old ledger" look in Activity and per-conversation history: entries separate by whitespace with one clear headline per row, not a hairline after every line
 
 **v2.3.0** — the Mac-native redesign:
 - ✅ **Navigation rebuilt** — content-free sidebar (Act / Digests / Activity) drives the whole window; Act and Activity go full-width, Digests pairs the archive with the open digest
