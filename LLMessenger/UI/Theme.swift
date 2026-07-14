@@ -175,6 +175,19 @@ enum Theme {
     static let cardTitleFont = display(16.5)               // card headline
     static let bodyFont      = sans(13.5)                  // prose
     static let labelFont     = mono(10.5, weight: .semibold) // tracked microlabels
+
+    // Wire-voice ladder — three steps, derived from the app's actual usage
+    // clusters rather than invented. New mono-caps UI should reach for one of
+    // these instead of a fourth ad-hoc size/tracking pair.
+    /// Section headers, sidebar/rail labels. Same as `labelFont`.
+    static let wireSection = mono(10.5, weight: .semibold)
+    static let wireSectionTracking: CGFloat = 1.3
+    /// Chips, timestamps, sender stamps — small inline metadata.
+    static let wireMeta = mono(11, weight: .medium)
+    static let wireMetaTracking: CGFloat = 0.8
+    /// Wire-voice buttons that intentionally keep the mono idiom (e.g. QUEUE SEND).
+    static let wireControl = mono(11, weight: .semibold)
+    static let wireControlTracking: CGFloat = 0.4
     static let microFont     = mono(10)
 
     /// Tracking for uppercase mono microlabels ("PRIORITY", "3 SOURCES").
@@ -287,12 +300,17 @@ struct ServiceStamp: View {
 /// Primary action: paper on ink — the inverted button. Secondary: quiet text.
 struct PaperButtonStyle: ButtonStyle {
     var prominent = false
+    /// Override for buttons that carry the mono wire voice (e.g. QUEUE SEND) —
+    /// the fill/foreground inversion stays correct in both appearances either way.
+    var labelFont: Font = Theme.sans(12.5, weight: .semibold)
+    var tracking: CGFloat = 0
     @State private var isHovered = false
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
-            .font(Theme.sans(12.5, weight: .semibold))
+            .font(labelFont)
+            .tracking(tracking)
             .foregroundStyle(prominent ? Theme.bg : Theme.textSecondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -343,13 +361,18 @@ struct PrimaryActionStyle: ButtonStyle {
 /// Quiet inline action — mono label, no chrome until hover.
 struct WireActionStyle: ButtonStyle {
     var tint: Color = Theme.textSecondary
+    /// A command (Detail, Reply, Edit, Skip…) reads as clickable in title-case
+    /// sans; mono-caps is reserved for section labels and evidence metadata.
+    /// Opt in per call site rather than flipping the default — most existing
+    /// mono-caps buttons in the app are legitimately wire-voice metadata.
+    var sansLabel = false
     @State private var isHovered = false
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
-            .font(Theme.mono(11, weight: .semibold))
-            .tracking(0.4)
+            .font(sansLabel ? Theme.sans(12, weight: .medium) : Theme.mono(11, weight: .semibold))
+            .tracking(sansLabel ? 0 : 0.4)
             .foregroundStyle(isHovered ? (tint == Theme.textSecondary ? Theme.textPrimary : tint) : tint)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)

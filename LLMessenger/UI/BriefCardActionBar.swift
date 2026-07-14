@@ -66,14 +66,14 @@ struct BriefCardActionBar: View {
     }
 
     private var detailButton: some View {
-        Button(messageCount > 20 ? "CATCH ME UP" : "DETAIL", action: onAskDetail)
-            .buttonStyle(WireActionStyle())
+        Button(messageCount > 20 ? "Catch me up" : "Detail", action: onAskDetail)
+            .buttonStyle(WireActionStyle(sansLabel: true))
             .help(messageCount > 20 ? "Deeper summary of this long thread" : "Ask for more detail")
     }
 
     private var replyButton: some View {
-        Button("REPLY", action: onReply)
-            .buttonStyle(WireActionStyle(tint: Theme.signal))
+        Button("Reply", action: onReply)
+            .buttonStyle(WireActionStyle(tint: Theme.signal, sansLabel: true))
             .help("Draft a reply")
     }
 
@@ -82,10 +82,10 @@ struct BriefCardActionBar: View {
             HStack(spacing: 4) {
                 Image(systemName: isHandled ? "arrow.uturn.left" : "checkmark")
                     .font(.system(size: 9, weight: .bold))
-                Text(isHandled ? "REOPEN" : "DONE")
+                Text(isHandled ? "Reopen" : "Done")
             }
         }
-        .buttonStyle(WireActionStyle(tint: isHandled ? Theme.textTertiary : Theme.ok))
+        .buttonStyle(WireActionStyle(tint: isHandled ? Theme.textTertiary : Theme.ok, sansLabel: true))
         .help(isHandled ? "Put this card back in the active digest" : "Mark this card as handled")
     }
 

@@ -48,6 +48,11 @@ struct ChatPanelView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
+                    // Capped reading measure: past ~760pt the eye has to travel too far to
+                    // track a line, and section rules would run wall-to-wall instead of
+                    // terminating with the prose. Left-anchored (not centered) so the
+                    // ledger's hard left edge stays put — the double .frame is the standard
+                    // "cap width, keep leading" idiom inside a full-width ScrollView.
                     VStack(alignment: .leading, spacing: 0) {
                         Color.clear.frame(height: 0).id("brief-top")
                         if let brief = appState.selectedBrief {
@@ -108,6 +113,8 @@ struct ChatPanelView: View {
                             .padding(.top, 8)
                         }
                     }
+                    .frame(maxWidth: 760, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .background(Theme.bg)
                 .onChange(of: appState.selectedBriefID) {
@@ -136,9 +143,9 @@ struct ChatPanelView: View {
                 }
             }
 
-            // Footer: passive next-digest countdown only. The AI disclaimer moved
-            // to the service/privacy status popover after initial consent.
-            BriefFooterView()
+            // No footer countdown here — the archive column's "Next digest" line
+            // (BriefListView) is the single source for that fact; showing it twice
+            // with two different values read as two separate upcoming events.
 
             // Ask panel — closed by default so reading has one purpose. Opens from
             // the toolbar Ask button; stays open while a conversation is active.
@@ -194,38 +201,5 @@ struct ChatPanelView: View {
             return []
         }
         return array
-    }
-}
-
-// MARK: - Footer
-
-private struct BriefFooterView: View {
-    @EnvironmentObject var appState: AppState
-
-    var body: some View {
-        // Refresh every 60s — no need for a per-second ticker here.
-        TimelineView(.periodic(from: .now, by: 60)) { _ in
-            if !footerText.isEmpty {
-                Rule(color: Theme.border.opacity(0.6))
-                Text(footerText.uppercased())
-                    .font(Theme.mono(11))
-                    .tracking(1.0)
-                    .foregroundStyle(Theme.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 7)
-            }
-        }
-    }
-
-    // Provenance ("AI-generated · may miss nuance") lives in the service/privacy
-    // status popover — routine reading shouldn't carry a permanent disclaimer.
-    private var footerText: String {
-        guard let next = appState.nextPollDate else { return "" }
-        let secs = max(0, Int(next.timeIntervalSinceNow))
-        guard secs > 0 else { return "" }
-        let mins = Int(ceil(Double(secs) / 60.0))
-        return mins <= 1 ? "Next digest soon" : "Next digest ~\(mins)m"
     }
 }

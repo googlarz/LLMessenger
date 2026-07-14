@@ -51,7 +51,7 @@ enum DemoSeeder {
             headline: "Anna needs the revised cap table before Thursday's partner meeting",
             priority: "high",
             summary: "Anna confirmed the partner meeting moved up to Thursday 10:00. She asked for the cap table with the option-pool change and flagged that Marcus still hasn't received data-room access. Tone is positive — she called the metrics deck 'the strongest in this batch'.",
-            callback: "Last brief: you promised the updated deck by Friday — it shipped Thursday night.",
+            callback: "Last digest: you promised the updated deck by Friday — it shipped Thursday night.",
             actions: ["Send revised cap table to Anna", "Grant Marcus data-room access"],
             messages: [
                 DemoMessage(sender: "Anna Keller", text: "Partner meeting moved to Thu 10:00 — can you get me the updated cap table by Wed EOD?", minutesAgo: 95, role: .quote),

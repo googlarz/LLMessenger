@@ -112,7 +112,10 @@ struct ActivityView: View {
                 .font(.system(size: 28, weight: .thin))
                 .foregroundStyle(Theme.textTertiary.opacity(0.5))
                 .padding(.bottom, 4)
-            Text("No activity yet")
+            // Scoped to "today" — this timeline only queries today's events, so
+            // saying "no activity yet" (unscoped) while the recap above cites
+            // this week's totals read as the app disagreeing with itself.
+            Text("Nothing logged today")
                 .font(Theme.display(19))
                 .foregroundStyle(Theme.textSecondary)
             Text("Sends and triage events\nappear here as they happen.")

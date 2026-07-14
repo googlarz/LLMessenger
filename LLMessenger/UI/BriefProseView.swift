@@ -387,7 +387,13 @@ struct BriefProseView: View {
     private func filterItem(id: String, label: String, count: Int, color: Color?) -> some View {
         FilterTabButton(id: id, label: label, count: count, color: color,
                         selected: filter == id) {
-            withAnimation(Theme.quick) { filter = id }
+            withAnimation(Theme.quick) {
+                filter = id
+                // Two-way sync with the sidebar's service filter — clearing here
+                // must also clear there, or Act stays silently scoped after the
+                // user thinks they cleared the filter from the digest.
+                appState.serviceQuickFilter = (id == "all") ? nil : id
+            }
         }
     }
 

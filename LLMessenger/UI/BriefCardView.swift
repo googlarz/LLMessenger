@@ -165,10 +165,10 @@ struct BriefCardView: View {
                 }
             }
             Spacer(minLength: 8)
+            // "Show Detail/Collapse" was dropped from this menu — the row tap
+            // and the chevron button already do that; a third path to the same
+            // action just added a decision, not a capability.
             Menu {
-                Button(isBodyExpanded ? "Collapse" : "Show Detail") {
-                    withAnimation(Theme.spring) { bodyExpanded.toggle() }
-                }
                 Button("Sources") {
                     withAnimation(Theme.spring) {
                         bodyExpanded = true
@@ -242,7 +242,7 @@ struct BriefCardView: View {
                         saveContext(label: labelEditText.isEmpty ? "VIP" : labelEditText,
                                     priorityHint: "high",
                                     privacyOverride: labelEditPrivacy)
-                        learnedHint = "Future briefs will treat this conversation as high priority."
+                        learnedHint = "Future digests will treat this conversation as high priority."
                         showContextReceipt("Marked VIP for future digests.", previous: previous)
                         showLabelEditor = false
                     },
@@ -265,11 +265,13 @@ struct BriefCardView: View {
             } label: {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 10))
-                    .foregroundStyle(Theme.textTertiary.opacity(hovering ? 1 : 0))
+                    // Faint at rest, full on hover — never fully invisible, so
+                    // keyboard/VoiceOver users have an affordance to find.
+                    .foregroundStyle(Theme.textTertiary.opacity(hovering ? 1 : 0.35))
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .help("Full conversation history across briefs")
+            .help("Full conversation history across digests")
             .accessibilityLabel("Show conversation history")
             .accessibilityHint("Opens earlier digest entries for \(convName).")
 
@@ -396,15 +398,11 @@ struct BriefCardView: View {
         }
     }
 
+    // "Reply needed"/"Review needed" chips were dropped: the priority stamp
+    // (NEEDS YOU/HEADS-UP/FYI) in the header already carries that fact — this
+    // row is for information the stamp doesn't encode, i.e. confidence.
     private var actionabilityChips: [(label: String, color: Color)] {
-        var chips: [(String, Color)] = []
-        if card.needsReply {
-            chips.append(("Reply needed", Theme.signal))
-        } else if isHigh {
-            chips.append(("Review needed", Theme.signal))
-        }
-        chips.append((confidenceLabel.text, confidenceLabel.color))
-        return chips
+        [(confidenceLabel.text, confidenceLabel.color)]
     }
 
     private var confidenceLabel: (text: String, color: Color) {
@@ -475,7 +473,9 @@ struct BriefCardView: View {
         actionBar
             .padding(.top, 4)
 
-        if hovering || evidenceExpanded || learnedHint != nil {
+        // Not gated on `hovering` — a row that appears/disappears as the
+        // pointer crosses the card makes the whole reading column jitter.
+        if evidenceExpanded || learnedHint != nil {
             BriefLearningRow(
                 learnedHint: learnedHint,
                 onMoreLikeThis: { teachFutureBriefs(priority: "high", label: "We'll surface threads like this.") },
@@ -492,7 +492,7 @@ struct BriefCardView: View {
                     .padding(.top, 2)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
-                Text("Evidence unavailable — brief not yet persisted.")
+                Text("Evidence unavailable — digest not yet persisted.")
                     .font(Theme.sans(12))
                     .italic()
                     .foregroundStyle(Theme.textTertiary)
@@ -955,8 +955,8 @@ private struct ActionabilityChip: View {
 
     var body: some View {
         Text(label)
-            .font(Theme.mono(10, weight: .semibold))
-            .tracking(0.6)
+            .font(Theme.wireMeta)
+            .tracking(Theme.wireMetaTracking)
             .foregroundStyle(color)
             .lineLimit(1)
             .padding(.horizontal, 6)
@@ -1029,7 +1029,7 @@ struct LabelEditorPopover: View {
                 }
             }
 
-            Text("Saved context changes future briefs for this conversation.")
+            Text("Saved context changes future digests for this conversation.")
                 .font(Theme.sans(11))
                 .foregroundStyle(Theme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)

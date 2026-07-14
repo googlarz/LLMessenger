@@ -45,7 +45,11 @@ struct WeeklyRecapView: View {
             HStack(spacing: 8) {
                 RecapMetric(value: recentBriefs.count, label: "digests")
                 RecapMetric(value: stats.threads, label: "threads")
-                RecapMetric(value: stats.reply, label: "replies")
+                // Not "replies" — this counts cards flagged needsReply, not
+                // replies actually sent. Mislabeling it invited exactly the
+                // "the app disagrees with itself" read against the empty
+                // Activity timeline below.
+                RecapMetric(value: stats.reply, label: "need reply")
                 RecapMetric(value: stats.quiet, label: "quiet")
             }
         }
@@ -70,7 +74,9 @@ struct WeeklyRecapView: View {
             return "You're staying on top of people: no open replies or promises right now."
         }
         if owedCount > 0 {
-            return "\(owedCount) \(owedCount == 1 ? "person is" : "people are") still waiting; \(stats.quiet) quiet \(stats.quiet == 1 ? "thread" : "threads") stayed out of the way."
+            // The count itself is already stated by the "N WAITING" verdict badge
+            // above — this sentence adds the context that badge can't.
+            return "Still waiting on you; \(stats.quiet) quiet \(stats.quiet == 1 ? "thread" : "threads") stayed out of the way."
         }
         return "\(commitmentsCount) open \(commitmentsCount == 1 ? "promise" : "promises"); \(stats.threads) threads summarized this week."
     }

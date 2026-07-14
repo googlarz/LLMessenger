@@ -16,44 +16,27 @@ struct ContentView: View {
     private static let narrowWindowThreshold: CGFloat = 900
     private static let railWidth: CGFloat = 190
 
+    /// At most one banner is ever shown — a stack of "notices" reads like a
+    /// debug console, and a queue means the important one never gets buried
+    /// under a routine one. Priority: error > pipeline stall > demo transition.
+    /// The kill switch and "first digest ready" moments are NOT banners
+    /// anymore — see the toolbar status item and the receipt toast below.
+    private enum TopBanner { case error(String), pipeline, demoTransition }
+    private var activeBanner: TopBanner? {
+        if let err = appState.lastError, !err.isEmpty { return .error(err) }
+        if appState.briefPipelineHealth.hasIssues { return .pipeline }
+        if appState.isDemoTransitioning { return .demoTransition }
+        return nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // One global surface for errors — ~30 lastError assignments used to vanish unless
-            // a brief happened to be open. Now every one is visible and dismissible.
-            if let err = appState.lastError, !err.isEmpty {
-                NoticeBanner(
-                    text: err,
-                    onRetry: { appState.onRequestRefresh?() },
-                    onDismiss: { appState.lastError = nil }
-                )
-                Rule()
-            }
-
-            if appState.briefPipelineHealth.hasIssues {
-                BriefPipelineBanner(health: appState.briefPipelineHealth) {
-                    appState.retryBlockedBriefJobs()
-                }
-                Rule()
-            }
-
-            if shouldShowFirstRealDigestMoment {
-                FirstRealDigestSuccessView()
-                Rule()
-            }
-
-            if appState.isDemoTransitioning {
-                DemoTransitionBanner()
-                Rule()
-            } else if appState.hasDelegatedLanes {
-                DelegationKillSwitchBanner()
-                Rule()
-            }
-
             GeometryReader { proxy in
                 let hideSidebar = deskCollapsed || proxy.size.width < Self.narrowWindowThreshold
                 HStack(spacing: 0) {
                     // Persistent navigation rail — Act, Digests, Activity. Content-free;
-                    // the selected section drives everything to its right.
+                    // the selected section drives everything to its right. Full-height:
+                    // banners live in the content column so they never cross it.
                     if !hideSidebar {
                         DeskView(selectedTab: $selectedSection)
                             .frame(width: Self.railWidth)
@@ -64,8 +47,14 @@ struct ContentView: View {
                             .transition(.opacity)
                     }
 
-                    sectionContent(width: proxy.size.width)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack(spacing: 0) {
+                        if let banner = activeBanner {
+                            bannerView(banner)
+                            Rule()
+                        }
+                        sectionContent(width: proxy.size.width)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
 
                     if showMedia {
                         Theme.border.frame(width: Theme.hairline)
@@ -91,6 +80,14 @@ struct ContentView: View {
             }
         }
         .animation(Theme.spring, value: appState.userReceipt?.id)
+        // The one-time "first real digest" moment fires as a toast instead of a
+        // persistent banner — its stat narration ("4 cards · 3 need you...")
+        // duplicates numbers already visible in the sidebar badge and header.
+        .onChange(of: shouldShowFirstRealDigestMoment) { _, shouldShow in
+            guard shouldShow else { return }
+            appState.showReceipt("First digest ready.")
+            appState.acknowledgeFirstRealDigest()
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("LLMessenger main window")
         .toolbar {
@@ -120,11 +117,13 @@ struct ContentView: View {
                     return true
                 }
                 guard selectedSection == .digests, event.hasNoCommandOptionControl else { return false }
-                if key == "j" {
+                // ↑/↓ are synonyms for K/J — the Mac list-navigation convention
+                // (Mail, Notes, NetNewsWire) must keep working here too.
+                if key == "j" || event.keyCode == 125 {
                     navigateBriefs(offset: 1)
                     return true
                 }
-                if key == "k" {
+                if key == "k" || event.keyCode == 126 {
                     navigateBriefs(offset: -1)
                     return true
                 }
@@ -153,6 +152,24 @@ struct ContentView: View {
         !DemoSeeder.isActive &&
         !appState.briefs.isEmpty &&
         !appState.productLoveMetrics.firstRealDigestAcknowledged
+    }
+
+    @ViewBuilder
+    private func bannerView(_ banner: TopBanner) -> some View {
+        switch banner {
+        case .error(let text):
+            NoticeBanner(
+                text: text,
+                onRetry: { appState.onRequestRefresh?() },
+                onDismiss: { appState.lastError = nil }
+            )
+        case .pipeline:
+            BriefPipelineBanner(health: appState.briefPipelineHealth) {
+                appState.retryBlockedBriefJobs()
+            }
+        case .demoTransition:
+            DemoTransitionBanner()
+        }
     }
 
     // MARK: - Window title
@@ -189,7 +206,8 @@ struct ContentView: View {
         let briefs = briefsNewestFirst
         guard !briefs.isEmpty else { return }
         let idx = briefs.firstIndex { $0.id == appState.selectedBriefID } ?? 0
-        let target = (idx + offset + briefs.count) % briefs.count
+        // Clamp at the ends — arrow-key lists never teleport oldest-to-newest.
+        let target = min(max(idx + offset, 0), briefs.count - 1)
         withAnimation(Theme.quick) { appState.selectedBriefID = briefs[target].id }
     }
 
@@ -213,9 +231,12 @@ struct ContentView: View {
                 .background(Theme.bg)
         case .digests:
             HStack(spacing: 0) {
+                // Theme.bg, not Theme.sidebar — the archive is content (a message
+                // list), not a second nav rail. Matching the rail's background
+                // was the exact "am I looking at two sidebars?" bug.
                 BriefListView()
                     .frame(width: archiveWidth(for: width))
-                    .background(Theme.sidebar)
+                    .background(Theme.bg)
                 Theme.border.frame(width: Theme.hairline)
                 if appState.selectedBrief != nil {
                     ChatPanelView()
@@ -520,68 +541,10 @@ private struct SetupCheck: Identifiable {
     var id: String { label }
 }
 
-// MARK: - First real digest success
-
-private struct FirstRealDigestSuccessView: View {
-    @EnvironmentObject var appState: AppState
-
-    private var latestBrief: Brief? {
-        appState.briefs.max(by: { $0.createdAt < $1.createdAt })
-    }
-
-    private var cardStats: (cards: Int, replies: Int, sourced: Int) {
-        guard let json = latestBrief.flatMap({ appState.briefJSON(for: $0) }) else {
-            return (0, 0, 0)
-        }
-        return (
-            json.cards.count,
-            json.cards.filter(\.needsReply).count,
-            json.cards.filter { !$0.sourceMessageIds.isEmpty }.count
-        )
-    }
-
-    var body: some View {
-        let stats = cardStats
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.ok)
-            Text("First digest ready")
-                .font(Theme.sans(12.5, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
-            Text(successLine(stats))
-                .font(Theme.sans(12))
-                .foregroundStyle(Theme.textTertiary)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Button {
-                appState.acknowledgeFirstRealDigest()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Dismiss")
-            .accessibilityLabel("Dismiss first digest confirmation")
-        }
-        .padding(.horizontal, Theme.gutter)
-        .padding(.vertical, 7)
-        .background(Theme.ok.opacity(0.045))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("First real digest ready. \(successLine(cardStats)) Nothing was sent.")
-    }
-
-    private func successLine(_ stats: (cards: Int, replies: Int, sourced: Int)) -> String {
-        let cards = "\(stats.cards) card\(stats.cards == 1 ? "" : "s")"
-        let replies = "\(stats.replies) need\(stats.replies == 1 ? "s" : "") you"
-        let sources = "\(stats.sourced) source-backed"
-        let heldBack = appState.heldBackCount > 0 ? " · \(appState.heldBackCount) held back" : ""
-        return "\(cards) · \(replies) · \(sources)\(heldBack) · Nothing sent"
-    }
-
-}
+// The persistent "First digest ready · 4 cards · 3 need you..." banner was
+// retired — the same moment now fires as a receipt toast (see body above),
+// since the stat narration duplicated numbers already visible in the sidebar
+// badge and the digest masthead.
 
 // MARK: - Global notice banner
 
@@ -612,6 +575,8 @@ private struct NoticeBanner: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Dismiss")
@@ -683,6 +648,7 @@ private struct ReceiptToast: View {
     let receipt: UserReceipt
     let onDismiss: () -> Void
     @State private var hovering = false
+    @State private var deadline = Date()
 
     var body: some View {
         HStack(spacing: 10) {
@@ -724,8 +690,15 @@ private struct ReceiptToast: View {
                 .strokeBorder(Theme.border, lineWidth: Theme.hairline)
         )
         .frame(maxWidth: 480)
-        .onHover { hovering = $0 }
+        // Hovering past the 6s deadline used to make the toast sticky forever
+        // (the deadline was only checked once, at expiry). Dismiss the instant
+        // the pointer leaves if that deadline has already passed.
+        .onHover { isHovering in
+            hovering = isHovering
+            if !isHovering, Date() >= deadline { onDismiss() }
+        }
         .task(id: receipt.id) {
+            deadline = Date().addingTimeInterval(6)
             try? await Task.sleep(nanoseconds: 6_000_000_000)
             if !hovering { onDismiss() }
         }

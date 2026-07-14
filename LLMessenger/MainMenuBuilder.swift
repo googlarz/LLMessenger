@@ -101,6 +101,12 @@ enum MainMenuBuilder {
         helpMenu.addItem(ClosureMenuItem(title: "LLMessenger Help", keyEquivalent: "?") {
             NSWorkspace.shared.open(URL(string: "https://github.com/googlarz/LLMessenger")!)
         })
+        helpMenu.addItem(ClosureMenuItem(title: "Release Notes", keyEquivalent: "") {
+            // The changelog lives in the About pane's "What's new" section —
+            // this jumps Settings straight there instead of the last-used pane.
+            UserDefaults.standard.set(SettingsPane.about.rawValue, forKey: "settings.selectedPane")
+            openSettings()
+        })
         main.addItem(submenu: helpMenu, title: "Help")
         NSApp.helpMenu = helpMenu
 

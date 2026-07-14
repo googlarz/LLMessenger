@@ -80,7 +80,7 @@ struct BriefHeaderView: View {
                 chatViewModel.inputText = "What changed since the last digest?"
                 Task { await chatViewModel.send() }
             }
-            .buttonStyle(WireActionStyle())
+            .buttonStyle(WireActionStyle(sansLabel: true))
             .help("Ask what changed since the last digest")
 
             Button {
@@ -185,12 +185,12 @@ struct BriefHeaderView: View {
         if briefCount == 0 && messageCount == 0 { return "No new messages." }
         if highPriorityCount > 0 {
             return highPriorityCount == 1
-                ? "One thing needs you."
-                : "\(spelled(highPriorityCount)) things need you."
+                ? "One thing needs your attention."
+                : "\(spelled(highPriorityCount)) things need your attention."
         }
-        // Mirror the "One thing needs you." voice — the affirming negative is its own feature
+        // Mirror the "needs your attention" voice — the affirming negative is its own feature
         // for someone who lives in fear of the missed message.
-        if briefCount > 0 { return "Nothing needs you right now." }
+        if briefCount > 0 { return "Nothing needs your attention right now." }
         return "\(messageCount) new message\(messageCount == 1 ? "" : "s")."
     }
 

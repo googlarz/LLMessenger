@@ -104,10 +104,10 @@ struct BriefListView: View {
                                     .font(.system(size: 28, weight: .thin))
                                     .foregroundStyle(Theme.textTertiary.opacity(0.4))
                                     .padding(.bottom, 4)
-                                Text("No briefs yet")
+                                Text("No digests yet")
                                     .font(Theme.display(16))
                                     .foregroundStyle(Theme.textSecondary)
-                                Text("Your first brief arrives\nafter the next message poll.")
+                                Text("Your first digest arrives\nafter the next message poll.")
                                     .font(Theme.sans(12))
                                     .foregroundStyle(Theme.textTertiary)
                                     .multilineTextAlignment(.center)
@@ -204,7 +204,7 @@ struct BriefListView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "clock.arrow.circlepath")
                                         .font(.system(size: 11, weight: .medium))
-                                    Text("Load older briefs")
+                                    Text("Load older digests")
                                         .font(Theme.sans(11, weight: .medium))
                                 }
                                 .foregroundStyle(Theme.textSecondary)
@@ -212,17 +212,12 @@ struct BriefListView: View {
                                 .padding(.vertical, 12)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Load older briefs")
-                            .accessibilityHint("Loads 500 more archived and recent briefs into the sidebar.")
+                            .accessibilityLabel("Load older digests")
+                            .accessibilityHint("Loads 500 more archived and recent digests into the sidebar.")
                         }
                     }
                 }
             }
-
-            Rule()
-            SettingsButtonView()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
         }
         .onAppear {
             refreshNeedsReply()
@@ -329,7 +324,7 @@ struct BriefListView: View {
             Button("Pin") {
                 let pinnedCount = appState.pinnedBriefs.count
                 if pinnedCount >= 10 {
-                    appState.lastError = "Cannot pin more than 10 briefs. Unpin one first."
+                    appState.lastError = "Cannot pin more than 10 digests. Unpin one first."
                 } else {
                     if let id = brief.id { appState.setPinnedBrief(briefID: id, pinned: true) }
                 }
@@ -459,9 +454,13 @@ private struct NextRefreshLine: View {
 
     var body: some View {
         HStack {
-            WireLabel("Next brief")
+            WireLabel("Next digest")
             Spacer()
-            TimelineView(.periodic(from: .now, by: 10)) { _ in
+            // Whole minutes only, ticking once a minute — a live seconds counter
+            // manufactures urgency in a product whose point is calm triage, and
+            // this is the app's one countdown (see ChatPanelView for why the
+            // reading pane no longer duplicates it).
+            TimelineView(.periodic(from: .now, by: 60)) { _ in
                 Text(countdownText)
                     .font(Theme.mono(11, weight: .semibold))
                     .foregroundStyle(Theme.textSecondary)
@@ -473,8 +472,8 @@ private struct NextRefreshLine: View {
     private var countdownText: String {
         guard let next = appState.nextPollDate else { return "—" }
         let secs = max(0, Int(next.timeIntervalSinceNow))
-        if secs == 0 { return "now" }
-        return String(format: "%dm %02ds", secs / 60, secs % 60)
+        if secs <= 60 { return "under a minute" }
+        return "in \(secs / 60) min"
     }
 }
 
@@ -548,8 +547,10 @@ private struct BriefRowView: View {
 }
 
 // MARK: - Settings button
+// Moved to the rail bottom (DeskView) — a global destination like Settings
+// shouldn't only exist while one section's list column happens to be open.
 
-private struct SettingsButtonView: View {
+struct SettingsButtonView: View {
     @EnvironmentObject var appState: AppState
     @State private var isHovered = false
 

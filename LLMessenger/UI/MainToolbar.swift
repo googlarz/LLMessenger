@@ -56,6 +56,12 @@ struct MainToolbar: ToolbarContent {
             ToolbarSearchField(appState: appState, selectedSection: $selectedSection)
                 .frame(width: 180)
 
+            // Fixed home for the delegation kill switch — was a banner that
+            // shifted the whole window's layout whenever it appeared/vanished.
+            if appState.hasDelegatedLanes {
+                DelegationStatusItem()
+            }
+
             if selectedSection == .digests {
                 Button {
                     withAnimation(Theme.spring) { appState.askPanelOpen.toggle() }
@@ -64,6 +70,9 @@ struct MainToolbar: ToolbarContent {
                         .foregroundStyle(appState.askPanelOpen ? Theme.textPrimary : Color.secondary)
                 }
                 .help(appState.askPanelOpen ? "Close the Ask panel" : "Ask about this digest, or draft a reply")
+                // Color alone doesn't announce state to VoiceOver/Increase Contrast.
+                .accessibilityAddTraits(appState.askPanelOpen ? [.isButton, .isSelected] : .isButton)
+                .accessibilityLabel(appState.askPanelOpen ? "Ask panel, open" : "Ask panel, closed")
             }
 
             // Routine progress is a toolbar spinner, never a banner.
@@ -110,6 +119,54 @@ struct MainToolbar: ToolbarContent {
                 Label("More", systemImage: "ellipsis.circle")
             }
             .help("More actions")
+        }
+    }
+
+    // MARK: - Delegation status
+
+    /// Fixed toolbar home for the always-relevant delegation kill switch —
+    /// a mono wire-label pill (matches the app's chip idiom) with a
+    /// pause/resume popover, so the safety control never moves and the
+    /// content column never reflows when delegation is armed/disarmed.
+    private struct DelegationStatusItem: View {
+        @AppStorage(AgentDelegation.killSwitchKey) private var disabled = false
+        @State private var showingPopover = false
+
+        var body: some View {
+            Button {
+                showingPopover.toggle()
+            } label: {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(disabled ? Theme.textTertiary : Theme.standby)
+                        .frame(width: 6, height: 6)
+                    Text(disabled ? "PAUSED" : "DELEGATED")
+                        .font(Theme.mono(10, weight: .semibold))
+                        .tracking(0.6)
+                }
+                .foregroundStyle(disabled ? Theme.textTertiary : Theme.standby)
+            }
+            .buttonStyle(.plain)
+            .help(disabled ? "Auto-send paused — click to resume" : "Auto-send active — click to pause")
+            .accessibilityLabel(disabled ? "Auto-send paused" : "Auto-send active")
+            .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(disabled ? "Auto-send paused" : "Auto-send active")
+                        .font(Theme.sans(12.5, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text(disabled
+                         ? "Delegated lanes will resume sending on their own schedule."
+                         : "One or more conversations can send without your review.")
+                        .font(Theme.sans(11.5))
+                        .foregroundStyle(Theme.textTertiary)
+                        .frame(maxWidth: 220, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(disabled ? "Resume" : "Pause all") { disabled.toggle() }
+                        .buttonStyle(WireActionStyle(tint: disabled ? Theme.standby : Theme.signal, sansLabel: true))
+                        .accessibilityLabel(disabled ? "Resume auto-send for delegated lanes" : "Pause all delegated auto-sends")
+                }
+                .padding(14)
+            }
         }
     }
 
@@ -188,12 +245,24 @@ struct ToolbarSearchField: NSViewRepresentable {
             self.parent = parent
         }
 
+        // Typing navigates the window as a side effect (Digests must be open to
+        // see results) — soften the user-control cost by remembering where the
+        // user actually was and returning them there when the query clears,
+        // rather than leaving them stranded in Digests after search.
+        private var preSearchSection: AppSection?
+
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSSearchField else { return }
             let value = field.stringValue
             parent.appState.archiveSearchQuery = value
-            if !value.isEmpty, parent.selectedSection != .digests {
-                parent.selectedSection = .digests
+            if !value.isEmpty {
+                if parent.selectedSection != .digests {
+                    preSearchSection = parent.selectedSection
+                    parent.selectedSection = .digests
+                }
+            } else if let priorSection = preSearchSection {
+                parent.selectedSection = priorSection
+                preSearchSection = nil
             }
         }
     }
@@ -240,6 +309,8 @@ struct ServiceStatusPopover: View {
                     if health[service] == .warning || health[service] == .error {
                         Button { onRetry?(service) } label: {
                             Image(systemName: "arrow.clockwise")
+                                .frame(width: 20, height: 20)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help("Retry \(Theme.serviceName(service))")

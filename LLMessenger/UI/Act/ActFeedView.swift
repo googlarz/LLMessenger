@@ -102,17 +102,23 @@ struct ActFeedView: View {
                 selectedIndex = 0
             }
         }
-        // Keyboard navigation — J/K move, Return = stage, S = skip, E = edit, ⌘Z = undo staged.
+        // Keyboard navigation — J/K or ↑/↓ move, ⌘Return = queue send (never plain
+        // Return — a stray keystroke must not send a real message), S = skip,
+        // E = edit, ⌘Z = undo staged.
         .background {
             KeyboardShortcutMonitor(isEnabled: editingItemId == nil) { event in
                 if event.hasCommandOnly, event.normalizedKey == "z" {
                     undoLastStaged()
                     return true
                 }
+                if event.hasCommandOnly, event.keyCode == 36 {
+                    approveSelected()
+                    return true
+                }
                 guard event.hasNoCommandOptionControl else { return false }
                 switch event.keyCode {
-                case 36:
-                    approveSelected()
+                case 125, 126: // down / up arrows — synonyms for J/K
+                    moveSelection(by: event.keyCode == 125 ? 1 : -1)
                     return true
                 default:
                     break
@@ -150,19 +156,28 @@ struct ActFeedView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         let sections = queueSections
-                        if let filtered = appState.serviceQuickFilter,
-                           sections.isEmpty, theyOweCommitments.isEmpty, iOweCommitments.isEmpty {
+                        // Always visible while filtered — not just when it empties
+                        // the queue. Filtering out items with zero on-screen
+                        // indication reads as "items are missing", not "I'm
+                        // filtered"; that's a state an Apple review would block.
+                        if let filtered = appState.serviceQuickFilter {
+                            let isEmpty = sections.isEmpty && theyOweCommitments.isEmpty && iOweCommitments.isEmpty
                             HStack(spacing: 8) {
-                                Text("Nothing from \(Theme.serviceName(filtered)) needs you.")
-                                    .font(Theme.sans(12.5))
+                                Text(isEmpty
+                                     ? "Nothing from \(Theme.serviceName(filtered)) needs you."
+                                     : "\(Theme.serviceName(filtered).uppercased()) ONLY")
+                                    .font(isEmpty ? Theme.sans(12.5) : Theme.wireSection)
+                                    .tracking(isEmpty ? 0 : Theme.wireSectionTracking)
                                     .foregroundStyle(Theme.textSecondary)
+                                Spacer(minLength: 8)
                                 Button("SHOW ALL") {
                                     withAnimation(Theme.quick) { appState.serviceQuickFilter = nil }
                                 }
                                 .buttonStyle(WireActionStyle())
                             }
                             .padding(.horizontal, layout.gutter)
-                            .padding(.vertical, 16)
+                            .padding(.vertical, isEmpty ? 16 : 9)
+                            .background(isEmpty ? Color.clear : Theme.surfaceHigh.opacity(0.4))
                         }
                         ForEach(sections, id: \.title) { section in
                             VStack(spacing: 0) {
@@ -306,7 +321,7 @@ struct ActFeedView: View {
                 resolvedInSession += actions.count
                 multiSelectedIds.removeAll()
             }
-            .buttonStyle(PrimaryActionStyle(tint: Theme.standby))
+            .buttonStyle(PaperButtonStyle(prominent: true, labelFont: Theme.mono(11, weight: .bold), tracking: 0.4))
             .accessibilityLabel("Queue \(actions.count) selected sends")
             .accessibilityHint("Each send waits 5 seconds and can be undone before it sends.")
             Button("CANCEL") { multiSelectedIds.removeAll() }
@@ -314,7 +329,7 @@ struct ActFeedView: View {
         }
         .padding(.horizontal, layout.gutter)
         .padding(.vertical, 10)
-        .background(Theme.standby.opacity(0.06))
+        .background(Theme.surfaceHigh.opacity(0.5))
     }
 
     private func toggleMultiSelect(_ item: ActItem) {
@@ -360,6 +375,7 @@ struct ActFeedView: View {
                     ? "Mark done, you delivered: \(c.what)"
                     : "Mark received, they delivered: \(c.what)")
         }
+        .frame(maxWidth: 760, alignment: .leading)
         .padding(.horizontal, layout.gutter)
         .padding(.vertical, 9)
         .accessibilityElement(children: .contain)
@@ -388,6 +404,7 @@ struct ActFeedView: View {
                 .help("Mark done")
                 .accessibilityLabel("Complete task: \(t.text)")
         }
+        .frame(maxWidth: 760, alignment: .leading)
         .padding(.horizontal, layout.gutter)
         .padding(.vertical, 9)
         .accessibilityElement(children: .contain)
@@ -527,8 +544,20 @@ private struct ActCardRow: View {
     @State private var editText = ""
     @State private var showContextEditor = false
 
+    /// Vermilion is reserved for items still awaiting a decision — matching the
+    /// "Needs your decision" section, not every person-waiting item. A drafted
+    /// reply that's merely Ready to send is not an emergency.
+    private var needsDecision: Bool {
+        switch item {
+        case .agentAction(let action):
+            return action.isMaybe || action.riskEnum == .high
+        case .owedReply:
+            return true
+        }
+    }
+
     private var accentColor: Color {
-        item.isPersonWaiting ? Theme.signal : Theme.textTertiary
+        needsDecision ? Theme.signal : Theme.textTertiary
     }
 
     private var background: Color {
@@ -558,6 +587,11 @@ private struct ActCardRow: View {
             .padding(.horizontal, 11)
             .padding(.vertical, 10)
             .animation(Theme.spring, value: isSelected)
+            // Cap the reading measure — past ~760pt a row becomes a sparse ribbon
+            // the eye must travel end-to-end to associate with its checkmark.
+            // The accent bar and hover/selection fill (outside this VStack) stay
+            // full-width so click/hover targets are unaffected.
+            .frame(maxWidth: 760, alignment: .leading)
         }
         .background(background)
         // Focus ring on selected card
@@ -606,8 +640,10 @@ private struct ActCardRow: View {
     private var headerRow: some View {
         HStack(spacing: 6) {
             ServiceStamp(service: item.service, size: 20)
+            // Serif anchor — without it Act was the one screen with no editorial
+            // identity, reading as a terminal next to Digests' newspaper.
             Text(item.name)
-                .font(Theme.sans(13, weight: .semibold))
+                .font(Theme.display(14.5))
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
             Spacer(minLength: 4)
@@ -821,9 +857,10 @@ private struct ActCardRow: View {
             appState.stageManualApprove(action)
             onResolved?()
         }
-        .buttonStyle(PrimaryActionStyle(tint: Theme.standby))
+        .buttonStyle(PaperButtonStyle(prominent: true, labelFont: Theme.mono(11, weight: .bold), tracking: 0.4))
+        .help("Queue send (⌘Return)")
         .accessibilityLabel("Queue suggested send to \(action.conversationName)")
-        .accessibilityHint("Sends in 5 seconds unless undone.")
+        .accessibilityHint("Sends in 5 seconds unless undone. Keyboard: Command Return.")
     }
 
     private func replyButton(_ reply: OwedReply) -> some View {
@@ -847,7 +884,7 @@ private struct ActCardRow: View {
     }
 
     private func editButton(_ action: AgentAction) -> some View {
-        actionButton("EDIT") {
+        actionButton("Edit") {
             editText = action.replyPayload?.draftText ?? action.payload
             isEditing = true
             isEditingExternal = true
@@ -855,7 +892,7 @@ private struct ActCardRow: View {
     }
 
     private func skipButton(_ action: AgentAction) -> some View {
-        actionButton("SKIP") {
+        actionButton("Skip") {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
             appState.skipAction(action)
             onResolved?()
@@ -863,7 +900,7 @@ private struct ActCardRow: View {
     }
 
     private func snoozeButton(_ reply: OwedReply) -> some View {
-        actionButton("SNOOZE") {
+        actionButton("Snooze") {
             OwedReplyStore.snooze(reply.id, until: Date().addingTimeInterval(86400))
             appState.reloadOwedReplies()
             appState.showReceipt("Snoozed reply until tomorrow.", actionTitle: "Undo") {
@@ -876,7 +913,7 @@ private struct ActCardRow: View {
     }
 
     private func dismissButton(_ reply: OwedReply) -> some View {
-        actionButton("DISMISS") {
+        actionButton("Dismiss") {
             OwedReplyStore.dismiss(reply.id)
             appState.reloadOwedReplies()
             appState.showReceipt("Dismissed owed reply.", actionTitle: "Undo") {
@@ -891,7 +928,7 @@ private struct ActCardRow: View {
     private func customizeReplyButton(service: String,
                                       conversationID: String,
                                       displayName: String,
-                                      title: String = "Chat to customize →") -> some View {
+                                      title: String = "Draft in chat") -> some View {
         Button(title) {
             chatViewModel.prepareReply(
                 service: service,
@@ -899,19 +936,19 @@ private struct ActCardRow: View {
                 displayName: displayName
             )
         }
-        .buttonStyle(WireActionStyle(tint: Theme.textSecondary))
+        .buttonStyle(WireActionStyle(tint: Theme.textSecondary, sansLabel: true))
         .accessibilityLabel("Open chat to draft a reply for \(displayName)")
     }
 
     private func customizeLaneButton(name: String) -> some View {
-        Button("Customize lane") { showContextEditor = true }
-            .buttonStyle(WireActionStyle())
+        Button("Lane settings") { showContextEditor = true }
+            .buttonStyle(WireActionStyle(sansLabel: true))
             .accessibilityLabel("Edit priority and delegation settings for \(name)")
     }
 
     private func actionButton(_ title: String, tint: Color = Theme.textTertiary, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
-            .buttonStyle(WireActionStyle(tint: tint))
+            .buttonStyle(WireActionStyle(tint: tint, sansLabel: true))
     }
 
     // MARK: - Helpers

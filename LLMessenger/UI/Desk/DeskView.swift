@@ -73,6 +73,13 @@ struct DeskView: View {
                 .padding(.top, 18)
 
             Spacer(minLength: 0)
+
+            // Settings is a global destination, not something scoped to one
+            // section — it belongs at the rail's own footer, always present,
+            // not pinned inside the Digests archive column.
+            Rule()
+            SettingsButtonView()
+                .padding(.top, 4)
         }
         .padding(.horizontal, 10)
         .padding(.top, 14)
@@ -204,6 +211,10 @@ private struct DeskRailButton: View {
     let onTap: () -> Void
     @State private var isHovered = false
 
+    /// Vermilion is reserved for Act — items that need you now. Digests'
+    /// "N today" is a plain count, not urgency, and reads as a tertiary numeral.
+    private var isUrgent: Bool { section == .act }
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
@@ -216,14 +227,20 @@ private struct DeskRailButton: View {
                     .foregroundStyle(textColor)
                 Spacer(minLength: 4)
                 if let badge {
-                    Text(badge)
-                        .font(Theme.mono(10, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(
-                            Capsule().fill(isSelected ? Theme.signal : Theme.signal.opacity(0.7))
-                        )
+                    if isUrgent {
+                        Text(badge)
+                            .font(Theme.mono(10, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(
+                                Capsule().fill(isSelected ? Theme.signal : Theme.signal.opacity(0.7))
+                            )
+                    } else {
+                        Text(badge)
+                            .font(Theme.mono(10, weight: .semibold))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
                 }
             }
             .padding(.horizontal, 8)
@@ -273,33 +290,6 @@ struct DemoTransitionBanner: View {
     }
 }
 
-// MARK: - Delegation kill switch banner
-
-/// Always-visible safety bar when at least one conversation has auto-send delegation.
-/// Lets the user pause all auto-sends in one tap without hunting through the menu bar.
-struct DelegationKillSwitchBanner: View {
-    @AppStorage(AgentDelegation.killSwitchKey) private var disabled = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(disabled ? Theme.textTertiary : Theme.standby)
-                .frame(width: 6, height: 6)
-            Text(disabled ? "Auto-send paused" : "Auto-send active")
-                .font(Theme.mono(10.5, weight: .semibold))
-                .tracking(0.7)
-                .foregroundStyle(disabled ? Theme.textTertiary : Theme.textSecondary)
-            Spacer(minLength: 0)
-            Button(disabled ? "RESUME" : "PAUSE") { disabled.toggle() }
-                .buttonStyle(WireActionStyle(tint: disabled ? Theme.standby : Theme.textSecondary))
-                .accessibilityLabel(disabled ? "Resume auto-send for delegated lanes" : "Pause all delegated auto-sends")
-                .accessibilityHint(disabled ? "Auto-send will resume for conversations where you enabled delegation." : "Stops delegated sends until you resume them.")
-        }
-        .padding(.horizontal, Theme.gutter)
-        .padding(.vertical, 8)
-        .background(disabled ? Color.clear : Theme.standby.opacity(0.06))
-        .animation(Theme.quick, value: disabled)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(disabled ? "Auto-send paused" : "Auto-send active")
-    }
-}
+// The delegation kill switch moved to a fixed toolbar status item
+// (MainToolbar.DelegationStatusItem) so it no longer reflows the content
+// column as a banner whenever delegation is armed/disarmed.
