@@ -52,6 +52,13 @@ struct SettingsView: View {
     var onRetryService: ((String) async -> Void)? = nil
     var onScheduleChanged: (() -> Void)? = nil
     @ObservedObject var selection: SettingsPaneSelection
+    // Owned here, not inside SubTabbedPane: tabContent below is `.id(selection.pane)`,
+    // so navigating to another pane and back recreates SubTabbedPane from scratch —
+    // if it owned this as local @State, the sub-tab (e.g. "Priority Rules") would
+    // silently reset to the first tab ("Instructions") every time, even though the
+    // top-level pane itself is remembered.
+    @State private var aiPrivacySubTab = 0
+    @State private var behaviorSubTab = 0
 
     var body: some View {
         tabContent
@@ -66,7 +73,7 @@ struct SettingsView: View {
     private var tabContent: some View {
         switch selection.pane {
         case .aiPrivacy:
-            SubTabbedPane(tabs: ["AI", "Privacy"]) { sub in
+            SubTabbedPane(tabs: ["AI", "Privacy"], sub: $aiPrivacySubTab) { sub in
                 if sub == 0 {
                     AISettingsTab(database: database)
                 } else {
@@ -79,7 +86,7 @@ struct SettingsView: View {
                                onSyncContacts: onSyncContacts,
                                onRetryService: onRetryService)
         case .behavior:
-            SubTabbedPane(tabs: ["Instructions", "Priority Rules"]) { sub in
+            SubTabbedPane(tabs: ["Instructions", "Priority Rules"], sub: $behaviorSubTab) { sub in
                 if sub == 0 {
                     InstructionsSettingsTab()
                 } else {
@@ -99,8 +106,8 @@ struct SettingsView: View {
 /// existing settings UI.
 private struct SubTabbedPane<Content: View>: View {
     let tabs: [String]
+    @Binding var sub: Int
     @ViewBuilder let content: (Int) -> Content
-    @State private var sub = 0
 
     var body: some View {
         VStack(spacing: 0) {

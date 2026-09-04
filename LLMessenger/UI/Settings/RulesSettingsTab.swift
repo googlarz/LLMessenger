@@ -248,7 +248,12 @@ private struct AddRuleView: View {
                     .buttonStyle(PaperButtonStyle())
                 Spacer()
                 Button("Save Rule") { save() }
-                    .disabled(contactPattern.isEmpty && keywordPattern.isEmpty && service == "any")
+                    // A rule with no conditions is valid — it matches "(any message)",
+                    // as ruleSummary above already renders. Requiring a condition here
+                    // made that catch-all case (e.g. "always notify" for everything, or
+                    // "suppress: yes" for everything) impossible to ever save.
+                    .disabled(contactPattern.isEmpty && keywordPattern.isEmpty && service == "any"
+                              && setPriority.isEmpty && !suppress && !alwaysNotify)
                     .buttonStyle(PaperButtonStyle(prominent: true))
             }
             .padding(.top, 14)

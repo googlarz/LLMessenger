@@ -171,7 +171,17 @@ struct ContextEditor: View {
     }
 
     private func load() {
-        defer { isLoadingContext = false }
+        // isLoadingContext must still read true when SwiftUI processes the
+        // .onChange(of: autoAck/autoRSVP) that setting these @State vars below
+        // triggers — otherwise the guard in requestAutoSendConfirmation is a
+        // no-op and opening this editor for an already-delegated conversation
+        // pops the "Enable auto-send?" alert unprompted. A synchronous `defer`
+        // here flips the flag false as this function returns, which is BEFORE
+        // SwiftUI's next render pass dispatches that onChange — so the flag
+        // must be cleared on a later run-loop turn instead.
+        defer {
+            Task { @MainActor in isLoadingContext = false }
+        }
         guard let ctx = try? repository.fetchConversationContext(service: service, conversationId: conversationId)
         else { return }
         relationship = ctx.relationship ?? ""
