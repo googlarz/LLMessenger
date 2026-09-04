@@ -56,7 +56,9 @@ struct SearchResultsView: View {
         guard let id = brief.id else { return }
         appState.selectedBriefID = id
         appState.markAsOpen(briefID: id)
-        Task { try? await chatViewModel.loadBrief(brief) }
+        // ChatPanelView's .task(id: appState.selectedBriefID) already loads
+        // the brief reactively on every selection change — this duplicated
+        // that fetch on every search-result tap.
     }
 
     private func openConversation(_ result: MessageSearchResult) {

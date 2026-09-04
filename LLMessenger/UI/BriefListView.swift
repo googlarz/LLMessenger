@@ -17,7 +17,6 @@ struct BriefListView: View {
     @State private var searchBriefResults: [Brief] = []
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>? = nil
-    @State private var loadTask: Task<Void, Never>? = nil
     @State private var needsReplyCards: [(card: BriefCardRecord, briefCreatedAt: Date)] = []
     @State private var showArchivedSection = false
     @State private var archiveToggleHovered = false
@@ -274,12 +273,13 @@ struct BriefListView: View {
         guard let id = brief.id else { return }
         appState.selectedBriefID = id
         appState.markAsOpen(briefID: id)
-        chatViewModel.inputText = ""
-        chatViewModel.pendingTarget = nil
-        // Cancel any in-flight load so a rapid second tap doesn't race and leave
-        // brief A's threadItems displayed while selectedBriefID points to brief B.
-        loadTask?.cancel()
-        loadTask = Task { try? await chatViewModel.loadBrief(brief) }
+        // ChatPanelView's .task(id: appState.selectedBriefID) already calls
+        // loadBrief reactively on every selection change — including the
+        // auto-cancel-on-rapid-retap behavior a manual Task here used to
+        // hand-roll. A second, independent loadBrief call from this function
+        // just duplicated that fetch on every single digest switch. Clearing
+        // inputText/pendingTarget also moved: AppState.selectedBriefID's
+        // didSet now does that for every selection path, not just this one.
     }
 
     @ViewBuilder

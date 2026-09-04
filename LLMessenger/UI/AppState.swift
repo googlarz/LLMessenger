@@ -123,7 +123,22 @@ final class AppState: ObservableObject {
     @Published var briefs: [Brief] = [] { didSet { recomputeAttentionProjection() } }
     @Published var briefCardsByBriefID: [Int64: [BriefCard]] = [:] { didSet { recomputeAttentionProjection() } }
     @Published var tasks: [BriefTask] = [] { didSet { recomputeAttentionProjection() } }
-    @Published var selectedBriefID: Int64?
+    @Published var selectedBriefID: Int64? {
+        didSet {
+            guard selectedBriefID != oldValue else { return }
+            onBriefSelectionChanged?()
+        }
+    }
+    /// Fired synchronously whenever selectedBriefID actually changes — before
+    /// any code that runs after the assignment in the same call. Wired once
+    /// (ChatWindowController) to clear the chat composer's unsent draft and
+    /// pending reply target, which otherwise leak from one digest into the
+    /// next. Must be synchronous (didSet, not .onChange/.task) so it still
+    /// runs strictly before ActFeedView's reply flow — which sets
+    /// selectedBriefID then immediately calls prepareReply() in the same
+    /// call, setting the new draft — an async clear would wipe that draft
+    /// out instead of the stale one.
+    var onBriefSelectionChanged: (() -> Void)?
     /// Live adapter status, pushed by AppDelegate on every poll event. Source of
     /// truth for all status reads. `serviceHealthMap` (DB rows, loaded in
     /// refreshBriefs) is kept only for `lastCheck` timestamps.

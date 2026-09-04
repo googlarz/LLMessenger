@@ -12,6 +12,16 @@ final class ChatWindowController: NSWindowController, NSWindowDelegate {
         self.appState = appState
         self.chatViewModel = appState.makeChatViewModel()
 
+        // An unsent draft or a pending @-mention reply target must not leak
+        // from one digest into the next when the user navigates away without
+        // sending — this runs on every selectedBriefID change, not just the
+        // archive-row-tap path that used to be the only place clearing it.
+        let chatViewModel = self.chatViewModel
+        appState.onBriefSelectionChanged = { [weak chatViewModel] in
+            chatViewModel?.inputText = ""
+            chatViewModel?.pendingTarget = nil
+        }
+
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1040, height: 700),
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],

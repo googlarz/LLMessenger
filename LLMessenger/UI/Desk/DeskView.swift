@@ -114,7 +114,10 @@ struct DeskView: View {
             ForEach(["imessage", "signal", "telegram", "slack"], id: \.self) { service in
                 ServiceFilterButton(
                     service: service,
-                    isSelected: appState.serviceQuickFilter == service,
+                    // Activity is a global audit trail and deliberately doesn't
+                    // honor this filter — showing it "selected" there implies a
+                    // scoping that isn't actually happening on screen.
+                    isSelected: selectedTab != .activity && appState.serviceQuickFilter == service,
                     count: actItemCount(for: service)
                 ) {
                     withAnimation(Theme.quick) {
