@@ -83,10 +83,13 @@ struct ContentView: View {
         // The one-time "first real digest" moment fires as a toast instead of a
         // persistent banner — its stat narration ("4 cards · 3 need you...")
         // duplicates numbers already visible in the sidebar badge and header.
-        .onChange(of: shouldShowFirstRealDigestMoment) { _, shouldShow in
-            guard shouldShow else { return }
-            appState.showReceipt("First digest ready.")
-            appState.acknowledgeFirstRealDigest()
+        // Checked on appear AND on change: .onChange alone only fires on a live
+        // false→true transition, so if the condition is already true the
+        // moment the view appears (nothing to "change" from), the toast would
+        // silently never show.
+        .onAppear { fireFirstRealDigestMomentIfNeeded() }
+        .onChange(of: shouldShowFirstRealDigestMoment) { _, _ in
+            fireFirstRealDigestMomentIfNeeded()
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("LLMessenger main window")
@@ -152,6 +155,12 @@ struct ContentView: View {
         !DemoSeeder.isActive &&
         !appState.briefs.isEmpty &&
         !appState.productLoveMetrics.firstRealDigestAcknowledged
+    }
+
+    private func fireFirstRealDigestMomentIfNeeded() {
+        guard shouldShowFirstRealDigestMoment else { return }
+        appState.showReceipt("First digest ready.")
+        appState.acknowledgeFirstRealDigest()
     }
 
     @ViewBuilder

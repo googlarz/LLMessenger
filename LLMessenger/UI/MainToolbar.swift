@@ -261,7 +261,14 @@ struct ToolbarSearchField: NSViewRepresentable {
                     parent.selectedSection = .digests
                 }
             } else if let priorSection = preSearchSection {
-                parent.selectedSection = priorSection
+                // Only restore if the user is still on Digests because search put
+                // them there. If they manually navigated to another section while
+                // the search was active, selectedSection is no longer .digests —
+                // restoring here would stomp on that manual navigation and snap
+                // them back to wherever they were before the search started.
+                if parent.selectedSection == .digests {
+                    parent.selectedSection = priorSection
+                }
                 preSearchSection = nil
             }
         }

@@ -80,6 +80,18 @@ struct ActFeedView: View {
         filteredCommitments.filter { $0.directionEnum == .iOwe }
     }
 
+    /// Tasks have no `service` field of their own — resolve it through the
+    /// card they came from so the "Later" section can honor the service
+    /// filter the same way every other section does.
+    private var filteredTasks: [BriefTask] {
+        guard let filtered = appState.serviceQuickFilter else { return appState.attentionProjection.tasks }
+        let serviceByCardID: [String: String] = Dictionary(
+            appState.briefCardsByBriefID.values.flatMap { $0 }.map { ($0.id, $0.service) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return appState.attentionProjection.tasks.filter { serviceByCardID[$0.briefCardId] == filtered }
+    }
+
     private var isQueueEmpty: Bool {
         appState.attentionProjection.actItems.isEmpty
             && appState.attentionProjection.promiseCount == 0
@@ -204,14 +216,14 @@ struct ActFeedView: View {
                             .accessibilityLabel("Waiting on others")
                         }
 
-                        if !iOweCommitments.isEmpty || !appState.attentionProjection.tasks.isEmpty {
+                        if !iOweCommitments.isEmpty || !filteredTasks.isEmpty {
                             VStack(spacing: 0) {
                                 sectionHeader("Later · promises and tasks", color: Theme.textTertiary)
                                 ForEach(iOweCommitments) { c in
                                     commitmentRow(c)
                                     Rule()
                                 }
-                                ForEach(appState.attentionProjection.tasks, id: \.id) { t in
+                                ForEach(filteredTasks, id: \.id) { t in
                                     taskRow(t)
                                     Rule()
                                 }
@@ -518,8 +530,22 @@ struct ActFeedView: View {
     }
 
     private func undoLastStaged() {
-        // Find the most recently scheduled (staged) action and cancel it
-        if let staged = appState.agentActions.first(where: { $0.statusEnum == .scheduled }) {
+        // Find the most recently STAGED (not most recently created) action and
+        // cancel it. `agentActions` is ordered by createdAt, so with 2+ actions
+        // queued (batch approve), `.first(where: scheduled)` picked whichever
+        // had the newest createdAt — not whichever the user actually staged
+        // last. And `scheduledAt` alone doesn't fix it either: it's the fire
+        // time, and manual (5s window) vs delegated (30s window) sends staged
+        // seconds apart can fire in the opposite order. The true staging
+        // moment is scheduledAt minus its own window.
+        let staged = appState.agentActions
+            .filter { $0.statusEnum == .scheduled }
+            .max { lhs, rhs in
+                let lhsStagedAt = (lhs.scheduledAt ?? .distantPast).addingTimeInterval(-(lhs.scheduledWindow ?? 0))
+                let rhsStagedAt = (rhs.scheduledAt ?? .distantPast).addingTimeInterval(-(rhs.scheduledWindow ?? 0))
+                return lhsStagedAt < rhsStagedAt
+            }
+        if let staged {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
             appState.undoAutoSend(staged)
             resolvedInSession = max(0, resolvedInSession - 1)

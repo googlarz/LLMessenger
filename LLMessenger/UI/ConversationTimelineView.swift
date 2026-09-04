@@ -66,7 +66,12 @@ struct ConversationTimelineView: View {
                                 Rule(color: Theme.border.opacity(0.6))
                                     .padding(.horizontal, 20)
                                 VStack(alignment: .leading, spacing: 14) {
-                                    ForEach(Array(group.entries.enumerated()), id: \.offset) { _, entry in
+                                    // Identity keyed on the card, not array position —
+                                    // a positional id (\.offset) reattaches this row's
+                                    // @State (expanded) to whatever entry lands at the
+                                    // same index after a reload/reorder, so the wrong
+                                    // card could appear expanded.
+                                    ForEach(group.entries, id: \.card.id) { entry in
                                         TimelineEntryRow(entry: entry)
                                     }
                                 }
@@ -101,7 +106,10 @@ struct ConversationTimelineView: View {
         let cal = Calendar.current
         if cal.isDateInToday(day) { return "Today" }
         if cal.isDateInYesterday(day) { return "Yesterday" }
-        return Theme.dayMonthFormatter.string(from: day)
+        // Matches ActivityView's identical day-header pattern: older dates go
+        // through the mono wire-label voice, which is uppercase everywhere
+        // else in the app ("11 JUL", not "11 Jul").
+        return Theme.dayMonthFormatter.string(from: day).uppercased()
     }
 }
 
@@ -174,6 +182,9 @@ private struct TimelineEntryRow: View {
         .onTapGesture { withAnimation(Theme.spring) { expanded.toggle() } }
         .onHover { isHovered = $0 }
         .animation(Theme.quick, value: isHovered)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(expanded ? "Collapse details" : "Expand details")
     }
 
     private func priorityBadge(_ priority: String) -> some View {
