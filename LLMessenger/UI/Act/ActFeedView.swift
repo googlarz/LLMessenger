@@ -6,6 +6,7 @@
 // Keyboard-first: J/K to move, Return = approve, S = skip, E = edit.
 // ⌘-click multi-selects; batch approval appears only for 2+ compatible sends.
 
+import Combine
 import SwiftUI
 
 // MARK: - Feed view
