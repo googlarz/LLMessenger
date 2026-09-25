@@ -178,9 +178,15 @@ struct ContextEditor: View {
         // pops the "Enable auto-send?" alert unprompted. A synchronous `defer`
         // here flips the flag false as this function returns, which is BEFORE
         // SwiftUI's next render pass dispatches that onChange — so the flag
-        // must be cleared on a later run-loop turn instead.
+        // must be cleared on a later run-loop turn instead. Task.yield() makes
+        // that ordering explicit (this cycle's onChange runs first) rather than
+        // relying on unspecified relative scheduling between two queued
+        // main-actor work items.
         defer {
-            Task { @MainActor in isLoadingContext = false }
+            Task { @MainActor in
+                await Task.yield()
+                isLoadingContext = false
+            }
         }
         guard let ctx = try? repository.fetchConversationContext(service: service, conversationId: conversationId)
         else { return }
