@@ -74,7 +74,7 @@ API keys are stored in the system Keychain via `KeychainStore`. Signal account n
 - `BriefListView` — sidebar, grouped by date
 - `ChatPanelView` — single `ScrollView` containing `BriefHeaderView` + `BriefProseView` + AI thread items + `ChatInputView` pinned at bottom
 
-`Theme.swift` defines the Anthropic-style dark palette. All colours live there — do not hardcode colours elsewhere.
+`Theme.swift` defines the palette, adapting to System/Light/Dark (user-selectable in Settings → Appearance). All colours live there — do not hardcode colours elsewhere.
 
 ### Adding a new service adapter
 
