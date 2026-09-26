@@ -35,7 +35,7 @@ struct AboutSettingsTab: View {
 
                 Rule().frame(maxWidth: 320)
 
-                Text("Released under the MIT License\nFree to use, modify, and distribute")
+                Text("Released under the Apache 2.0 License\nFree to use, modify, and distribute")
                     .font(Theme.sans(11))
                     .foregroundStyle(Theme.textTertiary)
                     .multilineTextAlignment(.center)
