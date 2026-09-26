@@ -542,8 +542,8 @@ struct ActFeedView: View {
         let staged = appState.agentActions
             .filter { $0.statusEnum == .scheduled }
             .max { lhs, rhs in
-                let lhsStagedAt = (lhs.scheduledAt ?? .distantPast).addingTimeInterval(-(lhs.scheduledWindow ?? 0))
-                let rhsStagedAt = (rhs.scheduledAt ?? .distantPast).addingTimeInterval(-(rhs.scheduledWindow ?? 0))
+                let lhsStagedAt = (lhs.scheduledAt ?? .distantPast).addingTimeInterval(-lhs.scheduledUndoWindow)
+                let rhsStagedAt = (rhs.scheduledAt ?? .distantPast).addingTimeInterval(-rhs.scheduledUndoWindow)
                 return lhsStagedAt < rhsStagedAt
             }
         if let staged {
