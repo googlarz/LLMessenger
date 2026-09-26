@@ -318,7 +318,12 @@ xcodebuild -scheme LLMessenger test    # keep them green
 - [ ] WhatsApp adapter (pending viable local API)
 
 <details>
-<summary>Shipped (v1.4 – v2.3.1)</summary>
+<summary>Shipped (v1.4 – v2.3.2)</summary>
+
+**v2.3.2** — bug-hunt hardening pass:
+- ✅ Fixed 15 bugs found in a manual audit: state leaking across digest navigation, wrong row expanding after a reload, a settings sub-tab silently resetting, a rule that could never be saved, and more
+- ✅ Fixed a flaky accessibility-audit test and a latent build-analyzer warning found during a full pre-release verification pass
+- ✅ 6 new regression tests added; full suite at 723 tests, zero analyzer warnings
 
 **v2.3.1** — Activity becomes a trend, not just today:
 - ✅ Activity now covers the last 14 days instead of just today — a real trail of when things needed you
