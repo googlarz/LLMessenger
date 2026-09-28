@@ -157,7 +157,7 @@ final class BriefRefreshCoordinator {
         )
         if let latestID = ids.last {
             if selectLatest {
-                state.selectedBriefID = latestID
+                state.selectBriefKeepingDraft(latestID)
             }
             await writeWidget(briefID: latestID)
         }
@@ -177,7 +177,7 @@ final class BriefRefreshCoordinator {
                 hours: hours,
                 adapters: state.adapters
             ) {
-                state.selectedBriefID = briefID
+                state.selectBriefKeepingDraft(briefID)
                 state.briefGenerationState = .complete
                 state.lastError = nil
                 await writeWidget(briefID: briefID)

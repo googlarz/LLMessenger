@@ -125,8 +125,24 @@ final class AppState: ObservableObject {
     @Published var tasks: [BriefTask] = [] { didSet { recomputeAttentionProjection() } }
     @Published var selectedBriefID: Int64? {
         didSet {
-            guard selectedBriefID != oldValue else { return }
+            guard selectedBriefID != oldValue, !isSelectingWithoutClearingDraft else { return }
             onBriefSelectionChanged?()
+        }
+    }
+    private var isSelectingWithoutClearingDraft = false
+
+    /// Selection changes the app makes on its own (a refresh finishing) must not
+    /// wipe what the user is typing — only user navigation clears the composer.
+    func selectBriefKeepingDraft(_ id: Int64?) {
+        isSelectingWithoutClearingDraft = true
+        defer { isSelectingWithoutClearingDraft = false }
+        selectedBriefID = id
+    }
+
+    func clearComposerOnBriefNavigation(_ chat: ChatViewModel) {
+        onBriefSelectionChanged = { [weak chat] in
+            chat?.inputText = ""
+            chat?.pendingTarget = nil
         }
     }
     /// Fired synchronously whenever selectedBriefID actually changes — before

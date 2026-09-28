@@ -95,6 +95,8 @@ final class ChatViewModel: ObservableObject {
         let label = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let target = label.isEmpty ? conversationID : label
         inputText = "write to \(target): "
+        // An abandoned @-mention target would otherwise override this reply's recipient.
+        pendingTarget = nil
         inputFocusRequest = UUID()
     }
 
@@ -105,7 +107,6 @@ final class ChatViewModel: ObservableObject {
     }
 
     func clearMentionTarget() {
-        pendingTarget = nil
     }
 
     private func submit(_ rawInput: String) async {
@@ -120,7 +121,6 @@ final class ChatViewModel: ObservableObject {
         // Case 0 — Explicit @ mention target: target is already known, skip intent routing
         // and go straight to the existing draft flow.
         if let target = pendingTarget {
-            pendingTarget = nil
             await draftReply(brief: brief,
                              originalRequest: rawInput,
                              service: target.service,
