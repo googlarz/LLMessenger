@@ -80,6 +80,20 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
         guard let scheduledKind else { return nil }
         return AgentActionScheduleKind(rawValue: scheduledKind)
     }
+    /// The scheduled send the user staged last — what Undo should cancel. Not the
+    /// newest createdAt (batch approve stages old actions), and not the latest
+    /// scheduledAt (a 30s delegated send staged earlier can fire after a 5s manual
+    /// one staged later): staging time is scheduledAt minus the action's own window.
+    static func mostRecentlyStaged(in actions: [AgentAction]) -> AgentAction? {
+        actions
+            .filter { $0.statusEnum == .scheduled }
+            .max { lhs, rhs in
+                let lhsStagedAt = (lhs.scheduledAt ?? .distantPast).addingTimeInterval(-lhs.scheduledUndoWindow)
+                let rhsStagedAt = (rhs.scheduledAt ?? .distantPast).addingTimeInterval(-rhs.scheduledUndoWindow)
+                return lhsStagedAt < rhsStagedAt
+            }
+    }
+
     var scheduledUndoWindow: TimeInterval {
         if let scheduledWindow, scheduledWindow > 0 { return scheduledWindow }
         switch scheduledKindEnum {

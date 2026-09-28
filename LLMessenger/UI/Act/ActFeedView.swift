@@ -531,22 +531,7 @@ struct ActFeedView: View {
     }
 
     private func undoLastStaged() {
-        // Find the most recently STAGED (not most recently created) action and
-        // cancel it. `agentActions` is ordered by createdAt, so with 2+ actions
-        // queued (batch approve), `.first(where: scheduled)` picked whichever
-        // had the newest createdAt — not whichever the user actually staged
-        // last. And `scheduledAt` alone doesn't fix it either: it's the fire
-        // time, and manual (5s window) vs delegated (30s window) sends staged
-        // seconds apart can fire in the opposite order. The true staging
-        // moment is scheduledAt minus its own window.
-        let staged = appState.agentActions
-            .filter { $0.statusEnum == .scheduled }
-            .max { lhs, rhs in
-                let lhsStagedAt = (lhs.scheduledAt ?? .distantPast).addingTimeInterval(-lhs.scheduledUndoWindow)
-                let rhsStagedAt = (rhs.scheduledAt ?? .distantPast).addingTimeInterval(-rhs.scheduledUndoWindow)
-                return lhsStagedAt < rhsStagedAt
-            }
-        if let staged {
+        if let staged = AgentAction.mostRecentlyStaged(in: appState.agentActions) {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
             appState.undoAutoSend(staged)
             resolvedInSession = max(0, resolvedInSession - 1)
