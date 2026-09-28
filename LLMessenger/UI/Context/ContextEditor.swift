@@ -26,7 +26,10 @@ struct ContextEditor: View {
     @State private var privacyOverride = "none"
     @State private var autoAck = false
     @State private var autoRSVP = false
-    @State private var isLoadingContext = true
+    // Kinds already delegated in the DB, or confirmed via the alert this session.
+    // Only a kind in this set may be saved as enabled — so neither load order nor
+    // a Save click racing the alert can persist an unconfirmed auto-send.
+    @State private var approvedAutoSendKinds: Set<AutoSendKind> = []
     @State private var pendingAutoSendKind: AutoSendKind?
     @State private var showAutoSendConfirmation = false
 
@@ -160,6 +163,7 @@ struct ContextEditor: View {
         .task { load() }
         .alert("Enable auto-send?", isPresented: $showAutoSendConfirmation, presenting: pendingAutoSendKind) { kind in
             Button("Enable auto-send") {
+                approvedAutoSendKinds.insert(kind)
                 pendingAutoSendKind = nil
             }
             Button("Cancel", role: .cancel) {
@@ -171,23 +175,6 @@ struct ContextEditor: View {
     }
 
     private func load() {
-        // isLoadingContext must still read true when SwiftUI processes the
-        // .onChange(of: autoAck/autoRSVP) that setting these @State vars below
-        // triggers — otherwise the guard in requestAutoSendConfirmation is a
-        // no-op and opening this editor for an already-delegated conversation
-        // pops the "Enable auto-send?" alert unprompted. A synchronous `defer`
-        // here flips the flag false as this function returns, which is BEFORE
-        // SwiftUI's next render pass dispatches that onChange — so the flag
-        // must be cleared on a later run-loop turn instead. Task.yield() makes
-        // that ordering explicit (this cycle's onChange runs first) rather than
-        // relying on unspecified relative scheduling between two queued
-        // main-actor work items.
-        defer {
-            Task { @MainActor in
-                await Task.yield()
-                isLoadingContext = false
-            }
-        }
         guard let ctx = try? repository.fetchConversationContext(service: service, conversationId: conversationId)
         else { return }
         relationship = ctx.relationship ?? ""
@@ -201,12 +188,15 @@ struct ContextEditor: View {
         responseExpectation = ctx.responseExpectation ?? "none"
         privacyOverride = ctx.privacyOverride ?? "none"
         let delegated = ctx.delegationKinds
+        // Set before the toggles so the onChange they trigger sees them as approved.
+        if delegated.contains(AgentActionKind.ack.rawValue) { approvedAutoSendKinds.insert(.ack) }
+        if delegated.contains(AgentActionKind.rsvp.rawValue) { approvedAutoSendKinds.insert(.rsvp) }
         autoAck = delegated.contains(AgentActionKind.ack.rawValue)
         autoRSVP = delegated.contains(AgentActionKind.rsvp.rawValue)
     }
 
     private func requestAutoSendConfirmation(_ kind: AutoSendKind) {
-        guard !isLoadingContext else { return }
+        guard !approvedAutoSendKinds.contains(kind) else { return }
         pendingAutoSendKind = kind
         showAutoSendConfirmation = true
     }
@@ -240,8 +230,8 @@ struct ContextEditor: View {
         ctx.keySendersList = splitCSV(keySenders)
         ctx.aliasesList = splitCSV(aliases)
         var delegated: [String] = []
-        if autoAck { delegated.append(AgentActionKind.ack.rawValue) }
-        if autoRSVP { delegated.append(AgentActionKind.rsvp.rawValue) }
+        if autoAck, approvedAutoSendKinds.contains(.ack) { delegated.append(AgentActionKind.ack.rawValue) }
+        if autoRSVP, approvedAutoSendKinds.contains(.rsvp) { delegated.append(AgentActionKind.rsvp.rawValue) }
         ctx.delegationKinds = delegated
 
         do {
