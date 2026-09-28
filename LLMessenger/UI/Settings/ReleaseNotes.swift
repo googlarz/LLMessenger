@@ -17,6 +17,24 @@ struct ReleaseNote: Identifiable {
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
         ReleaseNote(
+            version: "2.3.3",
+            title: "Fixes from an adversarial re-review",
+            highlights: [
+                "Refresh no longer clears a question you were mid-typing — only navigating to a different digest yourself clears the composer.",
+                "Fixed an abandoned @-mention target silently redirecting a reply to the wrong person.",
+                "A priority rule that suppresses every message (no contact, keyword, or service condition) now asks for confirmation before saving.",
+                "Closed a narrow window where auto-send could be saved without the confirmation dialog actually being shown.",
+                "The About tab now correctly says Apache 2.0 instead of MIT, and reports this version instead of 2.3.1."
+            ]),
+        ReleaseNote(
+            version: "2.3.2",
+            title: "Bug-hunt hardening pass",
+            highlights: [
+                "Fixed 15 bugs found in a manual audit: state leaking across digest navigation, wrong row expanding after a reload, a settings sub-tab silently resetting, a rule that could never be saved, and more.",
+                "Fixed a flaky accessibility-audit test and a latent build-analyzer warning found during a full pre-release verification pass.",
+                "6 new regression tests added."
+            ]),
+        ReleaseNote(
             version: "2.3.1",
             title: "Activity becomes a trend, not just today",
             highlights: [
