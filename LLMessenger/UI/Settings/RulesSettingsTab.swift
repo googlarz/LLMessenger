@@ -157,6 +157,26 @@ private struct RuleRowView: View {
     }
 }
 
+// MARK: - Add Rule validation
+
+enum RuleDraftValidation {
+    static func hasCondition(contact: String, keyword: String, service: String) -> Bool {
+        !contact.isEmpty || !keyword.isEmpty || service != "any"
+    }
+
+    /// A conditionless rule is valid — it matches "(any message)" — as long as it does something.
+    static func canSave(contact: String, keyword: String, service: String,
+                        setPriority: String, suppress: Bool, alwaysNotify: Bool) -> Bool {
+        hasCondition(contact: contact, keyword: keyword, service: service)
+            || !setPriority.isEmpty || suppress || alwaysNotify
+    }
+
+    /// Would silence every incoming message, urgent ones included.
+    static func silencesEverything(contact: String, keyword: String, service: String, suppress: Bool) -> Bool {
+        suppress && !hasCondition(contact: contact, keyword: keyword, service: service)
+    }
+}
+
 // MARK: - Add Rule Sheet
 
 private struct AddRuleView: View {
@@ -172,6 +192,7 @@ private struct AddRuleView: View {
     @State private var alwaysNotify = false
     @State private var quietStart = ""
     @State private var quietEnd = ""
+    @State private var confirmSilenceEverything = false
 
     private let serviceOptions = ["any", "signal", "telegram", "imessage", "slack"]
     private let priorityOptions = [("", "No change"), ("high", "High"), ("med", "Med"), ("low", "Low")]
@@ -247,14 +268,27 @@ private struct AddRuleView: View {
                 Button("Cancel") { dismiss() }
                     .buttonStyle(PaperButtonStyle())
                 Spacer()
-                Button("Save Rule") { save() }
-                    // A rule with no conditions is valid — it matches "(any message)",
-                    // as ruleSummary above already renders. Requiring a condition here
-                    // made that catch-all case (e.g. "always notify" for everything, or
-                    // "suppress: yes" for everything) impossible to ever save.
-                    .disabled(contactPattern.isEmpty && keywordPattern.isEmpty && service == "any"
-                              && setPriority.isEmpty && !suppress && !alwaysNotify)
-                    .buttonStyle(PaperButtonStyle(prominent: true))
+                Button("Save Rule") {
+                    if RuleDraftValidation.silencesEverything(
+                        contact: contactPattern, keyword: keywordPattern, service: service, suppress: suppress
+                    ) {
+                        confirmSilenceEverything = true
+                    } else {
+                        save()
+                    }
+                }
+                .disabled(!RuleDraftValidation.canSave(
+                    contact: contactPattern, keyword: keywordPattern, service: service,
+                    setPriority: setPriority, suppress: suppress, alwaysNotify: alwaysNotify
+                ))
+                .buttonStyle(PaperButtonStyle(prominent: true))
+                .confirmationDialog("Silence every message?", isPresented: $confirmSilenceEverything,
+                                    titleVisibility: .visible) {
+                    Button("Silence everything", role: .destructive) { save() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This rule has no conditions, so it suppresses notifications for every message on every service — urgent ones included.")
+                }
             }
             .padding(.top, 14)
         }

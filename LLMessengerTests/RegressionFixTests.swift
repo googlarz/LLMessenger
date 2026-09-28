@@ -45,39 +45,117 @@ final class AppStateSelectionCallbackTests: XCTestCase {
     }
 }
 
-// MARK: - Bug: RulesSettingsTab's Save button disabled condition rejected
-// valid catch-all rules (no contact/keyword/service condition, but a real
-// action like setPriority/suppress/alwaysNotify). The disabled expression
-// lives inline in AddRuleView (private, unreachable from tests), so this
-// test reproduces the exact boolean expression as a free function mirroring
-// the fixed source, guarding against a future regression of the same logic
-// if it's ever extracted or copied elsewhere. See note below the test for
-// why the private view itself can't be exercised directly.
+// MARK: - Composer draft vs. digest navigation: user navigation clears the
+// draft and @-mention target; a selection the app makes itself (refresh
+// finishing) must keep what the user is typing.
 
-final class RuleSaveButtonDisabledLogicTests: XCTestCase {
+@MainActor
+final class ComposerDraftNavigationTests: XCTestCase {
 
-    // Mirrors the `.disabled(...)` predicate in
-    // LLMessenger/UI/Settings/RulesSettingsTab.swift (private, not
-    // reachable via @testable import since `private` is file-scoped in
-    // Swift). This test exists to lock in the intended boolean semantics;
-    // it is not itself a guard against the private view drifting out of
-    // sync with this copy.
-    private func isSaveDisabled(contactPattern: String, keywordPattern: String, service: String,
-                                 setPriority: String, suppress: Bool, alwaysNotify: Bool) -> Bool {
-        contactPattern.isEmpty && keywordPattern.isEmpty && service == "any"
-            && setPriority.isEmpty && !suppress && !alwaysNotify
+    private func make() throws -> (AppState, ChatViewModel) {
+        let db = try AppDatabase(inMemory: true)
+        let appState = AppState(database: db, llmClient: MockLLMClient(), llmModel: "test", basePrompt: "BASE")
+        let chat = ChatViewModel(appState: appState)
+        appState.clearComposerOnBriefNavigation(chat)
+        return (appState, chat)
     }
 
-    func testCatchAllRuleWithSuppressActionIsSavable() {
-        let disabled = isSaveDisabled(contactPattern: "", keywordPattern: "", service: "any",
-                                       setPriority: "", suppress: true, alwaysNotify: false)
-        XCTAssertFalse(disabled)
+    private let mention = ChatViewModel.MentionTarget(
+        service: "imessage", conversationId: "old", displayName: "Old Contact", isGroup: false
+    )
+
+    func testUserNavigationClearsDraftAndMentionTarget() throws {
+        let (appState, chat) = try make()
+        appState.selectedBriefID = 1
+        chat.inputText = "half-typed question"
+        chat.pendingTarget = mention
+
+        appState.selectedBriefID = 2
+
+        XCTAssertEqual(chat.inputText, "")
+        XCTAssertNil(chat.pendingTarget)
     }
 
-    func testCatchAllRuleWithNoActionIsNotSavable() {
-        let disabled = isSaveDisabled(contactPattern: "", keywordPattern: "", service: "any",
-                                       setPriority: "", suppress: false, alwaysNotify: false)
-        XCTAssertTrue(disabled)
+    func testRefreshSelectionKeepsDraft() throws {
+        let (appState, chat) = try make()
+        appState.selectedBriefID = 1
+        chat.inputText = "half-typed question"
+
+        appState.selectBriefKeepingDraft(2)
+
+        XCTAssertEqual(appState.selectedBriefID, 2)
+        XCTAssertEqual(chat.inputText, "half-typed question")
+    }
+
+    func testPrepareReplyDropsAbandonedMentionTarget() throws {
+        let (_, chat) = try make()
+        chat.pendingTarget = mention
+
+        chat.prepareReply(service: "imessage", conversationID: "new", displayName: "New Contact")
+
+        XCTAssertNil(chat.pendingTarget, "an old @-mention would redirect this reply to the wrong person")
+        XCTAssertEqual(chat.inputText, "write to New Contact: ")
+    }
+}
+
+// MARK: - Priority rule drafts: catch-all rules are savable, and a catch-all
+// suppress is flagged so the UI can confirm before silencing everything.
+
+final class RuleDraftValidationTests: XCTestCase {
+
+    func testCatchAllRuleWithAnActionIsSavable() {
+        XCTAssertTrue(RuleDraftValidation.canSave(contact: "", keyword: "", service: "any",
+                                                  setPriority: "", suppress: false, alwaysNotify: true))
+    }
+
+    func testRuleWithNoConditionAndNoActionIsNotSavable() {
+        XCTAssertFalse(RuleDraftValidation.canSave(contact: "", keyword: "", service: "any",
+                                                   setPriority: "", suppress: false, alwaysNotify: false))
+    }
+
+    func testCatchAllSuppressIsFlagged() {
+        XCTAssertTrue(RuleDraftValidation.silencesEverything(contact: "", keyword: "", service: "any", suppress: true))
+    }
+
+    func testScopedSuppressIsNotFlagged() {
+        XCTAssertFalse(RuleDraftValidation.silencesEverything(contact: "", keyword: "", service: "slack", suppress: true))
+        XCTAssertFalse(RuleDraftValidation.silencesEverything(contact: "Bob", keyword: "", service: "any", suppress: true))
+    }
+}
+
+// MARK: - Undo cancels the send the user staged last.
+
+final class UndoTargetSelectionTests: XCTestCase {
+
+    private func scheduled(_ name: String, createdAt: Date, firesAt: Date,
+                           kind: AgentActionScheduleKind) -> AgentAction {
+        var action = AgentAction(
+            id: nil, kind: AgentActionKind.reply.rawValue, service: "imessage",
+            conversationId: name, conversationName: name, title: name,
+            payload: AgentAction.encodeReplyPayload("hi"), reasoning: "fixture",
+            confidence: 0.9, riskLevel: AgentActionRisk.low.rawValue,
+            status: AgentActionStatus.scheduled.rawValue, createdAt: createdAt, resolvedAt: nil
+        )
+        action.scheduledAt = firesAt
+        action.scheduledKind = kind.rawValue
+        return action
+    }
+
+    func testPicksLatestStagedNotLatestFiringOrCreated() {
+        let now = Date()
+        // Delegated: staged at now-20s (fires now+10s, 30s window), created most recently.
+        let delegated = scheduled("delegated", createdAt: now, firesAt: now.addingTimeInterval(10), kind: .delegated)
+        // Manual: staged at now-2s (fires now+3s, 5s window) — the one the user just approved.
+        let manual = scheduled("manual", createdAt: now.addingTimeInterval(-3600),
+                               firesAt: now.addingTimeInterval(3), kind: .manual)
+
+        XCTAssertEqual(AgentAction.mostRecentlyStaged(in: [delegated, manual])?.conversationId, "manual")
+    }
+
+    func testIgnoresActionsThatAreNotScheduled() {
+        var pending = scheduled("pending", createdAt: Date(), firesAt: Date().addingTimeInterval(60), kind: .manual)
+        pending.status = AgentActionStatus.pending.rawValue
+        XCTAssertNil(AgentAction.mostRecentlyStaged(in: [pending]))
     }
 }
 
