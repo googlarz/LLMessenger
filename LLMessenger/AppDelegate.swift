@@ -41,6 +41,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var briefRefreshCoordinator: BriefRefreshCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Not run under LLMESSENGER_UI_TEST_MODE: marking any window
+        // accessibilityElement=false during launch confuses XCUITest's own
+        // window-discovery for the whole app (verified — it made the real main
+        // window fail waitForExistence), so it would break AccessibilityUITests
+        // itself rather than fix it. Real VoiceOver users only run the
+        // production path below, which is what this actually needs to fix.
+        if ProcessInfo.processInfo.environment["LLMESSENGER_UI_TEST_MODE"] != "1" {
+            hideNoopWindowFromAccessibility()
+        }
         if ProcessInfo.processInfo.environment["LLMESSENGER_UI_TEST_MODE"] == "1" {
             do {
                 try launchUITestFixture()
@@ -468,6 +477,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.runModal()
             NSApp.terminate(nil)
         }
+    }
+
+    /// LLMessengerApp's WindowGroup(id: "_noop") (needed so Settings{} doesn't
+    /// intercept Cmd+,) creates a real 0x0 NSWindow. `.accessibilityHidden(true)`
+    /// on its SwiftUI content does nothing — that window's own AXWindow object
+    /// comes from AppKit, not from the hidden content — so performAccessibilityAudit()
+    /// still visits it and can crash if it vanishes mid-query. SwiftUI creates the
+    /// window asynchronously relative to this delegate callback, so poll briefly
+    /// for it instead of assuming it already exists.
+    private func hideNoopWindowFromAccessibility(attempt: Int = 0) {
+        // Matched by identifier, not frame size or title: SwiftUI gives this
+        // window the same default title ("LLMessenger") as the real main
+        // window, so a size- or title-based match can hide the wrong one.
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix("_noop") == true }) else {
+            guard attempt < 20 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.hideNoopWindowFromAccessibility(attempt: attempt + 1)
+            }
+            return
+        }
+        // Not orderOut(nil): this app toggles NSApp.activationPolicy between
+        // .accessory and .regular around showing/hiding its one real window, and
+        // ordering out a window during that dance disrupted the main window's
+        // own visibility in testing. setAccessibilityElement(false) alone is
+        // enough to exclude it from the AX tree.
+        window.setAccessibilityElement(false)
     }
 
     private func launchUITestFixture() throws {

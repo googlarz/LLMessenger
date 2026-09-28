@@ -10,10 +10,12 @@ struct LLMessengerApp: App {
         // We need *some* scene for SwiftUI, but Settings { EmptyView() } would
         // intercept Cmd+, globally. WindowGroup with a non-openable ID avoids both issues.
         WindowGroup(id: "_noop") {
-            // Never shown to the user, but its AX container is still visited by
-            // performAccessibilityAudit() and can vanish mid-query (this window
-            // comes and goes), which crashes the audit with a snapshot-mismatch
-            // error rather than a clean issue. Hide it from the AX tree entirely.
+            // Never shown to the user. `.accessibilityHidden` only hides SwiftUI
+            // content — this window's own AXWindow object is created by AppKit,
+            // so it's still visited by performAccessibilityAudit() and can crash
+            // it if it vanishes mid-query. AppDelegate.hideNoopWindowFromAccessibility()
+            // excludes the actual NSWindow from the AX tree; this modifier is
+            // belt-and-suspenders for the content SwiftUI does control.
             EmptyView()
                 .accessibilityHidden(true)
         }
