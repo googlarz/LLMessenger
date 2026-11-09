@@ -57,6 +57,7 @@
 		333442FC1535503F7C0F9305 /* Commitment.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44051E21B4C330335E6F6A6 /* Commitment.swift */; };
 		3441518A42C1C5815D1026B9 /* IntentRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865BE46F6C10FA7E2EE342A6 /* IntentRoute.swift */; };
 		34ACCAF6781DDF51A663A56F /* PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76E282A1175D7AE8E61BA9E1 /* PromptBuilder.swift */; };
+		34B435EC2C69A930D6F2D59C /* ReplyFlowSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08CEFDB4529834B4048EC89 /* ReplyFlowSnapshotTests.swift */; };
 		34C2302B885F6FE20720220B /* SlackWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFE2E2C0171471D3DD23F19 /* SlackWorkspace.swift */; };
 		359556DFED75CB36CAF7D256 /* AppState+Delegation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C7669BA4327FB41EA0EC472 /* AppState+Delegation.swift */; };
 		362A008262AA38403555B958 /* InstructionsSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD22DF77EE0F38928663192 /* InstructionsSettingsTab.swift */; };
@@ -455,6 +456,7 @@
 		999DA7D70BF17E8C58A82F39 /* MessengerAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessengerAdapter.swift; sourceTree = "<group>"; };
 		99D7AF88DAB2A13BF1136844 /* AccessibilityUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityUITests.swift; sourceTree = "<group>"; };
 		9B1929271EECAE78EB924D9C /* BriefRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepositoryTests.swift; sourceTree = "<group>"; };
+		A08CEFDB4529834B4048EC89 /* ReplyFlowSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyFlowSnapshotTests.swift; sourceTree = "<group>"; };
 		A205B592C8CBF382F66BB303 /* MessageSanitizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSanitizer.swift; sourceTree = "<group>"; };
 		A423CE176B5E44D30247ED0A /* OwedReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwedReply.swift; sourceTree = "<group>"; };
 		A5153C5FA624AF8042F72A30 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
@@ -810,6 +812,7 @@
 				EE76AF586A612F980FC97D19 /* PromptBuilderTests.swift */,
 				D585C9E79CE6C3373CBFD739 /* PromptRegressionTests.swift */,
 				ED3D7AE1F440EA7EF78FDE43 /* RegressionFixTests.swift */,
+				A08CEFDB4529834B4048EC89 /* ReplyFlowSnapshotTests.swift */,
 				F92C8AA66C25A14226115C03 /* ReplyFlowTests.swift */,
 				88E1B0A3F6C7C5CB3E3B6F55 /* RuleEvaluatorTests.swift */,
 				D375CCA30EA1A7BE26C8F209 /* SearchTests.swift */,
@@ -1512,6 +1515,7 @@
 				31E46F341085D08259EC4962 /* PromptBuilderTests.swift in Sources */,
 				C64A51B8478050E8D749A2D1 /* PromptRegressionTests.swift in Sources */,
 				4D820691CBA1F18AAF95CF1B /* RegressionFixTests.swift in Sources */,
+				34B435EC2C69A930D6F2D59C /* ReplyFlowSnapshotTests.swift in Sources */,
 				A33EEC2EEE54946CE05F56B1 /* ReplyFlowTests.swift in Sources */,
 				42F33173415F616F9F42B1DA /* RuleEvaluatorTests.swift in Sources */,
 				12A2A2099247A96860DD28E5 /* SearchTests.swift in Sources */,

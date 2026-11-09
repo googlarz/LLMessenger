@@ -23,7 +23,7 @@ enum ActQueueSection: String, CaseIterable {
     var caption: String {
         switch self {
         case .decision: return "Someone is waiting, or a draft needs a closer look"
-        case .ready: return "Drafted for you — nothing sends until you press Send"
+        case .ready: return "Nothing sends until you press Send"
         case .older: return "Still open after two days or more"
         }
     }
@@ -65,8 +65,9 @@ enum ActQueueRules {
         }
     }
 
+    /// Maybe, high-risk, or written by another app: the user looks before it goes.
     static func needsDecision(_ action: AgentAction) -> Bool {
-        action.isMaybe || action.riskEnum == .high
+        action.isMaybe || action.riskEnum == .high || action.isExternalProposal
     }
 
     /// External-agent proposals never send from the row: their primary button opens

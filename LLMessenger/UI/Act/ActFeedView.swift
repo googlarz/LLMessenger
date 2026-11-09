@@ -213,9 +213,11 @@ struct ActFeedView: View {
 
                         ForEach(sections, id: \.section) { entry in
                             VStack(spacing: 0) {
+                                // Vermilion only where someone needs a decision.
                                 sectionHeader(entry.section.title,
                                               caption: entry.section.caption,
-                                              color: entry.section == .older ? Theme.textTertiary : Theme.signal)
+                                              color: entry.section == .decision ? Theme.signal
+                                                  : (entry.section == .ready ? Theme.textSecondary : Theme.textTertiary))
                                 ForEach(entry.items, id: \.id) { item in
                                     actRow(item: item)
                                 }
@@ -279,7 +281,7 @@ struct ActFeedView: View {
 
     private func caughtUpHeader(olderCount: Int) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            WireLabel("Act", color: Theme.ok)
+            WireLabel("Nothing waiting on you", color: Theme.ok)
             Text("You're all caught up")
                 .font(Theme.display(19))
                 .foregroundStyle(Theme.textPrimary)
@@ -763,7 +765,7 @@ private struct ActCardRow: View {
                     Text("\(item.ageHours / 24)d waiting")
                         .font(Theme.mono(10, weight: .semibold))
                 }
-                .foregroundStyle(Theme.signal)
+                .foregroundStyle(Theme.standby)
             } else {
                 Text(relativeTime)
                     .font(Theme.mono(10))
@@ -1091,6 +1093,14 @@ private struct FailedSendRow: View {
         action.replyPayload?.draftText ?? action.calendarPayload?.replyText ?? action.title
     }
 
+    private var failedAgo: String {
+        let minutes = Int(Date().timeIntervalSince(action.resolvedAt ?? action.createdAt) / 60)
+        if minutes < 1 { return "failed just now" }
+        if minutes < 60 { return "failed \(minutes)m ago" }
+        if minutes < 1440 { return "failed \(minutes / 60)h ago" }
+        return "failed \(minutes / 1440)d ago"
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             Rectangle()
@@ -1110,7 +1120,9 @@ private struct FailedSendRow: View {
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize()
                     Spacer(minLength: 4)
-                    WireLabel("Not sent", color: Theme.signal)
+                    Text(failedAgo)
+                        .font(Theme.mono(10))
+                        .foregroundStyle(Theme.textTertiary)
                 }
                 Text(text)
                     .font(Theme.bodyFont)

@@ -73,7 +73,6 @@ struct ReplyDraftView: View {
                     }
 
                 HStack(spacing: 4) {
-                    WireLabel("Nothing has been sent")
                     Spacer()
                     Button("Discard") { chatViewModel.discardDraft(id: draftID) }
                         .buttonStyle(WireActionStyle())
