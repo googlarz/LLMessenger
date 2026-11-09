@@ -20,14 +20,33 @@ enum DemoSeeder {
         UserDefaults.standard.bool(forKey: demoFlagKey)
     }
 
-    /// Every conversation the seeder creates (and every action, commitment and
-    /// message that points at one) carries this id prefix. It is the one mark that
-    /// says "sample data": the wipe keys on it, and so does the send path, which
-    /// never hands a sample row to a real adapter.
-    static let sampleConversationPrefix = "demo-"
+    /// The exact conversations the seeder inserts, as "service|conversationId".
+    /// This constant is the one definition of "sample data": the wipe deletes by
+    /// it and the send path diverts by it. Nothing is matched by prefix or name,
+    /// so a real contact called "demo-team@example.com" can never be mistaken
+    /// for sample data.
+    static let sampleConversations: [(service: String, conversationId: String)] = [
+        ("signal", "demo-meridian"), ("slack", "demo-launch-room"),
+        ("imessage", "demo-dad"), ("telegram", "demo-sailing"),
+        ("signal", "demo-marcus"), ("imessage", "demo-mum"),
+    ]
 
-    static func isSampleConversation(_ conversationId: String) -> Bool {
-        conversationId.hasPrefix(sampleConversationPrefix)
+    private static let sampleKeys: Set<String> =
+        Set(sampleConversations.map { "\($0.service)|\($0.conversationId)" })
+
+    /// True only while demo mode is active AND the pair is one the seeder inserted.
+    /// Read at the moment of the decision; outside demo mode nothing is sample.
+    static func isSample(service: String, conversationId: String) -> Bool {
+        isActive && sampleKeys.contains("\(service)|\(conversationId)")
+    }
+
+    /// `(service = ? AND conversationId = ?) OR ...` over the sample pairs.
+    private static var sampleMatchSQL: String {
+        sampleConversations.map { _ in "(service = ? AND conversationId = ?)" }.joined(separator: " OR ")
+    }
+
+    private static var sampleMatchArgs: StatementArguments {
+        StatementArguments(sampleConversations.flatMap { [$0.service, $0.conversationId] })
     }
 
     // MARK: - Fixture script
@@ -233,24 +252,35 @@ enum DemoSeeder {
     /// Removes everything seed() created and clears the flag. Demo mode only
     /// exists on fresh installs, so a full wipe of content tables is safe.
     static func wipe(from database: AppDatabase) throws {
+        var seededOwedIDs: Set<String> = []
         try database.dbQueue.write { db in
-            try db.execute(sql: "DELETE FROM briefCardSources")
-            try db.execute(sql: "DELETE FROM tasks")
-            try db.execute(sql: "DELETE FROM briefCards")
-            try db.execute(sql: "DELETE FROM messages")
-            try db.execute(sql: "DELETE FROM briefs")
-            try db.execute(sql: "DELETE FROM conversationContexts")
+            let match = sampleMatchSQL, args = sampleMatchArgs
+            // Everything is found through the exact sample conversations.
+            let seeded = try Row.fetchAll(
+                db, sql: "SELECT service, conversationId, messageId, briefId FROM messages WHERE \(match)",
+                arguments: args)
+            seededOwedIDs = Set(seeded.map { "\($0["service"] as String)|\($0["conversationId"] as String)|\($0["messageId"] as String)" })
+            let briefIDs = Set(seeded.compactMap { $0["briefId"] as Int64? })
+            let cardIDs = try String.fetchAll(db, sql: "SELECT id FROM briefCards WHERE \(match)", arguments: args)
+            for id in cardIDs {
+                try db.execute(sql: "DELETE FROM briefCardSources WHERE briefCardId = ?", arguments: [id])
+                try db.execute(sql: "DELETE FROM tasks WHERE briefCardId = ?", arguments: [id])
+            }
+            try db.execute(sql: "DELETE FROM briefCards WHERE \(match)", arguments: args)
+            try db.execute(sql: "DELETE FROM messages WHERE \(match)", arguments: args)
+            for id in briefIDs { try db.execute(sql: "DELETE FROM briefs WHERE id = ?", arguments: [id]) }
+            try db.execute(sql: "DELETE FROM conversationContexts WHERE \(match)", arguments: args)
+            try db.execute(sql: "DELETE FROM agentActions WHERE \(match)", arguments: args)
+            try db.execute(sql: "DELETE FROM commitments WHERE \(match)", arguments: args)
+            // The seeder writes a disabled config row per service; they carry no
+            // marker, and the setup flow that follows rewrites them.
             try db.execute(sql: "DELETE FROM serviceConfig")
-            // Scoped to sample rows: these tables can also hold real data.
-            try db.execute(sql: "DELETE FROM agentActions WHERE conversationId LIKE 'demo-%'")
-            try db.execute(sql: "DELETE FROM commitments WHERE conversationId LIKE 'demo-%'")
         }
         // Dismissing or snoozing a sample "owed reply" is remembered in defaults.
         let defaults = UserDefaults.standard
-        let marker = "|\(sampleConversationPrefix)"
-        let dismissed = OwedReplyStore.dismissedIDs(defaults).filter { !$0.contains(marker) }
+        let dismissed = OwedReplyStore.dismissedIDs(defaults).subtracting(seededOwedIDs)
         defaults.set(Array(dismissed), forKey: OwedReplyStore.dismissedKey)
-        defaults.set(OwedReplyStore.snoozedMap(defaults).filter { !$0.key.contains(marker) },
+        defaults.set(OwedReplyStore.snoozedMap(defaults).filter { !seededOwedIDs.contains($0.key) },
                      forKey: OwedReplyStore.snoozedKey)
         defaults.removeObject(forKey: demoFlagKey)
     }

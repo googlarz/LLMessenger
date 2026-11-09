@@ -18,9 +18,9 @@
 import Foundation
 
 extension AgentAction {
-    /// A row the demo seeder wrote (or one the user composed against a sample
-    /// conversation). Real conversation ids never start with the sample prefix.
-    var isSample: Bool { DemoSeeder.isSampleConversation(conversationId) }
+    /// A row in one of the exact conversations the demo seeder inserted, while
+    /// demo mode is active. Never a name or prefix test, and never outside demo mode.
+    var isSample: Bool { DemoSeeder.isSample(service: service, conversationId: conversationId) }
 }
 
 extension AppState {

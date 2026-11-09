@@ -254,48 +254,108 @@ final class DemoActQueueTests: XCTestCase {
         XCTAssertEqual(state.attentionProjection.actItems.count, 5)
     }
 
+    // MARK: - Real contacts whose id looks like a sample id
+
+    private let lookalike = "demo-team@example.com"
+
+    private func insertLookalikeAction(_ state: AppState) throws -> AgentAction {
+        let action = AgentAction.userComposed(service: "imessage", conversationId: lookalike,
+                                              conversationName: "Demo Team", text: "see you then", commitmentId: nil)
+        let id = try XCTUnwrap(state.repository.insertAgentAction(action))
+        return try XCTUnwrap(state.repository.fetchAgentAction(id: id))
+    }
+
+    func testSampleMeansDemoActiveAndAnExactSeededConversation() throws {
+        let state = makeState(try seededDB())
+        let dad = try sampleAction(state, conversation: "demo-dad")
+        XCTAssertTrue(dad.isSample, "Seeded conversation while demo mode is active")
+        let real = try insertLookalikeAction(state)
+        XCTAssertFalse(real.isSample, "A look-alike id is not a seeded conversation")
+        var otherService = dad
+        otherService.service = "telegram"
+        XCTAssertFalse(otherService.isSample, "The pair must match exactly, service included")
+
+        UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey)
+        XCTAssertFalse(dad.isSample, "Outside demo mode nothing is sample, whatever its id")
+    }
+
+    func testRealActionWithDemoLikeIdTakesTheNormalSendPath() async throws {
+        AppState.sampleSendWindow = 0.1
+        let state = makeState(try seededDB())
+        let imessage = RecordingAdapter("imessage")
+        state.adapters["imessage"] = imessage
+        let real = try insertLookalikeAction(state)
+        state.stageSend(real)
+        // A diverted (fake) send would be finished after 0.1s. The real manual
+        // path keeps its five-second undo window.
+        try await Task.sleep(nanoseconds: 700_000_000)
+        let row = try XCTUnwrap(try state.repository.fetchAgentAction(id: real.id!))
+        XCTAssertEqual(row.statusEnum, .scheduled, "Still counting down in the real undo window")
+        XCTAssertEqual(row.scheduledKind, AgentActionScheduleKind.manual.rawValue)
+        XCTAssertEqual(row.scheduledWindow, AgentAction.manualApproveUndoWindow,
+                       "stageManualApprove's window, not the sample window")
+        state.undoStagedSend(row)
+    }
+
+    func testRealActionWithDemoLikeIdTakesTheNormalSendPathOutsideDemoMode() async throws {
+        AppState.sampleSendWindow = 0.1
+        let state = makeState(try AppDatabase(inMemory: true))
+        XCTAssertFalse(DemoSeeder.isActive)
+        let real = try insertLookalikeAction(state)
+        state.stageSend(real)
+        try await Task.sleep(nanoseconds: 700_000_000)
+        let row = try XCTUnwrap(try state.repository.fetchAgentAction(id: real.id!))
+        XCTAssertEqual(row.statusEnum, .scheduled)
+        XCTAssertEqual(row.scheduledWindow, AgentAction.manualApproveUndoWindow)
+        state.undoStagedSend(row)
+    }
+
     // MARK: - Wipe
 
-    func testWipeRemovesEveryDemoRowAndOnlyDemoRows() throws {
+    func testWipeRemovesEverySeededRowAndNoRealRow() throws {
         let db = try seededDB()
         let repo = BriefRepository(database: db)
-        // A user's own reply composed inside the sample world, and a dismissed sample owed reply.
+        // A reply the user composed inside the sample world, and a dismissed sample owed reply.
         _ = try repo.insertAgentAction(AgentAction.userComposed(
             service: "signal", conversationId: "demo-meridian", conversationName: "Anna", text: "On it",
             commitmentId: nil))
-        OwedReplyStore.dismiss("signal|demo-meridian|x")
-        // Real rows that must survive (the tables are shared with real use).
+        let seededOwed = try OwedReplyDeriver().derive(db: db, contexts: []).first { $0.conversationId == "demo-meridian" }
+        let seededOwedID = try XCTUnwrap(seededOwed).id
+        OwedReplyStore.dismiss(seededOwedID)
+        // A real contact whose id merely looks like a sample id.
+        let realOwedID = "imessage|\(lookalike)|real-m1"
+        OwedReplyStore.dismiss(realOwedID)
+        defer { OwedReplyStore.undismiss(seededOwedID); OwedReplyStore.undismiss(realOwedID) }
+        try db.dbQueue.write { d in
+            var m = Message(id: nil, briefId: nil, service: "imessage", conversationId: lookalike,
+                            conversationName: "Demo Team", messageId: "real-m1", sender: "Demo Team",
+                            text: "Are you in?", timestamp: Date(), isSent: false)
+            try m.insert(d)
+        }
         _ = try repo.insertAgentAction(AgentAction.userComposed(
-            service: "signal", conversationId: "real-1", conversationName: "Real", text: "hi", commitmentId: nil))
+            service: "imessage", conversationId: lookalike, conversationName: "Demo Team", text: "hi",
+            commitmentId: nil))
         _ = try repo.insertCommitment(Commitment(
-            id: nil, direction: CommitmentDirection.iOwe.rawValue, service: "signal", conversationId: "real-1",
-            conversationName: "Real", what: "x", dueAt: nil, evidenceMessageId: nil,
+            id: nil, direction: CommitmentDirection.iOwe.rawValue, service: "imessage", conversationId: lookalike,
+            conversationName: "Demo Team", what: "x", dueAt: nil, evidenceMessageId: nil,
             status: CommitmentStatus.open.rawValue, createdAt: Date()))
-        defer { OwedReplyStore.undismiss("signal|demo-meridian|x") }
 
         try DemoSeeder.wipe(from: db)
 
-        let counts = try db.dbQueue.read { d -> [String: Int] in
-            var out: [String: Int] = [:]
-            for t in ["messages", "tasks", "briefs", "briefCards", "conversationContexts"] {
-                out[t] = try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM \(t)") ?? -1
-            }
-            out["demoActions"] = try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM agentActions WHERE conversationId LIKE 'demo-%'") ?? -1
-            out["demoCommitments"] = try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM commitments WHERE conversationId LIKE 'demo-%'") ?? -1
-            out["realActions"] = try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM agentActions WHERE conversationId = 'real-1'") ?? -1
-            out["realCommitments"] = try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM commitments WHERE conversationId = 'real-1'") ?? -1
-            return out
+        func count(_ sql: String) throws -> Int {
+            try db.dbQueue.read { try Int.fetchOne($0, sql: sql) ?? -1 }
         }
-        XCTAssertEqual(counts["messages"], 0)
-        XCTAssertEqual(counts["tasks"], 0)
-        XCTAssertEqual(counts["briefs"], 0)
-        XCTAssertEqual(counts["briefCards"], 0)
-        XCTAssertEqual(counts["conversationContexts"], 0)
-        XCTAssertEqual(counts["demoActions"], 0)
-        XCTAssertEqual(counts["demoCommitments"], 0)
-        XCTAssertEqual(counts["realActions"], 1)
-        XCTAssertEqual(counts["realCommitments"], 1)
-        XCTAssertFalse(OwedReplyStore.dismissedIDs().contains("signal|demo-meridian|x"))
+        for t in ["briefs", "briefCards", "briefCardSources", "tasks", "conversationContexts", "serviceConfig"] {
+            XCTAssertEqual(try count("SELECT COUNT(*) FROM \(t)"), 0, t)
+        }
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM messages WHERE conversationId <> '\(lookalike)'"), 0)
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM agentActions WHERE conversationId <> '\(lookalike)'"), 0)
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM commitments WHERE conversationId <> '\(lookalike)'"), 0)
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM messages WHERE conversationId = '\(lookalike)'"), 1)
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM agentActions WHERE conversationId = '\(lookalike)'"), 1)
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM commitments WHERE conversationId = '\(lookalike)'"), 1)
+        XCTAssertFalse(OwedReplyStore.dismissedIDs().contains(seededOwedID))
+        XCTAssertTrue(OwedReplyStore.dismissedIDs().contains(realOwedID), "The real dismissal survives")
         XCTAssertFalse(DemoSeeder.isActive)
     }
 }
