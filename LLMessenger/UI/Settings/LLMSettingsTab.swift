@@ -41,7 +41,7 @@ struct AISettingsTab: View {
                         if isLocalOnlyMode {
                             HStack(alignment: .top, spacing: 8) {
                                 Image(systemName: "lock.fill")
-                                    .font(.system(size: 9))
+                                    .font(.system(size: 10))
                                     .foregroundStyle(Theme.ok)
                                     .padding(.top, 2)
                                 VStack(alignment: .leading, spacing: 2) {

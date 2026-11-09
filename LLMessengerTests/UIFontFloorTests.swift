@@ -5,13 +5,6 @@ import XCTest
 /// clamp to `Theme.minimumFontSize`; this scan catches the other way in — a
 /// literal `.system(size: 9)` or `Theme.mono(8)` typed straight into a view.
 final class UIFontFloorTests: XCTestCase {
-    /// Files outside the accessibility pass that still violate the floor when
-    /// this test was written. They are reported, not failed, and should be
-    /// removed from this list as their owners fix them.
-    private let knownViolators: Set<String> = [
-        "LLMessenger/UI/Settings/LLMSettingsTab.swift"
-    ]
-
     func testNoFontBelowTenPointsInUISources() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -23,7 +16,6 @@ final class UIFontFloorTests: XCTestCase {
             pattern: #"(?:\.system\(\s*size:|\b(?:mono|sans|display)\()\s*([0-9]+(?:\.[0-9]+)?)\b"#)
 
         var failures: [String] = []
-        var tolerated: [String] = []
         for case let file as URL in enumerator where file.pathExtension == "swift" {
             let relative = file.path.replacingOccurrences(of: root.path + "/", with: "")
             let source = try String(contentsOf: file, encoding: .utf8)
@@ -33,12 +25,10 @@ final class UIFontFloorTests: XCTestCase {
                 for match in pattern.matches(in: line, range: range) {
                     guard let r = Range(match.range(at: 1), in: line),
                           let size = Double(line[r]), size < Theme.minimumFontSize else { continue }
-                    let entry = "\(relative):\(index + 1): size \(size)"
-                    if knownViolators.contains(relative) { tolerated.append(entry) } else { failures.append(entry) }
+                    failures.append("\(relative):\(index + 1): size \(size)")
                 }
             }
         }
-        if !tolerated.isEmpty { print("UIFontFloorTests: tolerated (not owned): \(tolerated)") }
         XCTAssertTrue(failures.isEmpty, "Font below \(Theme.minimumFontSize)pt:\n" + failures.joined(separator: "\n"))
     }
 
