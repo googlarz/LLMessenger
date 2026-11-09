@@ -170,7 +170,7 @@ struct ServiceSettingsTab: View {
 
 // MARK: - Service Card
 
-private struct ServiceCard: View {
+struct ServiceCard: View {
     @Binding var config: ServiceConfig
     @Binding var signalAccount: String
     @Binding var telegramApiId: String
@@ -183,8 +183,25 @@ private struct ServiceCard: View {
     @State private var telegramSignInAdapter: SubprocessAdapter? = nil
     @State private var telegramSignInError: String? = nil
     @State private var showingSlackWorkspaces = false
-    @State private var slackWorkspaceCount: Int = SlackWorkspaceStore.load().count
+    @State private var slackWorkspaceCount: Int
     @State private var isRetrying = false
+
+    init(config: Binding<ServiceConfig>,
+         signalAccount: Binding<String>,
+         telegramApiId: Binding<String>,
+         telegramApiHash: Binding<String>,
+         health: ServiceHealth?,
+         hostFacts: ServiceHostFacts = .live,
+         onRetry: ((String) async -> Void)? = nil) {
+        _config = config
+        _signalAccount = signalAccount
+        _telegramApiId = telegramApiId
+        _telegramApiHash = telegramApiHash
+        self.health = health
+        self.hostFacts = hostFacts
+        self.onRetry = onRetry
+        _slackWorkspaceCount = State(initialValue: hostFacts.slackWorkspaceCount())
+    }
 
     private var service: String { config.service }
 

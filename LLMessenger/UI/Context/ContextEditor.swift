@@ -113,6 +113,7 @@ struct ContextEditor: View {
                     .font(Theme.sans(13))
 
                     WireLabel("Privacy")
+                        .padding(.top, 6)
                     Picker("Privacy", selection: $privacyOverride) {
                         ForEach(privacyOptions, id: \.0) { value, label in Text(label).tag(value) }
                     }

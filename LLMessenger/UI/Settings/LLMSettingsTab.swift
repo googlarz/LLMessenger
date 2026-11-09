@@ -21,9 +21,10 @@ struct AISettingsTab: View {
 
     @State private var testState: TestState = .idle
     @State private var usageRows: [LLMUsageSummary] = []
-    @State private var isLocalOnlyMode: Bool = SettingsRepository().loadLocalOnlyMode()
+    @State private var isLocalOnlyMode: Bool = false
 
-    private let repo = SettingsRepository()
+    /// Read for the Local-only banner; injectable for previews and snapshots.
+    var repo = SettingsRepository()
 
     enum TestState {
         case idle

@@ -34,7 +34,8 @@ final class AISettingsModel: ObservableObject {
     init(repo: SettingsRepository = SettingsRepository(), center: NotificationCenter = .default) {
         self.repo = repo
         self.center = center
-        load()
+        // Not loaded here: reading API keys touches the Keychain, and merely creating the
+        // Settings window must not. The AI tab calls `load()` when it appears.
     }
 
     var isDirty: Bool { values != saved }

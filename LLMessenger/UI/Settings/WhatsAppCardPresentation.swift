@@ -100,6 +100,8 @@ struct WhatsAppCardPresentation: Equatable {
 struct ServiceHostFacts: Sendable {
     var whatsAppStoreExists: @Sendable () -> Bool
     var whatsAppInstalled: @Sendable () -> Bool
+    /// Reads the Keychain, so snapshots and tests inject a constant.
+    var slackWorkspaceCount: @Sendable () -> Int = { SlackWorkspaceStore.load().count }
 
     static let live = ServiceHostFacts(
         whatsAppStoreExists: { FileManager.default.fileExists(atPath: WhatsAppAdapter.defaultStorePath) },

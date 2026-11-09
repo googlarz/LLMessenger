@@ -9,8 +9,10 @@ struct RulesSettingsTab: View {
     @State private var errorMessage: String? = nil
     private let database: AppDatabase?
 
-    init(database: AppDatabase? = nil) {
+    /// `initialRules` lets previews and snapshots show rows before the first load finishes.
+    init(database: AppDatabase? = nil, initialRules: [PriorityRule] = []) {
         self.database = database
+        _rules = State(initialValue: initialRules)
     }
 
     var body: some View {

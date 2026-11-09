@@ -1,13 +1,27 @@
 import SwiftUI
 
 struct PrivacySettingsTab: View {
-    @State private var localOnlyMode: Bool = SettingsRepository().loadLocalOnlyMode()
-    @State private var sanitizeBeforeSend: Bool = SettingsRepository().loadSanitizeBeforeSend()
-    @State private var updateChecksEnabled: Bool = SettingsRepository().loadUpdateChecksEnabled()
-    @StateObject private var mcp = MCPAccessModel()
+    @State private var localOnlyMode: Bool
+    @State private var sanitizeBeforeSend: Bool
+    @State private var updateChecksEnabled: Bool
+    @StateObject private var mcp: MCPAccessModel
     @State private var copiedLabel: String? = nil
     @ObservedObject private var auditLog = NetworkAuditLog.shared
-    private let repo = SettingsRepository()
+    private let repo: SettingsRepository
+    private let executablePath: String
+
+    /// `repo` and `executablePath` are injectable so previews and snapshots don't touch the
+    /// user's real settings or show a machine-specific path.
+    init(repo: SettingsRepository = SettingsRepository(),
+         mcp: MCPAccessModel? = nil,
+         executablePath: String? = nil) {
+        self.repo = repo
+        self.executablePath = executablePath ?? Bundle.main.executablePath ?? "LLMessenger"
+        _localOnlyMode = State(initialValue: repo.loadLocalOnlyMode())
+        _sanitizeBeforeSend = State(initialValue: repo.loadSanitizeBeforeSend())
+        _updateChecksEnabled = State(initialValue: repo.loadUpdateChecksEnabled())
+        _mcp = StateObject(wrappedValue: mcp ?? MCPAccessModel(repo: repo))
+    }
 
     var body: some View {
         ScrollView {
@@ -33,19 +47,7 @@ struct PrivacySettingsTab: View {
         VStack(alignment: .leading, spacing: 12) {
             WireLabel("Privacy")
 
-            Toggle(isOn: $localOnlyMode) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Local-only mode")
-                        .font(Theme.sans(13, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("Forces Ollama as the LLM, stops cloud-only services such as Slack, and blocks AI apps connected over MCP from reading anything. A request already under way may finish; nothing new is sent.")
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(Theme.ok)
+            SettingsToggleRow(title: "Local-only mode", caption: "Forces Ollama as the LLM, stops cloud-only services such as Slack, and blocks AI apps connected over MCP from reading anything. A request already under way may finish; nothing new is sent.", isOn: $localOnlyMode)
             .onChange(of: localOnlyMode) { _, enabled in
                 repo.saveLocalOnlyMode(enabled)
                 NotificationCenter.default.post(name: .privacyModeDidChange, object: nil)
@@ -54,19 +56,7 @@ struct PrivacySettingsTab: View {
 
             Rule()
 
-            Toggle(isOn: $sanitizeBeforeSend) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Redact sensitive patterns before sending to cloud LLM")
-                        .font(Theme.sans(13, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("Replaces credit card numbers, US SSNs, IBANs, and email addresses with [REDACTED:…] tokens in cloud LLM prompts. Best-effort, not a guarantee. May reduce digest quality.")
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(Theme.ok)
+            SettingsToggleRow(title: "Redact sensitive patterns before sending to cloud LLM", caption: "Replaces credit card numbers, US SSNs, IBANs, and email addresses with [REDACTED:…] tokens in cloud LLM prompts. Best-effort, not a guarantee. May reduce digest quality.", isOn: $sanitizeBeforeSend)
             .onChange(of: sanitizeBeforeSend) { _, enabled in
                 repo.saveSanitizeBeforeSend(enabled)
             }
@@ -76,7 +66,6 @@ struct PrivacySettingsTab: View {
 
     // MARK: - MCP
 
-    private var executablePath: String { Bundle.main.executablePath ?? "LLMessenger" }
     private var mcpClientConfig: String { MCPSetup.configJSON(executablePath: executablePath) }
     private var claudeCodeCommand: String { MCPSetup.claudeCodeCommand(executablePath: executablePath) }
 
@@ -84,19 +73,7 @@ struct PrivacySettingsTab: View {
         VStack(alignment: .leading, spacing: 12) {
             WireLabel("AI Apps (MCP)")
 
-            Toggle(isOn: Binding(get: { mcp.switchIsOn }, set: { mcp.setSwitch($0) })) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Let AI apps read LLMessenger")
-                        .font(Theme.sans(13, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text(MCPCopy.summary)
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(Theme.ok)
+            SettingsToggleRow(title: "Let AI apps read LLMessenger", caption: MCPCopy.summary, isOn: Binding(get: { mcp.switchIsOn }, set: { mcp.setSwitch($0) }))
 
             if mcp.phase == .confirming {
                 mcpConfirmation
@@ -248,19 +225,7 @@ struct PrivacySettingsTab: View {
         VStack(alignment: .leading, spacing: 12) {
             WireLabel("Updates")
 
-            Toggle(isOn: $updateChecksEnabled) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Check GitHub for new versions once a day")
-                        .font(Theme.sans(13, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("When LLMessenger starts, it asks GitHub for the latest release, at most once a day. The request carries no message content or account details; GitHub sees your IP address and the app and macOS versions, as with any web request. Updates are never installed for you.")
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(Theme.ok)
+            SettingsToggleRow(title: "Check GitHub for new versions once a day", caption: "When LLMessenger starts, it asks GitHub for the latest release, at most once a day. The request carries no message content or account details; GitHub sees your IP address and the app and macOS versions, as with any web request. Updates are never installed for you.", isOn: $updateChecksEnabled)
             .onChange(of: updateChecksEnabled) { _, enabled in
                 repo.saveUpdateChecksEnabled(enabled)
             }
