@@ -125,7 +125,7 @@ private struct RuleRowView: View {
                 Image(systemName: "minus.circle")
                     .foregroundStyle(deleteHovered ? Theme.signal : Theme.textTertiary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .help("Delete rule")
             .accessibilityLabel("Delete rule")
             .animation(Theme.quick, value: deleteHovered)

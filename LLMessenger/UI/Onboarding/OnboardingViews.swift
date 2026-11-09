@@ -45,7 +45,7 @@ struct OnboardingRootView: View {
                     }
                     .foregroundStyle(backHovered ? Theme.textPrimary : Theme.textSecondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.quiet)
                 .onHover { backHovered = $0 }
             }
             Spacer()
@@ -65,7 +65,7 @@ struct OnboardingRootView: View {
                         .frame(width: 14, height: 20)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.quiet)
                 .disabled(!model.canJump(to: s))
                 .accessibilityLabel(Self.label(for: s))
                 .accessibilityValue(model.step == s ? "Current step" : "")
@@ -281,7 +281,7 @@ extension WelcomeStep {
             (urgent ? Theme.signal : Color.clear).frame(width: 2).clipShape(RoundedRectangle(cornerRadius: 1))
             VStack(alignment: .leading, spacing: 3) {
                 Text(headline).font(Theme.display(14.5, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                Text(meta.uppercased()).font(Theme.mono(9.5)).tracking(0.6).foregroundStyle(Theme.textTertiary)
+                Text(meta.uppercased()).font(Theme.mono(10)).tracking(0.6).foregroundStyle(Theme.textTertiary)
             }
             Spacer(minLength: 0)
         }
@@ -298,7 +298,7 @@ private struct ChoiceBox: View {
         RoundedRectangle(cornerRadius: 3)
             .strokeBorder(selected ? Theme.textPrimary : Theme.border, lineWidth: 1)
             .background(RoundedRectangle(cornerRadius: 3).fill(selected ? Theme.textPrimary : Color.clear))
-            .overlay(Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
+            .overlay(Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
                         .foregroundStyle(Theme.bg).opacity(selected ? 1 : 0))
             .frame(width: 16, height: 16)
     }
@@ -354,7 +354,7 @@ private struct ServicesStep: View {
             .padding(.vertical, 12)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .disabled(!available)
         .accessibilityLabel(service.name)
         .accessibilityValue(selected ? "Selected" : "Not selected")

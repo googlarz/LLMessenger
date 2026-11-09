@@ -319,7 +319,7 @@ struct ActFeedView: View {
                 )
                 .id(item.id)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .background(multiSelectedIds.contains(item.id) ? Theme.standby.opacity(0.08) : Color.clear)
             .accessibilityLabel(item.accessibilitySummary)
             Rule()
@@ -428,7 +428,7 @@ struct ActFeedView: View {
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
-                .buttonStyle(.plain)
+                .buttonStyle(.quiet)
                 .help(c.directionEnum == .iOwe ? "Mark done" : "Mark received")
                 .accessibilityLabel(c.directionEnum == .iOwe
                     ? "Mark done, you delivered: \(c.what)"
@@ -459,7 +459,7 @@ struct ActFeedView: View {
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
-                .buttonStyle(.plain)
+                .buttonStyle(.quiet)
                 .help("Mark done")
                 .accessibilityLabel("Complete task: \(t.text)")
         }
@@ -495,7 +495,7 @@ struct ActFeedView: View {
                 Button("Read latest digest →") {
                     appState.selectedBriefID = latest.id
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.quiet)
                 .font(Theme.sans(12))
                 .foregroundStyle(Theme.textSecondary)
                 .padding(.top, 6)
@@ -761,7 +761,7 @@ private struct ActCardRow: View {
             if item.isStale {
                 HStack(spacing: 3) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 8))
+                        .font(.system(size: 10))
                     Text("\(item.ageHours / 24)d waiting")
                         .font(Theme.mono(10, weight: .semibold))
                 }
@@ -818,7 +818,7 @@ private struct ActCardRow: View {
             case .agentAction(let a) where !a.reasoning.isEmpty && !a.isUserComposed && !a.isExternalProposal:
                 HStack(alignment: .top, spacing: 5) {
                     Image(systemName: "info.circle")
-                        .font(.system(size: 9))
+                        .font(.system(size: 10))
                         .foregroundStyle(Theme.textTertiary)
                         .frame(width: 13)
                         .padding(.top, 2)
@@ -830,7 +830,7 @@ private struct ActCardRow: View {
             case .owedReply(let r):
                 HStack(alignment: .top, spacing: 5) {
                     Image(systemName: "info.circle")
-                        .font(.system(size: 9))
+                        .font(.system(size: 10))
                         .foregroundStyle(Theme.textTertiary)
                         .frame(width: 13)
                         .padding(.top, 2)
@@ -1131,7 +1131,7 @@ private struct FailedSendRow: View {
                     .textSelection(.enabled)
                 HStack(alignment: .top, spacing: 5) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 9))
+                        .font(.system(size: 10))
                         .foregroundStyle(Theme.signal)
                         .padding(.top, 2)
                     Text(appState.failureReason(for: action))

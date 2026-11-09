@@ -103,7 +103,7 @@ struct CommandBar<Recognizer: SpeechRecognizing>: View {
                     .foregroundStyle(speech.isListening ? Theme.bg : (micHovered ? Theme.textPrimary : Theme.textSecondary))
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .animation(Theme.quick, value: micHovered)
         .onHover { micHovered = $0 }
         .help(speech.isListening ? "Stop dictation" : "Dictate a command")
@@ -142,7 +142,7 @@ struct CommandBar<Recognizer: SpeechRecognizing>: View {
                     .foregroundStyle(canRun ? Theme.bg : Theme.textTertiary)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .disabled(!canRun)
         .animation(Theme.quick, value: runHovered)
         .onHover { runHovered = $0 }

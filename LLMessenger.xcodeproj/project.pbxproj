@@ -98,6 +98,7 @@
 		517C487C27020779B4F6CCCD /* ProductionReadinessPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B9A2A0119C6CF2FBFB58EC /* ProductionReadinessPerformanceTests.swift */; };
 		5181AA7389C147B2D66E279E /* AgentFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8399559E74670E836329A4 /* AgentFoundationTests.swift */; };
 		54B9748C2278DB6D3818109C /* ContextBias.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA244AA90638FA48D795F7D2 /* ContextBias.swift */; };
+		55708C7588C2C5F9AD403AB0 /* Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF56E2586D9360AA1D197C7 /* Accessibility.swift */; };
 		55D5BEFF888909CDB585F8F2 /* DeepValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C2EEA87E1CE3CFC017BF0B /* DeepValidationTests.swift */; };
 		570A01C0F98874233CA618A5 /* MessengerAdapterTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */; };
 		57A0A183DA4F04B687597823 /* AnthropicClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5505C31BEA21DA121B801309 /* AnthropicClient.swift */; };
@@ -507,6 +508,7 @@
 		CB8399559E74670E836329A4 /* AgentFoundationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFoundationTests.swift; sourceTree = "<group>"; };
 		CBCB2D19932EDC5AD99A0622 /* AppState+Commitments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppState+Commitments.swift"; sourceTree = "<group>"; };
 		CBF1E29FE25174068D1BB2B5 /* GlossaryPromptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlossaryPromptTests.swift; sourceTree = "<group>"; };
+		CBF56E2586D9360AA1D197C7 /* Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Accessibility.swift; sourceTree = "<group>"; };
 		CC0C225688D30EB64B17C503 /* PluginDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginDiscovery.swift; sourceTree = "<group>"; };
 		CC762565E52A3E618204CC24 /* BriefEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefEngine.swift; sourceTree = "<group>"; };
 		CC8AFC142FA3DB7BF2E8C360 /* ContextParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextParserTests.swift; sourceTree = "<group>"; };
@@ -1053,6 +1055,7 @@
 		CFF5E8DAB84A19E3F26BD8A6 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				CBF56E2586D9360AA1D197C7 /* Accessibility.swift */,
 				EBC9C795B6AF02F77D298ED7 /* AppState.swift */,
 				79465D1CF8BC8C2A618D48F4 /* AppState+Briefs.swift */,
 				02351D67D82E35312AD3438E /* AppState+Commands.swift */,
@@ -1314,6 +1317,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9B30345F5A5A20571E4BE12D /* AboutSettingsTab.swift in Sources */,
+				55708C7588C2C5F9AD403AB0 /* Accessibility.swift in Sources */,
 				1F656903F16B668B1D56C644 /* ActFeedView.swift in Sources */,
 				A05765E64251B1F1F9C4AAD0 /* ActQueueRules.swift in Sources */,
 				D5BE7C49EE846FE54C95A595 /* ActWorkspaceView.swift in Sources */,

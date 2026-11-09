@@ -99,7 +99,7 @@ struct ActivityView: View {
                     Spacer()
                     if !isToday {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Theme.textTertiary)
                             .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     }
@@ -108,7 +108,7 @@ struct ActivityView: View {
                 .padding(.vertical, 8)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .disabled(isToday)
             .accessibilityLabel("\(dayLabel(group.day))\(mattered > 0 ? ", \(mattered) needed you" : "")")
             .accessibilityAddTraits(isToday ? [] : .isButton)
@@ -300,7 +300,7 @@ private struct ActivityEventRow: View {
                         WireLabel("Reply?", color: Theme.standby)
                     }
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }

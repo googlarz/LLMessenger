@@ -101,7 +101,7 @@ struct DeskView: View {
                     Button("ALL") {
                         withAnimation(Theme.quick) { appState.serviceQuickFilter = nil }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.quiet)
                     .font(Theme.mono(10, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
                     .help("Clear the service filter")
@@ -189,7 +189,7 @@ private struct ServiceFilterButton: View {
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .opacity(count == 0 && !isSelected ? 0.55 : 1)
         .help(isSelected
               ? "Show all services"
@@ -255,7 +255,7 @@ private struct DeskRailButton: View {
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .keyboardShortcut(keyEquivalent, modifiers: .command)
         .help(section.helpText)
         .accessibilityHint(section.helpText)

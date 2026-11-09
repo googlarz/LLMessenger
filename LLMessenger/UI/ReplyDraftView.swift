@@ -20,14 +20,14 @@ struct ReplyDraftView: View {
                     Spacer()
                     Button { chatViewModel.discardDraft(id: draftID) } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(discardHovered ? Theme.textSecondary : Theme.textTertiary)
                             .frame(minWidth: 22, minHeight: 22)
                             .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Discard draft")
                     .help("Discard this draft")
-                    .buttonStyle(.plain)
+                    .buttonStyle(.quiet)
                     .animation(Theme.quick, value: discardHovered)
                     .onHover { discardHovered = $0 }
                 }

@@ -112,7 +112,7 @@ private struct ServiceHandleChip: View {
                     .fill(isHovered ? Theme.surface : Theme.surfaceHigh)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }

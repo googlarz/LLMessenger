@@ -23,10 +23,10 @@ struct MediaPanelView: View {
                     Image(systemName: "xmark")
                         .font(Theme.sans(11, weight: .medium))
                         .foregroundStyle(closeHovered ? Theme.textSecondary : Theme.textTertiary)
-                        .frame(width: 22, height: 22)
+                        .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.icon)
                 .help("Close")
                 .accessibilityLabel("Close media panel")
                 .animation(Theme.quick, value: closeHovered)
@@ -113,7 +113,7 @@ private struct MediaTabButton: View {
                     .frame(height: 1)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }

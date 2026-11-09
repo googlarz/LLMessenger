@@ -93,6 +93,12 @@ struct ContentView: View {
             .padding(.bottom, 16)
         }
         .animation(Theme.spring, value: appState.userReceipt?.id)
+        // The error banner never takes focus, so say it. (Receipts announce
+        // themselves in AppState.showReceipt.)
+        .onChange(of: appState.lastError) { _, error in
+            guard let error, !error.isEmpty else { return }
+            A11y.announce("Notice. \(error) Refresh now and Dismiss are available.", urgent: true)
+        }
         // The one-time "first real digest" moment fires as a toast instead of a
         // persistent banner — its stat narration ("4 cards · 3 need you...")
         // duplicates numbers already visible in the sidebar badge and header.
@@ -130,6 +136,14 @@ struct ContentView: View {
                 if key == "f", event.modifierFlags.contains(.command) {
                     selectedSection = .digests
                     appState.focusArchiveSearch?()
+                    return true
+                }
+                // Act handles its own ⌘Z; elsewhere the "Sending in Ns" bar is the
+                // only undo surface, so give it the same keyboard path the
+                // VoiceOver announcement promises.
+                if selectedSection != .act, event.hasCommandOnly, key == "z",
+                   let staged = AgentAction.mostRecentlyStaged(in: appState.agentActions) {
+                    appState.undoStagedSend(staged)
                     return true
                 }
                 guard selectedSection == .digests, event.hasNoCommandOptionControl else { return false }
@@ -404,7 +418,7 @@ private struct FirstBriefPreparingView: View {
             // local-first promise here, not just in PRIVACY.md.
             HStack(spacing: 6) {
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 9))
+                    .font(.system(size: 10))
                     .foregroundStyle(Theme.ok)
                 Text(safetyLine)
                     .font(Theme.sans(11.5))
@@ -608,12 +622,12 @@ private struct NoticeBanner: View {
             }
             Button { onDismiss() } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
-                    .frame(width: 20, height: 20)
+                    .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.icon)
             .help("Dismiss")
             .accessibilityLabel("Dismiss notice")
         }
@@ -652,7 +666,7 @@ private struct BriefPipelineBanner: View {
                         )
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.quiet)
                 .help("Retry preserved digest messages")
                 .accessibilityLabel("Retry preserved digest messages")
                 .onHover { retryHovered = $0 }
@@ -705,12 +719,12 @@ private struct ReceiptToast: View {
                 onDismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
-                    .frame(width: 20, height: 20)
+                    .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.icon)
             .accessibilityLabel("Dismiss confirmation")
         }
         .padding(.horizontal, 14)
@@ -733,12 +747,22 @@ private struct ReceiptToast: View {
             if !isHovering, Date() >= deadline { onDismiss() }
         }
         .task(id: receipt.id) {
-            deadline = Date().addingTimeInterval(6)
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            let seconds = A11y.toastDuration(hasAction: receipt.action != nil)
+            deadline = Date().addingTimeInterval(seconds)
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             if !hovering { onDismiss() }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(receipt.text)
+        // Reachable from anywhere in the toast, not just by finding the button.
+        .accessibilityActions {
+            if let title = receipt.actionTitle, let action = receipt.action {
+                Button(title) {
+                    action()
+                    onDismiss()
+                }
+            }
+        }
     }
 }
 

@@ -11,11 +11,12 @@ private struct CloseButton: View {
             Image(systemName: "xmark")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
-                .frame(width: 22, height: 22)
+                .frame(width: 24, height: 24)
                 .background(RoundedRectangle(cornerRadius: Theme.controlRadius).fill(isHovered ? Theme.surface : Theme.surfaceHigh))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.icon)
         .help("Close")
+        .accessibilityLabel("Close keyboard shortcuts")
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }

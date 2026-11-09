@@ -220,7 +220,7 @@ struct BriefCardView: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .help("Add a label or priority hint for this conversation")
             .animation(Theme.quick, value: labelHovered)
             .onHover { labelHovered = $0 }
@@ -270,7 +270,7 @@ struct BriefCardView: View {
                     .foregroundStyle(Theme.textTertiary.opacity(hovering ? 1 : 0.35))
                     .frame(width: 24, height: 24)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .help("Full conversation history across digests")
             .accessibilityLabel("Show conversation history")
             .accessibilityHint("Opens earlier digest entries for \(convName).")
@@ -301,7 +301,7 @@ struct BriefCardView: View {
                 } label: {
                     PriorityStamp(priority: card.priority)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.quiet)
                 .fixedSize()
                 .help("Tap to correct this priority")
                 .accessibilityLabel("\(priorityAccessibilityLabel) priority")
@@ -332,11 +332,11 @@ struct BriefCardView: View {
                 withAnimation(Theme.spring) { bodyExpanded.toggle() }
             } label: {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(chevronHovered ? Theme.textSecondary : Theme.textTertiary)
                     .rotationEffect(.degrees(isBodyExpanded ? 180 : 0))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .help(isBodyExpanded ? "Collapse" : "Expand")
             .accessibilityLabel(isBodyExpanded ? "Collapse details" : "Expand details")
             .animation(Theme.quick, value: chevronHovered)
@@ -516,13 +516,13 @@ struct BriefCardView: View {
                         Text("WHY THIS CARD")
                             .font(Theme.mono(10, weight: .semibold))
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 7, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .rotationEffect(.degrees(trustExpanded ? 180 : 0))
                     }
                     .foregroundStyle(trustExpanded ? Theme.textSecondary : Theme.textTertiary)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.quiet)
                 .help(trustExpanded ? "Hide why this card was included" : "Show why this card was included")
                 .accessibilityLabel("Why this card")
                 .accessibilityValue(trustExpanded ? "Expanded" : "Collapsed")
@@ -942,7 +942,7 @@ private struct QuickReplyChip: View {
                     Capsule().strokeBorder(isHovered ? Theme.textTertiary : Theme.border, lineWidth: Theme.hairline)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .help(reply.draft)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }

@@ -526,7 +526,7 @@ private struct NoiseStripView: View {
                               color: headerHovered ? Theme.textPrimary : Theme.textSecondary)
                     Rule()
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(headerHovered ? Theme.textPrimary : Theme.textSecondary)
                         .rotationEffect(.degrees(expanded ? 180 : 0))
                         .animation(Theme.spring, value: expanded)
@@ -535,7 +535,7 @@ private struct NoiseStripView: View {
                 .padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .onHover { headerHovered = $0 }
             .animation(Theme.quick, value: headerHovered)
             .accessibilityLabel("FYI, \(cards.count) quiet item\(cards.count == 1 ? "" : "s")")
@@ -604,7 +604,7 @@ private struct NoiseRowButton: View {
                             .foregroundStyle(Theme.textTertiary)
                     }
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 7, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
                         .rotationEffect(.degrees(rowExpanded ? 90 : 0))
                 }
@@ -622,7 +622,7 @@ private struct NoiseRowButton: View {
             }
             .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 7)
         .animation(Theme.quick, value: isHovered)
@@ -667,7 +667,7 @@ private struct FilterTabButton: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }

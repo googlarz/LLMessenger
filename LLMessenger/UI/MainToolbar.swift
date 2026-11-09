@@ -146,7 +146,7 @@ struct MainToolbar: ToolbarContent {
                 }
                 .foregroundStyle(disabled ? Theme.textTertiary : Theme.standby)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .help(disabled ? "Auto-send paused — click to resume" : "Auto-send active — click to pause")
             .accessibilityLabel(disabled ? "Auto-send paused" : "Auto-send active")
             .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
@@ -316,10 +316,10 @@ struct ServiceStatusPopover: View {
                     if health[service] == .warning || health[service] == .error {
                         Button { onRetry?(service) } label: {
                             Image(systemName: "arrow.clockwise")
-                                .frame(width: 20, height: 20)
+                                .frame(width: 24, height: 24)
                                 .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.icon)
                         .help("Retry \(Theme.serviceName(service))")
                         .accessibilityLabel("Retry \(Theme.serviceName(service))")
                     }

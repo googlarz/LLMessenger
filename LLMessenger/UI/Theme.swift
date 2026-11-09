@@ -22,13 +22,20 @@ extension Color {
     init(light: Color, dark: Color, lightHC: Color? = nil, darkHC: Color? = nil) {
         self.init(NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            let highContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+            let highContrast = ThemeEnvironment.forceIncreaseContrast
+                ?? NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
             if isDark {
                 return NSColor(highContrast ? (darkHC ?? dark) : dark)
             }
             return NSColor(highContrast ? (lightHC ?? light) : light)
         })
     }
+}
+
+/// Test seam: lets the contrast tests resolve the Increase Contrast branches
+/// of every adaptive colour without flipping a system setting.
+enum ThemeEnvironment {
+    nonisolated(unsafe) static var forceIncreaseContrast: Bool?
 }
 
 enum Theme {
@@ -99,6 +106,21 @@ enum Theme {
         dark:  Color(red: 0.980, green: 0.420, blue: 0.300)
     )
     static let signalWash  = signal.opacity(0.10)
+    /// Label colour on a filled `tint` button (PrimaryActionStyle). White on the
+    /// bright dark-mode amber is ~1.7:1, so dark mode flips to ink.
+    static let onTint = Color(
+        light: Color(red: 1, green: 1, blue: 1),
+        dark:  Color(red: 0.055, green: 0.067, blue: 0.082)
+    )
+    /// Text of a control that is switched off. Disabled controls are exempt from
+    /// WCAG contrast, but this stays readable (>= 3:1) and is never the only cue:
+    /// pair it with a word such as "off".
+    static let textDisabled = Color(
+        light: Color(red: 0.420, green: 0.405, blue: 0.375),
+        dark:  Color(red: 0.600, green: 0.588, blue: 0.557),
+        lightHC: Color(red: 0.30, green: 0.29, blue: 0.27),
+        darkHC:  Color(red: 0.78, green: 0.77, blue: 0.74)
+    )
     /// Standby amber — partial states, warnings, "heads-up".
     static let standby = Color(
         light: Color(red: 0.505, green: 0.337, blue: 0.055),
@@ -164,17 +186,22 @@ enum Theme {
 
     // MARK: - Typography — three voices
 
+    /// No text is set below this size anywhere in the app. The three font
+    /// constructors clamp to it, and `UIFontFloorTests` fails if a literal
+    /// smaller size appears in the UI sources.
+    static let minimumFontSize: CGFloat = 10
+
     /// Editorial voice: brief and card headlines. New York, the system serif.
     static func display(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
-        .system(size: size, weight: weight, design: .serif)
+        .system(size: max(size, minimumFontSize), weight: weight, design: .serif)
     }
     /// Wire voice: timestamps, counts, section labels, evidence metadata.
     static func mono(_ size: CGFloat, weight: Font.Weight = .medium) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
+        .system(size: max(size, minimumFontSize), weight: weight, design: .monospaced)
     }
     /// Interface voice: body copy and controls.
     static func sans(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
+        .system(size: max(size, minimumFontSize), weight: weight)
     }
 
     // Named styles
@@ -283,7 +310,7 @@ struct ServiceStamp: View {
 
     var body: some View {
         Text(initials)
-            .font(Theme.mono(size <= 18 ? 8 : 9, weight: .bold))
+            .font(Theme.mono(10, weight: .bold))
             .tracking(0.5)
             .foregroundStyle(Theme.serviceColor(service))
             .frame(width: size + 6, height: size - 4)
@@ -303,6 +330,73 @@ struct ServiceStamp: View {
         default:         return String(service.prefix(2)).uppercased()
         }
     }
+}
+
+// MARK: - Keyboard focus
+
+/// The one focus indicator: a paper-coloured ring just outside the control.
+/// Shown only while the control has keyboard focus (Full Keyboard Access / Tab),
+/// thicker under Increase Contrast. Paper-on-ink matches "interactive = paper,
+/// never a hue" and contrasts with both grounds.
+private struct FocusRingModifier: ViewModifier {
+    var radius: CGFloat
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        content.overlay(
+            RoundedRectangle(cornerRadius: radius + 2)
+                .strokeBorder(Theme.textPrimary, lineWidth: contrast == .increased ? 3 : 2)
+                .padding(-3)
+                .opacity(isFocused ? 1 : 0)
+                .allowsHitTesting(false)
+        )
+    }
+}
+
+extension View {
+    /// Draws the shared keyboard-focus ring. Put it on the label of a custom
+    /// button style, or on any focusable control that draws its own chrome.
+    func focusRing(radius: CGFloat = Theme.controlRadius) -> some View {
+        modifier(FocusRingModifier(radius: radius))
+    }
+
+    /// Guarantees a 24x24pt hit area without changing the visual size of an
+    /// icon-only control (WCAG 2.5.8 target size).
+    func minimumHitTarget(_ side: CGFloat = 24) -> some View {
+        frame(minWidth: side, minHeight: side).contentShape(Rectangle())
+    }
+}
+
+/// Replacement for `.plain`: no chrome, but a visible focus ring and a pressed
+/// state, and every icon-only button gets at least a 24pt target.
+struct QuietButtonStyle: ButtonStyle {
+    var radius: CGFloat = Theme.controlRadius
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .focusRing(radius: radius)
+            .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+extension ButtonStyle where Self == QuietButtonStyle {
+    static var quiet: QuietButtonStyle { QuietButtonStyle() }
+}
+
+/// Icon-only control (dismiss, retry, chevron): visual size is the caller's,
+/// the hit area is never smaller than 24x24pt.
+struct IconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .minimumHitTarget()
+            .focusRing()
+            .opacity(configuration.isPressed ? 0.6 : 1)
+    }
+}
+
+extension ButtonStyle where Self == IconButtonStyle {
+    static var icon: IconButtonStyle { IconButtonStyle() }
 }
 
 /// Primary action: paper on ink — the inverted button. Secondary: quiet text.
@@ -332,6 +426,7 @@ struct PaperButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: Theme.controlRadius)
                     .strokeBorder(prominent ? Color.clear : Theme.border, lineWidth: Theme.hairline)
             )
+            .focusRing()
             .opacity(pressed ? 0.75 : 1)
             .scaleEffect(pressed ? 0.985 : 1)
             .animation(Theme.quick, value: pressed)
@@ -351,13 +446,14 @@ struct PrimaryActionStyle: ButtonStyle {
         return configuration.label
             .font(Theme.mono(11, weight: .bold))
             .tracking(0.4)
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.onTint)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: Theme.controlRadius)
                     .fill(isHovered ? tint.opacity(0.85) : tint)
             )
+            .focusRing()
             .opacity(pressed ? 0.78 : 1)
             .scaleEffect(pressed ? 0.97 : 1)
             .animation(Theme.quick, value: pressed)
@@ -374,6 +470,9 @@ struct WireActionStyle: ButtonStyle {
     /// Opt in per call site rather than flipping the default — most existing
     /// mono-caps buttons in the app are legitimately wire-voice metadata.
     var sansLabel = false
+    /// Underlined text-button affordance for secondary actions that would
+    /// otherwise read as plain text ("Draft with AI", "Decide later").
+    var underlined = false
     @State private var isHovered = false
 
     func makeBody(configuration: Configuration) -> some View {
@@ -381,6 +480,7 @@ struct WireActionStyle: ButtonStyle {
         return configuration.label
             .font(sansLabel ? Theme.sans(12, weight: .medium) : Theme.mono(11, weight: .semibold))
             .tracking(sansLabel ? 0 : 0.4)
+            .underline(underlined, pattern: .solid)
             .foregroundStyle(isHovered ? (tint == Theme.textSecondary ? Theme.textPrimary : tint) : tint)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -389,9 +489,15 @@ struct WireActionStyle: ButtonStyle {
                     .fill(pressed ? Theme.surfaceHigh : (isHovered ? Theme.surface : Color.clear))
             )
             .contentShape(Rectangle())
+            .focusRing()
             .animation(Theme.quick, value: pressed)
             .animation(Theme.quick, value: isHovered)
             .onHover { isHovered = $0 }
+    }
+
+    /// The shared secondary text-button: sans, underlined, quiet until hover.
+    static func textAction(tint: Color = Theme.textSecondary) -> WireActionStyle {
+        WireActionStyle(tint: tint, sansLabel: true, underlined: true)
     }
 }
 

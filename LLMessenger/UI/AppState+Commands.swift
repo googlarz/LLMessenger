@@ -117,7 +117,10 @@ extension AppState {
                      actionTitle: String? = nil,
                      tone: UserReceipt.Tone = .done,
                      action: (() -> Void)? = nil) {
-        userReceipt = UserReceipt(text: text, actionTitle: actionTitle, tone: tone, action: action)
+        let receipt = UserReceipt(text: text, actionTitle: actionTitle, tone: tone, action: action)
+        userReceipt = receipt
+        // Every toast is spoken from here, so a new toast cannot forget to be.
+        A11y.announce(receipt.spokenText, urgent: tone == .problem || actionTitle != nil)
     }
 
     func clearReceipt() {

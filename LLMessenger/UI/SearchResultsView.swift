@@ -33,7 +33,7 @@ struct SearchResultsView: View {
                             Button { selectBrief(brief) } label: {
                                 BriefSearchResultRow(brief: brief)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.quiet)
                             .accessibilityLabel("Open brief, \(brief.notificationText)")
                         }
                     }
@@ -43,7 +43,7 @@ struct SearchResultsView: View {
                             Button { openConversation(result) } label: {
                                 MessageSearchResultRow(result: result)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.quiet)
                             .accessibilityLabel("Open conversation, \(result.conversationName ?? result.conversationId)")
                         }
                     }

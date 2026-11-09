@@ -57,7 +57,7 @@ struct BriefCardActionBar: View {
                     Text("· \(quoteCount) QUOTED")
                 }
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 7, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .rotationEffect(.degrees(evidenceExpanded ? 180 : 0))
             }
         }
@@ -81,7 +81,7 @@ struct BriefCardActionBar: View {
         Button(action: onToggleHandled) {
             HStack(spacing: 4) {
                 Image(systemName: isHandled ? "arrow.uturn.left" : "checkmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                 Text(isHandled ? "Reopen" : "Done")
             }
         }
@@ -98,7 +98,7 @@ struct BriefCardActionBar: View {
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: 24, height: 24)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .popover(isPresented: $showingMore) {
             Button(draftOptionsFailed ? "Retry draft options" : "Generate draft options") {
                 showingMore = false
