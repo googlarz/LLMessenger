@@ -105,6 +105,10 @@ final class MCPServerTests: XCTestCase {
         try db.dbQueue.read { try AgentAction.fetchAll($0) }
     }
 
+    private func stillPending() throws -> [AgentAction] {
+        try pendingActions().filter { $0.statusEnum == .pending }
+    }
+
     // MARK: - Protocol
 
     func testInitializeHandshakeShape() throws {
@@ -385,13 +389,37 @@ final class MCPServerTests: XCTestCase {
     func testProposeReplyReplacesPendingExternalProposalForSameConversation() throws {
         try seed()
         let first = try call("propose_reply", ["service": "imessage", "conversation_id": "open", "text": "one"])
+        let reviewed = try XCTUnwrap(try pendingActions().first) // what the user is looking at
         let second = try call("propose_reply", ["service": "imessage", "conversation_id": "open", "text": "two"])
         XCTAssertEqual(first.json["replaced"] as? Bool, false)
         XCTAssertEqual(second.json["replaced"] as? Bool, true)
-        let actions = try pendingActions()
+        let actions = try stillPending()
         XCTAssertEqual(actions.count, 1)
         XCTAssertEqual(actions.first?.replyPayload?.draftText, "two")
         XCTAssertEqual(actions.first?.statusEnum, .pending)
+
+        // The row the user reviewed must keep its text and stop being approvable: approval
+        // goes by id, so rewriting it in place would send text the user never saw.
+        XCTAssertNotEqual(actions.first?.id, reviewed.id)
+        let old = try XCTUnwrap(try db.dbQueue.read { try AgentAction.fetchOne($0, key: reviewed.id) })
+        XCTAssertEqual(old.replyPayload?.draftText, "one")
+        XCTAssertEqual(old.statusEnum, .skipped)
+    }
+
+    func testDigestFedByAConversationThatIsNowLocalOnlyIsWithheld() throws {
+        try seed()
+        flags.enabledSince = Date().addingTimeInterval(-3600)
+        // "later" was summarized into the digest (its messages are attached to it) and
+        // may be quoted inside any card — then the user marked it Local-only.
+        try insertMessage(conv: "later", name: "Bob", text: "private detail", offset: -900)
+        try db.dbQueue.write { grdb in
+            let briefID = try XCTUnwrap(try Brief.fetchOne(grdb)?.id)
+            try grdb.execute(sql: "UPDATE messages SET briefId = ? WHERE conversationId IN ('open', 'later')",
+                             arguments: [briefID])
+        }
+        XCTAssertEqual(try digestCount().count, 1, "served while nothing that fed it is Local-only")
+        try setPrivacy("later", "local_only")
+        XCTAssertEqual(try digestCount().count, 0)
     }
 
     func testProposeReplyDoesNotTouchAppsOwnDraftOrResolvedExternalRows() throws {
@@ -426,7 +454,7 @@ final class MCPServerTests: XCTestCase {
         let replace = try call("propose_reply", ["service": "imessage", "conversation_id": "c3", "text": "again"])
         XCTAssertFalse(replace.isError, replace.text)
         XCTAssertEqual(replace.json["replaced"] as? Bool, true)
-        XCTAssertEqual(try pendingActions().count, 20)
+        XCTAssertEqual(try stillPending().count, 20)
     }
 
     func testExternalProposalsAreNotBatchEligible() {

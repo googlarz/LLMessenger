@@ -210,6 +210,16 @@ final class MCPToolbox {
         }
         let digests: [[String: Any]] = try eligible.compactMap { brief in
             guard let id = brief.id else { return nil }
+            // All of a digest's cards come from one shared prompt, so any card may quote
+            // any conversation that was in it. If a conversation that fed this digest is
+            // Local-only now — marked later, or summarized while MCP was being switched
+            // on — withhold the whole digest rather than filter card by card.
+            let fedBy = try db.dbQueue.read { grdb in
+                try Row.fetchAll(grdb, sql: "SELECT DISTINCT service, conversationId FROM messages WHERE briefId = ?",
+                                 arguments: [id])
+                    .map { ConvKey($0["service"], $0["conversationId"]) }
+            }
+            if fedBy.contains(where: hidden.contains) { return nil }
             let cards: [[String: Any]] = try repo.fetchBriefCards(briefID: id)
                 .filter { !hidden.contains(ConvKey($0.service, $0.conversationId)) }
                 .map { card in
@@ -350,13 +360,13 @@ final class MCPToolbox {
             if existing == nil && pendingExternal.count >= Self.maxPendingExternalProposals {
                 throw MCPToolError(message: "Too many pending proposals (\(Self.maxPendingExternalProposals)). Ask the user to review the Act queue first.")
             }
+            // Never rewrite a pending row in place: approval goes by row id and re-reads
+            // the payload, so the user could approve text A and send text B. Retire the
+            // old row instead — an approval aimed at it then finds it no longer pending.
             if var existing {
-                existing.payload = AgentAction.encodeReplyPayload(text)
-                existing.title = Self.proposalTitle(name)
-                existing.conversationName = name
-                existing.createdAt = created
+                existing.status = AgentActionStatus.skipped.rawValue
+                existing.resolvedAt = created
                 try existing.update(db)
-                return true
             }
             var action = AgentAction(
                 id: nil,
@@ -373,7 +383,7 @@ final class MCPToolbox {
                 createdAt: created,
                 resolvedAt: nil)
             try action.insert(db)
-            return false
+            return existing != nil
         }
         return ["queued": true, "replaced": replaced]
     }
