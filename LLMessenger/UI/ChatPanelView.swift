@@ -149,7 +149,6 @@ struct ChatPanelView: View {
 
             // Ask panel — closed by default so reading has one purpose. Opens from
             // the toolbar Ask button; stays open while a conversation is active.
-            // Demo/unconfigured states keep their banner (it carries the exit CTA).
             if showComposer {
                 Rule()
                 ChatInputView()
@@ -168,9 +167,7 @@ struct ChatPanelView: View {
     }
 
     private var showComposer: Bool {
-        DemoSeeder.isActive
-            || !appState.isLLMConfigured
-            || appState.askPanelOpen
+        appState.askPanelOpen
             || !aiItems.isEmpty
             || chatViewModel.isLoading
     }

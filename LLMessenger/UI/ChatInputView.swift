@@ -11,33 +11,6 @@ struct ChatInputView: View {
     @State private var mentionRange: Range<String.Index>?
 
     var body: some View {
-        if DemoSeeder.isActive {
-            HStack(spacing: 10) {
-                Theme.standby.frame(width: 2, height: 24)
-                    .clipShape(RoundedRectangle(cornerRadius: 1))
-                Text("Example data — not your messages. Connect your accounts to digest your real conversations.")
-                    .font(Theme.sans(12.5))
-                    .foregroundStyle(Theme.textSecondary)
-                Button("SET UP MY ACCOUNTS") { appState.onExitDemo?() }
-                    .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 12)
-            .background(Theme.sidebar)
-        } else if !appState.isLLMConfigured {
-            HStack(spacing: 10) {
-                Theme.standby.frame(width: 2, height: 24)
-                    .clipShape(RoundedRectangle(cornerRadius: 1))
-                Text("No AI backend configured — digests and replies are paused.")
-                    .font(Theme.sans(12.5))
-                    .foregroundStyle(Theme.textPrimary)
-                Button("OPEN SETTINGS") { appState.onOpenSettings?() }
-                    .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 12)
-            .background(Theme.sidebar)
-        } else {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .bottom, spacing: 10) {
                 // Question field — asks about your messages; it never sends to anyone.
@@ -51,6 +24,7 @@ struct ChatInputView: View {
                             .allowsHitTesting(false)
                     }
                     TextEditor(text: $chatViewModel.inputText)
+                        .disabled(!appState.isLLMConfigured)
                         .font(Theme.sans(13))
                         .foregroundStyle(Theme.textPrimary)
                         .scrollContentBackground(.hidden)
@@ -88,15 +62,19 @@ struct ChatInputView: View {
         .padding(.top, 9)
         .padding(.bottom, 11)
         .background(Theme.sidebar)
-        } // end else
     }
 
+    /// Without an AI model the field stays visible but off; the ribbon at the top
+    /// of the window carries the reason and the way to fix it.
     private var placeholder: String {
-        "Ask about your messages — type @ to write to someone"
+        if DemoSeeder.isActive { return "Asking is off in the sample — set up with your messages to try it" }
+        if !appState.isLLMConfigured { return "Choose an AI model to ask about your messages" }
+        return "Ask about your messages — type @ to write to someone"
     }
 
     private var canAsk: Bool {
-        !chatViewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        appState.isLLMConfigured
+            && !chatViewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !chatViewModel.isLoading
     }
 
