@@ -31,6 +31,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            StatusRibbon()
             GeometryReader { proxy in
                 let hideSidebar = deskCollapsed || proxy.size.width < Self.narrowWindowThreshold
                 HStack(spacing: 0) {

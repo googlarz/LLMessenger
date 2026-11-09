@@ -1,6 +1,7 @@
 // LLMessenger/AppDelegate.swift
 import AppKit
 import GRDB
+import UserNotifications
 
 extension UserDefaults {
     @objc dynamic var realtimeFirewallDisabled: Bool {
@@ -69,16 +70,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             database = db
 
-            // One-time explanation shown before the first keychain read so the
-            // macOS "Always Allow" prompt doesn't look suspicious to the user.
-            if !UserDefaults.standard.bool(forKey: "hasSeenKeychainExplanation") {
-                UserDefaults.standard.set(true, forKey: "hasSeenKeychainExplanation")
+            // First run: say what LLMessenger is before asking for anything. The window is
+            // on screen before any system prompt or alert below can appear.
+            if !UserDefaults.standard.bool(forKey: OnboardingFlag.completedKey) {
+                quietFirstLaunchServices(db)
+                presentOnboarding(startAt: .welcome)
+            }
+
+            // One-time explanation, only when there is a saved credential macOS may ask
+            // to unlock. A fresh install has none, so it sees nothing here.
+            if KeychainExplanation.shouldShow(
+                hasSeen: UserDefaults.standard.bool(forKey: KeychainExplanation.seenKey),
+                hasStoredCredentials: KeychainExplanation.hasStoredCredentials()
+            ) {
+                UserDefaults.standard.set(true, forKey: KeychainExplanation.seenKey)
                 let alert = NSAlert()
                 alert.messageText = "Unlock your saved credentials"
                 alert.informativeText = """
-                    macOS will ask for your login password once to unlock your saved API keys \
-                    and service credentials. This is a standard macOS security check — \
-                    everything stays on this Mac and is never sent anywhere.
+                    macOS may ask for your login password once to unlock the API keys and \
+                    service credentials LLMessenger saved earlier. This is a standard macOS \
+                    security check \u{2014} everything stays on this Mac and is never sent anywhere.
 
                     Click "Always Allow" and you'll never be asked again.
                     """
@@ -99,6 +110,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             let llm = resolvedProvider()
+            SetupProgress.shared.needsAIChoice = !llm.isConfigured
             let gateway = LLMGateway(
                 database: db,
                 client: llm.client,
@@ -119,6 +131,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 basePrompt: basePrompt
             )
             appState = state
+            onboardingWindowController?.model.appState = state
 
             let briefGenerator = BriefEngine(
                 database: db,
@@ -136,7 +149,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             let notifications = NotificationManager()
-            notifications.requestPermission()
+            // The permission prompt belongs to onboarding, where it is explained first.
+            // Setting the delegate here keeps notification taps and banners working.
+            UNUserNotificationCenter.current().delegate = notifications
             notifications.onNotificationTap = { [weak windowController, weak state] briefID in
                 state?.selectedBriefID = briefID
                 state?.markAsOpen(briefID: briefID)
@@ -181,42 +196,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let settingsController = SettingsWindowController(database: db)
             settingsWindowController = settingsController
-            let runSetupWizard: () -> Void = { [weak self] in
-                guard let self else { return }
-                UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
-                let controller = OnboardingWindowController(database: db)
-                controller.onComplete = { [weak self] in
-                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                    self?.onboardingWindowController = nil
-                    self?.didFinishOnboarding()
-                }
-                self.onboardingWindowController = controller
-                controller.show()
-            }
+            let runSetupWizard: () -> Void = { [weak self] in self?.resumeOnboarding() }
             settingsController.onRunSetup = runSetupWizard
             state.onExitDemo = { [weak state, weak self] in
-                guard let self else { return }
                 state?.selectedBriefID = nil
-                // Open setup wizard first; demo briefs remain visible behind the
-                // window so the user sees the product before connecting accounts.
-                // Wipe demo data only after setup completes.
-                UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
-                let demoExitController = OnboardingWindowController(database: db)
-                demoExitController.onComplete = { [weak self, weak state] in
-                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                    self?.onboardingWindowController = nil
-                    self?.didFinishOnboarding()
-                    // Show transitioning banner while real sync warms up, then swap out demo data.
-                    state?.isDemoTransitioning = true
-                    Task { @MainActor [weak state] in
-                        try? await Task.sleep(for: .seconds(4))
-                        try? DemoSeeder.wipe(from: db)
-                        state?.refreshBriefs()
-                        state?.isDemoTransitioning = false
-                    }
-                }
-                self.onboardingWindowController = demoExitController
-                demoExitController.show()
+                // The setup wizard opens over the sample data, so the user keeps seeing
+                // the product while connecting accounts. The samples are removed when
+                // the wizard starts building the real first digest.
+                self?.resumeOnboarding()
             }
             settingsController.onBuild7DaySummaries = { [weak refreshCoordinator] in
                 await refreshCoordinator?.buildHistory(hours: 168)
@@ -307,19 +294,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 forName: .serviceConfigDidChange, object: nil, queue: .main
             ) { [weak self] _ in
                 guard let self else { return }
-                Task { @MainActor [weak self] in
-                    guard let self, let db = self.database,
-                          let engine = self.pollEngine, let state = self.appState
-                    else { return }
-                    let configs = (try? db.dbQueue.read { db in try ServiceConfig.fetchAll(db) }) ?? []
-                    for config in configs { engine.reload(config: config) }
-                    // Adapters added after launch (e.g. user pastes Signal account or
-                    // a Slack token) need to actually be instantiated and started.
-                    // reload() only updates configs of already-registered adapters.
-                    for svc in ["telegram", "signal", "imessage", "slack", "whatsapp"] {
-                        self.registerAdapter(serviceID: svc, engine: engine, db: db, state: state)
-                    }
-                }
+                Task { @MainActor [weak self] in self?.reloadServicesFromDatabase() }
             }
 
             // Hot-swap the LLM client when provider, API key, or consent changes in Settings.
@@ -328,20 +303,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 forName: .llmProviderDidChange, object: nil, queue: .main
             ) { [weak self] _ in
                 guard let self else { return }
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    let llm = self.resolvedProvider()
-                    self.llmGateway?.update(
-                        client: llm.client,
-                        provider: llm.provider,
-                        model: llm.model
-                    )
-                    self.appState?.updateLLMConfiguration(
-                        model: llm.model,
-                        provider: llm.provider,
-                        isConfigured: llm.isConfigured
-                    )
-                }
+                Task { @MainActor [weak self] in self?.applyLLMProviderFromSettings() }
             }
 
             NotificationCenter.default.addObserver(
@@ -461,19 +423,96 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 await agent.start()
             }
 
-            // Show onboarding on first launch
-            if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-                let onboardingController = OnboardingWindowController(database: db)
-                onboardingController.onComplete = { [weak self] in
-                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                    self?.onboardingWindowController = nil
-                    self?.didFinishOnboarding()
-                }
-                self.onboardingWindowController = onboardingController
-                onboardingController.show()
+            NotificationCenter.default.addObserver(
+                forName: .resumeOnboardingRequested, object: nil, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.resumeOnboarding() }
             }
 
+            // LLMessenger has no Dock icon: the first time the main window closes, say where it went.
+            if let mainWindow = windowController.window {
+                NotificationCenter.default.addObserver(
+                    forName: NSWindow.willCloseNotification, object: mainWindow, queue: .main
+                ) { _ in
+                    Task { @MainActor in MenuBarHint.showOnceIfNeeded() }
+                }
+            }
         }
+    }
+
+    // MARK: - Onboarding
+
+    /// A fresh install must not poll iMessage (and trigger the Contacts prompt) before
+    /// the user has seen the welcome screen. The wizard enables it when they ask.
+    private func quietFirstLaunchServices(_ db: AppDatabase) {
+        let repo = SettingsRepository(database: db)
+        guard (try? repo.loadServiceConfig(for: "imessage")) == nil else { return }
+        var config = ServiceConfig.default(for: "imessage")
+        config.enabled = false
+        try? repo.saveServiceConfig(config)
+    }
+
+    private func resumeOnboarding() {
+        if let existing = onboardingWindowController {
+            existing.show()
+        } else {
+            presentOnboarding(startAt: .services)
+        }
+    }
+
+    private func presentOnboarding(startAt step: OnboardingStep) {
+        guard let db = database else { return }
+        let controller = OnboardingWindowController(
+            database: db,
+            startAt: step,
+            environment: .live(applyChanges: { [weak self] buildDigest in
+                Task { @MainActor [weak self] in await self?.applyOnboardingChanges(buildDigest: buildDigest) }
+            })
+        )
+        controller.model.appState = appState
+        controller.onFinish = { [weak self] outcome in self?.handleOnboarding(outcome) }
+        onboardingWindowController = controller
+        controller.show()
+    }
+
+    /// The only place onboarding is marked complete: the user finished, skipped, or
+    /// chose the sample data. Closing the window mid-way leaves it incomplete, so
+    /// setup comes back on next launch and the main window offers "Finish setup".
+    private func handleOnboarding(_ outcome: OnboardingOutcome) {
+        let defaults = UserDefaults.standard
+        let wasComplete = defaults.bool(forKey: OnboardingFlag.completedKey)
+        OnboardingFlag.apply(outcome, to: defaults)
+        onboardingWindowController = nil
+        appState?.isDemoTransitioning = false
+        SetupProgress.shared.setupUnfinished = !defaults.bool(forKey: OnboardingFlag.completedKey)
+        // Closing a re-run of setup changes nothing and shouldn't pull the main window forward.
+        if outcome == .dismissed && wasComplete { return }
+        didFinishOnboarding()
+    }
+
+    private func applyOnboardingChanges(buildDigest: Bool) async {
+        reloadServicesFromDatabase()
+        applyLLMProviderFromSettings()
+        if buildDigest { await briefRefreshCoordinator?.refreshNow() }
+    }
+
+    private func reloadServicesFromDatabase() {
+        guard let db = database, let engine = pollEngine, let state = appState else { return }
+        let configs = (try? db.dbQueue.read { db in try ServiceConfig.fetchAll(db) }) ?? []
+        for config in configs { engine.reload(config: config) }
+        // Adapters added after launch (e.g. user pastes Signal account or
+        // a Slack token) need to actually be instantiated and started.
+        // reload() only updates configs of already-registered adapters.
+        for svc in ["telegram", "signal", "imessage", "slack", "whatsapp"] {
+            registerAdapter(serviceID: svc, engine: engine, db: db, state: state)
+        }
+    }
+
+    private func applyLLMProviderFromSettings() {
+        let llm = resolvedProvider()
+        llmGateway?.update(client: llm.client, provider: llm.provider, model: llm.model)
+        appState?.updateLLMConfiguration(model: llm.model, provider: llm.provider, isConfigured: llm.isConfigured)
+        SetupProgress.shared.needsAIChoice = !llm.isConfigured
     }
 
     /// Opens the production store. If that fails (e.g. a migration error), explains why,
@@ -654,6 +693,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         guard let provider = repo.loadSelectedLLMProvider() else {
+            // "Decide later" in onboarding: no model, and the window says so.
+            if UserDefaults.standard.bool(forKey: OnboardingFlag.aiDecideLaterKey) {
+                return ResolvedProvider(provider: nil, client: UnconfiguredLLMClient(), model: "", isConfigured: false)
+            }
             let provider: LLMProvider = AppleFM.isAvailable ? .appleIntelligence : .ollama
             let savedModel = repo.loadOllamaModel()
             let model = provider == .ollama && !savedModel.isEmpty ? savedModel : provider.defaultModel
