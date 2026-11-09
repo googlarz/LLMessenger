@@ -355,6 +355,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             updateChecker = checker
             checker.checkIfDue()
+            checker.startPeriodicChecks()
 
             // Morning Digest — fire brief generation + notification at scheduled time
             let digest = DigestScheduler()

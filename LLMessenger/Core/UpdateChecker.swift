@@ -40,12 +40,34 @@ final class UpdateChecker {
     /// Returns whether a check was started.
     @discardableResult
     func checkIfDue() -> Bool {
-        guard !defaults.bool(forKey: Self.optOutKey) else { return false }
-        let last = defaults.object(forKey: Self.lastCheckKey) as? Date ?? .distantPast
-        guard Date().timeIntervalSince(last) > Self.checkInterval else { return false }
+        guard Self.isCheckDue(disabled: defaults.bool(forKey: Self.optOutKey),
+                              lastCheck: defaults.object(forKey: Self.lastCheckKey) as? Date,
+                              now: Date()) else { return false }
         Task { await check() }
         return true
     }
+
+    /// The whole "should we ask GitHub now" decision, with no side effects.
+    nonisolated static func isCheckDue(disabled: Bool, lastCheck: Date?, now: Date,
+                                       interval: TimeInterval = 24 * 3600) -> Bool {
+        guard !disabled else { return false }
+        guard let lastCheck else { return true }
+        return now.timeIntervalSince(lastCheck) > interval
+    }
+
+    /// A menu-bar app can run for weeks, so a launch-time check is not enough.
+    /// This wakes up every hour and asks `checkIfDue`, which re-reads the opt-out
+    /// each time and lets at most one real check through per day.
+    func startPeriodicChecks(every tick: TimeInterval = 3600) {
+        timer?.invalidate()
+        let timer = Timer.scheduledTimer(withTimeInterval: tick, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.checkIfDue() }
+        }
+        timer.tolerance = tick / 10
+        self.timer = timer
+    }
+
+    private var timer: Timer?
 
     func check() async {
         defaults.set(Date(), forKey: Self.lastCheckKey)

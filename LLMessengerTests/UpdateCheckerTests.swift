@@ -39,6 +39,23 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertFalse(UpdateChecker.isVersion("0.9", newerThan: "1.0"))
     }
 
+    func testCheckDueDecision() {
+        let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let day: TimeInterval = 24 * 3600
+        XCTAssertTrue(UpdateChecker.isCheckDue(disabled: false, lastCheck: nil, now: now),
+                      "Never checked: due")
+        XCTAssertTrue(UpdateChecker.isCheckDue(disabled: false, lastCheck: now.addingTimeInterval(-day - 1), now: now),
+                      "More than a day ago: due")
+        XCTAssertFalse(UpdateChecker.isCheckDue(disabled: false, lastCheck: now.addingTimeInterval(-day + 60), now: now),
+                       "Checked within the day: not due")
+        XCTAssertFalse(UpdateChecker.isCheckDue(disabled: false, lastCheck: now, now: now),
+                       "Just checked: not due")
+        XCTAssertFalse(UpdateChecker.isCheckDue(disabled: true, lastCheck: nil, now: now),
+                       "Turned off: never due")
+        XCTAssertFalse(UpdateChecker.isCheckDue(disabled: true, lastCheck: now.addingTimeInterval(-10 * day), now: now),
+                       "Turned off wins over overdue")
+    }
+
     func testUpdateCheckAppearsInMetadataOnlyNetworkAudit() async throws {
         NetworkAuditLog.shared.clear()
         let configuration = URLSessionConfiguration.ephemeral
