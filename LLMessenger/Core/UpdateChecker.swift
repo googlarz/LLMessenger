@@ -2,7 +2,7 @@
 //
 // Privacy-respecting update check for a directly-distributed app: one
 // unauthenticated HTTPS call to the GitHub releases API, no identifiers, no
-// tracking, off by a single toggle. While the repo is private the call 404s
+// tracking, off by a single toggle (Settings → AI & Privacy → Privacy). While the repo is private the call 404s
 // and the checker stays silent — it activates the day the repo goes public.
 
 import Foundation
@@ -15,7 +15,7 @@ final class UpdateChecker {
         let url: URL
     }
 
-    static let optOutKey = "disableUpdateChecks"
+    static let optOutKey = SettingsRepository.updateChecksDisabledKey
     private static let lastCheckKey = "lastUpdateCheckDate"
     private static let endpoint = URL(string: "https://api.github.com/repos/googlarz/LLMessenger/releases/latest")!
     private static let checkInterval: TimeInterval = 24 * 3600
@@ -25,23 +25,30 @@ final class UpdateChecker {
 
     private let session: URLSession
     private let currentVersion: String
+    private let defaults: UserDefaults
 
     init(session: URLSession = .shared,
-         currentVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0") {
+         currentVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0",
+         defaults: UserDefaults = .standard) {
         self.session = session
         self.currentVersion = currentVersion
+        self.defaults = defaults
     }
 
-    /// Checks at most once per day; silent on any failure.
-    func checkIfDue() {
-        guard !UserDefaults.standard.bool(forKey: Self.optOutKey) else { return }
-        let last = UserDefaults.standard.object(forKey: Self.lastCheckKey) as? Date ?? .distantPast
-        guard Date().timeIntervalSince(last) > Self.checkInterval else { return }
+    /// Checks at most once per day; silent on any failure. The opt-out is read on every
+    /// call, so switching it off in Settings takes effect before the next check.
+    /// Returns whether a check was started.
+    @discardableResult
+    func checkIfDue() -> Bool {
+        guard !defaults.bool(forKey: Self.optOutKey) else { return false }
+        let last = defaults.object(forKey: Self.lastCheckKey) as? Date ?? .distantPast
+        guard Date().timeIntervalSince(last) > Self.checkInterval else { return false }
         Task { await check() }
+        return true
     }
 
     func check() async {
-        UserDefaults.standard.set(Date(), forKey: Self.lastCheckKey)
+        defaults.set(Date(), forKey: Self.lastCheckKey)
         var request = URLRequest(url: Self.endpoint)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 10

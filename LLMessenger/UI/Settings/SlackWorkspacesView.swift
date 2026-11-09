@@ -5,6 +5,7 @@ struct SlackWorkspacesView: View {
     @State private var workspaces: [SlackWorkspace] = SlackWorkspaceStore.load()
     @State private var showingAdd = false
     @State private var workspaceToRemove: SlackWorkspace? = nil
+    @State private var removeError: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -52,6 +53,16 @@ struct SlackWorkspacesView: View {
 
             Rule()
 
+            if let removeError {
+                Text(removeError)
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.signal)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+            }
+
             HStack(spacing: 10) {
                 Link("Required scopes & setup guide →",
                      destination: URL(string: "https://api.slack.com/apps")!)
@@ -93,8 +104,12 @@ struct SlackWorkspacesView: View {
     }
 
     private func remove(_ ws: SlackWorkspace) {
-        if let updated = try? SlackWorkspaceStore.remove(teamId: ws.teamId) {
-            workspaces = updated
+        do {
+            workspaces = try SlackWorkspaceStore.remove(teamId: ws.teamId)
+            removeError = nil
+        } catch {
+            // The workspace is still connected, so keep it listed and say why it stayed.
+            removeError = "Couldn't remove \(ws.teamName): \(error.localizedDescription) It is still connected."
         }
     }
 }

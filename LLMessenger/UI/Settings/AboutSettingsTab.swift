@@ -6,9 +6,9 @@ struct AboutSettingsTab: View {
     var onRunSetup: (() -> Void)? = nil
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-
+        // Scrolls so nothing is ever cut off in a short window.
+        ScrollView {
+            VStack(spacing: 0) {
             VStack(spacing: 20) {
                 // Masthead: serif wordmark over a mono version line — typeset, not badged.
                 VStack(spacing: 6) {
@@ -77,56 +77,71 @@ struct AboutSettingsTab: View {
 
                 whatsNew
             }
-
-            Spacer()
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.bg)
     }
 
+    /// The newest release is always shown in full; older ones scroll beneath it.
     private var whatsNew: some View {
         VStack(alignment: .leading, spacing: 0) {
             WireLabel("What's new")
                 .padding(.bottom, 8)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(ReleaseNotes.all) { note in
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack(spacing: 8) {
-                                Text("v\(note.version)")
-                                    .font(Theme.mono(10.5, weight: .semibold))
-                                    .foregroundStyle(Theme.textSecondary)
-                                Text(note.title)
-                                    .font(Theme.sans(12, weight: .medium))
-                                    .foregroundStyle(Theme.textPrimary)
-                            }
-                            ForEach(note.highlights, id: \.self) { line in
-                                HStack(alignment: .top, spacing: 6) {
-                                    Text("·")
-                                        .font(Theme.sans(11.5))
-                                        .foregroundStyle(Theme.textTertiary)
-                                    Text(line)
-                                        .font(Theme.sans(11.5))
-                                        .foregroundStyle(Theme.textSecondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                        }
-                    }
-
-                    Link("Full release history →",
-                         destination: URL(string: "https://github.com/googlarz/LLMessenger/releases")!)
-                        .font(Theme.mono(10.5))
-                        .tint(Theme.textTertiary)
-                }
-                .padding(.trailing, 8)
+            if let newest = ReleaseNotes.all.first {
+                releaseEntry(newest)
             }
-            .frame(maxHeight: 190)
+
+            let older = Array(ReleaseNotes.all.dropFirst())
+            if !older.isEmpty {
+                Rule().padding(.vertical, 12)
+                WireLabel("Earlier versions")
+                    .padding(.bottom, 8)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(older) { releaseEntry($0) }
+                    }
+                    .padding(.trailing, 8)
+                }
+                .frame(maxHeight: 140)
+            }
+
+            Link("Full release history →",
+                 destination: URL(string: "https://github.com/googlarz/LLMessenger/releases")!)
+                .font(Theme.mono(10.5))
+                .tint(Theme.textTertiary)
+                .padding(.top, 12)
         }
         .frame(maxWidth: 420, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("What's new in recent versions")
+    }
+
+    private func releaseEntry(_ note: ReleaseNote) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text("v\(note.version)")
+                    .font(Theme.mono(10.5, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                Text(note.title)
+                    .font(Theme.sans(12, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+            }
+            ForEach(note.highlights, id: \.self) { line in
+                HStack(alignment: .top, spacing: 6) {
+                    Text("·")
+                        .font(Theme.sans(11.5))
+                        .foregroundStyle(Theme.textTertiary)
+                    Text(line)
+                        .font(Theme.sans(11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 
     private var appVersion: String {

@@ -1,6 +1,5 @@
 // LLMessenger/UI/Settings/LLMSettingsTab.swift
 import SwiftUI
-import ServiceManagement
 import GRDB
 
 private struct LLMUsageSummary: Identifiable {
@@ -17,14 +16,9 @@ private struct LLMUsageSummary: Identifiable {
 
 struct AISettingsTab: View {
     var database: AppDatabase? = nil
+    /// Owned by SettingsView so unsaved edits survive switching tabs.
+    @ObservedObject var model: AISettingsModel
 
-    @State private var selectedProviderRaw: String = ""
-    @State private var anthropicKey: String = ""
-    @State private var openAIKey: String = ""
-    @State private var ollamaModel: String = ""
-    @State private var cloudAutoBriefsConsent: Bool = false
-    @State private var launchAtLogin: Bool = false
-    @State private var saveStatus: String = ""
     @State private var testState: TestState = .idle
     @State private var usageRows: [LLMUsageSummary] = []
     @State private var isLocalOnlyMode: Bool = SettingsRepository().loadLocalOnlyMode()
@@ -63,7 +57,7 @@ struct AISettingsTab: View {
                             .padding(.vertical, 6)
                         }
 
-                        Picker("Provider", selection: $selectedProviderRaw) {
+                        Picker("Provider", selection: $model.values.selectedProviderRaw) {
                             Text("Choose...").tag("")
                             ForEach(LLMProvider.availableCases, id: \.rawValue) { provider in
                                 Text(provider.displayName).tag(provider.rawValue)
@@ -73,13 +67,20 @@ struct AISettingsTab: View {
                         .labelsHidden()
                         .disabled(isLocalOnlyMode && selectedProviderIsCloud)
 
+                        if let notice = AIProviderDisclosure.cloudNotice(for: model.selectedProvider) {
+                            Text(notice)
+                                .font(Theme.sans(12))
+                                .foregroundStyle(Theme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
                         caption("LLMessenger only uses the backend selected here. API keys by themselves never enable cloud processing.")
                     }
 
                     Rule()
 
                     section("Anthropic") {
-                        SecureField("API Key (sk-ant-…)", text: $anthropicKey)
+                        SecureField("API Key (sk-ant-…)", text: $model.values.anthropicKey)
                             .textFieldStyle(.roundedBorder)
                             .font(Theme.sans(13))
                         caption("Used only when Anthropic is explicitly selected above.")
@@ -88,7 +89,7 @@ struct AISettingsTab: View {
                     Rule()
 
                     section("OpenAI") {
-                        SecureField("API Key (sk-…)", text: $openAIKey)
+                        SecureField("API Key (sk-…)", text: $model.values.openAIKey)
                             .textFieldStyle(.roundedBorder)
                             .font(Theme.sans(13))
                         caption("Used only when OpenAI is explicitly selected above.")
@@ -97,31 +98,19 @@ struct AISettingsTab: View {
                     Rule()
 
                     section("Ollama — Local") {
-                        OllamaModelPicker(selectedModel: $ollamaModel)
+                        OllamaModelPicker(selectedModel: $model.values.ollamaModel)
                         caption("Runs locally via Ollama when Ollama is explicitly selected above. The picker loads available models from the local Ollama API; falls back to a text field if Ollama is not running.")
                     }
 
                     Rule()
 
                     section("Automatic Digest Privacy") {
-                        Toggle("Allow automatic digests with the selected cloud provider", isOn: $cloudAutoBriefsConsent)
+                        Toggle("Allow automatic digests with the selected cloud provider", isOn: $model.values.cloudAutoBriefsConsent)
                             .toggleStyle(.switch).controlSize(.small)
                             .font(Theme.sans(13))
                             .tint(Theme.ok)
                             .disabled(!selectedProviderIsCloud)
                         caption(consentHelpText)
-                    }
-
-                    Rule()
-
-                    section("General") {
-                        Toggle("Launch at login", isOn: $launchAtLogin)
-                            .toggleStyle(.switch).controlSize(.small)
-                            .font(Theme.sans(13))
-                            .tint(Theme.ok)
-                            .onChange(of: launchAtLogin) { _, enabled in
-                                try? AutoLaunchManager.setEnabled(enabled)
-                            }
                     }
 
                     Rule()
@@ -143,8 +132,8 @@ struct AISettingsTab: View {
                         switch testState {
                         case .idle, .running:
                             EmptyView()
-                        case .success(let model):
-                            statusLine("Connected — \(model) responded", color: Theme.ok)
+                        case .success(let responder):
+                            statusLine("Connected — \(responder) responded", color: Theme.ok)
                         case .failure(let msg):
                             statusLine(msg, color: Theme.signal)
                         }
@@ -163,22 +152,16 @@ struct AISettingsTab: View {
 
             Rule()
 
-            // Footer: status + save
-            HStack {
-                if !saveStatus.isEmpty {
-                    Text(saveStatus)
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textSecondary)
-                }
-                Spacer()
-                Button("Save") { save() }
-                    .buttonStyle(PaperButtonStyle(prominent: true))
-                    .keyboardShortcut(.return, modifiers: .command)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            SettingsSaveFooter(
+                isDirty: model.isDirty,
+                message: footerMessage,
+                messageIsError: footerMessageIsError,
+                unsavedLabel: "Unsaved changes to the AI settings",
+                onSave: { model.save() },
+                onDiscard: { model.discard() }
+            )
         }
-        .onAppear { load(); isLocalOnlyMode = repo.loadLocalOnlyMode() }
+        .onAppear { model.load(); isLocalOnlyMode = repo.loadLocalOnlyMode() }
         .task { await loadUsage() }
     }
 
@@ -198,6 +181,19 @@ struct AISettingsTab: View {
             .font(Theme.sans(11))
             .foregroundStyle(Theme.textTertiary)
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var footerMessage: String? {
+        switch model.status {
+        case .idle: return nil
+        case .saved: return "Saved"
+        case .error(let message): return message
+        }
+    }
+
+    private var footerMessageIsError: Bool {
+        if case .error = model.status { return true }
+        return false
     }
 
     private func statusLine(_ text: String, color: Color) -> some View {
@@ -226,7 +222,7 @@ struct AISettingsTab: View {
                         .font(Theme.mono(11))
                         .foregroundStyle(row.failures > 0 ? Theme.standby : Theme.textTertiary)
                     if row.truncatedRuns > 0 {
-                        Text("\(row.truncatedRuns) fit")
+                        Text(LLMUsageLabel.trimmedRuns(row.truncatedRuns))
                             .font(Theme.mono(11))
                             .foregroundStyle(Theme.standby)
                     }
@@ -259,27 +255,27 @@ struct AISettingsTab: View {
     }
 
     private var currentClientSpec: ClientSpec? {
-        guard let provider = LLMProvider(rawValue: selectedProviderRaw) else { return nil }
+        guard let provider = LLMProvider(rawValue: model.values.selectedProviderRaw) else { return nil }
         switch provider {
         case .appleIntelligence:
             return ClientSpec(client: provider.makeClient(apiKey: nil), provider: provider,
                               model: provider.defaultModel,
                               label: "On-Device / Apple Intelligence")
         case .anthropic:
-            let key = anthropicKey.trimmingCharacters(in: .whitespaces)
+            let key = model.values.anthropicKey.trimmingCharacters(in: .whitespaces)
             guard !key.isEmpty else { return nil }
             return ClientSpec(client: provider.makeClient(apiKey: key), provider: provider,
                               model: provider.defaultModel,
                               label: "\(provider.displayName) / \(provider.defaultModel)")
         case .openai:
-            let key = openAIKey.trimmingCharacters(in: .whitespaces)
+            let key = model.values.openAIKey.trimmingCharacters(in: .whitespaces)
             guard !key.isEmpty else { return nil }
             return ClientSpec(client: provider.makeClient(apiKey: key), provider: provider,
                               model: provider.defaultModel,
                               label: "\(provider.displayName) / \(provider.defaultModel)")
         case .ollama:
-            let model = ollamaModel.trimmingCharacters(in: .whitespaces)
-            let m = model.isEmpty ? provider.defaultModel : model
+            let typed = model.values.ollamaModel.trimmingCharacters(in: .whitespaces)
+            let m = typed.isEmpty ? provider.defaultModel : typed
             return ClientSpec(client: provider.makeClient(apiKey: nil), provider: provider,
                               model: m,
                               label: "Ollama / \(m)")
@@ -309,33 +305,6 @@ struct AISettingsTab: View {
             testState = .success(spec.label)
         } catch {
             testState = .failure(error.localizedDescription)
-        }
-    }
-
-    // MARK: - Load / Save
-
-    private func load() {
-        selectedProviderRaw = repo.loadSelectedLLMProvider()?.rawValue ?? ""
-        anthropicKey = (try? repo.loadLLMKey(provider: .anthropic)) ?? ""
-        openAIKey    = (try? repo.loadLLMKey(provider: .openai))    ?? ""
-        ollamaModel  = repo.loadOllamaModel()
-        cloudAutoBriefsConsent = repo.loadCloudAutoBriefsConsent()
-        launchAtLogin = AutoLaunchManager.isEnabled
-    }
-
-    private func save() {
-        do {
-            let selectedProvider = LLMProvider(rawValue: selectedProviderRaw)
-            repo.saveSelectedLLMProvider(selectedProvider)
-            try repo.saveLLMKey(provider: .anthropic, key: anthropicKey)
-            try repo.saveLLMKey(provider: .openai,    key: openAIKey)
-            repo.saveOllamaModel(ollamaModel)
-            repo.saveCloudAutoBriefsConsent(selectedProvider?.isCloud == true && cloudAutoBriefsConsent)
-            NotificationCenter.default.post(name: .llmProviderDidChange, object: nil)
-            saveStatus = "Saved ✓"
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }
-        } catch {
-            saveStatus = "Error: \(error.localizedDescription)"
         }
     }
 
@@ -395,9 +364,7 @@ struct AISettingsTab: View {
         }
     }
 
-    private var selectedProviderIsCloud: Bool {
-        LLMProvider(rawValue: selectedProviderRaw)?.isCloud == true
-    }
+    private var selectedProviderIsCloud: Bool { model.selectedProviderIsCloud }
 
     private var consentHelpText: String {
         if selectedProviderIsCloud {

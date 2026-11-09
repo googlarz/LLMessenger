@@ -104,6 +104,22 @@ struct SettingsRepository: @unchecked Sendable {
         userDefaults.bool(forKey: Self.mcpServerEnabledKey)
     }
 
+    /// The once-a-day GitHub release check. Stored inverted (`disableUpdateChecks`) so
+    /// the default, with no key at all, is "on". `UpdateChecker` reads the same key.
+    static let updateChecksDisabledKey = "disableUpdateChecks"
+
+    func loadUpdateChecksEnabled() -> Bool {
+        !userDefaults.bool(forKey: Self.updateChecksDisabledKey)
+    }
+
+    func saveUpdateChecksEnabled(_ on: Bool) {
+        if on {
+            userDefaults.removeObject(forKey: Self.updateChecksDisabledKey)
+        } else {
+            userDefaults.set(true, forKey: Self.updateChecksDisabledKey)
+        }
+    }
+
     static let mcpServerEnabledKey = "mcp_server_enabled"
     static let mcpServerEnabledSinceKey = "mcp_server_enabled_since"
 
