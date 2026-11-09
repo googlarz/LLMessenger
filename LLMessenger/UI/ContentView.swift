@@ -311,7 +311,7 @@ private struct NoBriefPlaceholder: View {
             FirstBriefPreparingView()
         } else {
             VStack(spacing: 10) {
-                Image(systemName: "newspaper")
+                Image(systemName: "newspaper").accessibilityHidden(true)
                     .font(Theme.sans(32, weight: .thin))
                     .foregroundStyle(Theme.textTertiary.opacity(0.5))
                     .padding(.bottom, 4)
@@ -417,7 +417,7 @@ private struct FirstBriefPreparingView: View {
             // The moment a user decides whether to trust this with their messages — say the
             // local-first promise here, not just in PRIVACY.md.
             HStack(spacing: 6) {
-                Image(systemName: "lock.fill")
+                Image(systemName: "lock.fill").accessibilityHidden(true)
                     .font(.system(size: 10))
                     .foregroundStyle(Theme.ok)
                 Text(safetyLine)
@@ -619,6 +619,7 @@ private struct NoticeBanner: View {
                 Button("Refresh now", action: onRefresh)
                     .buttonStyle(WireActionStyle())
                     .help("Check your services and update the digest now")
+                    .accessibilityHint("Check your services and update the digest now")
             }
             Button { onDismiss() } label: {
                 Image(systemName: "xmark")
@@ -701,7 +702,7 @@ private struct ReceiptToast: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: receipt.tone == .problem ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+            Image(systemName: receipt.tone == .problem ? "exclamationmark.triangle.fill" : "checkmark.circle.fill").accessibilityHidden(true)
                 .font(.system(size: 12))
                 .foregroundStyle(receipt.tone == .problem ? Theme.signal : Theme.ok)
             Text(receipt.text)

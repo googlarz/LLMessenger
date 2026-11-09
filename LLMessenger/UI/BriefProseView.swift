@@ -333,6 +333,7 @@ struct BriefProseView: View {
                         }
                         .buttonStyle(WireActionStyle())
                         .help("Mark every visible card in this digest as handled")
+                        .accessibilityHint("Mark every visible card in this digest as handled")
                     }
                     .padding(.horizontal, Theme.gutter)
                     .padding(.top, 10)
@@ -525,7 +526,7 @@ private struct NoiseStripView: View {
                     WireLabel("FYI · \(cards.count) quiet item\(cards.count == 1 ? "" : "s")",
                               color: headerHovered ? Theme.textPrimary : Theme.textSecondary)
                     Rule()
-                    Image(systemName: "chevron.down")
+                    Image(systemName: "chevron.down").accessibilityHidden(true)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(headerHovered ? Theme.textPrimary : Theme.textSecondary)
                         .rotationEffect(.degrees(expanded ? 180 : 0))
@@ -603,7 +604,7 @@ private struct NoiseRowButton: View {
                             .font(Theme.mono(11))
                             .foregroundStyle(Theme.textTertiary)
                     }
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.right").accessibilityHidden(true)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
                         .rotationEffect(.degrees(rowExpanded ? 90 : 0))

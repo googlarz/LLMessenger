@@ -40,7 +40,7 @@ struct OnboardingRootView: View {
             if canGoBack {
                 Button { model.goBack() } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
+                        Image(systemName: "chevron.left").accessibilityHidden(true).font(.system(size: 10, weight: .semibold))
                         Text("Back").font(Theme.sans(12.5))
                     }
                     .foregroundStyle(backHovered ? Theme.textPrimary : Theme.textSecondary)
@@ -161,7 +161,7 @@ private struct QuietLink: View {
     let action: () -> Void
     var body: some View {
         Button(title, action: action)
-            .buttonStyle(WireActionStyle(sansLabel: true))
+            .buttonStyle(WireActionStyle.textAction())
             .frame(maxWidth: .infinity, alignment: .center)
     }
 }
@@ -242,7 +242,7 @@ struct WelcomeStep: View {
                   subtitle: "LLMessenger reads your chats and writes one short digest of what needs you. It drafts replies, and you approve every one.") {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(spacing: 8) {
-                    Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(Theme.ok)
+                    Image(systemName: "lock.fill").accessibilityHidden(true).font(.system(size: 10)).foregroundStyle(Theme.ok)
                     Text("Nothing leaves this Mac unless you choose a cloud model.")
                         .font(Theme.sans(12.5, weight: .medium))
                         .foregroundStyle(Theme.textSecondary)
@@ -298,7 +298,7 @@ private struct ChoiceBox: View {
         RoundedRectangle(cornerRadius: 3)
             .strokeBorder(selected ? Theme.textPrimary : Theme.border, lineWidth: 1)
             .background(RoundedRectangle(cornerRadius: 3).fill(selected ? Theme.textPrimary : Color.clear))
-            .overlay(Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
+            .overlay(Image(systemName: "checkmark").accessibilityHidden(true).font(.system(size: 10, weight: .bold))
                         .foregroundStyle(Theme.bg).opacity(selected ? 1 : 0))
             .frame(width: 16, height: 16)
     }

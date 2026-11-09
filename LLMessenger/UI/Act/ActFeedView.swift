@@ -474,7 +474,7 @@ struct ActFeedView: View {
 
     private var emptyState: some View {
         VStack(spacing: 10) {
-            Image(systemName: appState.briefs.isEmpty ? "ellipsis.circle" : "checkmark.circle")
+            Image(systemName: appState.briefs.isEmpty ? "ellipsis.circle" : "checkmark.circle").accessibilityHidden(true)
                 .font(Theme.sans(28, weight: .thin))
                 .foregroundStyle(Theme.textTertiary.opacity(0.4))
                 .padding(.bottom, 2)
@@ -675,11 +675,13 @@ private struct ActCardRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // 2-colour accent bar: wider + brighter when selected
+            // Accent bar: vermilion AND wider when the row needs a decision, so
+            // the cue survives without colour; wider again when selected.
             Rectangle()
                 .fill(accentColor)
-                .frame(width: isSelected ? 4 : 3)
+                .frame(width: (needsDecision ? 4 : 2) + (isSelected ? 1 : 0))
                 .animation(Theme.quick, value: isSelected)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 5) {
                 headerRow
@@ -717,8 +719,29 @@ private struct ActCardRow: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(needsDecision ? "Needs your decision" : "")
         .accessibilityAction(named: primaryAccessibilityActionName) {
             performPrimaryAccessibilityAction()
+        }
+        // The visible buttons sit inside the row's own Button, so mirror the
+        // secondary ones as row actions: reachable from the VoiceOver actions
+        // rotor even if the nested buttons are not exposed individually.
+        .accessibilityActions { secondaryAccessibilityActions }
+    }
+
+    @ViewBuilder
+    private var secondaryAccessibilityActions: some View {
+        switch item {
+        case .agentAction(let a) where a.statusEnum != .scheduled:
+            if Self.isEditable(a) && ActQueueRules.sendsFromRow(a) {
+                Button("Edit") { appState.openComposer(editing: a) }
+            }
+            Button("Skip") { skip(a) }
+        case .owedReply(let r):
+            Button("Snooze until tomorrow") { snooze(r) }
+            Button("Dismiss") { dismiss(r) }
+        default:
+            EmptyView()
         }
     }
 
@@ -762,6 +785,7 @@ private struct ActCardRow: View {
                 HStack(spacing: 3) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 10))
+                        .accessibilityHidden(true)
                     Text("\(item.ageHours / 24)d waiting")
                         .font(Theme.mono(10, weight: .semibold))
                 }
@@ -797,6 +821,7 @@ private struct ActCardRow: View {
             Image(systemName: item.typeIcon)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(accentColor.opacity(0.65))
+                .accessibilityHidden(true)
                 .frame(width: 13)
                 .padding(.top, 2)
             Text(item.preview)
@@ -820,6 +845,7 @@ private struct ActCardRow: View {
                     Image(systemName: "info.circle")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.textTertiary)
+                        .accessibilityHidden(true)
                         .frame(width: 13)
                         .padding(.top, 2)
                     Text(a.reasoning)
@@ -832,6 +858,7 @@ private struct ActCardRow: View {
                     Image(systemName: "info.circle")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.textTertiary)
+                        .accessibilityHidden(true)
                         .frame(width: 13)
                         .padding(.top, 2)
                     Text(r.reason)
@@ -989,37 +1016,43 @@ private struct ActCardRow: View {
     }
 
     private func skipButton(_ action: AgentAction) -> some View {
-        actionButton("Skip", key: "S") {
-            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-            appState.skipAction(action)
-            onResolved?()
+        actionButton("Skip", key: "S") { skip(action) }
+    }
+
+    private func skip(_ action: AgentAction) {
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+        appState.skipAction(action)
+        onResolved?()
+    }
+
+    private func snooze(_ reply: OwedReply) {
+        OwedReplyStore.snooze(reply.id, until: Date().addingTimeInterval(86400))
+        appState.reloadOwedReplies()
+        appState.showReceipt("Snoozed reply until tomorrow.", actionTitle: "Undo") {
+            OwedReplyStore.unsnooze(reply.id)
+            appState.reloadOwedReplies()
+            appState.recordUndo()
         }
+        onResolved?()
+    }
+
+    private func dismiss(_ reply: OwedReply) {
+        OwedReplyStore.dismiss(reply.id)
+        appState.reloadOwedReplies()
+        appState.showReceipt("Dismissed owed reply.", actionTitle: "Undo") {
+            OwedReplyStore.undismiss(reply.id)
+            appState.reloadOwedReplies()
+            appState.recordUndo()
+        }
+        onResolved?()
     }
 
     private func snoozeButton(_ reply: OwedReply) -> some View {
-        actionButton("Snooze") {
-            OwedReplyStore.snooze(reply.id, until: Date().addingTimeInterval(86400))
-            appState.reloadOwedReplies()
-            appState.showReceipt("Snoozed reply until tomorrow.", actionTitle: "Undo") {
-                OwedReplyStore.unsnooze(reply.id)
-                appState.reloadOwedReplies()
-                appState.recordUndo()
-            }
-            onResolved?()
-        }
+        actionButton("Snooze") { snooze(reply) }
     }
 
     private func dismissButton(_ reply: OwedReply) -> some View {
-        actionButton("Dismiss", key: "S") {
-            OwedReplyStore.dismiss(reply.id)
-            appState.reloadOwedReplies()
-            appState.showReceipt("Dismissed owed reply.", actionTitle: "Undo") {
-                OwedReplyStore.undismiss(reply.id)
-                appState.reloadOwedReplies()
-                appState.recordUndo()
-            }
-            onResolved?()
-        }
+        actionButton("Dismiss", key: "S") { dismiss(reply) }
     }
 
     private func actionButton(_ title: String, key: String? = nil, tint: Color = Theme.textTertiary,
@@ -1134,6 +1167,7 @@ private struct FailedSendRow: View {
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.signal)
                         .padding(.top, 2)
+                        .accessibilityHidden(true)
                     Text(appState.failureReason(for: action))
                         .font(Theme.sans(11.5))
                         .foregroundStyle(Theme.textSecondary)
@@ -1151,6 +1185,7 @@ private struct FailedSendRow: View {
                     Button("Dismiss") { appState.dismissFailedSend(action) }
                         .buttonStyle(WireActionStyle(tint: Theme.textTertiary, sansLabel: true))
                         .help("Remove it from Act without sending")
+                        .accessibilityHint("Remove it from Act without sending")
                     Spacer()
                 }
                 .padding(.top, 2)
@@ -1202,7 +1237,9 @@ private struct ScheduledCountdownBar: View {
             .accessibilityHidden(true)
         }
         .onReceive(ticker) { now = $0 }
-        .accessibilityElement(children: .combine)
+        // .contain, not .combine: combining swallowed the Undo button, which is
+        // the one control a VoiceOver user must be able to reach in time.
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Scheduled send")
         .accessibilityValue("\(secondsRemaining) seconds remaining")
     }

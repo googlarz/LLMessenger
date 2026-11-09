@@ -49,7 +49,7 @@ struct ReplyDraftView: View {
 
                 if let provenance = draft.provenance, !provenance.isEmpty {
                     HStack(alignment: .top, spacing: 7) {
-                        Image(systemName: "checkmark.shield")
+                        Image(systemName: "checkmark.shield").accessibilityHidden(true)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Theme.ok)
                             .padding(.top, 1)
@@ -81,6 +81,7 @@ struct ReplyDraftView: View {
                         .buttonStyle(PaperButtonStyle(prominent: true))
                         .disabled(!ChatViewModel.isAddressable(draft))
                         .help("Open this text in the Reply window, where you check it and send it")
+                        .accessibilityHint("Open this text in the Reply window, where you check it and send it")
                 }
             }
 

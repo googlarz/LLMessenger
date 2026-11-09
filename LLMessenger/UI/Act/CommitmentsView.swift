@@ -59,6 +59,7 @@ struct CommitmentsView: View {
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "checkmark.seal")
+                .accessibilityHidden(true)
                 .font(Theme.sans(28, weight: .thin))
                 .foregroundStyle(Theme.textTertiary.opacity(0.5))
                 .padding(.bottom, 4)

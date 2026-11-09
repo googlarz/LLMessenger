@@ -102,6 +102,7 @@ struct ActivityView: View {
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Theme.textTertiary)
                             .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .accessibilityHidden(true)
                     }
                 }
                 .padding(.horizontal, Theme.gutter)
@@ -112,6 +113,7 @@ struct ActivityView: View {
             .disabled(isToday)
             .accessibilityLabel("\(dayLabel(group.day))\(mattered > 0 ? ", \(mattered) needed you" : "")")
             .accessibilityAddTraits(isToday ? [] : .isButton)
+            .accessibilityValue(isToday ? "" : (isExpanded ? "Expanded" : "Collapsed"))
             .accessibilityHint(isToday ? "" : (isExpanded ? "Collapse this day" : "Expand this day"))
 
             if isExpanded {
@@ -198,7 +200,7 @@ struct ActivityView: View {
 
     private var emptyState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "tray")
+            Image(systemName: "tray").accessibilityHidden(true)
                 .font(.system(size: 28, weight: .thin))
                 .foregroundStyle(Theme.textTertiary.opacity(0.5))
                 .padding(.bottom, 4)
@@ -282,6 +284,19 @@ private struct ActivityEventRow: View {
     @State private var isHovered = false
 
     var body: some View {
+        // A real button so the row can be focused and toggled from the keyboard.
+        Button(action: onTap) { rowContent }
+            .buttonStyle(.quiet)
+            .onHover { isHovered = $0 }
+            .animation(Theme.quick, value: isHovered)
+            .animation(Theme.spring, value: isExpanded)
+            .accessibilityValue([event.priority == "high" ? "High priority" : nil,
+                                 isExpanded ? "Expanded" : "Collapsed"]
+                .compactMap { $0 }.joined(separator: ", "))
+            .accessibilityHint(isExpanded ? "Collapse details" : "Expand details")
+    }
+
+    private var rowContent: some View {
         HStack(alignment: .top, spacing: 10) {
             (event.priority == "high" ? Theme.signal : Color.clear)
                 .frame(width: 2)
@@ -303,6 +318,7 @@ private struct ActivityEventRow: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .accessibilityHidden(true)
                 }
 
                 // Metadata demoted to one quiet line beneath the anchor.
@@ -326,15 +342,9 @@ private struct ActivityEventRow: View {
         .padding(.leading, 8)
         .padding(.vertical, 6)
         .padding(.trailing, Theme.gutter)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
         .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
-        .onTapGesture { onTap() }
-        .animation(Theme.quick, value: isHovered)
-        .animation(Theme.spring, value: isExpanded)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint(isExpanded ? "Collapse details" : "Expand details")
     }
 
     private func timeString(_ date: Date) -> String {

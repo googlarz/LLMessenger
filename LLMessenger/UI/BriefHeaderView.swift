@@ -83,6 +83,7 @@ struct BriefHeaderView: View {
             .buttonStyle(WireActionStyle(sansLabel: true))
             .help("Ask what changed since the last digest")
 
+            .accessibilityHint("Ask what changed since the last digest")
             Button {
                 InstrumentationManager.shared.track(event: .refreshTriggered, metadata: ["source": "header"])
                 onRefresh?()
@@ -92,6 +93,7 @@ struct BriefHeaderView: View {
             .buttonStyle(PaperButtonStyle())
             .disabled(isWorking)
             .help("Fetch new messages and rebuild the digest")
+            .accessibilityHint("Fetch new messages and rebuild the digest")
         }
     }
 

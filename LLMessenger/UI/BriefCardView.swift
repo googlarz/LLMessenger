@@ -156,7 +156,7 @@ struct BriefCardView: View {
             if !isHandled {
                 if card.needsReply {
                     Button("REPLY") { prepareReply() }
-                        .buttonStyle(WireActionStyle(tint: Theme.signal))
+                        .buttonStyle(WireActionStyle(tint: card.priority == "high" ? Theme.signal : Theme.textSecondary))
                         .accessibilityLabel("Reply to \(convName)")
                 } else {
                     Button("DONE") { toggleHandled() }
@@ -222,6 +222,7 @@ struct BriefCardView: View {
             }
             .buttonStyle(.quiet)
             .help("Add a label or priority hint for this conversation")
+            .accessibilityHint("Add a label or priority hint for this conversation")
             .animation(Theme.quick, value: labelHovered)
             .onHover { labelHovered = $0 }
             .popover(isPresented: $showLabelEditor) {
@@ -331,12 +332,14 @@ struct BriefCardView: View {
             Button {
                 withAnimation(Theme.spring) { bodyExpanded.toggle() }
             } label: {
-                Image(systemName: "chevron.down")
+                Image(systemName: "chevron.down").accessibilityHidden(true)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(chevronHovered ? Theme.textSecondary : Theme.textTertiary)
                     .rotationEffect(.degrees(isBodyExpanded ? 180 : 0))
             }
-            .buttonStyle(.quiet)
+            // The chevron is the keyboard/VoiceOver path; the tap gestures on the
+            // headline and summary are pointer shortcuts to the same action.
+            .buttonStyle(.icon)
             .help(isBodyExpanded ? "Collapse" : "Expand")
             .accessibilityLabel(isBodyExpanded ? "Collapse details" : "Expand details")
             .animation(Theme.quick, value: chevronHovered)
@@ -511,7 +514,7 @@ struct BriefCardView: View {
                     withAnimation(Theme.spring) { trustExpanded.toggle() }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "checkmark.shield")
+                        Image(systemName: "checkmark.shield").accessibilityHidden(true)
                             .font(.system(size: 10, weight: .medium))
                         Text("WHY THIS CARD")
                             .font(Theme.mono(10, weight: .semibold))
@@ -559,7 +562,8 @@ struct BriefCardView: View {
             onAskDetail: askForDetails,
             onReply: prepareReply,
             onDraftOptions: generateDraftOptions,
-            onToggleHandled: toggleHandled
+            onToggleHandled: toggleHandled,
+            replyIsUrgent: card.priority == "high"
         )
     }
 

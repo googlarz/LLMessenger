@@ -43,7 +43,7 @@ struct MenuBarLocationNote: View {
 private struct MenuBarHintView: View {
     var body: some View {
         VStack(spacing: 0) {
-            Image(systemName: "arrowtriangle.up.fill")
+            Image(systemName: "arrowtriangle.up.fill").accessibilityHidden(true)
                 .font(.system(size: 10))
                 .foregroundStyle(Theme.border)
             HStack(spacing: 12) {

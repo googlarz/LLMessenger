@@ -78,7 +78,7 @@ private struct EmptyMediaState: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: icon)
+            Image(systemName: icon).accessibilityHidden(true)
                 .font(Theme.sans(32, weight: .thin))
                 .foregroundStyle(Theme.textTertiary)
             Text(label)
@@ -100,7 +100,7 @@ private struct MediaTabButton: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 3) {
-                Image(systemName: symbol)
+                Image(systemName: symbol).accessibilityHidden(true)
                     .font(Theme.sans(11))
                 Text(label)
                     .font(Theme.sans(10.5, weight: selected ? .semibold : .medium))

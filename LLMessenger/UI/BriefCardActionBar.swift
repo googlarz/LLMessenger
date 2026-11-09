@@ -13,6 +13,9 @@ struct BriefCardActionBar: View {
     let onReply: () -> Void
     let onDraftOptions: () -> Void
     let onToggleHandled: () -> Void
+    /// Vermilion on Reply only when the card itself is high priority — it
+    /// means "needs you now", not "has a reply button".
+    var replyIsUrgent = false
     @State private var showingMore = false
 
     var body: some View {
@@ -59,22 +62,26 @@ struct BriefCardActionBar: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
                     .rotationEffect(.degrees(evidenceExpanded ? 180 : 0))
+                    .accessibilityHidden(true)
             }
         }
         .buttonStyle(WireActionStyle(tint: evidenceExpanded ? Theme.textPrimary : Theme.textTertiary))
         .help(evidenceExpanded ? "Hide the source messages" : "Show the source messages behind this card")
+        .accessibilityHint(evidenceExpanded ? "Hides the source messages" : "Shows the source messages behind this card")
     }
 
     private var detailButton: some View {
         Button(messageCount > 20 ? "Catch me up" : "Detail", action: onAskDetail)
             .buttonStyle(WireActionStyle(sansLabel: true))
             .help(messageCount > 20 ? "Deeper summary of this long thread" : "Ask for more detail")
+            .accessibilityHint(messageCount > 20 ? "Deeper summary of this long thread" : "Ask for more detail")
     }
 
     private var replyButton: some View {
         Button("Reply", action: onReply)
-            .buttonStyle(WireActionStyle(tint: Theme.signal, sansLabel: true))
+            .buttonStyle(WireActionStyle(tint: replyIsUrgent ? Theme.signal : Theme.textSecondary, sansLabel: true))
             .help("Write a reply in the Reply window")
+            .accessibilityHint("Write a reply in the Reply window")
     }
 
     private var doneButton: some View {
@@ -82,11 +89,13 @@ struct BriefCardActionBar: View {
             HStack(spacing: 4) {
                 Image(systemName: isHandled ? "arrow.uturn.left" : "checkmark")
                     .font(.system(size: 10, weight: .bold))
+                    .accessibilityHidden(true)
                 Text(isHandled ? "Reopen" : "Done")
             }
         }
         .buttonStyle(WireActionStyle(tint: isHandled ? Theme.textTertiary : Theme.ok, sansLabel: true))
         .help(isHandled ? "Put this card back in the active digest" : "Mark this card as handled")
+        .accessibilityHint(isHandled ? "Puts this card back in the active digest" : "Marks this card as handled")
     }
 
     private var moreButton: some View {
@@ -110,6 +119,7 @@ struct BriefCardActionBar: View {
         }
         .help("More reply options")
         .accessibilityLabel("More reply options")
+        .accessibilityHint("Opens a menu with draft options")
     }
 
     private var divider: some View {

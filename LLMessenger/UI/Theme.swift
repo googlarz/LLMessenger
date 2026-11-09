@@ -407,24 +407,26 @@ struct PaperButtonStyle: ButtonStyle {
     var labelFont: Font = Theme.sans(12.5, weight: .semibold)
     var tracking: CGFloat = 0
     @State private var isHovered = false
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
+        let filled = prominent && isEnabled
         return configuration.label
             .font(labelFont)
             .tracking(tracking)
-            .foregroundStyle(prominent ? Theme.bg : Theme.textSecondary)
+            .foregroundStyle(!isEnabled ? Theme.textDisabled : (prominent ? Theme.bg : Theme.textSecondary))
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .fill(prominent
+                    .fill(filled
                           ? (isHovered ? Theme.textPrimary.opacity(0.88) : Theme.textPrimary)
-                          : (isHovered ? Theme.surfaceHigh : Theme.surface))
+                          : (isHovered && isEnabled ? Theme.surfaceHigh : Theme.surface))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .strokeBorder(prominent ? Color.clear : Theme.border, lineWidth: Theme.hairline)
+                    .strokeBorder(filled ? Color.clear : Theme.border, lineWidth: Theme.hairline)
             )
             .focusRing()
             .opacity(pressed ? 0.75 : 1)
@@ -440,18 +442,19 @@ struct PaperButtonStyle: ButtonStyle {
 struct PrimaryActionStyle: ButtonStyle {
     var tint: Color = Theme.standby
     @State private var isHovered = false
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
             .font(Theme.mono(11, weight: .bold))
             .tracking(0.4)
-            .foregroundStyle(Theme.onTint)
+            .foregroundStyle(isEnabled ? Theme.onTint : Theme.textDisabled)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .fill(isHovered ? tint.opacity(0.85) : tint)
+                    .fill(!isEnabled ? Theme.surfaceHigh : (isHovered ? tint.opacity(0.85) : tint))
             )
             .focusRing()
             .opacity(pressed ? 0.78 : 1)
@@ -470,18 +473,21 @@ struct WireActionStyle: ButtonStyle {
     /// Opt in per call site rather than flipping the default — most existing
     /// mono-caps buttons in the app are legitimately wire-voice metadata.
     var sansLabel = false
-    /// Underlined text-button affordance for secondary actions that would
-    /// otherwise read as plain text ("Draft with AI", "Decide later").
-    var underlined = false
+    /// Underlined text-button affordance so a sans-label command never reads as
+    /// plain text ("Draft with AI", "Decide later", "Skip"). On by default for
+    /// every `sansLabel` button; the mono-caps wire voice stays unmarked.
+    var underlined: Bool? = nil
     @State private var isHovered = false
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
             .font(sansLabel ? Theme.sans(12, weight: .medium) : Theme.mono(11, weight: .semibold))
             .tracking(sansLabel ? 0 : 0.4)
-            .underline(underlined, pattern: .solid)
-            .foregroundStyle(isHovered ? (tint == Theme.textSecondary ? Theme.textPrimary : tint) : tint)
+            .underline(underlined ?? sansLabel, pattern: .solid)
+            .foregroundStyle(!isEnabled ? Theme.textDisabled
+                             : (isHovered ? (tint == Theme.textSecondary ? Theme.textPrimary : tint) : tint))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(

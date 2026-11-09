@@ -88,7 +88,7 @@ private struct BriefSearchResultRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                Image(systemName: "doc.text")
+                Image(systemName: "doc.text").accessibilityHidden(true)
                     .font(Theme.sans(11))
                     .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
                 Text(brief.createdAt, style: .date)

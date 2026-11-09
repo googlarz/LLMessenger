@@ -187,12 +187,13 @@ struct ReplyComposerView: View {
                        ? "Draft with AI" : "Redraft with AI") {
                     Task { await model.draftWithAI() }
                 }
-                .buttonStyle(WireActionStyle(tint: Theme.textSecondary, sansLabel: true))
+                .buttonStyle(WireActionStyle.textAction())
                 .disabled(model.draftingBlockedReason != nil)
                 .help("Fill the text box with a suggested reply. Nothing is sent.")
+                .accessibilityHint("Fill the text box with a suggested reply. Nothing is sent.")
                 if model.textBeforeDraft != nil {
                     Button("Restore my text") { model.restoreTextBeforeDraft() }
-                        .buttonStyle(WireActionStyle(tint: Theme.textTertiary, sansLabel: true))
+                        .buttonStyle(WireActionStyle.textAction(tint: Theme.textTertiary))
                 }
             }
             Spacer(minLength: 0)
