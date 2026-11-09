@@ -85,12 +85,12 @@ struct ChatPanelView: View {
                                 .transition(.opacity)
                         }
 
-                        // Q&A zone — a side conversation about the brief, set apart
+                        // Ask zone — a side conversation about the digest, set apart
                         // by a section label and a faint ink wash, not the brief itself.
                         if !aiItems.isEmpty || chatViewModel.isLoading {
                             VStack(alignment: .leading, spacing: 0) {
                                 HStack(spacing: 10) {
-                                    WireLabel("Q&A")
+                                    WireLabel("Ask about your messages")
                                     Rule()
                                 }
                                 .padding(.horizontal, Theme.gutter)
@@ -188,8 +188,6 @@ struct ChatPanelView: View {
             AssistantResponseWithSourcesView(text: text, sources: sources)
         case .replyDraft(let id, let draft):
             ReplyDraftView(draftID: id, draft: draft)
-        case .sendConfirmation(let id, let draft):
-            SendConfirmationView(confirmationID: id, draft: draft)
         case .conversationPicker(let id, let req, let opts):
             ConversationPickerView(pickerID: id, originalRequest: req, options: opts)
         }
