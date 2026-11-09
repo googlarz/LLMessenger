@@ -684,6 +684,18 @@ final class AppDatabase: @unchecked Sendable {
 
             try Self.backfillCanonicalBriefCards(in: db)
         }
+        // Which conversations fed each brief's prompt. No backfill: briefs that
+        // predate this table have no rows and are never shared over MCP.
+        migrator.registerMigration("v36_brief_provenance") { db in
+            try db.create(table: "briefProvenance") { table in
+                table.column("briefId", .integer).notNull()
+                    .references("briefs", onDelete: .cascade)
+                table.column("service", .text).notNull()
+                table.column("conversationId", .text).notNull()
+                table.column("isIncompleteMarker", .boolean).notNull().defaults(to: false)
+                table.primaryKey(["briefId", "service", "conversationId"])
+            }
+        }
         return migrator
     }
 
