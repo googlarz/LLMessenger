@@ -702,3 +702,22 @@ final class PrivacyOverrideCopyTests: XCTestCase {
         XCTAssertEqual(PrivacyOverrideCopy.caption(for: "anything else"), PrivacyOverrideCopy.caption(for: "none"))
     }
 }
+
+final class MCPStatusLineTests: XCTestCase {
+    func testNoRequestYet() {
+        XCTAssertEqual(MCPStatusLine.text(nil, now: Date()), "No app has asked for anything yet.")
+    }
+
+    func testRecentRequestNamesWhatWasAskedForInPlainWords() {
+        let now = Date()
+        let line = MCPStatusLine.text((now.addingTimeInterval(-10), "search_messages"), now: now)
+        XCTAssertEqual(line, "Last request from a connected app: just now (a message search).")
+    }
+
+    func testOlderRequestUsesRelativeTimeAndUnknownToolsStayGeneric() {
+        let now = Date()
+        let line = MCPStatusLine.text((now.addingTimeInterval(-7200), "something_new"), now: now)
+        XCTAssertTrue(line.contains("2 hours ago"), line)
+        XCTAssertTrue(line.hasSuffix("(a request)."), line)
+    }
+}

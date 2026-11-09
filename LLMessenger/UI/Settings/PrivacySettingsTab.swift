@@ -9,13 +9,19 @@ struct PrivacySettingsTab: View {
     @ObservedObject private var auditLog = NetworkAuditLog.shared
     private let repo: SettingsRepository
     private let executablePath: String
+    private let lastAgentRequest: () -> (date: Date, tool: String)?
+    @State private var showMCPSetup: Bool
 
     /// `repo` and `executablePath` are injectable so previews and snapshots don't touch the
     /// user's real settings or show a machine-specific path.
     init(repo: SettingsRepository = SettingsRepository(),
          mcp: MCPAccessModel? = nil,
-         executablePath: String? = nil) {
+         executablePath: String? = nil,
+         lastAgentRequest: @escaping () -> (date: Date, tool: String)? = { MCPActivityLog().load() }) {
         self.repo = repo
+        self.lastAgentRequest = lastAgentRequest
+        // Setup steps matter until an app has connected once; after that they are reference.
+        _showMCPSetup = State(initialValue: lastAgentRequest() == nil)
         self.executablePath = executablePath ?? Bundle.main.executablePath ?? "LLMessenger"
         _localOnlyMode = State(initialValue: repo.loadLocalOnlyMode())
         _sanitizeBeforeSend = State(initialValue: repo.loadSanitizeBeforeSend())
@@ -96,9 +102,16 @@ struct PrivacySettingsTab: View {
         .padding(.vertical, 14)
     }
 
-    /// Reserved for a "last request from a connected app" line. Intentionally empty for now.
+    /// Proof that the switch does something: when a connected app last asked for data.
     @ViewBuilder private var mcpStatusSlot: some View {
-        EmptyView()
+        if mcp.phase == .on {
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                Text(MCPStatusLine.text(lastAgentRequest(), now: context.date))
+                    .font(Theme.sans(11.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var mcpConfirmation: some View {
@@ -141,8 +154,17 @@ struct PrivacySettingsTab: View {
     private var mcpSetup: some View {
         VStack(alignment: .leading, spacing: 14) {
             Rule()
-            WireLabel("Connect an app")
+            DisclosureGroup(isExpanded: $showMCPSetup) {
+                mcpSetupSteps.padding(.top, 10)
+            } label: {
+                WireLabel("Connect an app")
+            }
+        }
+        .padding(.top, 6)
+    }
 
+    private var mcpSetupSteps: some View {
+        VStack(alignment: .leading, spacing: 14) {
             setupBlock(title: "Claude Desktop", steps: [
                 "Open Claude, then Settings, Developer, Edit Config.",
                 "Paste the config below into the file. If it already has \u{201C}mcpServers\u{201D}, add only the llmessenger entry.",
@@ -165,7 +187,6 @@ struct PrivacySettingsTab: View {
                 .foregroundStyle(Theme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, 6)
     }
 
     private func setupBlock(title: String, steps: [String]) -> some View {
@@ -357,5 +378,34 @@ private struct AuditRow: View {
         if let ms = entry.durationMs { parts.append("\(ms) ms") }
         if entry.error != nil { parts.append("error") }
         return parts.joined(separator: " · ")
+    }
+}
+
+enum MCPStatusLine {
+    /// Only the time and the kind of request are known — never what was asked for.
+    static func text(_ last: (date: Date, tool: String)?, now: Date) -> String {
+        guard let last else { return "No app has asked for anything yet." }
+        let seconds = max(0, now.timeIntervalSince(last.date))
+        let when: String
+        if seconds < 60 {
+            when = "just now"
+        } else {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .full
+            when = formatter.localizedString(for: last.date, relativeTo: now)
+        }
+        return "Last request from a connected app: \(when) (\(describe(last.tool)))."
+    }
+
+    static func describe(_ tool: String) -> String {
+        switch tool {
+        case "get_owed_replies": return "who is waiting on you"
+        case "get_latest_digest": return "your latest digest"
+        case "search_messages": return "a message search"
+        case "list_conversations": return "your conversation list"
+        case "get_conversation_messages": return "messages from one conversation"
+        case "propose_reply": return "a suggested reply"
+        default: return "a request"
+        }
     }
 }

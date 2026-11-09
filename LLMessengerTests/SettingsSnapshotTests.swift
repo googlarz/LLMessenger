@@ -83,7 +83,7 @@ final class SettingsSnapshotTests: XCTestCase {
 
     func testSnapshotPrivacyMCPOff() throws {
         let r = repo()
-        try renderBoth(PrivacySettingsTab(repo: r, executablePath: fakeExecutable),
+        try renderBoth(PrivacySettingsTab(repo: r, executablePath: fakeExecutable, lastAgentRequest: { nil }),
                        size: NSSize(width: 720, height: 980), name: "settings-privacy-mcp-off")
     }
 
@@ -92,14 +92,14 @@ final class SettingsSnapshotTests: XCTestCase {
         let model = MCPAccessModel(repo: r)
         model.setSwitch(true)   // switch flipped, confirmation showing, nothing stored
         XCTAssertFalse(r.loadMCPServerEnabled())
-        try renderBoth(PrivacySettingsTab(repo: r, mcp: model, executablePath: fakeExecutable),
+        try renderBoth(PrivacySettingsTab(repo: r, mcp: model, executablePath: fakeExecutable, lastAgentRequest: { nil }),
                        size: NSSize(width: 720, height: 1100), name: "settings-privacy-mcp-confirm")
     }
 
     func testSnapshotPrivacyMCPOn() throws {
         let r = repo()
         r.saveMCPServerEnabled(true)
-        try renderBoth(PrivacySettingsTab(repo: r, executablePath: fakeExecutable),
+        try renderBoth(PrivacySettingsTab(repo: r, executablePath: fakeExecutable, lastAgentRequest: { nil }),
                        size: NSSize(width: 720, height: 1500), name: "settings-privacy-mcp-on")
     }
 
