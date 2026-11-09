@@ -23,6 +23,9 @@ extension AppState {
             Task { @MainActor in
                 await task.value
                 selectedBriefID = try? repository.latestBriefID()
+                // The seeded data has a digest but no drafts or owed replies, so
+                // Act would open nearly empty. Land where the sample content is.
+                requestedSection = .digests
                 showReceipt("Sample command center opened. This is synthetic demo data.")
             }
         } catch {

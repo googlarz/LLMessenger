@@ -340,6 +340,16 @@ final class DesignSnapshotTests: XCTestCase {
         await state.refreshBriefs().value
         state.selectedBriefID = try BriefRepository(database: db).latestBriefID()
         state.serviceHealth = [:]
+        // refreshBriefs() returns before the owed-reply / agent-action / task
+        // reloads it kicks off finish (they run detached), so without waiting the
+        // window rendered an empty Act. The real app has those results by the
+        // time anyone looks; wait for them here so the snapshot shows the same.
+        state.refreshTasks()
+        for _ in 0..<60 where state.attentionProjection.actItems.isEmpty && state.attentionProjection.tasks.isEmpty {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
+        print("DEMO act items: \(state.attentionProjection.actItems.count), tasks: \(state.attentionProjection.tasks.count), owed: \(state.owedReplies.count), actions: \(state.agentActions.count)")
 
         let chat = state.makeChatViewModel()
         let main = ContentView()
