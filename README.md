@@ -125,7 +125,7 @@ CI runs security checks, the full test suite, static analysis, and an unsigned u
 | **Anthropic Claude** | API key | Pay per use | Opt-in cloud — best digest quality |
 | **OpenAI** | API key | Pay per use | Opt-in cloud |
 
-Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) is a single toggle that guarantees no message content can leave your machine.
+Cloud backends are strictly opt-in. **Local-only mode** (Settings → AI & Privacy → Privacy) is a single toggle that keeps message content away from cloud AI providers and blocks AI apps connected over MCP from reading anything.
 
 ## What it does
 
@@ -209,10 +209,10 @@ This is the entire trust model — see [`PRIVACY.md`](PRIVACY.md) for the full d
 - **There is no LLMessenger server.** Nothing to breach, no developer who can read your messages, no account to create.
 - **All data lives in** `~/Library/Application Support/LLMessenger/`. Delete the folder, and it's gone.
 - **On-Device or Ollama = zero egress.** With a local backend and no Slack, no message content ever leaves your machine.
-- **Network audit log** (Settings → Privacy) shows every cloud HTTPS call live — provider, endpoint, status, bytes. Never message content.
+- **Network audit log** (Settings → AI & Privacy → Privacy) shows every cloud HTTPS call live — provider, endpoint, status, bytes. Never message content.
 - **Pre-send redaction** (opt-in) strips credit cards, SSNs, IBANs, and emails before anything reaches a cloud LLM.
 - **Keys in the Keychain.** API keys and Slack tokens are never written to plain files.
-- **No telemetry or analytics.** The optional daily GitHub release check sends no message content and can be disabled in Settings.
+- **No telemetry or analytics, and nothing is sent to the developer.** The one thing the app looks up on its own is a new version on GitHub, when it starts and at most once a day. The request carries no message content or account details, and you can switch it off in Settings → AI & Privacy → Privacy → Updates.
 
 Don't trust the README? The [reproducible release workflow](.github/workflows/release.yml) lets anyone rebuild the packaged app from source on a clean GitHub runner and compare SHA-256 hashes.
 
@@ -239,7 +239,7 @@ No. README screenshots are generated from `DesignSnapshotTests` and `DemoSeeder`
 <details>
 <summary><strong>Does this send my messages to OpenAI / Anthropic?</strong></summary>
 
-Only if you explicitly choose a cloud backend. The default path (On-Device on macOS 26, Ollama otherwise) processes everything locally. Local-only mode makes cloud egress impossible with one toggle, and the network audit log lets you verify it live. A conversation marked local-only is never sent to a cloud model — including for the agent's reasoning.
+Only if you explicitly choose a cloud backend. The default path (On-Device on macOS 26, Ollama otherwise) processes everything locally. Local-only mode stops message content going to cloud AI providers and Slack with one toggle, and the network audit log lets you verify it live. A conversation marked local-only is never sent to a cloud model — including for the agent's reasoning.
 </details>
 
 <details>
@@ -269,7 +269,7 @@ By default, no. Quick replies and AI drafts wait for your tap. If you explicitly
 <details>
 <summary><strong>What about WhatsApp?</strong></summary>
 
-Supported read-only since v2.4.0. LLMessenger reads WhatsApp Desktop's local history on your Mac (the same way it reads iMessage), so WhatsApp chats show up in digests and owed replies. There is no local send API, so you reply in WhatsApp itself — LLMessenger drafts the text and opens the chat. It's off by default; enable it in Settings → Services. Requires WhatsApp Desktop installed and signed in.
+Supported read-only since v2.4.0. LLMessenger reads WhatsApp Desktop's local history on your Mac (the same way it reads iMessage), so WhatsApp chats show up in digests and owed replies. There is no local send API, so you reply in WhatsApp itself — LLMessenger drafts the text and opens the chat. It's off by default; enable it in Settings → Services. Requires WhatsApp Desktop installed and signed in, and Full Disk Access for LLMessenger (System Settings → Privacy & Security → Full Disk Access); the WhatsApp card in Settings tells you which of these is missing. "Open" jumps straight to the chat only for one-to-one chats; for groups it just opens WhatsApp, and you pick the group yourself.
 </details>
 
 <details>

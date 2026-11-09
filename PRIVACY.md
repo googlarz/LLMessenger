@@ -8,7 +8,7 @@ LLMessenger is a personal tool that reads your messages from the messaging servi
 * **Your messages live only on your Mac**, in `~/Library/Application Support/LLMessenger/`.
 * **Cloud egress happens only if you configure it.** With Ollama + no Anthropic/OpenAI key + no Slack: zero message content ever leaves your machine.
 * **API keys and Slack tokens are stored in the macOS Keychain.** They are not written to any plaintext file.
-* **No remote analytics or crash upload.** A once-daily, anonymous GitHub release check can be disabled in Settings.
+* **No analytics, telemetry or crash upload, and nothing is sent to the developer.** The one thing the app looks up on its own is a new version on GitHub, when it starts and at most once a day. Switch it off in Settings → AI & Privacy → Privacy → Updates.
 
 ## Where your data is stored
 
@@ -37,7 +37,7 @@ When the app talks to anything that is **not** localhost, it goes to exactly one
 | `https://api.openai.com/v1/chat/completions` | Same as above — only if you configured an OpenAI key (and no Anthropic key) | Same as above |
 | `https://slack.com/api/*` | Slack adapter polls + send — only if you added a Slack workspace | Your OAuth token in the Authorization header; channel/user IDs in queries; outbound messages on `chat.postMessage` |
 | Telegram MTProto servers | Telegram adapter — only if you signed in | Your Telegram session + outbound messages |
-| `https://api.github.com/repos/googlarz/LLMessenger/releases/latest` | At most once daily unless update checks are disabled | App version request metadata only; no message content or account identifier |
+| `https://api.github.com/repos/googlarz/LLMessenger/releases/latest` | When the app starts, at most once a day, unless you turn it off in Settings → AI & Privacy → Privacy → Updates | No message content or account details. Like any web request, GitHub sees your IP address and the app and macOS versions |
 | `http://127.0.0.1:11434` (Ollama) | LLM calls when Ollama is selected | Localhost only — never leaves your Mac |
 | `http://127.0.0.1:7583` (signal-cli daemon) | Signal send | Localhost only — never leaves your Mac |
 
@@ -48,7 +48,7 @@ If you don't want any of that, see "Local-only mode" below.
 ## What the app does NOT do
 
 * No analytics, no crash reporter, no telemetry beacon.
-* No silent download or installation of updates. The optional GitHub request checks release metadata only.
+* No silent download or installation of updates. The optional GitHub request only reads the latest release's version number and link.
 * No background uploading of any kind.
 * No sharing of one user's data with another user's instance.
 * No use of message content for model training (this is governed by your contract with Anthropic / OpenAI / Slack, not by LLMessenger).
@@ -58,9 +58,9 @@ If you don't want any of that, see "Local-only mode" below.
 LLMessenger v2.0 learns who matters to you — per-conversation context (who's a key sender, what's important, what's noise), reply-owed state, and behavior-based suggestions. **This model never leaves your machine.**
 
 * It lives entirely in the local SQLite store (`conversationContexts`, `triageEvents`, `priorityCorrections`) — there is no server copy and no sync.
-* It is fully visible (Settings → the conversation's Context editor) and deletable: clear a conversation's context, or delete the store folder, and it's gone.
+* It is fully visible (in each conversation's Context editor) and deletable: clear a conversation's context, or delete the store folder, and it's gone.
 * There is **no cross-conversation identity graph** — context is scoped to one conversation; the app does not link "who's who" across chats.
-* A conversation you mark **local-only** (per-conversation privacy) is never sent to a cloud model for triage, even if your global backend is a cloud provider; one marked **never-draft** is never used to generate a reply.
+* A conversation you mark **Local-only** (per-conversation privacy) is never sent to a cloud model, even if your global backend is a cloud provider: with a cloud provider selected it is left out of digests and gets no reply drafts, and while MCP is on it is left out of digests regardless. One marked **Never draft** gets no reply drafts, no suggested replies and no auto-send, and is left out of digests entirely. (An AI app connected over MCP can still read a Never-draft conversation; it just can't propose replies for it.)
 
 ## The agent, and the one place it can send for you
 
@@ -71,31 +71,33 @@ There is exactly one way the app can send without a per-message tap, and it is e
 * **Scoped delegation is opt-in and off by default.** You enable it per conversation, for a specific low-risk action type only (acknowledgements, RSVPs) — in that conversation's Context editor.
 * **The decision to auto-send reads only your settings and structured action fields — never message content as authorization.** A single function (`AgentDelegation.decide`) is the only thing that can authorize an automatic send, and it requires *all* of: you delegated that action type for that conversation; the action is low-risk and high-confidence; the recipient is someone you already have a conversation with (never brand-new); and the draft contains no links, monetary amounts, or credential-like text. Incoming messages can naturally trigger an acknowledgement or RSVP within a scope you already delegated, but crafted content cannot enable delegation, widen it, bypass a guard, or authorize another action type.
 * **Every auto-send has a 30-second Undo** (cancellable from the menu bar) and is recorded in a local **action audit log** (what, where, why, when). Nothing about it is transmitted anywhere.
-* **A global kill switch** (and the per-conversation toggle) instantly reverts the app to prepare-only — propose, never send.
+* **A global kill switch** (the DELEGATED / PAUSED pill in the window toolbar) and the per-conversation toggle instantly revert the app to prepare-only — propose, never send.
 * **Voice commands are recognized on-device** (`requiresOnDeviceRecognition`); audio is not uploaded. **Calendar events** are written to your local calendar via EventKit; no calendar data leaves your Mac.
 
 ## Local-only mode
 
-Settings → About → **Local-only mode** disables every cloud egress path that carries message content:
+Settings → AI & Privacy → Privacy → **Local-only mode** disables every cloud egress path that carries message content:
 
 * Disables Anthropic + OpenAI clients (forces Ollama)
 * Skips registering the Slack adapter
+* Blocks every MCP read (see below)
 * Telegram is opt-in to begin with; you can simply not connect it
 
 With Ollama running locally, no message content is sent to a cloud AI provider. Connected messaging services still receive the traffic inherent in using them, including replies you approve or delegated sends; disconnect Telegram as well if you want no non-local connector traffic.
 
 ## MCP server mode (opt-in)
 
-Settings → AI & Privacy → Privacy → **Let AI agents read LLMessenger over MCP** is off by default. When you turn it on, `LLMessenger --mcp` lets an MCP client you configure (Claude Desktop, Cursor, …) read your owed replies, digests created after you enabled it, conversation lists and messages, and search them. That client may pass what it reads to its own model, which may be a cloud model — this is an egress path you control by choosing the client.
+Settings → AI & Privacy → Privacy → **Let AI apps read LLMessenger** is off by default, and asks you to confirm before it turns on. When it is on, `LLMessenger --mcp` lets an MCP client you configure (Claude Desktop, Claude Code, Cursor, …) read your owed replies, digests created after you enabled it, conversation lists and messages, and search them. That client may pass what it reads to its own model, which may be a cloud model — this is an egress path you control by choosing the client.
 
 * Conversations marked **Local-only** are never returned by any MCP tool, and are left out of digests entirely while MCP is on.
 * Global **Local-only mode** blocks every MCP read.
-* An agent can only *propose* a reply: it lands in your Act queue labelled as coming from an external agent, is never part of a batch send, and is sent only if you approve it.
+* Conversations marked **Never draft** can be read, but no reply can be proposed for them.
+* An agent can only *propose* a reply: it lands in your Act queue tagged **External agent** (it came from a connected app, not from you), is never part of a batch send, and is sent only if you approve it.
 * The MCP server speaks over stdio to a process on your Mac; it opens no network port.
 
 ## Network audit log
 
-Settings → About → **Network log** shows cloud HTTPS calls made by the built-in LLM, Slack, and update clients during this session, with timestamp, provider, endpoint path, request size in bytes, and response status. Queries, headers, bodies, and provider error bodies are omitted. Telegram runs in a separate process and is not represented in this in-app log.
+Settings → AI & Privacy → Privacy → **Network Log** shows cloud HTTPS calls made by the built-in LLM, Slack, and update clients during this session, with timestamp, provider, endpoint path, request size in bytes, and response status. Queries, headers, bodies, and provider error bodies are omitted. Telegram runs in a separate process and is not represented in this in-app log.
 
 ## Verifying for yourself
 
