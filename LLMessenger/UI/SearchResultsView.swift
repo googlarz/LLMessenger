@@ -28,13 +28,13 @@ struct SearchResultsView: View {
                         .frame(maxWidth: .infinity)
                 } else {
                     if !briefResults.isEmpty {
-                        SectionLabel(text: "BRIEFS")
+                        SectionLabel(text: "DIGESTS")
                         ForEach(briefResults, id: \.id) { brief in
                             Button { selectBrief(brief) } label: {
                                 BriefSearchResultRow(brief: brief)
                             }
                             .buttonStyle(.quiet)
-                            .accessibilityLabel("Open brief, \(brief.notificationText)")
+                            .accessibilityLabel("Open digest, \(brief.notificationText)")
                         }
                     }
                     if !messageResults.isEmpty {

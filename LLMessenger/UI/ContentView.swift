@@ -315,7 +315,7 @@ private struct NoBriefPlaceholder: View {
                     .font(Theme.sans(32, weight: .thin))
                     .foregroundStyle(Theme.textTertiary.opacity(0.5))
                     .padding(.bottom, 4)
-                WireLabel("Desk")
+                WireLabel("Digests")
                 Text("Nothing open")
                     .font(Theme.display(22))
                     .foregroundStyle(Theme.textSecondary)
@@ -450,11 +450,11 @@ private struct FirstBriefPreparingView: View {
         }
         if appState.llmClient.isLocal {
             return appState.hasDelegatedLanes
-                ? "Summaries run on this Mac. Delegated sends still show an undo window."
+                ? "Summaries run on this Mac. Auto-sends still show an undo window."
                 : "Summaries run on this Mac. Manual sends stage with undo."
         }
         return appState.hasDelegatedLanes
-            ? "Cloud summaries use your selected provider. Delegated sends still show an undo window."
+            ? "Cloud summaries use your selected provider. Auto-sends still show an undo window."
             : "Cloud summaries use your selected provider. Manual sends stage with undo."
     }
 

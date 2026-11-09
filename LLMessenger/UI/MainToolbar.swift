@@ -145,7 +145,7 @@ struct MainToolbar: ToolbarContent {
                     Circle()
                         .fill(disabled ? Theme.textTertiary : Theme.standby)
                         .frame(width: 6, height: 6)
-                    Text(disabled ? "PAUSED" : "DELEGATED")
+                    Text(disabled ? "PAUSED" : "AUTO-SEND")
                         .font(Theme.mono(10, weight: .semibold))
                         .tracking(0.6)
                 }
@@ -160,7 +160,7 @@ struct MainToolbar: ToolbarContent {
                         .font(Theme.sans(12.5, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
                     Text(disabled
-                         ? "Delegated lanes will resume sending on their own schedule."
+                         ? "Auto-send will resume for the conversations you allowed it in."
                          : "One or more conversations can send without your review.")
                         .font(Theme.sans(11.5))
                         .foregroundStyle(Theme.textTertiary)
@@ -168,7 +168,7 @@ struct MainToolbar: ToolbarContent {
                         .fixedSize(horizontal: false, vertical: true)
                     Button(disabled ? "Resume" : "Pause all") { disabled.toggle() }
                         .buttonStyle(WireActionStyle(tint: disabled ? Theme.standby : Theme.signal, sansLabel: true))
-                        .accessibilityLabel(disabled ? "Resume auto-send for delegated lanes" : "Pause all delegated auto-sends")
+                        .accessibilityLabel(disabled ? "Resume auto-send" : "Pause all auto-sends")
                 }
                 .padding(14)
             }

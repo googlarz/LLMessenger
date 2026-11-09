@@ -50,7 +50,7 @@ final class NotificationManager: NSObject {
 
     nonisolated static func scheduleSnoozeNotification(briefID: Int64, headline: String, at date: Date) {
         let content = UNMutableNotificationContent()
-        content.title = "Snoozed brief"
+        content.title = "Snoozed digest"
         content.body = headline
         content.userInfo = ["briefID": briefID]
         let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)

@@ -258,7 +258,7 @@ final class MenuBarController {
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = "LLMessenger brief"
+        image.accessibilityDescription = "LLMessenger digest"
         return image
     }()
 
@@ -292,12 +292,12 @@ final class MenuBarController {
         newItem.isEnabled = !isLoading
         menu.addItem(newItem)
 
-        let last24hItem = NSMenuItem(title: "Brief Last 48h", action: isLoading ? nil : #selector(MenuActionProxy.last24h), keyEquivalent: "")
+        let last24hItem = NSMenuItem(title: "Digest of the last 48 hours", action: isLoading ? nil : #selector(MenuActionProxy.last24h), keyEquivalent: "")
         last24hItem.target = proxy
         last24hItem.isEnabled = !isLoading
         menu.addItem(last24hItem)
 
-        let last7dItem = NSMenuItem(title: "Brief Last 7 Days", action: isLoading ? nil : #selector(MenuActionProxy.last7d), keyEquivalent: "")
+        let last7dItem = NSMenuItem(title: "Digest of the last 7 days", action: isLoading ? nil : #selector(MenuActionProxy.last7d), keyEquivalent: "")
         last7dItem.target = proxy
         last7dItem.isEnabled = !isLoading
         menu.addItem(last7dItem)
@@ -350,7 +350,7 @@ final class MenuBarController {
         menu.addItem(.separator())
 
         if recentBriefs.isEmpty {
-            let empty = NSMenuItem(title: "No briefs yet", action: nil, keyEquivalent: "")
+            let empty = NSMenuItem(title: "No digests yet", action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
         } else {

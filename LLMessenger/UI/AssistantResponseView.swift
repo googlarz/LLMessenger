@@ -126,7 +126,7 @@ struct AssistantResponseView: View {
 
     var body: some View {
         DeskItem(
-            label: "The desk",
+            label: "LLMessenger",
             trailing: providerLabel.map { label in
                 AnyView(
                     Text(label.uppercased())
@@ -153,7 +153,7 @@ struct AssistantResponseWithSourcesView: View {
     let sources: [ThreadSource]
 
     var body: some View {
-        DeskItem(label: "The desk · sourced") {
+        DeskItem(label: "LLMessenger · sourced") {
             VStack(alignment: .leading, spacing: 10) {
                 Text(text)
                     .font(Theme.sans(13))

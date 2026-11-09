@@ -358,7 +358,7 @@ struct BriefProseView: View {
                 HStack(alignment: .top, spacing: 10) {
                     Theme.standby.frame(width: 2)
                         .clipShape(RoundedRectangle(cornerRadius: 1))
-                    Text("\(stillBroken.map { Theme.serviceName($0) }.joined(separator: ", ")) is having connection trouble — its threads aren't in this brief.")
+                    Text("\(stillBroken.map { Theme.serviceName($0) }.joined(separator: ", ")) is having connection trouble — its threads aren't in this digest.")
                         .font(Theme.sans(12.5))
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
