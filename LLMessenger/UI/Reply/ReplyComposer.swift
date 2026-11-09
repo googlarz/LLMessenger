@@ -95,6 +95,8 @@ final class ReplyComposerModel: ObservableObject {
             }
             textBeforeDraft = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
             text = drafted
+        } catch let blocked as ReplyDrafter.Blocked {
+            draftError = blocked.reason
         } catch {
             draftError = appState.friendly(error, source: .ai)
         }
@@ -211,27 +213,47 @@ struct ReplyDrafter {
     let appState: AppState
 
     /// One plain line explaining why drafting is unavailable, or nil when allowed.
+    /// Reads the conversation's privacy setting from the database, never the
+    /// in-memory cache, so a just-changed setting can't be bypassed.
     func blockedReason(service: String, conversationId: String) -> String? {
         guard appState.isLLMConfigured else {
             return "Set up an AI provider in Settings to draft replies."
         }
-        let ctx = appState.cachedConversationContext(service: service, conversationId: conversationId)
-            ?? ((try? appState.repository.fetchConversationContext(service: service, conversationId: conversationId)) ?? nil)
-        switch ctx?.privacyOverride {
-        case "never_draft":
-            return "AI drafting is off for this conversation."
-        case "local_only" where !appState.llmClient.isLocal:
-            return "This conversation is Local-only and your AI provider is in the cloud."
-        default:
+        let ctx: ConversationContext?
+        do {
+            ctx = try appState.repository.fetchConversationContext(service: service, conversationId: conversationId)
+        } catch {
+            return "Couldn't read this conversation's privacy setting."
+        }
+        return Self.privacyBlock(context: ctx, clientIsCloud: appState.llmClient.isCloud)
+    }
+
+    /// The same rule digests and the agent use (BriefPromptAssembler.isExcludedByPrivacy).
+    /// Global Local-only mode is enforced below this, by LLMGateway (egressBlocked).
+    static func privacyBlock(context: ConversationContext?, clientIsCloud: Bool) -> String? {
+        guard BriefPromptAssembler.isExcludedByPrivacy(context: context, clientIsCloud: clientIsCloud) else {
             return nil
         }
+        return context?.privacyOverride == "never_draft"
+            ? "AI drafting is off for this conversation."
+            : "This conversation is Local-only and your AI provider is in the cloud."
+    }
+
+    struct Blocked: LocalizedError {
+        let reason: String
+        var errorDescription: String? { reason }
     }
 
     /// Drafts (empty editor) or redrafts (editor has text) a reply.
     func draft(request: ReplyComposerRequest, currentText: String) async throws -> String {
         let service = request.service
         let convId = request.conversationId
-        let ctx = (try? appState.repository.fetchConversationContext(service: service, conversationId: convId)) ?? nil
+        // Fail closed: the gate is checked here, on the context just read from
+        // the database, immediately before any text leaves for the model.
+        let ctx = try appState.repository.fetchConversationContext(service: service, conversationId: convId)
+        if let reason = Self.privacyBlock(context: ctx, clientIsCloud: appState.llmClient.isCloud) {
+            throw Blocked(reason: reason)
+        }
         let recent = (try? appState.repository.fetchRecentContextMessages(
             service: service, conversationID: convId, before: Date().addingTimeInterval(1), limit: 20)) ?? []
         let contextText = recent.map { "[\(Theme.serviceName($0.service))] [\($0.sender)]: \($0.text)" }

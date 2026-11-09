@@ -87,6 +87,22 @@ struct ReplyComposerView: View {
                     .font(Theme.sans(11.5))
                     .foregroundStyle(Theme.textTertiary)
             }
+            if !request.canSend {
+                // Said up front, before the user writes anything.
+                HStack(alignment: .top, spacing: 8) {
+                    Theme.standby.frame(width: 2)
+                        .clipShape(RoundedRectangle(cornerRadius: 1))
+                    Text("LLMessenger can read \(request.serviceName) but can't send through it. "
+                         + (ServiceDeepLink.opensExactChat(service: request.service, conversationId: request.conversationId)
+                            ? "Your reply is copied and the chat opens in \(request.serviceName) — paste and send it there."
+                            : "Your reply is copied and \(request.serviceName) opens — choose the chat, then paste."))
+                        .font(Theme.sans(12))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("To \(request.displayName) on \(request.serviceName)\(request.isGroup ? ", group chat" : "")")
@@ -96,9 +112,12 @@ struct ReplyComposerView: View {
 
     private var contextBlock: some View {
         VStack(alignment: .leading, spacing: 7) {
-            ForEach(model.context.suffix(3), id: \.messageId) { message in
+            let shown = Array(model.context.suffix(3))
+            ForEach(Array(shown.enumerated()), id: \.element.messageId) { index, message in
+                let author = message.isSent ? "You" : message.sender
+                let sameAsAbove = index > 0 && (shown[index - 1].isSent ? "You" : shown[index - 1].sender) == author
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(message.isSent ? "You" : message.sender)
+                    Text(sameAsAbove ? "" : author)
                         .font(Theme.mono(10.5, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
                         .lineLimit(1)
@@ -109,7 +128,9 @@ struct ReplyComposerView: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    Text(Theme.timeFormatter.string(from: message.timestamp))
+                    Text(Calendar.current.isDateInToday(message.timestamp)
+                         ? Theme.timeFormatter.string(from: message.timestamp)
+                         : Theme.dayMonthTimeFormatter.string(from: message.timestamp))
                         .font(Theme.mono(10))
                         .foregroundStyle(Theme.textTertiary)
                 }
@@ -142,7 +163,7 @@ struct ReplyComposerView: View {
                 .disabled(model.isDrafting)
                 .accessibilityLabel("Message to \(request.displayName). This exact text is what will be sent.")
         }
-        .frame(minHeight: 120, maxHeight: 220)
+        .frame(height: 150)
         .background(
             RoundedRectangle(cornerRadius: Theme.controlRadius)
                 .fill(Theme.surface)
@@ -197,16 +218,6 @@ struct ReplyComposerView: View {
                     Text("You'll have 5 seconds to undo.")
                         .font(Theme.sans(11.5))
                         .foregroundStyle(Theme.textTertiary)
-                } else {
-                    Text("LLMessenger can read \(request.serviceName) but can't send through it.")
-                        .font(Theme.sans(11.5))
-                        .foregroundStyle(Theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !ServiceDeepLink.opensExactChat(service: request.service, conversationId: request.conversationId) {
-                        Text("Choose the chat in \(request.serviceName), then paste.")
-                            .font(Theme.sans(11.5))
-                            .foregroundStyle(Theme.textTertiary)
-                    }
                 }
                 if let error = model.sendError {
                     Text(error)
@@ -228,6 +239,8 @@ struct ReplyComposerView: View {
                         .font(Theme.mono(10.5, weight: .semibold))
                         .opacity(0.6)
                 }
+                .lineLimit(1)
+                .fixedSize()
             }
             .buttonStyle(PaperButtonStyle(prominent: true))
             .keyboardShortcut(.return, modifiers: .command)

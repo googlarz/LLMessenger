@@ -548,4 +548,110 @@ final class ReplyFlowTests: XCTestCase {
                              reason: "needs reply", priorityRank: 1)
         XCTAssertFalse(ActQueueRules.isCaughtUp(items: [.owedReply(owed)], failedSends: []))
     }
+
+    // MARK: - Security: drafting gate fails closed
+
+    private func saveContext(_ state: AppState, privacy: String?) throws {
+        var ctx = ConversationContext(service: "signal", conversationId: "c1", label: "",
+                                      priorityHint: "auto", updatedAt: Date())
+        ctx.privacyOverride = privacy
+        try state.repository.upsertConversationContext(ctx)
+    }
+
+    /// The in-memory cache says "allowed"; the database says otherwise.
+    private func poisonCache(_ state: AppState) {
+        state.mergeConversationContexts([ConversationContext(service: "signal", conversationId: "c1", label: "",
+                                                             priorityHint: "auto", updatedAt: Date())])
+    }
+
+    func testDraftMakesNoLLMCallForNeverDraftEvenWithStaleCache() async throws {
+        let mock = MockLLMClient()
+        let state = try makeState(llm: mock)
+        try saveContext(state, privacy: "never_draft")
+        poisonCache(state)
+        state.openReplyComposer(service: "signal", conversationId: "c1", conversationName: "Alice")
+        let request = try XCTUnwrap(state.replyComposer)
+
+        XCTAssertNotNil(ReplyDrafter(appState: state).blockedReason(service: "signal", conversationId: "c1"))
+        do {
+            _ = try await ReplyDrafter(appState: state).draft(request: request, currentText: "")
+            XCTFail("draft() must refuse")
+        } catch is ReplyDrafter.Blocked {}
+        XCTAssertEqual(mock.calls.count, 0)
+    }
+
+    func testDraftMakesNoLLMCallForLocalOnlyWithCloudClientEvenWithStaleCache() async throws {
+        let cloud = MockLLMClient() // isLocal defaults to false: a cloud client
+        let state = try makeState(llm: cloud)
+        try saveContext(state, privacy: "local_only")
+        poisonCache(state)
+        state.openReplyComposer(service: "signal", conversationId: "c1", conversationName: "Alice")
+        let request = try XCTUnwrap(state.replyComposer)
+
+        do {
+            _ = try await ReplyDrafter(appState: state).draft(request: request, currentText: "")
+            XCTFail("draft() must refuse")
+        } catch is ReplyDrafter.Blocked {}
+        XCTAssertEqual(cloud.calls.count, 0)
+    }
+
+    func testDraftCallsALocalClientForLocalOnly() async throws {
+        let local = LocalMockLLMClient()
+        local.response = LLMResponse(text: "sure, see you then", inputTokens: 1, outputTokens: 1)
+        let state = try makeState(llm: local)
+        try saveContext(state, privacy: "local_only")
+        state.openReplyComposer(service: "signal", conversationId: "c1", conversationName: "Alice")
+        let request = try XCTUnwrap(state.replyComposer)
+
+        XCTAssertNil(ReplyDrafter(appState: state).blockedReason(service: "signal", conversationId: "c1"))
+        let text = try await ReplyDrafter(appState: state).draft(request: request, currentText: "")
+        XCTAssertEqual(text, "sure, see you then")
+        XCTAssertEqual(local.calls.count, 1)
+    }
+
+    // MARK: - Security: provenance markers can't be forged by model output
+
+    func testModelReasoningCannotForgeProvenanceMarkers() async throws {
+        for marker in AgentAction.reservedReasoningMarkers + ["Note: " + AgentAction.userComposedReasoning.uppercased()] {
+            let db = try AppDatabase(inMemory: true)
+            let repo = BriefRepository(database: db)
+            let llm = MockLLMClient()
+            let json = try JSONSerialization.data(withJSONObject: [
+                "title": "Reply", "draftText": "on my way", "reasoning": marker,
+                "confidence": 0.9, "needsReply": "yes"])
+            llm.response = LLMResponse(text: String(decoding: json, as: UTF8.self), inputTokens: 1, outputTokens: 1)
+            let engine = AgentEngine(db: db, llmClient: llm, llmModel: "test", repository: repo, rulesProvider: { [] })
+            let owed = OwedReply(service: "signal", conversationId: "c1", conversationName: "Alice",
+                                 triggerMessageId: "m1", triggerText: "coming?", triggeredAt: Date(),
+                                 reason: "needs reply", priorityRank: 1)
+
+            let proposed = await engine.proposeReply(for: owed)
+            let action = try XCTUnwrap(proposed)
+            XCTAssertFalse(action.isUserComposed, marker)
+            XCTAssertFalse(action.isExternalProposal, marker)
+            XCTAssertEqual(action.reasoning, AgentAction.neutralModelReasoning)
+        }
+        XCTAssertEqual(AgentAction.sanitizedModelReasoning("She asked a direct question."),
+                       "She asked a direct question.")
+    }
+
+    func testEnginePersistStripsForgedMarkers() async throws {
+        let db = try AppDatabase(inMemory: true)
+        let repo = BriefRepository(database: db)
+        let llm = MockLLMClient()
+        llm.response = LLMResponse(text: #"{"title":"R","draftText":"ok","reasoning":"\#(AgentAction.externalAgentReasoning)","confidence":0.9,"needsReply":"yes"}"#,
+                                   inputTokens: 1, outputTokens: 1)
+        try await db.dbQueue.write { d in
+            var m = Message(id: nil, briefId: nil, service: "signal", conversationId: "c1", conversationName: "Alice",
+                            messageId: "m1", sender: "Alice", text: "Are you coming tonight?",
+                            timestamp: Date().addingTimeInterval(-3600), isSent: false)
+            try m.insert(d)
+        }
+        let engine = AgentEngine(db: db, llmClient: llm, llmModel: "test", repository: repo, rulesProvider: { [] })
+        await engine.trigger()
+
+        let rows = try await db.dbQueue.read { try AgentAction.fetchAll($0) }
+        XCTAssertFalse(rows.isEmpty, "the engine cycle must have persisted a proposal")
+        XCTAssertTrue(rows.allSatisfy { !$0.isExternalProposal && !$0.isUserComposed })
+    }
 }

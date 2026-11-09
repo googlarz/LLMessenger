@@ -80,6 +80,24 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
 
     var isUserComposed: Bool { reasoning == Self.userComposedReasoning }
 
+    /// Provenance markers the app writes itself. Model output must never carry
+    /// one: a prompt-injected message could otherwise make an AI draft look
+    /// user-written or external. Every path that stores model-written reasoning
+    /// passes it through `sanitizedModelReasoning`.
+    static let reservedReasoningMarkers: [String] = [externalAgentReasoning, userComposedReasoning]
+
+    static let neutralModelReasoning = "Drafted by LLMessenger."
+
+    static func sanitizedModelReasoning(_ text: String) -> String {
+        let folded = text.lowercased()
+        let forged = reservedReasoningMarkers.contains { marker in
+            let m = marker.lowercased()
+            return folded.contains(m)
+                || folded.contains(m.trimmingCharacters(in: CharacterSet(charactersIn: ".")))
+        }
+        return forged ? neutralModelReasoning : text
+    }
+
     /// External proposals are approved one at a time, never in a multi-select batch.
     /// A user-composed reply is never batched either: it only ever sends from its
     /// own composer (or its own row after an interrupted undo window).

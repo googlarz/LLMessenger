@@ -398,7 +398,7 @@ actor AgentEngine {
             conversationName: reply.conversationName,
             title: draft.title,
             payload: AgentAction.encodeReplyPayload(draft.draftText),
-            reasoning: draft.reasoning,
+            reasoning: AgentAction.sanitizedModelReasoning(draft.reasoning),
             confidence: draft.confidence,
             riskLevel: risk.rawValue,
             status: AgentActionStatus.pending.rawValue,
@@ -493,6 +493,9 @@ actor AgentEngine {
         }
         try db.dbQueue.write { grdb in
             var a = action
+            // The engine only ever stores its own proposals: no reserved provenance
+            // marker may reach the table from here, whatever the model wrote.
+            a.reasoning = AgentAction.sanitizedModelReasoning(a.reasoning)
             try a.insert(grdb)
         }
     }
