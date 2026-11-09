@@ -1,11 +1,27 @@
 import SwiftUI
 
 struct PrivacySettingsTab: View {
-    @State private var localOnlyMode: Bool = SettingsRepository().loadLocalOnlyMode()
-    @State private var sanitizeBeforeSend: Bool = SettingsRepository().loadSanitizeBeforeSend()
-    @State private var mcpEnabled: Bool = SettingsRepository().loadMCPServerEnabled()
+    @State private var localOnlyMode: Bool
+    @State private var sanitizeBeforeSend: Bool
+    @State private var updateChecksEnabled: Bool
+    @StateObject private var mcp: MCPAccessModel
+    @State private var copiedLabel: String? = nil
     @ObservedObject private var auditLog = NetworkAuditLog.shared
-    private let repo = SettingsRepository()
+    private let repo: SettingsRepository
+    private let executablePath: String
+
+    /// `repo` and `executablePath` are injectable so previews and snapshots don't touch the
+    /// user's real settings or show a machine-specific path.
+    init(repo: SettingsRepository = SettingsRepository(),
+         mcp: MCPAccessModel? = nil,
+         executablePath: String? = nil) {
+        self.repo = repo
+        self.executablePath = executablePath ?? Bundle.main.executablePath ?? "LLMessenger"
+        _localOnlyMode = State(initialValue: repo.loadLocalOnlyMode())
+        _sanitizeBeforeSend = State(initialValue: repo.loadSanitizeBeforeSend())
+        _updateChecksEnabled = State(initialValue: repo.loadUpdateChecksEnabled())
+        _mcp = StateObject(wrappedValue: mcp ?? MCPAccessModel(repo: repo))
+    }
 
     var body: some View {
         ScrollView {
@@ -13,6 +29,8 @@ struct PrivacySettingsTab: View {
                 modesSection
                 Rule()
                 mcpSection
+                Rule()
+                updatesSection
                 Rule()
                 dataFlowSection
                 Rule()
@@ -29,19 +47,7 @@ struct PrivacySettingsTab: View {
         VStack(alignment: .leading, spacing: 12) {
             WireLabel("Privacy")
 
-            Toggle(isOn: $localOnlyMode) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Local-only mode")
-                        .font(Theme.sans(13, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("Forces Ollama as the LLM and stops cloud-only adapters such as Slack immediately. Existing in-flight requests may finish, but new cloud message processing is blocked.")
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(Theme.ok)
+            SettingsToggleRow(title: "Local-only mode", caption: "Forces Ollama as the LLM, stops cloud-only services such as Slack, and blocks AI apps connected over MCP from reading anything. A request already under way may finish; nothing new is sent.", isOn: $localOnlyMode)
             .onChange(of: localOnlyMode) { _, enabled in
                 repo.saveLocalOnlyMode(enabled)
                 NotificationCenter.default.post(name: .privacyModeDidChange, object: nil)
@@ -50,19 +56,7 @@ struct PrivacySettingsTab: View {
 
             Rule()
 
-            Toggle(isOn: $sanitizeBeforeSend) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Redact sensitive patterns before sending to cloud LLM")
-                        .font(Theme.sans(13, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("Replaces credit card numbers, US SSNs, IBANs, and email addresses with [REDACTED:…] tokens in cloud LLM prompts. Best-effort, not a guarantee. May reduce digest quality.")
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(Theme.ok)
+            SettingsToggleRow(title: "Redact sensitive patterns before sending to cloud LLM", caption: "Replaces credit card numbers, US SSNs, IBANs, and email addresses with [REDACTED:…] tokens in cloud LLM prompts. Best-effort, not a guarantee. May reduce digest quality.", isOn: $sanitizeBeforeSend)
             .onChange(of: sanitizeBeforeSend) { _, enabled in
                 repo.saveSanitizeBeforeSend(enabled)
             }
@@ -72,48 +66,169 @@ struct PrivacySettingsTab: View {
 
     // MARK: - MCP
 
-    private var mcpClientConfig: String {
-        MCPToolbox.compactJSON([
-            "mcpServers": ["llmessenger": ["command": Bundle.main.executablePath ?? "LLMessenger",
-                                           "args": ["--mcp"]]]
-        ])
-    }
+    private var mcpClientConfig: String { MCPSetup.configJSON(executablePath: executablePath) }
+    private var claudeCodeCommand: String { MCPSetup.claudeCodeCommand(executablePath: executablePath) }
 
     private var mcpSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            WireLabel("AI Agents")
+            WireLabel("AI Apps (MCP)")
 
-            Toggle(isOn: $mcpEnabled) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Let AI agents read LLMessenger over MCP")
-                        .font(Theme.sans(13, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("Exposes your owed replies, digests, conversations and message search to MCP clients you configure (Claude Desktop, Claude Code, Cursor). The connected AI client may send what it reads to its own, possibly cloud, model. Conversations marked Local-only are never readable, and Local-only mode blocks all reads. While this is on, Local-only conversations are left out of digests entirely, and digests created before you turned it on are not shared. Replies an agent proposes always wait for your approval in the Act queue and are labelled as coming from an external agent.")
-                        .font(Theme.sans(11))
+            SettingsToggleRow(title: "Let AI apps read LLMessenger", caption: MCPCopy.summary, isOn: Binding(get: { mcp.switchIsOn }, set: { mcp.setSwitch($0) }))
+
+            if mcp.phase == .confirming {
+                mcpConfirmation
+            }
+
+            if localOnlyMode && mcp.phase == .on {
+                Text(MCPCopy.localOnlyBlocksReads)
+                    .font(Theme.sans(11.5))
+                    .foregroundStyle(Theme.standby)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            mcpStatusSlot
+
+            if mcp.phase == .on {
+                mcpHowItWorks
+                mcpSetup
+            }
+        }
+        .padding(.vertical, 14)
+    }
+
+    /// Reserved for a "last request from a connected app" line. Intentionally empty for now.
+    @ViewBuilder private var mcpStatusSlot: some View {
+        EmptyView()
+    }
+
+    private var mcpConfirmation: some View {
+        HStack(alignment: .top, spacing: 0) {
+            Theme.standby
+                .frame(width: 2)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
+                .padding(.trailing, 12)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(MCPCopy.confirmationTitle)
+                    .font(Theme.sans(12.5, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                ForEach(MCPCopy.confirmationPoints, id: \.self) { point in
+                    bullet(point)
+                }
+                Text("The switch stays off until you confirm.")
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.textTertiary)
+                HStack(spacing: 8) {
+                    Button("Turn On") { mcp.confirmEnable() }
+                        .buttonStyle(PaperButtonStyle(prominent: true))
+                    Button("Cancel") { mcp.cancelEnable() }
+                        .buttonStyle(PaperButtonStyle())
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var mcpHowItWorks: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(MCPCopy.howItWorks, id: \.self) { line in
+                bullet(line)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private var mcpSetup: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Rule()
+            WireLabel("Connect an app")
+
+            setupBlock(title: "Claude Desktop", steps: [
+                "Open Claude, then Settings, Developer, Edit Config.",
+                "Paste the config below into the file. If it already has \u{201C}mcpServers\u{201D}, add only the llmessenger entry.",
+                "Quit and reopen Claude."
+            ])
+            setupBlock(title: "Claude Code", steps: [
+                "Copy the command below and run it in Terminal.",
+                "Start a new Claude Code session."
+            ])
+            setupBlock(title: "Cursor", steps: [
+                "Paste the config below into ~/.cursor/mcp.json.",
+                "Restart Cursor."
+            ])
+
+            snippet(label: "Config", text: mcpClientConfig, copyTitle: "Copy config")
+            snippet(label: "Claude Code command", text: claudeCodeCommand, copyTitle: "Copy command")
+
+            Text(MCPCopy.movedAppNote)
+                .font(Theme.sans(11))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 6)
+    }
+
+    private func setupBlock(title: String, steps: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(Theme.sans(12.5, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(index + 1).")
+                        .font(Theme.mono(11))
                         .foregroundStyle(Theme.textTertiary)
+                        .frame(width: 16, alignment: .trailing)
+                    Text(step)
+                        .font(Theme.sans(12))
+                        .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .toggleStyle(.switch)
-            .tint(Theme.ok)
-            .onChange(of: mcpEnabled) { _, enabled in
-                repo.saveMCPServerEnabled(enabled)
-            }
+        }
+    }
 
-            Text("Client config")
-                .font(Theme.sans(11, weight: .medium))
-                .foregroundStyle(Theme.textSecondary)
-            Text(mcpClientConfig)
+    private func snippet(label: String, text: String, copyTitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                WireLabel(label)
+                Spacer()
+                Button(copiedLabel == label ? "Copied" : copyTitle) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                    copiedLabel = label
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        if copiedLabel == label { copiedLabel = nil }
+                    }
+                }
+                .buttonStyle(WireActionStyle())
+            }
+            Text(text)
                 .font(Theme.mono(11))
                 .foregroundStyle(Theme.textSecondary)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button("Copy config") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(mcpClientConfig, forType: .string)
+                .padding(8)
+                .background(Theme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.controlRadius)
+                        .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+                )
+        }
+    }
+
+    // MARK: - Updates
+
+    private var updatesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            WireLabel("Updates")
+
+            SettingsToggleRow(title: "Check GitHub for new versions once a day", caption: "When LLMessenger starts, it asks GitHub for the latest release, at most once a day. The request carries no message content or account details; GitHub sees your IP address and the app and macOS versions, as with any web request. Updates are never installed for you.", isOn: $updateChecksEnabled)
+            .onChange(of: updateChecksEnabled) { _, enabled in
+                repo.saveUpdateChecksEnabled(enabled)
             }
-            .buttonStyle(WireActionStyle())
         }
         .padding(.vertical, 14)
     }
@@ -126,9 +241,9 @@ struct PrivacySettingsTab: View {
 
             bullet("Your messages are stored locally at ~/Library/Application Support/LLMessenger/.")
             bullet("There is no LLMessenger server. The developer cannot see your data.")
-            bullet("Cloud egress only happens when you configure Anthropic, OpenAI, or Slack.")
+            bullet(PrivacyCopy.cloudEgress)
             bullet("API keys and Slack tokens are stored in the macOS Keychain, never in plain files.")
-            bullet("No analytics, telemetry, or auto-update beacon. The app does not call home.")
+            bullet(PrivacyCopy.noTelemetry)
 
             Link("Read the full privacy & data-flow document →",
                  destination: URL(string: "https://github.com/googlarz/LLMessenger/blob/main/PRIVACY.md")!)
@@ -184,6 +299,14 @@ struct PrivacySettingsTab: View {
             Spacer()
         }
     }
+}
+
+/// The two Data Flow claims that must stay exactly true; PRIVACY.md and the README say the same.
+enum PrivacyCopy {
+    static let cloudEgress =
+        "Cloud egress only happens when you set up Anthropic, OpenAI or Slack, or when an AI app connected over MCP reads your messages and passes them on."
+    static let noTelemetry =
+        "No analytics or telemetry, and nothing is sent to the developer. The only thing LLMessenger looks up on its own is a new version on GitHub, at most once a day; you can turn that off under Updates."
 }
 
 private struct AuditRow: View {

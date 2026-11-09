@@ -1,9 +1,30 @@
 // LLMessenger/Core/Adapters/WhatsAppAdapter.swift
+import AppKit
 import Foundation
 import GRDB
 
 // Core Data reference date (2001-01-01) offset from the Unix epoch, in seconds.
 private let kCoreDataEpochOffset: TimeInterval = 978_307_200
+
+/// Why WhatsApp is not working, recovered from the health record's message. The
+/// Settings card shows a different fix for each; anything unrecognised is `.other`.
+enum WhatsAppHealthIssue: Equatable {
+    case notInstalled
+    case needsFullDiskAccess
+    case busy
+    case formatChanged
+    case other(String)
+
+    static func classify(_ reason: String) -> WhatsAppHealthIssue {
+        switch reason {
+        case WhatsAppAdapter.notFoundReason:     return .notInstalled
+        case WhatsAppAdapter.unreadableReason:   return .needsFullDiskAccess
+        case WhatsAppAdapter.busyReason:         return .busy
+        case WhatsAppAdapter.formatChangedReason: return .formatChanged
+        default:                                 return .other(reason)
+        }
+    }
+}
 
 /// Read-only adapter over WhatsApp Desktop's unencrypted Core Data store
 /// (`ChatStorage.sqlite`). It can ingest text messages (and, for the user's own
@@ -21,13 +42,28 @@ final class WhatsAppAdapter: MessengerAdapter, @unchecked Sendable {
         NSHomeDirectory() + "/Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite"
     }
 
+    // One message per cause, so the Settings card can tell the user the one thing that
+    // will actually fix it. `WhatsAppHealthIssue.classify` maps them back.
     static let notFoundReason =
-        "WhatsApp Desktop not found — install it and sign in, and make sure LLMessenger has Full Disk Access."
+        "WhatsApp Desktop not found — install it and sign in."
     static let unreadableReason =
-        "Cannot read WhatsApp's database — grant Full Disk Access in System Settings › Privacy & Security."
+        "LLMessenger can't read WhatsApp's data — it needs Full Disk Access (System Settings › Privacy & Security)."
     static let busyReason = "WhatsApp is busy, will retry."
     static let formatChangedReason =
         "Couldn't read WhatsApp's local data — its format may have changed."
+
+    /// Whether the WhatsApp Desktop app is on this Mac. Without Full Disk Access macOS can
+    /// hide WhatsApp's data folder, so a missing store is only "not installed" when the app
+    /// itself is missing too; otherwise the likely cause is the missing permission.
+    static func isDesktopAppInstalled() -> Bool {
+        if NSWorkspace.shared.urlForApplication(withBundleIdentifier: "net.whatsapp.WhatsApp") != nil { return true }
+        return FileManager.default.fileExists(atPath: "/Applications/WhatsApp.app")
+    }
+
+    /// The reason to report when the store file is not there.
+    private var missingStoreReason: String {
+        isAppInstalled() ? Self.unreadableReason : Self.notFoundReason
+    }
 
     /// WhatsApp Desktop writes a backlog with old timestamps after wake/launch, so a
     /// read starts this far before the caller's cursor. Re-read messages are dropped
@@ -52,21 +88,24 @@ final class WhatsAppAdapter: MessengerAdapter, @unchecked Sendable {
     private let storePath: String
     private let now: @Sendable () -> Date
     private let busyTimeout: TimeInterval
+    private let isAppInstalled: @Sendable () -> Bool
     private var started = false
 
     init(storePath: String = WhatsAppAdapter.defaultStorePath,
          busyTimeout: TimeInterval = 2,
-         now: @escaping @Sendable () -> Date = { Date() }) {
+         now: @escaping @Sendable () -> Date = { Date() },
+         isAppInstalled: @escaping @Sendable () -> Bool = { WhatsAppAdapter.isDesktopAppInstalled() }) {
         self.storePath = storePath
         self.busyTimeout = busyTimeout
         self.now = now
+        self.isAppInstalled = isAppInstalled
     }
 
     // MARK: - MessengerAdapter
 
     func start() async throws {
         guard FileManager.default.fileExists(atPath: storePath) else {
-            throw AdapterError.initFailed(Self.notFoundReason)
+            throw AdapterError.initFailed(missingStoreReason)
         }
         do {
             let hasMessages = try await openStore().read { db in
@@ -100,7 +139,10 @@ final class WhatsAppAdapter: MessengerAdapter, @unchecked Sendable {
     }
 
     func fetch(config: FetchConfig) async throws -> AdapterFetchResult {
-        guard started else { throw AdapterError.initFailed(Self.notFoundReason) }
+        guard started else {
+            let storeExists = FileManager.default.fileExists(atPath: storePath)
+            throw AdapterError.initFailed(storeExists ? "WhatsApp adapter not started" : missingStoreReason)
+        }
 
         let since: Date
         let limit: Int?
@@ -198,7 +240,7 @@ final class WhatsAppAdapter: MessengerAdapter, @unchecked Sendable {
     func healthCheck() async -> AdapterHealthResult {
         guard FileManager.default.fileExists(atPath: storePath) else {
             healthStatus = .warning
-            return AdapterHealthResult(status: .warning, reason: Self.notFoundReason, retryAfter: nil)
+            return AdapterHealthResult(status: .warning, reason: missingStoreReason, retryAfter: nil)
         }
         do {
             _ = try await openStore().read { db in

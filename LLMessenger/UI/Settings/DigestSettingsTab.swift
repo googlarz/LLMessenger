@@ -9,6 +9,7 @@ struct DigestSettingsTab: View {
     }()
     @State private var firewallEnabled: Bool = SettingsRepository().loadFirewallEnabled()
     @State private var heldBackCount: Int = SettingsRepository().loadFirewallHeldBack()
+    @StateObject private var launchAtLogin = LaunchAtLoginModel()
 
     private let settingsRepo = SettingsRepository()
 
@@ -131,25 +132,52 @@ struct DigestSettingsTab: View {
 
                 Rule()
 
-                // MARK: - Notes
-                VStack(alignment: .leading, spacing: 8) {
-                    WireLabel("Requirements")
-                    Text("The app must be running at the scheduled time. Enable \"Launch at Login\" in macOS System Settings → General → Login Items to ensure the digest fires reliably.")
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .lineSpacing(3)
+                // MARK: - Launch at login
+                VStack(alignment: .leading, spacing: 14) {
+                    WireLabel("Launch at Login")
+
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Open LLMessenger when you log in")
+                                .font(Theme.sans(13, weight: .medium))
+                                .foregroundStyle(Theme.textPrimary)
+                            Text("Digests only run while LLMessenger is open. Starting it at login keeps the schedule above reliable.")
+                                .font(Theme.sans(11))
+                                .foregroundStyle(Theme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                        Toggle("", isOn: Binding(get: { launchAtLogin.isOn },
+                                                 set: { launchAtLogin.set($0) }))
+                            .labelsHidden()
+                            .accessibilityLabel("Open LLMessenger at login")
+                            .toggleStyle(.switch)
+                    }
+
+                    if let error = launchAtLogin.errorMessage {
+                        Text(error)
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.signal)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if launchAtLogin.needsApproval {
+                        Text("macOS is waiting for your approval. Allow LLMessenger in System Settings → General → Login Items.")
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.standby)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     Button("Open Login Items") {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
                             NSWorkspace.shared.open(url)
                         }
                     }
                     .buttonStyle(WireActionStyle())
-                    .padding(.top, 2)
                 }
                 .padding(20)
             }
         }
+        .onAppear { launchAtLogin.refresh() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.bg)
     }

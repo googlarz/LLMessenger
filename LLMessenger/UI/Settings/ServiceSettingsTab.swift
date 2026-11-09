@@ -1,35 +1,25 @@
 // LLMessenger/UI/Settings/ServiceSettingsTab.swift
 import SwiftUI
 
-private let kAllServices = ["imessage", "signal", "telegram", "slack", "whatsapp"]
-
 private let kWhatsAppNote = "Read-only: reads WhatsApp Desktop's local history. Requires WhatsApp Desktop installed and signed in, and Full Disk Access."
 
 struct ServiceSettingsTab: View {
-    @State private var configs: [ServiceConfig] = kAllServices.map { ServiceConfig.default(for: $0) }
-    @State private var signalAccount: String = ""
-    @State private var telegramApiId: String = ""
-    @State private var telegramApiHash: String = ""
-    @State private var saveStatus: SaveStatus = .idle
-    @State private var healthByService: [String: ServiceHealth] = [:]
+    @ObservedObject var model: ServiceSettingsModel
     @State private var isBuildingSummaries = false
     @State private var isSyncingContacts = false
     @State private var maintenanceStatus: String? = nil
-    private let repo: SettingsRepository
     private let onBuild7DaySummaries: (() async -> Void)?
     private let onSyncContacts: (() async -> Void)?
     private let onRetryService: ((String) async -> Void)?
+    private let hostFacts: ServiceHostFacts
 
-    enum SaveStatus: Equatable {
-        case idle, saved
-        case error(String)
-    }
-
-    init(database: AppDatabase? = nil,
+    init(model: ServiceSettingsModel,
+         hostFacts: ServiceHostFacts = .live,
          onBuild7DaySummaries: (() async -> Void)? = nil,
          onSyncContacts: (() async -> Void)? = nil,
          onRetryService: ((String) async -> Void)? = nil) {
-        repo = SettingsRepository(database: database)
+        self.model = model
+        self.hostFacts = hostFacts
         self.onBuild7DaySummaries = onBuild7DaySummaries
         self.onSyncContacts = onSyncContacts
         self.onRetryService = onRetryService
@@ -39,13 +29,15 @@ struct ServiceSettingsTab: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach($configs, id: \.service) { $cfg in
+                    ForEach(model.configs, id: \.service) { cfg in
                         ServiceCard(
-                            config: $cfg,
-                            signalAccount: $signalAccount,
-                            telegramApiId: $telegramApiId,
-                            telegramApiHash: $telegramApiHash,
-                            health: healthByService[cfg.service],
+                            config: Binding(get: { model.config(for: cfg.service) },
+                                            set: { model.update($0) }),
+                            signalAccount: $model.credentials.signalAccount,
+                            telegramApiId: $model.credentials.telegramApiId,
+                            telegramApiHash: $model.credentials.telegramApiHash,
+                            health: model.healthByService[cfg.service],
+                            hostFacts: hostFacts,
                             onRetry: onRetryService
                         )
                         Rule()
@@ -56,59 +48,49 @@ struct ServiceSettingsTab: View {
                 .padding(.vertical, 16)
             }
 
-            Rule()
-
-            // Footer: status + save
-            HStack {
-                switch saveStatus {
-                case .saved:
-                    statusLine("Saved", color: Theme.ok)
-                case .error(let msg):
-                    statusLine(msg, color: Theme.signal)
-                case .idle:
-                    EmptyView()
+            // On/off and poll interval save as soon as you change them. Only the sign-in
+            // fields wait for Save, so the bar appears only when there is something to save
+            // (or to confirm).
+            if model.hasUnsavedCredentials || model.status != .idle {
+                Rule()
+                HStack(spacing: 12) {
+                    if model.hasUnsavedCredentials {
+                        statusLine("Unsaved changes to sign-in details", color: Theme.standby)
+                        Button("Discard") { model.discardCredentials() }
+                            .buttonStyle(WireActionStyle())
+                    } else {
+                        switch model.status {
+                        case .saved:
+                            statusLine("Saved", color: Theme.ok)
+                        case .error(let message):
+                            statusLine(message, color: Theme.signal)
+                        case .idle:
+                            EmptyView()
+                        }
+                    }
+                    if model.hasUnsavedCredentials, case .error(let message) = model.status {
+                        statusLine(message, color: Theme.signal)
+                    }
+                    Spacer()
+                    if model.hasUnsavedCredentials {
+                        Button("Save") { model.saveCredentials() }
+                            .buttonStyle(PaperButtonStyle(prominent: true))
+                            .keyboardShortcut(.return, modifiers: .command)
+                    }
                 }
-                Spacer()
-                Button("Save") { save() }
-                    .buttonStyle(PaperButtonStyle(prominent: true))
-                    .keyboardShortcut(.return, modifiers: .command)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
         }
-        .onAppear { load() }
+        .onAppear { model.reload() }
         // Refresh health + configs whenever a retry or background poll
         // updates the DB, so the cards repaint without the user toggling
         // away and back to this tab.
         .onReceive(NotificationCenter.default.publisher(for: .serviceHealthDidChange)) { _ in
-            load()
+            model.reload()
         }
         .onReceive(NotificationCenter.default.publisher(for: .serviceConfigDidChange)) { _ in
-            load()
-        }
-    }
-
-    private func load() {
-        let dbConfigs = (try? repo.loadAllServiceConfigs()) ?? []
-        let dbByService = Dictionary(uniqueKeysWithValues: dbConfigs.map { ($0.service, $0) })
-        configs = kAllServices.map { dbByService[$0] ?? ServiceConfig.default(for: $0) }
-        signalAccount = (try? repo.loadSignalAccount()) ?? ""
-        let tg = repo.loadTelegramCredentials()
-        telegramApiId = tg.apiId
-        telegramApiHash = tg.apiHash
-        healthByService = (try? repo.loadAllServiceHealth()) ?? [:]
-    }
-
-    private func save() {
-        do {
-            for cfg in configs { try repo.saveServiceConfig(cfg) }
-            try repo.saveSignalAccount(signalAccount)
-            try repo.saveTelegramCredentials(apiId: telegramApiId, apiHash: telegramApiHash)
-            NotificationCenter.default.post(name: .serviceConfigDidChange, object: nil)
-            saveStatus = .saved
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = .idle }
-        } catch {
-            saveStatus = .error(error.localizedDescription)
+            model.reload()
         }
     }
 
@@ -188,20 +170,38 @@ struct ServiceSettingsTab: View {
 
 // MARK: - Service Card
 
-private struct ServiceCard: View {
+struct ServiceCard: View {
     @Binding var config: ServiceConfig
     @Binding var signalAccount: String
     @Binding var telegramApiId: String
     @Binding var telegramApiHash: String
     var health: ServiceHealth?
+    var hostFacts: ServiceHostFacts = .live
     var onRetry: ((String) async -> Void)? = nil
 
     @State private var showingTelegramSignIn = false
     @State private var telegramSignInAdapter: SubprocessAdapter? = nil
     @State private var telegramSignInError: String? = nil
     @State private var showingSlackWorkspaces = false
-    @State private var slackWorkspaceCount: Int = SlackWorkspaceStore.load().count
+    @State private var slackWorkspaceCount: Int
     @State private var isRetrying = false
+
+    init(config: Binding<ServiceConfig>,
+         signalAccount: Binding<String>,
+         telegramApiId: Binding<String>,
+         telegramApiHash: Binding<String>,
+         health: ServiceHealth?,
+         hostFacts: ServiceHostFacts = .live,
+         onRetry: ((String) async -> Void)? = nil) {
+        _config = config
+        _signalAccount = signalAccount
+        _telegramApiId = telegramApiId
+        _telegramApiHash = telegramApiHash
+        self.health = health
+        self.hostFacts = hostFacts
+        self.onRetry = onRetry
+        _slackWorkspaceCount = State(initialValue: hostFacts.slackWorkspaceCount())
+    }
 
     private var service: String { config.service }
 
@@ -217,8 +217,24 @@ private struct ServiceCard: View {
         case working                   // credentials + recent ok poll
     }
 
+    /// WhatsApp is read from a local file, so its card follows the real cause of a failure
+    /// (not installed, Full Disk Access, busy, changed format) rather than a generic error.
+    private var whatsAppPresentation: WhatsAppCardPresentation {
+        WhatsAppCardPresentation.make(
+            health: health,
+            storeExists: hostFacts.whatsAppStoreExists(),
+            appInstalled: hostFacts.whatsAppInstalled())
+    }
+
+    /// A calm state (waiting, busy) gets no warning colour.
+    private var isCalm: Bool { service == WhatsAppAdapter.id && whatsAppPresentation.isCalm }
+
     var state: CardState {
         if !config.enabled { return .disabled }
+        if service == WhatsAppAdapter.id {
+            if let health, health.status == "ok", !isHealthStale { return .working }
+            return .broken(reason: whatsAppPresentation.headline)
+        }
         if !hasRequiredCredentials { return .notConfigured }
         if let health, health.status == "error" {
             return .broken(reason: health.lastError ?? "Connection error")
@@ -255,7 +271,7 @@ private struct ServiceCard: View {
         Group {
             switch state {
             case .broken:
-                health?.status == "error" ? Theme.signal : Theme.standby
+                isCalm ? Color.clear : (health?.status == "error" ? Theme.signal : Theme.standby)
             case .working, .notConfigured, .disabled:
                 Color.clear
             }
@@ -277,6 +293,7 @@ private struct ServiceCard: View {
         case .working:
             return Theme.ok
         case .broken:
+            if isCalm { return Theme.textTertiary.opacity(0.4) }
             return health?.status == "error" ? Theme.signal : Theme.standby
         case .notConfigured, .disabled:
             return Theme.textTertiary.opacity(0.4)
@@ -302,10 +319,7 @@ private struct ServiceCard: View {
                 }
             }
             Spacer()
-            Toggle("", isOn: $config.enabled)
-                .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                .accessibilityLabel("Enable \(displayName)")
-                .tint(Theme.ok)
+            enableToggle
         }
         .opacity(0.7)
     }
@@ -325,6 +339,7 @@ private struct ServiceCard: View {
                         .font(Theme.sans(11)).foregroundStyle(Theme.textTertiary)
                 }
                 Spacer()
+                enableToggle
             }
             Text(setupBlurb)
                 .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
@@ -346,14 +361,12 @@ private struct ServiceCard: View {
                         .foregroundStyle(Theme.textPrimary)
                     Text(reason)
                         .font(Theme.sans(11))
-                        .foregroundStyle(health?.status == "error" ? Theme.signal : Theme.standby)
+                        .foregroundStyle(isCalm ? Theme.textTertiary
+                                         : (health?.status == "error" ? Theme.signal : Theme.standby))
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Toggle("", isOn: $config.enabled)
-                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                    .accessibilityLabel("Enable \(displayName)")
-                    .tint(Theme.ok)
+                enableToggle
             }
             Rule()
             brokenBodyContent(reason: reason)
@@ -380,18 +393,7 @@ private struct ServiceCard: View {
                 }
             }
         case "whatsapp":
-            VStack(alignment: .leading, spacing: 10) {
-                Text(kWhatsAppNote)
-                    .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
-                    Button("Grant Full Disk Access") {
-                        openFullDiskAccessSettings()
-                    }
-                    .buttonStyle(PaperButtonStyle(prominent: true))
-                    retryButton
-                }
-            }
+            whatsAppBody
         case "signal":
             VStack(alignment: .leading, spacing: 10) {
                 Text("Phone number is set but the local signal-mcp watch daemon isn't responding. Start it in a terminal (`signal-mcp watch`) or use Restart, then Retry now.")
@@ -472,6 +474,41 @@ private struct ServiceCard: View {
         }
     }
 
+    /// On/off for the service. Saves and applies the moment it changes.
+    private var enableToggle: some View {
+        Toggle("", isOn: $config.enabled)
+            .toggleStyle(.switch).labelsHidden().controlSize(.small)
+            .accessibilityLabel("Enable \(displayName)")
+            .tint(Theme.ok)
+    }
+
+    /// The fix for the actual WhatsApp problem; calm states get a sentence and no button.
+    @ViewBuilder
+    private var whatsAppBody: some View {
+        let presentation = whatsAppPresentation
+        VStack(alignment: .leading, spacing: 10) {
+            Text(presentation.guidance)
+                .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if !presentation.isCalm {
+                HStack(spacing: 8) {
+                    switch presentation.action {
+                    case .grantFullDiskAccess:
+                        Button("Grant Full Disk Access") { openFullDiskAccessSettings() }
+                            .buttonStyle(PaperButtonStyle(prominent: true))
+                    case .reportOnGitHub:
+                        Link("Report on GitHub →", destination: WhatsAppCardPresentation.issuesURL)
+                            .font(Theme.sans(11))
+                            .tint(Theme.textSecondary)
+                    case .none:
+                        EmptyView()
+                    }
+                    retryButton
+                }
+            }
+        }
+    }
+
     /// "Retry now" trigger that calls back into AppDelegate → pollEngine.pollNow.
     /// Hidden when no callback was provided (e.g. previews/tests).
     @ViewBuilder
@@ -513,10 +550,7 @@ private struct ServiceCard: View {
                         .font(Theme.sans(11)).foregroundStyle(Theme.textTertiary)
                 }
                 Spacer()
-                Toggle("", isOn: $config.enabled)
-                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                    .accessibilityLabel("Enable \(displayName)")
-                    .tint(Theme.ok)
+                enableToggle
             }
 
             DisclosureGroup(isExpanded: $showAdvanced) {
@@ -616,7 +650,6 @@ private struct ServiceCard: View {
     private var setupBlurb: String {
         switch service {
         case "imessage": return "Summarise your iMessage conversations. Requires Full Disk Access."
-        case "whatsapp": return kWhatsAppNote
         case "signal":   return "Summarise your Signal conversations. Requires the signal-mcp daemon and your phone number."
         case "telegram": return "Summarise your Telegram conversations. Requires API credentials from my.telegram.org and a one-time sign-in."
         case "slack":    return "Summarise messages across one or more Slack workspaces. You'll paste an OAuth token from a private Slack app you create."
@@ -627,7 +660,7 @@ private struct ServiceCard: View {
     @ViewBuilder
     private var primarySetupAction: some View {
         switch service {
-        case "imessage", "whatsapp":
+        case "imessage":
             Button("Grant Full Disk Access") {
                 openFullDiskAccessSettings()
             }
@@ -732,9 +765,6 @@ private struct ServiceCard: View {
             // Full Disk Access may still block a real query — surfaced via the health record.
             let path = NSHomeDirectory() + "/Library/Messages/chat.db"
             return FileManager.default.isReadableFile(atPath: path)
-        case "whatsapp":
-            // Existence only: without Full Disk Access the adapter's health check reports the real cause.
-            return FileManager.default.fileExists(atPath: WhatsAppAdapter.defaultStorePath)
         case "signal":
             return !signalAccount.trimmingCharacters(in: .whitespaces).isEmpty
         case "telegram":
@@ -768,18 +798,7 @@ private struct ServiceCard: View {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "Grant Full Disk Access to LLMessenger"
-        alert.informativeText = """
-        macOS needs you to add LLMessenger to Full Disk Access before it can read your iMessage history.
-
-        Manual steps (works on every Mac):
-          1. Apple menu  →  System Settings…
-          2. Privacy & Security  →  Full Disk Access
-          3. Click the +
-          4. Choose LLMessenger.app
-          5. Quit and reopen LLMessenger
-
-        The buttons below can speed it up but don't always work — some Macs immediately quit System Settings on URL hand-off ("is not open anymore"). If that happens, just use the Apple menu manually.
-        """
+        alert.informativeText = FullDiskAccessCopy.informativeText(for: service)
         alert.addButton(withTitle: "Open System Settings")       // rightmost (default)
         alert.addButton(withTitle: "Reveal LLMessenger.app")     // middle
         alert.addButton(withTitle: "Cancel")                      // leftmost

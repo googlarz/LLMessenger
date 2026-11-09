@@ -317,7 +317,8 @@ final class WhatsAppAdapterTests: XCTestCase {
     // MARK: - Missing / unreadable store
 
     func testMissingStoreReportsNotFoundWithoutCrashing() async throws {
-        let adapter = WhatsAppAdapter(storePath: dir.appendingPathComponent("nope.sqlite").path)
+        let adapter = WhatsAppAdapter(storePath: dir.appendingPathComponent("nope.sqlite").path,
+                                      isAppInstalled: { false })
         let health = await adapter.healthCheck()
         XCTAssertEqual(health.status, .warning)
         XCTAssertTrue(health.reason?.contains("WhatsApp Desktop not found") == true)

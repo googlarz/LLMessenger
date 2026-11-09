@@ -3,13 +3,9 @@ import SwiftUI
 import AppKit
 
 struct InstructionsSettingsTab: View {
-    @State private var prompt: String = ""
-    @State private var theme: String = "system"
-    @State private var briefLanguage: String = "English"
-    @State private var saveStatus: String = ""
+    /// Owned by SettingsView so unsaved edits survive switching tabs.
+    @ObservedObject var model: InstructionsSettingsModel
     @State private var showResetConfirmation = false
-
-    private let repo = SettingsRepository()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,7 +14,7 @@ struct InstructionsSettingsTab: View {
                     VStack(alignment: .leading, spacing: 10) {
                         WireLabel("System Prompt")
 
-                        TextEditor(text: $prompt)
+                        TextEditor(text: $model.values.prompt)
                             .font(Theme.mono(12))
                             .foregroundStyle(Theme.textPrimary)
                             .frame(minHeight: 140)
@@ -31,10 +27,11 @@ struct InstructionsSettingsTab: View {
                                     .strokeBorder(Theme.border, lineWidth: Theme.hairline)
                             )
 
-                        HStack {
-                            Text("This instruction is added before every AI request to shape how it responds. Changes take effect on next launch.")
+                        HStack(alignment: .top) {
+                            Text(InstructionsCopy.promptTiming)
                                 .font(Theme.sans(11))
                                 .foregroundStyle(Theme.textTertiary)
+                                .fixedSize(horizontal: false, vertical: true)
                             Spacer()
                             Button("Reset to Default") { showResetConfirmation = true }
                                 .buttonStyle(WireActionStyle())
@@ -44,11 +41,11 @@ struct InstructionsSettingsTab: View {
                                     titleVisibility: .visible
                                 ) {
                                     Button("Reset", role: .destructive) {
-                                        prompt = PromptBuilder.defaultBasePrompt
+                                        model.resetPromptToDefault()
                                     }
                                     Button("Cancel", role: .cancel) {}
                                 } message: {
-                                    Text("Your current prompt will be replaced. This cannot be undone.")
+                                    Text("Your current prompt will be replaced in the editor. Choose Save to keep the change, or Discard to go back.")
                                 }
                         }
                     }
@@ -58,15 +55,13 @@ struct InstructionsSettingsTab: View {
 
                     VStack(alignment: .leading, spacing: 10) {
                         WireLabel("Digest Language")
-                        HStack {
-                            TextField("English", text: $briefLanguage)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(maxWidth: 200)
-                            Text("Briefs, drafts, and summaries are written in this language, even when the original messages are in another language.")
-                                .font(Theme.sans(11))
-                                .foregroundStyle(Theme.textTertiary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        TextField("English", text: $model.values.briefLanguage)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 200)
+                        Text(InstructionsCopy.languageTiming)
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.vertical, 14)
 
@@ -78,7 +73,8 @@ struct InstructionsSettingsTab: View {
                             Text("Theme")
                                 .font(Theme.sans(12))
                                 .foregroundStyle(Theme.textSecondary)
-                            Picker("", selection: $theme) {
+                            Picker("", selection: Binding(get: { model.theme },
+                                                          set: { model.setTheme($0) })) {
                                 Text("System").tag("system")
                                 Text("Light").tag("light")
                                 Text("Dark").tag("dark")
@@ -87,6 +83,9 @@ struct InstructionsSettingsTab: View {
                             .labelsHidden()
                             .frame(maxWidth: 250)
                         }
+                        Text(InstructionsCopy.themeTiming)
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.textTertiary)
                     }
                     .padding(.vertical, 14)
                 }
@@ -97,45 +96,14 @@ struct InstructionsSettingsTab: View {
 
             Rule()
 
-            HStack {
-                if !saveStatus.isEmpty {
-                    Text(saveStatus)
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.ok)
-                }
-                Spacer()
-                Button("Save") { save() }
-                    .buttonStyle(PaperButtonStyle(prominent: true))
-                    .keyboardShortcut(.return, modifiers: .command)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            SettingsSaveFooter(
+                isDirty: model.isDirty,
+                message: model.status == .saved ? "Saved" : nil,
+                unsavedLabel: "Unsaved changes to the prompt or language",
+                onSave: { model.save() },
+                onDiscard: { model.discard() }
+            )
         }
-        .onAppear { load() }
-    }
-
-    private func load() {
-        let saved = repo.loadBasePrompt()
-        prompt = saved.isEmpty ? PromptBuilder.defaultBasePrompt : saved
-        theme = repo.loadTheme()
-        briefLanguage = repo.loadBriefLanguage()
-    }
-
-    private func save() {
-        repo.saveBasePrompt(prompt)
-        repo.saveTheme(theme)
-        repo.saveBriefLanguage(briefLanguage)
-        applyTheme(theme)
-        saveStatus = "Saved ✓"
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = "" }
-    }
-
-    private func applyTheme(_ theme: String) {
-        let appearance: NSAppearance? = switch theme {
-        case "light": NSAppearance(named: .aqua)
-        case "dark":  NSAppearance(named: .darkAqua)
-        default:      nil
-        }
-        NSApp.appearance = appearance
+        .onAppear { model.load() }
     }
 }

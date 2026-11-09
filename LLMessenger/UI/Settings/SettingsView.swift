@@ -59,6 +59,29 @@ struct SettingsView: View {
     // top-level pane itself is remembered.
     @State private var aiPrivacySubTab = 0
     @State private var behaviorSubTab = 0
+    // Form state lives here for the same reason: the pane and sub-tab views below are
+    // recreated on every switch, so anything typed but not yet saved would be lost if the
+    // views owned it. Each model shows an "Unsaved changes" bar until the user decides.
+    @StateObject private var servicesModel: ServiceSettingsModel
+    @StateObject private var aiModel = AISettingsModel()
+    @StateObject private var instructionsModel = InstructionsSettingsModel()
+
+    init(database: AppDatabase? = nil,
+         onRunSetup: (() -> Void)? = nil,
+         onBuild7DaySummaries: (() async -> Void)? = nil,
+         onSyncContacts: (() async -> Void)? = nil,
+         onRetryService: ((String) async -> Void)? = nil,
+         onScheduleChanged: (() -> Void)? = nil,
+         selection: SettingsPaneSelection) {
+        self.database = database
+        self.onRunSetup = onRunSetup
+        self.onBuild7DaySummaries = onBuild7DaySummaries
+        self.onSyncContacts = onSyncContacts
+        self.onRetryService = onRetryService
+        self.onScheduleChanged = onScheduleChanged
+        self.selection = selection
+        _servicesModel = StateObject(wrappedValue: ServiceSettingsModel(repo: SettingsRepository(database: database)))
+    }
 
     var body: some View {
         tabContent
@@ -75,20 +98,20 @@ struct SettingsView: View {
         case .aiPrivacy:
             SubTabbedPane(tabs: ["AI", "Privacy"], sub: $aiPrivacySubTab) { sub in
                 if sub == 0 {
-                    AISettingsTab(database: database)
+                    AISettingsTab(database: database, model: aiModel)
                 } else {
                     PrivacySettingsTab()
                 }
             }
         case .services:
-            ServiceSettingsTab(database: database,
+            ServiceSettingsTab(model: servicesModel,
                                onBuild7DaySummaries: onBuild7DaySummaries,
                                onSyncContacts: onSyncContacts,
                                onRetryService: onRetryService)
         case .behavior:
-            SubTabbedPane(tabs: ["Instructions", "Priority Rules"], sub: $behaviorSubTab) { sub in
+            SubTabbedPane(tabs: ["Writing & Appearance", "Priority Rules"], sub: $behaviorSubTab) { sub in
                 if sub == 0 {
-                    InstructionsSettingsTab()
+                    InstructionsSettingsTab(model: instructionsModel)
                 } else {
                     RulesSettingsTab(database: database)
                 }

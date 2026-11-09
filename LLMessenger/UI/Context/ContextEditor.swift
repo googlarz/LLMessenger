@@ -32,6 +32,7 @@ struct ContextEditor: View {
     @State private var approvedAutoSendKinds: Set<AutoSendKind> = []
     @State private var pendingAutoSendKind: AutoSendKind?
     @State private var showAutoSendConfirmation = false
+    @State private var saveError: String? = nil
 
     private var repository: BriefRepository { BriefRepository(database: database) }
 
@@ -40,9 +41,7 @@ struct ContextEditor: View {
         ("none", "Unspecified"), ("fast", "Reply fast"),
         ("evening ok", "Evening ok"), ("no reply needed", "No reply needed")
     ]
-    private let privacyOptions = [
-        ("none", "None"), ("local_only", "Local only"), ("never_draft", "Never draft")
-    ]
+    private let privacyOptions = PrivacyOverrideCopy.options
 
     var body: some View {
         ScrollView {
@@ -114,10 +113,16 @@ struct ContextEditor: View {
                     .font(Theme.sans(13))
 
                     WireLabel("Privacy")
+                        .padding(.top, 6)
                     Picker("Privacy", selection: $privacyOverride) {
                         ForEach(privacyOptions, id: \.0) { value, label in Text(label).tag(value) }
                     }
-                    .font(Theme.sans(13))
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text(PrivacyOverrideCopy.caption(for: privacyOverride))
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 14)
 
@@ -149,6 +154,14 @@ struct ContextEditor: View {
                     Rule()
                 }
 
+                if let saveError {
+                    Text(saveError)
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.signal)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 12)
+                }
+
                 HStack {
                     Button("Cancel") { dismiss() }
                         .buttonStyle(PaperButtonStyle())
@@ -173,7 +186,7 @@ struct ContextEditor: View {
                 cancelAutoSendConfirmation(kind)
             }
         } message: { kind in
-            Text("\(kind.label) for \(conversationName) will send automatically after a 30-second undo window. You can pause all delegated sends from the Desk banner.")
+            Text("\(kind.label) for \(conversationName) will send automatically after a 30-second undo window. You can pause all auto-sends at any time from the DELEGATED pill in the window toolbar.")
         }
     }
 
@@ -239,15 +252,37 @@ struct ContextEditor: View {
 
         do {
             try repository.upsertConversationContext(ctx)
+            saveError = nil
             onSaved()
             dismiss()
         } catch {
-            // non-fatal; leave the sheet open so the user can retry
+            // The sheet stays open with everything the user typed, and says what went wrong.
+            saveError = "Couldn't save: \(error.localizedDescription) Nothing was changed. Your entries are still here — try Save again."
         }
     }
 
     private func splitCSV(_ s: String) -> [String] {
         s.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+}
+
+/// The per-conversation Privacy choice, in plain words. Stored values are unchanged
+/// ("none", "local_only", "never_draft"); only what the user reads differs.
+enum PrivacyOverrideCopy {
+    static let options = [
+        ("none", "Normal"), ("local_only", "Local-only"), ("never_draft", "Never draft")
+    ]
+
+    /// What the selected option really does, per the digest, drafting and MCP code paths.
+    static func caption(for value: String) -> String {
+        switch value {
+        case "local_only":
+            return "Never sent to a cloud AI model: with Anthropic or OpenAI selected, this conversation is left out of digests and gets no reply drafts. Hidden from AI apps connected over MCP, and left out of digests while MCP is on."
+        case "never_draft":
+            return "No reply drafts and no auto-send for this conversation, and it is left out of digests. AI apps connected over MCP can still read it, but can't suggest replies."
+        default:
+            return "Follows your AI and privacy settings. Digests and drafts use whichever AI you chose, cloud or local."
+        }
     }
 }
 
