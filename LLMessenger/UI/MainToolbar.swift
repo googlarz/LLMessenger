@@ -69,7 +69,7 @@ struct MainToolbar: ToolbarContent {
                     Label("Ask", systemImage: "text.bubble")
                         .foregroundStyle(appState.askPanelOpen ? Theme.textPrimary : Color.secondary)
                 }
-                .help(appState.askPanelOpen ? "Close the Ask panel" : "Ask about this digest, or draft a reply")
+                .help(appState.askPanelOpen ? "Close the Ask panel" : "Ask about your messages")
                 // Color alone doesn't announce state to VoiceOver/Increase Contrast.
                 .accessibilityAddTraits(appState.askPanelOpen ? [.isButton, .isSelected] : .isButton)
                 .accessibilityLabel(appState.askPanelOpen ? "Ask panel, open" : "Ask panel, closed")

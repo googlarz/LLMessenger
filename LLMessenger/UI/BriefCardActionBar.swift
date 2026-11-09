@@ -74,7 +74,7 @@ struct BriefCardActionBar: View {
     private var replyButton: some View {
         Button("Reply", action: onReply)
             .buttonStyle(WireActionStyle(tint: Theme.signal, sansLabel: true))
-            .help("Draft a reply")
+            .help("Write a reply in the Reply window")
     }
 
     private var doneButton: some View {

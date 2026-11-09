@@ -1,6 +1,5 @@
 // LLMessenger/UI/ReplyDraftView.swift
 import SwiftUI
-import AppKit
 
 struct ReplyDraftView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
@@ -17,7 +16,7 @@ struct ReplyDraftView: View {
 
             VStack(alignment: .leading, spacing: 9) {
                 HStack {
-                    WireLabel(draft.senderName.isEmpty ? "Draft reply" : "Draft reply · \(draft.senderName)")
+                    WireLabel("Proposed reply")
                     Spacer()
                     Button { chatViewModel.discardDraft(id: draftID) } label: {
                         Image(systemName: "xmark")
@@ -41,10 +40,9 @@ struct ReplyDraftView: View {
                 } else if !draft.conversationID.isEmpty {
                     HStack(spacing: 7) {
                         ServiceStamp(service: draft.serviceID, size: 14)
-                        Text(draft.conversationID.uppercased())
-                            .font(Theme.mono(11))
-                            .tracking(0.6)
-                            .foregroundStyle(Theme.textTertiary)
+                        Text("\(chatViewModel.displayName(for: draft)) · \(Theme.serviceName(draft.serviceID))")
+                            .font(Theme.sans(12, weight: .medium))
+                            .foregroundStyle(Theme.textSecondary)
                             .lineLimit(1)
                     }
                 }
@@ -75,19 +73,14 @@ struct ReplyDraftView: View {
                     }
 
                 HStack(spacing: 4) {
-                    WireLabel("Nothing has been sent")
                     Spacer()
                     Button("Discard") { chatViewModel.discardDraft(id: draftID) }
                         .buttonStyle(WireActionStyle())
 
-                    Button("Open App") { openTargetApp() }
-                        .buttonStyle(WireActionStyle())
-                        .disabled(!canOpenTargetApp)
-                        .help("Open the target app to review and send")
-
-                    Button("Copy") { copyDraft() }
+                    Button("Review and send…") { chatViewModel.reviewAndSend(draftID: draftID) }
                         .buttonStyle(PaperButtonStyle(prominent: true))
-                        .help("Copy the draft to the clipboard")
+                        .disabled(!ChatViewModel.isAddressable(draft))
+                        .help("Open this text in the Reply window, where you check it and send it")
                 }
             }
 
@@ -95,48 +88,5 @@ struct ReplyDraftView: View {
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 9)
-    }
-
-    private var canOpenTargetApp: Bool {
-        targetURL != nil
-    }
-
-    private var targetURL: URL? {
-        switch draft.serviceID {
-        case "telegram":
-            return URL(string: "tg://")
-        case "signal":
-            return URL(string: "sgnl://")
-        case "whatsapp":
-            // 1:1 chats can be opened pre-addressed; groups and LID chats have no phone number.
-            if let digits = WhatsAppAdapter.phoneDigits(fromJID: draft.conversationID) {
-                return URL(string: "whatsapp://send?phone=\(digits)")
-            }
-            return URL(string: "whatsapp://")
-        case "imessage":
-            // conversationID format from iMessage adapter: "any;-;+491234567890"
-            // Extract the phone/email portion after the last ";-;"
-            let convID = draft.conversationID
-            if let range = convID.range(of: ";-;") {
-                let recipient = String(convID[range.upperBound...])
-                if !recipient.isEmpty,
-                   let encoded = recipient.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
-                    return URL(string: "imessage://\(encoded)")
-                }
-            }
-            return URL(string: "imessage://")
-        default:
-            return nil
-        }
-    }
-
-    private func copyDraft() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(draft.text, forType: .string)
-    }
-
-    private func openTargetApp() {
-        guard let targetURL else { return }
-        NSWorkspace.shared.open(targetURL)
     }
 }

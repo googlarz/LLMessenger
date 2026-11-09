@@ -23,9 +23,11 @@ struct ConversationOption: Identifiable, Equatable {
 }
 
 struct UserReceipt: Identifiable {
+    enum Tone { case done, problem }
     let id = UUID()
     let text: String
     let actionTitle: String?
+    var tone: Tone = .done
     let action: (() -> Void)?
 }
 
@@ -44,7 +46,6 @@ enum ThreadItem: Identifiable {
     case assistantResponse(id: UUID, text: String)
     case assistantResponseWithSources(id: UUID, text: String, sources: [ThreadSource])
     case replyDraft(id: UUID, draft: ReplyDraft)
-    case sendConfirmation(id: UUID, draft: ReplyDraft)
     /// Shown when a reply intent targets multiple conversations — user picks one by number.
     case conversationPicker(id: UUID, originalRequest: String, options: [ConversationOption])
 
@@ -55,7 +56,6 @@ enum ThreadItem: Identifiable {
         case .assistantResponse(let i, _):   return "asst-\(i)"
         case .assistantResponseWithSources(let i, _, _): return "asst-src-\(i)"
         case .replyDraft(let i, _):          return "draft-\(i)"
-        case .sendConfirmation(let i, _):    return "send-\(i)"
         case .conversationPicker(let i, _, _): return "picker-\(i)"
         }
     }
@@ -142,18 +142,11 @@ final class AppState: ObservableObject {
     func clearComposerOnBriefNavigation(_ chat: ChatViewModel) {
         onBriefSelectionChanged = { [weak chat] in
             chat?.inputText = ""
-            chat?.pendingTarget = nil
         }
     }
-    /// Fired synchronously whenever selectedBriefID actually changes — before
-    /// any code that runs after the assignment in the same call. Wired once
-    /// (ChatWindowController) to clear the chat composer's unsent draft and
-    /// pending reply target, which otherwise leak from one digest into the
-    /// next. Must be synchronous (didSet, not .onChange/.task) so it still
-    /// runs strictly before ActFeedView's reply flow — which sets
-    /// selectedBriefID then immediately calls prepareReply() in the same
-    /// call, setting the new draft — an async clear would wipe that draft
-    /// out instead of the stale one.
+    /// Fired synchronously whenever selectedBriefID actually changes. Wired once
+    /// (ChatWindowController) to clear the Ask panel's unsent question, which
+    /// otherwise leaks from one digest into the next.
     var onBriefSelectionChanged: (() -> Void)?
     /// Live adapter status, pushed by AppDelegate on every poll event. Source of
     /// truth for all status reads. `serviceHealthMap` (DB rows, loaded in
@@ -289,6 +282,27 @@ final class AppState: ObservableObject {
     /// Ask panel (the AI conversation inspector). Closed by default so reading
     /// a digest doesn't look like composing; opened from the toolbar Ask button.
     @Published var askPanelOpen = false
+
+    // MARK: - Reply composer (AppState+Reply.swift)
+
+    /// The open Reply composer, if any. Presented as a sheet on the main window.
+    @Published var replyComposer: ReplyComposerRequest?
+    /// Unsent composer text per "service|conversationId", kept for the session.
+    var savedReplyDrafts: [String: String] = [:]
+    /// Sends that failed recently — shown at the top of Act as "Couldn't send".
+    @Published var failedSends: [AgentAction] = []
+    /// Plain-language reason per failed action id, captured when the send failed.
+    @Published var sendFailureReasons: [Int64: String] = [:]
+    /// Staged sends whose outcome (sent / couldn't send) has not been reported yet.
+    var trackedSendIDs: Set<Int64> = []
+    /// Lets non-view code (a toast's "Show") switch the main window's section.
+    @Published var requestedSection: AppSection?
+    /// Read-only hand-off: copy the text, then open the service's app. Replaced in tests.
+    var replyHandOff: (String, URL?) -> Void = { text, url in
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        if let url { NSWorkspace.shared.open(url) }
+    }
 
     /// Sidebar service quick-filter (nil = all services). Scopes the Act queue
     /// and the open digest's cards to one service.

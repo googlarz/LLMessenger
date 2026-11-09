@@ -5,12 +5,10 @@ struct ChatInputView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
     @EnvironmentObject var appState: AppState
     @FocusState private var isFocused: Bool
-    @State private var selectedTone: String? = nil
     @State private var showMentionPicker = false
     @State private var mentionQuery = ""
     // Range of "@<query>" inside inputText that the picker is currently completing.
     @State private var mentionRange: Range<String.Index>?
-    @State private var sendHovered = false
 
     var body: some View {
         if DemoSeeder.isActive {
@@ -41,30 +39,8 @@ struct ChatInputView: View {
             .background(Theme.sidebar)
         } else {
         VStack(alignment: .leading, spacing: 7) {
-            if let target = chatViewModel.pendingTarget {
-                MentionTargetChip(target: target) {
-                    chatViewModel.clearMentionTarget()
-                }
-            }
-
-            // Tone controls only while actually writing or editing a reply —
-            // an empty panel shouldn't advertise composer controls.
-            if !chatViewModel.inputText.isEmpty || chatViewModel.pendingTarget != nil {
-                HStack(spacing: 14) {
-                    WireLabel("Tone")
-                    ForEach(["Formal", "Short", "Casual"], id: \.self) { tone in
-                        ToneButton(tone: tone, selected: selectedTone == tone) {
-                            withAnimation(Theme.quick) {
-                                selectedTone = selectedTone == tone ? nil : tone
-                            }
-                        }
-                    }
-                }
-                .transition(.opacity)
-            }
-
             HStack(alignment: .bottom, spacing: 10) {
-                // Input field
+                // Question field — asks about your messages; it never sends to anyone.
                 ZStack(alignment: .topLeading) {
                     if chatViewModel.inputText.isEmpty {
                         Text(placeholder)
@@ -82,9 +58,7 @@ struct ChatInputView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .focused($isFocused)
                         .tint(Theme.textPrimary)
-                        .onChange(of: chatViewModel.inputFocusRequest) {
-                            isFocused = true
-                        }
+                        .accessibilityLabel("Ask about your messages")
                         .onChange(of: chatViewModel.inputText) { _, newValue in
                             updateMentionState(for: newValue)
                         }
@@ -100,26 +74,14 @@ struct ChatInputView: View {
                         }
                 }
 
-                // Send — paper on ink
-                Button { sendIfPossible() } label: {
-                    ZStack {
-                        Circle()
-                            .fill(canSend ? (sendHovered ? Theme.textSecondary : Theme.textPrimary) : Theme.surfaceHigh)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(canSend ? Theme.bg : Theme.textTertiary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSend)
-                .animation(Theme.quick, value: canSend)
-                .animation(Theme.quick, value: sendHovered)
-                .onHover { sendHovered = $0 }
-                .keyboardShortcut(.return, modifiers: .command)
-                .help("Send (⌘↩)")
-                .accessibilityLabel(sendAccessibilityLabel)
-                .accessibilityHint("Press Command Return to send.")
+                // "Ask", in words — an arrow-up circle reads as "send a message".
+                Button("Ask") { askIfPossible() }
+                    .buttonStyle(PaperButtonStyle(prominent: canAsk))
+                    .disabled(!canAsk)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .help("Ask about your messages (⌘↩). Nothing is sent to anyone.")
+                    .accessibilityLabel("Ask about your messages")
+                    .accessibilityHint("Press Command Return to ask. Nothing is sent to anyone.")
             }
         }
         .padding(.horizontal, 16)
@@ -130,39 +92,16 @@ struct ChatInputView: View {
     }
 
     private var placeholder: String {
-        if let target = chatViewModel.pendingTarget {
-            return "Reply to \(target.displayName) on \(Theme.serviceName(target.service)) — say what you want, AI drafts it"
-        }
-        return "Ask about this digest, or type @ to write to anyone"
+        "Ask about your messages — type @ to write to someone"
     }
 
-    private var canSend: Bool {
+    private var canAsk: Bool {
         !chatViewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !chatViewModel.isLoading
     }
 
-    private var sendAccessibilityLabel: String {
-        if let target = chatViewModel.pendingTarget {
-            return "Create reply draft for \(target.displayName)"
-        }
-        return "Ask AI about this digest"
-    }
-
-    private var toneSuffix: String {
-        switch selectedTone {
-        case "Formal":  return " [Reply formally and professionally]"
-        case "Short":   return " [Keep reply under 2 sentences]"
-        case "Casual":  return " [Use a friendly, casual tone]"
-        default:        return ""
-        }
-    }
-
-    private func sendIfPossible() {
-        guard canSend else { return }
-        if !toneSuffix.isEmpty {
-            chatViewModel.inputText += toneSuffix
-        }
-        selectedTone = nil
+    private func askIfPossible() {
+        guard canAsk else { return }
         Task {
             await chatViewModel.send()
         }
@@ -200,78 +139,14 @@ struct ChatInputView: View {
     }
 
     private func applyMention(_ target: ChatViewModel.MentionTarget) {
-        // Remove the typed "@query" so the user can type the message body cleanly.
+        // Writing to a person happens in the Reply composer, not here: drop the
+        // typed "@query" from the question and open the composer for them.
         if let range = mentionRange {
             chatViewModel.inputText.removeSubrange(range)
         }
-        chatViewModel.setMentionTarget(target)
         showMentionPicker = false
         mentionRange = nil
         mentionQuery = ""
-    }
-}
-
-private struct ToneButton: View {
-    let tone: String
-    let selected: Bool
-    let onTap: () -> Void
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: onTap) {
-            Text(tone.uppercased())
-                .font(Theme.mono(11, weight: .semibold))
-                .tracking(1.0)
-                .foregroundStyle(selected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary))
-                .padding(.vertical, 2)
-                .overlay(alignment: .bottom) {
-                    (selected ? Theme.textPrimary : (isHovered ? Theme.textTertiary : Color.clear))
-                        .frame(height: 1.5)
-                        .offset(y: 2)
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .animation(Theme.quick, value: isHovered)
-        .onHover { isHovered = $0 }
-    }
-}
-
-private struct MentionTargetChip: View {
-    let target: ChatViewModel.MentionTarget
-    let onClear: () -> Void
-    @State private var clearHovered = false
-
-    var body: some View {
-        HStack(spacing: 7) {
-            ServiceStamp(service: target.service, size: 16)
-            Text("TO \(target.displayName.uppercased())")
-                .font(Theme.mono(11, weight: .semibold))
-                .tracking(0.8)
-                .foregroundStyle(Theme.textPrimary)
-            if target.isGroup {
-                WireLabel("Group")
-            }
-            Button(action: onClear) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(clearHovered ? Theme.textSecondary : Theme.textTertiary)
-            }
-            .buttonStyle(.plain)
-            .help("Clear recipient")
-            .animation(Theme.quick, value: clearHovered)
-            .onHover { clearHovered = $0 }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.controlRadius)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.controlRadius)
-                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
-        )
+        chatViewModel.openComposer(for: target)
     }
 }

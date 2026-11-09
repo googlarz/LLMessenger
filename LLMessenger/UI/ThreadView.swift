@@ -46,8 +46,6 @@ struct ThreadView: View {
             AssistantResponseWithSourcesView(text: text, sources: sources)
         case .replyDraft(let id, let draft):
             ReplyDraftView(draftID: id, draft: draft)
-        case .sendConfirmation(let id, let draft):
-            SendConfirmationView(confirmationID: id, draft: draft)
         case .conversationPicker(let id, let req, let opts):
             ConversationPickerView(pickerID: id, originalRequest: req, options: opts)
         }

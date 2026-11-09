@@ -1349,11 +1349,56 @@ struct BriefRepository: Sendable {
         }
     }
 
-    /// Inserts a proposed action (e.g. an on-demand follow-up from the Commitments surface).
-    func insertAgentAction(_ action: AgentAction) throws {
+    /// Inserts a proposed action (e.g. a reply written in the Reply composer) and
+    /// returns its new row id.
+    @discardableResult
+    func insertAgentAction(_ action: AgentAction) throws -> Int64? {
         try database.dbQueue.write { db in
             var a = action
             try a.insert(db)
+            return a.id
+        }
+    }
+
+    /// Message sends that failed in the last `days` days, newest first — the Act
+    /// queue's "Couldn't send" rows. A calendar hold never ends in .failed.
+    func fetchRecentFailedSends(days: Double = 7, now: Date = Date()) throws -> [AgentAction] {
+        let since = now.addingTimeInterval(-days * 86_400)
+        return try database.dbQueue.read { db in
+            try AgentAction
+                .filter(Column("status") == AgentActionStatus.failed.rawValue)
+                .filter(Column("kind") != AgentActionKind.calendarHold.rawValue)
+                .filter(Column("resolvedAt") >= since)
+                .order(Column("resolvedAt").desc)
+                .fetchAll(db)
+        }
+    }
+
+    func fetchAgentActions(ids: [Int64]) throws -> [AgentAction] {
+        guard !ids.isEmpty else { return [] }
+        return try database.dbQueue.read { db in
+            try AgentAction.filter(ids.contains(Column("id"))).fetchAll(db)
+        }
+    }
+
+    /// "Try again" / "Edit" on a failed send: failed → pending, only if still failed,
+    /// so it can be staged through the normal undo window again.
+    @discardableResult
+    func requeueFailedAgentAction(id: Int64) throws -> Bool {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE agentActions SET status = ?, resolvedAt = NULL WHERE id = ? AND status = ?",
+                arguments: [AgentActionStatus.pending.rawValue, id, AgentActionStatus.failed.rawValue])
+            return db.changesCount > 0
+        }
+    }
+
+    /// "Dismiss" on a failed send: it leaves Act without being sent.
+    func dismissFailedAgentAction(id: Int64) throws {
+        try database.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE agentActions SET status = ?, resolvedAt = ? WHERE id = ? AND status = ?",
+                arguments: [AgentActionStatus.skipped.rawValue, Date(), id, AgentActionStatus.failed.rawValue])
         }
     }
 

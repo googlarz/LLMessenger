@@ -94,19 +94,14 @@ extension AppState {
         }
     }
 
-    /// Proposes a follow_up for a due commitment on demand (the "Draft follow-up"
-    /// button) and surfaces it in the Act queue. Reuses the engine's pure builder.
+    /// "Draft follow-up" on a due commitment: opens the Reply composer with the
+    /// engine's templated nudge. Sending it resolves the commitment (commitmentId).
     func draftFollowUp(for commitment: Commitment) {
         guard let action = AgentEngine.followUpAction(for: commitment) else { return }
-        guard ServiceCapabilities.canSend(service: action.service) else {
-            lastError = ServiceCapabilities.readOnlyMessage(for: action.service)
-            return
-        }
-        do {
-            try repository.insertAgentAction(action)
-            reloadAgentActions()
-        } catch {
-            lastError = friendly(error)
-        }
+        openReplyComposer(service: action.service,
+                          conversationId: action.conversationId,
+                          conversationName: action.conversationName,
+                          text: action.replyPayload?.draftText,
+                          commitmentId: action.commitmentId)
     }
 }

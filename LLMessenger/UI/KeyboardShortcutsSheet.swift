@@ -24,29 +24,35 @@ private struct CloseButton: View {
 struct KeyboardShortcutsSheet: View {
     @Binding var isPresented: Bool
 
-    private let sections: [(title: String, shortcuts: [(key: String, description: String)])] = [
-        ("Navigation", [
-            ("J / K",          "Older / newer digest when Desk is hidden"),
-            ("⌘[ / ⌘]",        "Older / newer digest"),
+    /// Must match the code exactly: ContentView (?, ⌘F, digest J/K), DeskView (⌘1–3),
+    /// MainToolbar (⌘[ ⌘] ⌘R ⌥⌘S), BriefProseView (H), ActFeedView (Act keys),
+    /// ChatInputView (Ask) and ReplyComposerView (Send/Cancel).
+    static let sections: [(title: String, shortcuts: [(key: String, description: String)])] = [
+        ("Anywhere", [
+            ("⌘1 / ⌘2 / ⌘3",   "Act / Digests / Activity"),
             ("⌘F",             "Search messages"),
-        ]),
-        ("Act queue", [
-            ("⌘1",             "Act tab"),
-            ("⌘2",             "Digest tab"),
-            ("⌘3",             "Activity tab"),
-            ("J / K",          "Next / previous action"),
-            ("↩ Return",       "Stage selected send (5s undo)"),
-            ("S",              "Skip selected"),
-            ("E",              "Edit selected reply"),
-            ("⌘Z",             "Undo staged send"),
-        ]),
-        ("Digest", [
-            ("H",              "File the first unhandled card"),
-            ("⌘↩",             "Send reply draft"),
-        ]),
-        ("Window", [
+            ("⌘R",             "Refresh now"),
+            ("⌥⌘S",            "Show or hide the sidebar"),
             ("⌘,",             "Settings"),
             ("? (Shift+/)",    "This help sheet"),
+        ]),
+        ("Act", [
+            ("J / K  ↓ / ↑",   "Select the next / previous item"),
+            ("⌘↩",             "Selected item's main button — Send waits 5s; Maybe and high-risk drafts ask first"),
+            ("S",              "Skip or dismiss the selected item"),
+            ("E",              "Edit the selected draft"),
+            ("⌘Z",             "Undo the last send"),
+            ("Esc",            "Clear the selection"),
+        ]),
+        ("Digests", [
+            ("J / K  ↓ / ↑",   "Older / newer digest"),
+            ("⌘[ / ⌘]",        "Older / newer digest"),
+            ("H",              "Mark the first open card done"),
+            ("⌘↩",             "Ask (in the Ask box)"),
+        ]),
+        ("Reply window", [
+            ("⌘↩",             "Send — you'll have 5 seconds to undo"),
+            ("Esc",            "Cancel — your text is kept"),
         ]),
     ]
 
@@ -66,7 +72,7 @@ struct KeyboardShortcutsSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(sections, id: \.title) { section in
+                    ForEach(Self.sections, id: \.title) { section in
                         sectionHeader(section.title)
                         ForEach(section.shortcuts, id: \.key) { shortcut in
                             shortcutRow(key: shortcut.key, description: shortcut.description)
@@ -76,10 +82,16 @@ struct KeyboardShortcutsSheet: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
-                .padding(.bottom, 24)
+                .padding(.bottom, 8)
+
+                Text("Single keys work in the main window when no text box is focused.")
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 20)
             }
         }
-        .frame(width: 360)
+        .frame(width: 440, height: 520)
         .background(Theme.bg)
     }
 
@@ -93,11 +105,11 @@ struct KeyboardShortcutsSheet: View {
     }
 
     private func shortcutRow(key: String, description: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(key)
                 .font(Theme.mono(11, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
-                .frame(minWidth: 80, alignment: .leading)
+                .frame(width: 104, alignment: .leading)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(
@@ -108,6 +120,7 @@ struct KeyboardShortcutsSheet: View {
             Text(description)
                 .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer()
         }

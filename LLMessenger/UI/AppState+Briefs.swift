@@ -113,14 +113,22 @@ extension AppState {
     }
 
     func reloadAgentActions() {
+        let tracked = trackedSendIDs
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let actions = (try? self.repository.fetchPendingAgentActions()) ?? []
+            let failed = (try? self.repository.fetchRecentFailedSends()) ?? []
+            // Staged sends that left the active queue: sent, failed or undone.
+            let activeIDs = Set(actions.compactMap(\.id))
+            let settled = (try? self.repository.fetchAgentActions(ids: Array(tracked.subtracting(activeIDs)))) ?? []
             let pairs = actions.map { (service: $0.service, conversationId: $0.conversationId) }
             let contexts = (try? self.repository.fetchConversationContexts(for: pairs)) ?? []
             let delegated = contexts.contains { !$0.delegationKinds.isEmpty }
             await MainActor.run {
                 self.agentActions = actions
+                self.failedSends = failed
+                self.trackedSendIDs.formUnion(actions.filter { $0.statusEnum == .scheduled }.compactMap(\.id))
+                self.noteSettledSends(settled)
                 self.mergeConversationContexts(contexts)
                 // "Maybe" proposals are the user's call, not part of the ready-to-send count.
                 self.actionsReadyCount = actions.filter { !$0.isMaybe }.count

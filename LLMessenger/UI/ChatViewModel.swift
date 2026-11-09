@@ -8,10 +8,6 @@ final class ChatViewModel: ObservableObject {
     @Published var threadItems: [ThreadItem] = []
     @Published var inputText: String = ""
     @Published var isLoading: Bool = false
-    @Published var inputFocusRequest = UUID()
-    /// When set via the @ mention picker, the next send() bypasses the intent router
-    /// and goes straight to draftReply with this target. Cleared after the draft is built.
-    @Published var pendingTarget: MentionTarget?
     /// Keyed by BriefCard.id. Populated on-demand when the user taps "Quick reply" on a card.
     @Published var quickReplies: [String: [QuickReply]] = [:]
     /// Cards currently loading quick replies.
@@ -89,24 +85,36 @@ final class ChatViewModel: ObservableObject {
         await answerQuestion(brief: brief, rawInput: question, echoUserMessage: false)
     }
 
-    func prepareReply(service: String,
-                      conversationID: String,
-                      displayName: String) {
-        let label = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let target = label.isEmpty ? conversationID : label
-        inputText = "write to \(target): "
-        // An abandoned @-mention target would otherwise override this reply's recipient.
-        pendingTarget = nil
-        inputFocusRequest = UUID()
+    /// The @ picker writes to a person: that happens in the Reply composer, never
+    /// in the Ask box (which only asks).
+    func openComposer(for target: MentionTarget) {
+        appState.openReplyComposer(service: target.service,
+                                   conversationId: target.conversationId,
+                                   conversationName: target.displayName)
     }
 
-    /// Lock the next send() to a specific conversation. Used by the @ mention picker.
-    func setMentionTarget(_ target: MentionTarget) {
-        pendingTarget = target
-        inputFocusRequest = UUID()
+    /// "Review and send…" on a draft the Ask panel proposed: open the composer
+    /// prefilled with its recipient and text. Nothing is sent from the Ask panel.
+    func reviewAndSend(draftID: UUID) {
+        guard let draft = threadItems.compactMap({ item -> ReplyDraft? in
+            if case .replyDraft(let id, let draft) = item, id == draftID { return draft }
+            return nil
+        }).first, Self.isAddressable(draft) else { return }
+        appState.openReplyComposer(service: draft.serviceID,
+                                   conversationId: draft.conversationID,
+                                   conversationName: displayName(for: draft),
+                                   text: draft.text)
     }
 
-    func clearMentionTarget() {
+    /// A draft can only be reviewed for sending when its recipient is known.
+    static func isAddressable(_ draft: ReplyDraft) -> Bool {
+        !draft.serviceID.isEmpty && !draft.conversationID.isEmpty && draft.conversationID != "unknown"
+    }
+
+    func displayName(for draft: ReplyDraft) -> String {
+        if !draft.senderName.isEmpty { return draft.senderName }
+        return briefConvs.first { $0.service == draft.serviceID && $0.convId == draft.conversationID }?.name
+            ?? draft.conversationID
     }
 
     private func submit(_ rawInput: String) async {
@@ -117,17 +125,6 @@ final class ChatViewModel: ObservableObject {
         // means the bubble shows up the instant Send is tapped, and routing/LLM
         // latency only delays the assistant's reply, not the user's own line.
         threadItems.append(.userMessage(id: UUID(), text: rawInput))
-
-        // Case 0 — Explicit @ mention target: target is already known, skip intent routing
-        // and go straight to the existing draft flow.
-        if let target = pendingTarget {
-            await draftReply(brief: brief,
-                             originalRequest: rawInput,
-                             service: target.service,
-                             convId: target.conversationId,
-                             convName: target.displayName)
-            return
-        }
 
         // Case 1 — Picker resolution: user typed a number, service name, or
         // contact name to answer an active picker. Matching is case-insensitive
@@ -241,7 +238,7 @@ final class ChatViewModel: ObservableObject {
             case .reviseDraft:
                 await reviseDraft(action, brief: brief, context: context, originalText: originalText)
             case .sendDraftRequest:
-                requestSendConfirmation(action, context: context)
+                openComposerForSendRequest(action, context: context)
             case .showSources:
                 showSources(action, context: context)
             case .listActions, .findWaitingReplies, .summarizeChanges, .extractTasks, .compareConversations,
@@ -352,30 +349,32 @@ final class ChatViewModel: ObservableObject {
                 service: draftRef.draft.serviceID,
                 conversationId: draftRef.draft.conversationID
             )
-            let revised = stripDraftPrefix(response.text.trimmingCharacters(in: .whitespacesAndNewlines))
+            let revised = Self.stripDraftPrefix(response.text.trimmingCharacters(in: .whitespacesAndNewlines))
             updateDraft(id: draftRef.id, text: revised)
         } catch {
             threadItems.append(.assistantResponse(id: UUID(), text: "Error: \(error.localizedDescription)"))
         }
     }
 
-    private func requestSendConfirmation(_ action: IntentAction, context: ChatInteractionContext) {
+    /// "Send it" in the Ask panel never sends: it opens the Reply composer with the
+    /// draft, where the user reviews the recipient and text and presses Send.
+    private func openComposerForSendRequest(_ action: IntentAction, context: ChatInteractionContext) {
         guard let draftRef = context.draft(for: action) else {
             if context.drafts.isEmpty {
                 threadItems.append(.assistantResponse(id: UUID(), text: "There are no drafts to send."))
             } else {
-                let list = context.drafts.map { "\($0.number). \($0.draft.conversationID)" }.joined(separator: "\n")
+                let list = context.drafts.map { "\($0.number). \(displayName(for: $0.draft))" }.joined(separator: "\n")
                 threadItems.append(.assistantResponse(id: UUID(),
-                    text: "Which draft do you want to send? Reply with a number:\n\(list)"))
+                    text: "Which draft do you want to review? Reply with a number:\n\(list)"))
             }
             return
         }
-        guard ServiceCapabilities.canSend(service: draftRef.draft.serviceID) else {
+        guard Self.isAddressable(draftRef.draft) else {
             threadItems.append(.assistantResponse(id: UUID(),
-                text: "\(ServiceCapabilities.readOnlyMessage(for: draftRef.draft.serviceID)). Use Copy or Open App on the draft."))
+                text: "I can't tell who that draft is for. Ask about one conversation, or use Reply on its card."))
             return
         }
-        threadItems.append(.sendConfirmation(id: UUID(), draft: draftRef.draft))
+        reviewAndSend(draftID: draftRef.id)
     }
 
     private func showSources(_ action: IntentAction, context: ChatInteractionContext) {
@@ -547,7 +546,7 @@ final class ChatViewModel: ObservableObject {
                                    text: draftText,
                                    serviceID: target?.service ?? services.first ?? "",
                                    conversationID: target?.convId ?? "",
-                                   senderName: "",
+                                   senderName: target?.name ?? "",
                                    provenance: "Draft based on this digest context. Nothing has been sent.")
             threadItems.append(.replyDraft(id: draft.id, draft: draft))
             appState.recordDraftCreated()
@@ -597,47 +596,6 @@ final class ChatViewModel: ObservableObject {
             for card in json.cards where card.conversationId == convID {
                 quickReplies.removeValue(forKey: card.id)
             }
-        }
-    }
-
-    func cancelSendConfirmation(id: UUID) {
-        threadItems.removeAll {
-            if case .sendConfirmation(let i, _) = $0 { return i == id }
-            return false
-        }
-    }
-
-    func confirmSendDraft(id: UUID) async {
-        guard let confirmation = threadItems.compactMap({ item -> (UUID, ReplyDraft)? in
-            if case .sendConfirmation(let confirmationID, let draft) = item {
-                return (confirmationID, draft)
-            }
-            return nil
-        }).first(where: { $0.0 == id }) else { return }
-
-        let draft = confirmation.1
-        guard let adapter = appState.adapters[draft.serviceID] else {
-            threadItems.append(.assistantResponse(id: UUID(),
-                                                   text: "I can't send this because \(Theme.serviceName(draft.serviceID)) is not connected."))
-            return
-        }
-
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            try await adapter.send(conversationID: draft.conversationID, text: draft.text)
-            cancelSendConfirmation(id: id)
-            discardDraft(id: draft.id)
-            if let brief = appState.selectedBrief,
-               let briefID = brief.id,
-               let json = appState.briefJSON(for: brief),
-               let card = json.cards.first(where: { $0.service == draft.serviceID && $0.conversationId == draft.conversationID }) {
-                appState.markCardHandled(briefID: briefID, cardID: card.id)
-            }
-            threadItems.append(.assistantResponse(id: UUID(), text: "Sent."))
-        } catch {
-            threadItems.append(.assistantResponse(id: UUID(),
-                                                   text: "Error: \(error.localizedDescription)"))
         }
     }
 
@@ -720,19 +678,12 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    /// Converts a quick reply option into a draft and appends it to the thread,
-    /// then clears the chip list so the user can regenerate if needed.
+    /// Opens the Reply composer with a quick reply option, then clears the chip list
+    /// so the user can regenerate if needed.
     func applyQuickReply(_ reply: QuickReply, cardID: String, service: String, convId: String, convName: String) {
-        let draft = ReplyDraft(id: UUID(),
-                               text: reply.draft,
-                               serviceID: service,
-                               conversationID: convId,
-                               senderName: convName,
-                               provenance: "Quick draft based on recent local messages for this conversation. Nothing has been sent.")
-        threadItems.append(.replyDraft(id: draft.id, draft: draft))
         appState.recordDraftCreated()
-        // Clear chips so the "Quick reply" trigger reappears and the user
-        // can generate a fresh set if they discard this draft.
+        appState.openReplyComposer(service: service, conversationId: convId, conversationName: convName,
+                                   text: reply.draft)
         quickReplies.removeValue(forKey: cardID)
     }
 
@@ -811,7 +762,7 @@ final class ChatViewModel: ObservableObject {
                 conversationId: convId
             )
             let responseText = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            let draftText = stripDraftPrefix(responseText)
+            let draftText = Self.stripDraftPrefix(responseText)
             let draft = ReplyDraft(id: UUID(), text: draftText,
                                    serviceID: service, conversationID: convId, senderName: convName,
                                    provenance: draftProvenance(
@@ -872,8 +823,6 @@ final class ChatViewModel: ObservableObject {
                 msgs.append(LLMMessage(role: .assistant, content: "\(text)\n\(sourceText)"))
             case .replyDraft(_, let draft):
                 msgs.append(LLMMessage(role: .assistant, content: "DRAFT: \(draft.text)"))
-            case .sendConfirmation(_, let draft):
-                msgs.append(LLMMessage(role: .assistant, content: "SEND CONFIRMATION PENDING: \(draft.text)"))
             default:
                 break
             }
@@ -957,7 +906,7 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    private func stripDraftPrefix(_ responseText: String) -> String {
+    static func stripDraftPrefix(_ responseText: String) -> String {
         var text = responseText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Strip "DRAFT:" / "Reply:" / "Message:" / "Response:" leaders, case-insensitive.

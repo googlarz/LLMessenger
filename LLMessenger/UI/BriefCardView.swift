@@ -281,7 +281,7 @@ struct BriefCardView: View {
                 Text(t.relativeLabel)
                     .font(Theme.mono(10))
                     .foregroundStyle(Theme.textTertiary.opacity(0.7))
-                    .help("Brief generated \(t.relativeLabel)")
+                    .help("Digest generated \(t.relativeLabel)")
             }
 
             // Counts only where they help a decision — the expanded reading view.
@@ -598,10 +598,10 @@ struct BriefCardView: View {
     }
 
     private func prepareReply() {
-        chatViewModel.prepareReply(
+        appState.openReplyComposer(
             service: card.service,
-            conversationID: card.conversationId,
-            displayName: card.conversation ?? ""
+            conversationId: card.conversationId,
+            conversationName: card.conversation ?? ""
         )
     }
 

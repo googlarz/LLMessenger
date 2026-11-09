@@ -2,8 +2,8 @@
 //
 // Q&A thread items. The assistant speaks as "the desk" — quiet paper rule,
 // mono attribution, no urgency colour (answers aren't urgent). Sources are
-// typeset as citations; the send confirmation is the app's central trust
-// moment and gets the most deliberate treatment.
+// typeset as citations. Nothing here sends: a proposed reply opens the Reply
+// composer ("Review and send…").
 
 import SwiftUI
 
@@ -187,56 +187,6 @@ struct AssistantResponseWithSourcesView: View {
                 .padding(.leading, 12)
                 .overlay(alignment: .leading) {
                     Theme.border.frame(width: Theme.hairline)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Send confirmation (the trust moment)
-
-struct SendConfirmationView: View {
-    @EnvironmentObject var chatViewModel: ChatViewModel
-    let confirmationID: UUID
-    let draft: ReplyDraft
-
-    var body: some View {
-        DeskItem(label: "Confirm send", labelColor: Theme.standby) {
-            VStack(alignment: .leading, spacing: 9) {
-                if !draft.senderName.isEmpty || !draft.conversationID.isEmpty {
-                    HStack(spacing: 7) {
-                        ServiceStamp(service: draft.serviceID, size: 16)
-                        Text("TO \((draft.senderName.isEmpty ? draft.conversationID : draft.senderName).uppercased())")
-                            .font(Theme.mono(11, weight: .semibold))
-                            .tracking(0.8)
-                            .foregroundStyle(Theme.textSecondary)
-                    }
-                }
-
-                Text(draft.text)
-                    .font(Theme.sans(13))
-                    .lineSpacing(4)
-                    .foregroundStyle(Theme.textPrimary)
-                    .textSelection(.enabled)
-                    .padding(.leading, 12)
-                    .overlay(alignment: .leading) {
-                        Theme.standby.opacity(0.6).frame(width: 2)
-                            .clipShape(RoundedRectangle(cornerRadius: 1))
-                    }
-
-                HStack {
-                    WireLabel("Nothing sends until you confirm")
-                    Spacer()
-                    Button("Cancel") {
-                        chatViewModel.cancelSendConfirmation(id: confirmationID)
-                    }
-                    .buttonStyle(WireActionStyle())
-
-                    Button("Send") {
-                        Task { await chatViewModel.confirmSendDraft(id: confirmationID) }
-                    }
-                    .buttonStyle(PaperButtonStyle(prominent: true))
-                    .keyboardShortcut(.return, modifiers: .command)
                 }
             }
         }
