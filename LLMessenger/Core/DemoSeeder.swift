@@ -20,6 +20,16 @@ enum DemoSeeder {
         UserDefaults.standard.bool(forKey: demoFlagKey)
     }
 
+    /// Every conversation the seeder creates (and every action, commitment and
+    /// message that points at one) carries this id prefix. It is the one mark that
+    /// says "sample data": the wipe keys on it, and so does the send path, which
+    /// never hands a sample row to a real adapter.
+    static let sampleConversationPrefix = "demo-"
+
+    static func isSampleConversation(_ conversationId: String) -> Bool {
+        conversationId.hasPrefix(sampleConversationPrefix)
+    }
+
     // MARK: - Fixture script
 
     private struct DemoMessage {
@@ -54,11 +64,11 @@ enum DemoSeeder {
             callback: "Last digest: you promised the updated deck by Friday — it shipped Thursday night.",
             actions: ["Send revised cap table to Anna", "Grant Marcus data-room access"],
             messages: [
-                DemoMessage(sender: "Anna Keller", text: "Partner meeting moved to Thu 10:00 — can you get me the updated cap table by Wed EOD?", minutesAgo: 95, role: .quote),
+                DemoMessage(sender: "Anna Keller", text: "For what it's worth — the metrics deck is the strongest in this batch.", minutesAgo: 95),
                 DemoMessage(sender: "Anna Keller", text: "Also Marcus says he still can't open the data room.", minutesAgo: 93, role: .quote),
-                DemoMessage(sender: "Anna Keller", text: "For what it's worth — the metrics deck is the strongest in this batch. See you Thursday.", minutesAgo: 90),
+                DemoMessage(sender: "Anna Keller", text: "Partner meeting moved to Thu 10:00 — can you get me the updated cap table by Wed EOD?", minutesAgo: 90, role: .quote),
             ],
-            quoteIndexes: [0, 1]
+            quoteIndexes: [1, 2]
         ),
         DemoCard(
             service: "slack",
@@ -86,8 +96,8 @@ enum DemoSeeder {
             callback: nil,
             actions: ["Confirm whether 1pm works for Sunday lunch"],
             messages: [
-                DemoMessage(sender: "Dad", text: "Sunday lunch still on? 1pm at the usual place?", minutesAgo: 200),
-                DemoMessage(sender: "Dad", text: "Fixed the boat trailer by the way. Ready for summer.", minutesAgo: 198),
+                DemoMessage(sender: "Dad", text: "Fixed the boat trailer by the way. Ready for summer.", minutesAgo: 200),
+                DemoMessage(sender: "Dad", text: "Sunday lunch still on? 1pm at the usual place?", minutesAgo: 198),
             ],
             quoteIndexes: []
         ),
@@ -150,7 +160,7 @@ enum DemoSeeder {
         // Yesterday evening's quiet brief first, so it sits below today's in
         // the archive and gives the conversation timeline two entries.
         let eveningDate = Calendar.current.date(byAdding: .hour, value: -14, to: now) ?? now
-        _ = try insertBrief(
+        let eveningID = try insertBrief(
             cards: eveningCards, createdAt: eveningDate, windowStart: eveningDate.addingTimeInterval(-3 * 3600),
             status: "open", notificationText: "Nothing urgent · 2 threads",
             database: database
@@ -173,6 +183,7 @@ enum DemoSeeder {
         }
 
         let repo = BriefRepository(database: database)
+        try seedActQueue(into: database, now: now, morningBriefID: morningID, eveningBriefID: eveningID)
         try repo.upsertConversationContext(ConversationContext(
             service: "signal",
             conversationId: "demo-meridian",
@@ -230,8 +241,97 @@ enum DemoSeeder {
             try db.execute(sql: "DELETE FROM briefs")
             try db.execute(sql: "DELETE FROM conversationContexts")
             try db.execute(sql: "DELETE FROM serviceConfig")
+            // Scoped to sample rows: these tables can also hold real data.
+            try db.execute(sql: "DELETE FROM agentActions WHERE conversationId LIKE 'demo-%'")
+            try db.execute(sql: "DELETE FROM commitments WHERE conversationId LIKE 'demo-%'")
         }
-        UserDefaults.standard.removeObject(forKey: demoFlagKey)
+        // Dismissing or snoozing a sample "owed reply" is remembered in defaults.
+        let defaults = UserDefaults.standard
+        let marker = "|\(sampleConversationPrefix)"
+        let dismissed = OwedReplyStore.dismissedIDs(defaults).filter { !$0.contains(marker) }
+        defaults.set(Array(dismissed), forKey: OwedReplyStore.dismissedKey)
+        defaults.set(OwedReplyStore.snoozedMap(defaults).filter { !$0.key.contains(marker) },
+                     forKey: OwedReplyStore.snoozedKey)
+        defaults.removeObject(forKey: demoFlagKey)
+    }
+
+    // MARK: - Act queue
+
+    /// The small world behind the Act screen, told with the same people as the
+    /// digests: Anna is waiting on the cap table, Priya owes a postmortem, Dad
+    /// wants a yes about Sunday. Everything is written through the same
+    /// repository calls real data uses, so `OwedReplyDeriver`,
+    /// `fetchPendingAgentActions` and the commitment reads find it unaided.
+    ///
+    /// Act then shows: Needs your decision (Anna's unanswered question, ranked
+    /// first, and a "Maybe" draft for Priya), Ready to send (Dad on iMessage,
+    /// Marcus on Signal), Waiting on others (Priya's postmortem), Your promises
+    /// and tasks (the cap table task) and, under Older, Mum's three-day-old question.
+    private static func seedActQueue(into database: AppDatabase, now: Date,
+                                     morningBriefID: Int64, eveningBriefID: Int64) throws {
+        let repo = BriefRepository(database: database)
+
+        // Two conversations that have no digest card: Marcus (waiting on data-room
+        // access) and Mum (an old, still-unanswered question). Attached to a
+        // brief so the digest pipeline never treats them as unprocessed.
+        try database.dbQueue.write { db in
+            var marcus = Message(
+                briefId: morningBriefID, service: "signal", conversationId: "demo-marcus",
+                conversationName: "Marcus Reid", messageId: "demo-signal-demo-marcus-m0",
+                sender: "Marcus Reid",
+                text: "Hi — Anna said you could sort my data-room access. Still getting 'access denied'. Any ETA?",
+                timestamp: now.addingTimeInterval(-40 * 60), isSent: false)
+            try marcus.insert(db)
+            var mum = Message(
+                briefId: eveningBriefID, service: "imessage", conversationId: "demo-mum",
+                conversationName: "Mum", messageId: "demo-imessage-demo-mum-m0",
+                sender: "Mum",
+                text: "Did you see the photos I sent from Gran's birthday? No rush 🙂",
+                timestamp: now.addingTimeInterval(-4 * 24 * 3600), isSent: false)
+            try mum.insert(db)
+        }
+
+        func draft(service: String, conversationId: String, name: String, title: String,
+                   text: String, why: String, confidence: Double, minutesAgo: Int,
+                   maybe: Bool = false) -> AgentAction {
+            AgentAction(
+                id: nil, kind: AgentActionKind.reply.rawValue, service: service,
+                conversationId: conversationId, conversationName: name, title: title,
+                payload: AgentAction.encodeReplyPayload(text), reasoning: why,
+                confidence: confidence,
+                // Normal risk on purpose: "low" is what batch-approve picks up.
+                riskLevel: AgentActionRisk.normal.rawValue,
+                status: AgentActionStatus.pending.rawValue,
+                createdAt: now.addingTimeInterval(-Double(minutesAgo) * 60), resolvedAt: nil,
+                isMaybe: maybe)
+        }
+        for action in [
+            draft(service: "imessage", conversationId: "demo-dad", name: "Dad",
+                  title: "Reply — Sunday lunch at 1pm",
+                  text: "1pm works! See you Sunday. Glad the trailer is fixed 🙂",
+                  why: "Dad asked a direct question, and you usually answer him in a line.",
+                  confidence: 0.86, minutesAgo: 20),
+            draft(service: "signal", conversationId: "demo-marcus", name: "Marcus Reid",
+                  title: "Reply — data-room access",
+                  text: "Sorry about that, Marcus. I'll get your access sorted today and message you when it's live.",
+                  why: "Marcus asked for access, and Anna raised it too.",
+                  confidence: 0.82, minutesAgo: 35),
+            draft(service: "slack", conversationId: "demo-launch-room", name: "#launch-room",
+                  title: "Acknowledge Priya's update",
+                  text: "Thanks Priya, I'll read the postmortem when it lands.",
+                  why: "Priya didn't ask anything, so this may not need a reply.",
+                  confidence: 0.55, minutesAgo: 50, maybe: true),
+        ] {
+            try repo.insertAgentAction(action)
+        }
+
+        _ = try repo.insertCommitment(Commitment(
+            id: nil, direction: CommitmentDirection.theyOwe.rawValue, service: "slack",
+            conversationId: "demo-launch-room", conversationName: "#launch-room",
+            what: "Priya will post the incident postmortem",
+            dueAt: now.addingTimeInterval(6 * 3600), evidenceMessageId: nil,
+            status: CommitmentStatus.open.rawValue,
+            createdAt: now.addingTimeInterval(-150 * 60)))
     }
 
     // MARK: - Private

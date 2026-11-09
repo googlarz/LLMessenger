@@ -199,6 +199,13 @@ final class OnboardingSnapshotTests: XCTestCase {
                              isLLMConfigured: false, basePrompt: "")
         await state.refreshBriefs().value
         state.selectedBriefID = try BriefRepository(database: db).latestBriefID()
+        // refreshBriefs() returns before the owed-reply / action / task reloads it
+        // starts have finished; the real app has them by the time anyone looks.
+        state.refreshTasks()
+        for _ in 0..<60 where state.attentionProjection.actItems.count < 5 {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
         let chat = state.makeChatViewModel()
         let view = ContentView().environmentObject(state).environmentObject(chat)
         let window = NSSize(width: 1180, height: 780)

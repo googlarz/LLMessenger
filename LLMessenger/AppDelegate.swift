@@ -634,6 +634,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// the panel.
     private func didFinishOnboarding() {
         if DemoSeeder.isActive {
+            appState?.detachAdaptersForDemo()
+            appState?.requestedSection = .act
             for service in ["imessage", "signal", "telegram", "slack", "whatsapp"] {
                 var config = ServiceConfig.default(for: service)
                 config.enabled = false
@@ -822,6 +824,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             try ServiceConfig.fetchOne(db, key: serviceID)
         }) ?? ServiceConfig.default(for: serviceID)
         let isLocalOnly = SettingsRepository().loadLocalOnlyMode()
+
+        // The sample world has no live connections; a real adapter would be the
+        // one thing that could send a sample draft. Setup re-registers on exit.
+        guard !DemoSeeder.isActive else { return }
 
         switch serviceID {
         case "imessage":

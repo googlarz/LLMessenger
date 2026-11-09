@@ -152,6 +152,12 @@ extension AppState {
     func stageSend(_ action: AgentAction) {
         guard let id = action.id else { return }
         trackedSendIDs.insert(id)
+        // Sample (demo) rows count down and settle like real ones but never reach
+        // an adapter — see AppState+SampleSend.swift.
+        if action.isSample {
+            stageSampleSend(action)
+            return
+        }
         stageManualApprove(action)
     }
 
@@ -224,7 +230,9 @@ extension AppState {
             switch row.statusEnum {
             case .done:
                 trackedSendIDs.remove(id)
-                showReceipt("Sent to \(row.conversationName) · \(Theme.serviceName(row.service))")
+                showReceipt(row.isSample
+                            ? "This is a sample, so nothing was sent to \(row.conversationName)."
+                            : "Sent to \(row.conversationName) · \(Theme.serviceName(row.service))")
             case .failed:
                 trackedSendIDs.remove(id)
                 // The send path stores its error in lastError just before reloading;
