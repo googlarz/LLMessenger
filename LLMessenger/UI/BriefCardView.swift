@@ -1014,13 +1014,15 @@ struct LabelEditorPopover: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 WireLabel("Privacy")
-                Picker("", selection: $privacyOverride) {
-                    Text("Normal").tag("none")
-                    Text("Local-only").tag("local_only")
-                    Text("Never draft").tag("never_draft")
+                Picker("Privacy", selection: $privacyOverride) {
+                    ForEach(PrivacyOverrideCopy.options, id: \.0) { value, label in Text(label).tag(value) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                Text(PrivacyOverrideCopy.caption(for: privacyOverride))
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: 7) {
