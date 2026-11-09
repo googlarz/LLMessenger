@@ -52,6 +52,7 @@ struct AboutSettingsTab: View {
                         }
                         .buttonStyle(PaperButtonStyle())
                         .help("Versions, store integrity, service health, crash reports — never message content")
+.accessibilityHint("Versions, store integrity, service health, crash reports — never message content")
                     }
                 }
 
@@ -62,6 +63,7 @@ struct AboutSettingsTab: View {
                         }
                         .buttonStyle(PaperButtonStyle())
                         .help("Digest history, learned context, and preferences. Not credentials — you'll sign back in to each service.")
+.accessibilityHint("Digest history, learned context, and preferences. Not credentials — you'll sign back in to each service.")
 
                         if let path = database.path {
                             Button("Restore Backup…") {
@@ -69,6 +71,7 @@ struct AboutSettingsTab: View {
                             }
                             .buttonStyle(PaperButtonStyle())
                             .help("Replaces your current data with a backup, then quits the app for the change to take effect.")
+.accessibilityHint("Replaces your current data with a backup, then quits the app for the change to take effect.")
                         }
                     }
                 }

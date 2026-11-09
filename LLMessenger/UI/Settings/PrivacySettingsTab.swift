@@ -222,7 +222,7 @@ struct PrivacySettingsTab: View {
                         if copiedLabel == label { copiedLabel = nil }
                     }
                 }
-                .buttonStyle(WireActionStyle())
+                .buttonStyle(WireActionStyle.textAction())
             }
             Text(text)
                 .font(Theme.mono(11))
@@ -284,7 +284,7 @@ struct PrivacySettingsTab: View {
                 WireLabel("Network Log — This Session")
                 Spacer()
                 Button("Clear") { auditLog.clear() }
-                    .buttonStyle(WireActionStyle())
+                    .buttonStyle(WireActionStyle.textAction())
                     .disabled(auditLog.entries.isEmpty)
             }
 

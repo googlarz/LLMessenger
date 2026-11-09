@@ -229,27 +229,30 @@ private struct RuleRowView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             Button { onMove(-1) } label: { Image(systemName: "chevron.up") }
-                .buttonStyle(.plain)
-                .foregroundStyle(canMoveUp ? Theme.textSecondary : Theme.textTertiary.opacity(0.4))
+                .buttonStyle(.icon)
+                .foregroundStyle(canMoveUp ? Theme.textSecondary : Theme.textDisabled)
                 .disabled(!canMoveUp)
                 .help("Move up — checked earlier")
                 .accessibilityLabel("Move rule \(position) up")
+                .accessibilityHint("Move up — checked earlier")
             Button { onMove(1) } label: { Image(systemName: "chevron.down") }
-                .buttonStyle(.plain)
-                .foregroundStyle(canMoveDown ? Theme.textSecondary : Theme.textTertiary.opacity(0.4))
+                .buttonStyle(.icon)
+                .foregroundStyle(canMoveDown ? Theme.textSecondary : Theme.textDisabled)
                 .disabled(!canMoveDown)
                 .help("Move down — checked later")
                 .accessibilityLabel("Move rule \(position) down")
+                .accessibilityHint("Move down — checked later")
             Button("Edit", action: onEdit)
-                .buttonStyle(WireActionStyle())
+                .buttonStyle(WireActionStyle.textAction())
                 .accessibilityLabel("Edit rule \(position)")
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "minus.circle")
                     .foregroundStyle(deleteHovered ? Theme.signal : Theme.textTertiary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.icon)
             .help("Delete rule")
             .accessibilityLabel("Delete rule \(position)")
+            .accessibilityHint("Delete rule")
             .animation(Theme.quick, value: deleteHovered)
             .onHover { deleteHovered = $0 }
         }

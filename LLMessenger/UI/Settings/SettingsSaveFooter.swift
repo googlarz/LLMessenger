@@ -28,7 +28,7 @@ struct SettingsSaveFooter: View {
             if isDirty {
                 dot(Theme.standby, unsavedLabel)
                 Button("Discard", action: onDiscard)
-                    .buttonStyle(WireActionStyle())
+                    .buttonStyle(WireActionStyle.textAction())
             }
             if let message {
                 dot(messageIsError ? Theme.signal : Theme.ok, message)

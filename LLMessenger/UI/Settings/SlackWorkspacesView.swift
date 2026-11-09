@@ -145,8 +145,10 @@ private struct WorkspaceRow: View {
                 Image(systemName: "trash")
                     .foregroundStyle(removeHovered ? Theme.signal : Theme.textTertiary)
             }
-            .buttonStyle(.quiet)
+            .buttonStyle(.icon)
             .help("Remove workspace")
+            .accessibilityLabel("Remove workspace \(workspace.teamName)")
+            .accessibilityHint("Remove workspace")
             .animation(Theme.quick, value: removeHovered)
             .onHover { removeHovered = $0 }
         }

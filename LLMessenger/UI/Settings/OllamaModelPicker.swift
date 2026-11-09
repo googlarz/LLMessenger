@@ -43,8 +43,10 @@ struct OllamaModelPicker: View {
                         .font(.system(size: 12))
                         .foregroundStyle(refreshHovered ? Theme.textPrimary : Theme.textSecondary)
                 }
-                .buttonStyle(.quiet)
+                .buttonStyle(.icon)
                 .help("Refresh model list")
+                .accessibilityLabel("Refresh model list")
+                .accessibilityHint("Refresh model list")
                 .animation(Theme.quick, value: refreshHovered)
                 .onHover { refreshHovered = $0 }
 
@@ -61,8 +63,10 @@ struct OllamaModelPicker: View {
                                          ? (refreshHovered ? Theme.signal.opacity(0.7) : Theme.signal)
                                          : (refreshHovered ? Theme.textPrimary : Theme.textSecondary))
                 }
-                .buttonStyle(.quiet)
+                .buttonStyle(.icon)
                 .help(loadState == .failed ? "Ollama not running — click to retry" : "Refresh")
+                .accessibilityLabel("Refresh model list")
+                .accessibilityHint(loadState == .failed ? "Ollama is not running. Activate to retry." : "Refresh")
                 .animation(Theme.quick, value: refreshHovered)
                 .onHover { refreshHovered = $0 }
             }

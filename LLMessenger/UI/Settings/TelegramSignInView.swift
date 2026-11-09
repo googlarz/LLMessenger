@@ -53,7 +53,7 @@ struct TelegramSignInView: View {
 
                 // Always-visible Cancel/Close at the bottom too.
                 Button("Close") { dismiss() }
-                    .buttonStyle(WireActionStyle())
+                    .buttonStyle(WireActionStyle.textAction())
                     .keyboardShortcut(.cancelAction)
             }
             .padding(28)
@@ -66,7 +66,9 @@ struct TelegramSignInView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(closeHovered ? Theme.textSecondary : Theme.textTertiary)
             }
-            .buttonStyle(.quiet)
+            .buttonStyle(.icon)
+            .accessibilityLabel("Close")
+            .accessibilityHint("Close the Telegram sign-in")
             .padding(12)
             .keyboardShortcut("w", modifiers: .command)
             .animation(Theme.quick, value: closeHovered)

@@ -54,6 +54,7 @@ struct ContextEditor: View {
                     TextField("e.g. son's basketball team", text: $relationship)
                         .textFieldStyle(.roundedBorder)
                         .font(Theme.sans(13))
+                        .accessibilityLabel("Relationship")
 
                     WireLabel("Priority")
                     Picker("Priority", selection: $priorityHint) {
@@ -70,15 +71,19 @@ struct ContextEditor: View {
                     TextField("Important: training, games", text: $importantTopics)
                         .textFieldStyle(.roundedBorder)
                         .font(Theme.sans(13))
+                        .accessibilityLabel("Important topics, comma-separated")
                     TextField("Ignore: memes, polls", text: $noiseTopics)
                         .textFieldStyle(.roundedBorder)
                         .font(Theme.sans(13))
+                        .accessibilityLabel("Topics to ignore, comma-separated")
                     TextField("Key senders: Coach Lasse", text: $keySenders)
                         .textFieldStyle(.roundedBorder)
                         .font(Theme.sans(13))
+                        .accessibilityLabel("Key senders, comma-separated")
                     TextField("Glossary: The Hall = home venue", text: $aliases)
                         .textFieldStyle(.roundedBorder)
                         .font(Theme.sans(13))
+                        .accessibilityLabel("Glossary of names and terms")
                 }
                 .padding(.vertical, 14)
 
@@ -89,6 +94,7 @@ struct ContextEditor: View {
                     TextEditor(text: $contextNote)
                         .font(Theme.sans(13))
                         .frame(height: 64)
+                        .accessibilityLabel("Note")
                         .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.textTertiary.opacity(0.4)))
                 }
                 .padding(.vertical, 14)
@@ -100,6 +106,7 @@ struct ContextEditor: View {
                     TextField("e.g. casual, lots of emoji", text: $tone)
                         .textFieldStyle(.roundedBorder)
                         .font(Theme.sans(13))
+                        .accessibilityLabel("Tone")
                 }
                 .padding(.vertical, 14)
 
@@ -186,7 +193,7 @@ struct ContextEditor: View {
                 cancelAutoSendConfirmation(kind)
             }
         } message: { kind in
-            Text("\(kind.label) for \(conversationName) will send automatically after a 30-second undo window. You can pause all auto-sends at any time from the DELEGATED pill in the window toolbar.")
+            Text("\(kind.label) for \(conversationName) will send automatically after a 30-second undo window. You can pause all auto-sends at any time from the AUTO-SEND pill in the window toolbar.")
         }
     }
 

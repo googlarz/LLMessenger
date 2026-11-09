@@ -34,7 +34,7 @@ struct InstructionsSettingsTab: View {
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer()
                             Button("Reset to Default") { showResetConfirmation = true }
-                                .buttonStyle(WireActionStyle())
+                                .buttonStyle(WireActionStyle.textAction())
                                 .confirmationDialog(
                                     "Reset system prompt to default?",
                                     isPresented: $showResetConfirmation,

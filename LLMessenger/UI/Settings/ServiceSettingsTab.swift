@@ -57,7 +57,7 @@ struct ServiceSettingsTab: View {
                     if model.hasUnsavedCredentials {
                         statusLine("Unsaved changes to sign-in details", color: Theme.standby)
                         Button("Discard") { model.discardCredentials() }
-                            .buttonStyle(WireActionStyle())
+                            .buttonStyle(WireActionStyle.textAction())
                     } else {
                         switch model.status {
                         case .saved:
@@ -293,10 +293,10 @@ struct ServiceCard: View {
         case .working:
             return Theme.ok
         case .broken:
-            if isCalm { return Theme.textTertiary.opacity(0.4) }
+            if isCalm { return Theme.textDisabled }
             return health?.status == "error" ? Theme.signal : Theme.standby
         case .notConfigured, .disabled:
-            return Theme.textTertiary.opacity(0.4)
+            return Theme.textDisabled
         }
     }
 

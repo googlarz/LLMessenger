@@ -172,7 +172,7 @@ struct DigestSettingsTab: View {
                             NSWorkspace.shared.open(url)
                         }
                     }
-                    .buttonStyle(WireActionStyle())
+                    .buttonStyle(WireActionStyle.textAction())
                 }
                 .padding(20)
             }
