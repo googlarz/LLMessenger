@@ -15,6 +15,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         context.coordinator.install()
         let view = NSView(frame: .zero)
         view.setAccessibilityElement(false)
+        context.coordinator.hostView = view
         return view
     }
 
@@ -35,6 +36,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
     final class Coordinator {
         var isEnabled: Bool
         var onKeyDown: (NSEvent) -> Bool
+        weak var hostView: NSView?
         private var monitor: Any?
 
         init(isEnabled: Bool, onKeyDown: @escaping (NSEvent) -> Bool) {
@@ -46,9 +48,26 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             guard monitor == nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self, self.isEnabled else { return event }
+                let host = self.hostView?.window
+                guard Self.accepts(eventWindow: event.window,
+                                   hostWindow: host,
+                                   hostIsKey: host?.isKeyWindow ?? false,
+                                   hostHasSheet: host?.attachedSheet != nil) else { return event }
                 guard !Self.isTextEditing(event.window?.firstResponder) else { return event }
                 return self.onKeyDown(event) ? nil : event
             }
+        }
+
+        /// Single-key commands belong to the window the monitor lives in, and only
+        /// while that window is key with nothing in front of it. A sheet, a popover,
+        /// the Settings window or an alert each has its own window, so a stray "S"
+        /// typed there can never skip a card behind it.
+        static func accepts(eventWindow: NSWindow?,
+                            hostWindow: NSWindow?,
+                            hostIsKey: Bool,
+                            hostHasSheet: Bool) -> Bool {
+            guard let eventWindow, let hostWindow, eventWindow === hostWindow else { return false }
+            return hostIsKey && !hostHasSheet
         }
 
         func uninstall() {
