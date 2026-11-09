@@ -1230,7 +1230,7 @@ private struct ScheduledCountdownBar: View {
                     Rectangle()
                         .fill(Theme.standby.opacity(0.8))
                         .frame(width: geo.size.width * CGFloat(progress), height: 2)
-                        .animation(.linear(duration: 1), value: progress)
+                        .animation(Theme.reduceMotion ? nil : .linear(duration: 1), value: progress)
                 }
             }
             .frame(height: 2)

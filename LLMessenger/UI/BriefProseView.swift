@@ -250,12 +250,12 @@ struct BriefProseView: View {
         }
         .onAppear {
             refreshCaches()
-            withAnimation { appeared = true }
+            withAnimation(Theme.quick) { appeared = true }
         }
         .onChange(of: brief.id) {
             refreshCaches()
             appeared = false
-            withAnimation { appeared = true }
+            withAnimation(Theme.quick) { appeared = true }
         }
         .onChange(of: canonicalJSON?.cards.map(\.id)) {
             refreshCaches()

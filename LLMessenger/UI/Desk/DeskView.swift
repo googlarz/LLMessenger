@@ -240,7 +240,7 @@ private struct DeskRailButton: View {
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(
-                                Capsule().fill(isSelected ? Theme.signal : Theme.signal.opacity(0.7))
+                                Capsule().fill(Theme.signal)
                             )
                     } else {
                         Text(badge)
