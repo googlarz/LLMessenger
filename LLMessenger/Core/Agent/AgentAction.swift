@@ -75,13 +75,48 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
 
     var isExternalProposal: Bool { reasoning == Self.externalAgentReasoning }
 
+    /// Marks a reply the user wrote themselves in the Reply composer.
+    static let userComposedReasoning = "Written by you in the Reply composer."
+
+    var isUserComposed: Bool { reasoning == Self.userComposedReasoning }
+
     /// External proposals are approved one at a time, never in a multi-select batch.
+    /// A user-composed reply is never batched either: it only ever sends from its
+    /// own composer (or its own row after an interrupted undo window).
     var isBatchEligible: Bool {
         statusEnum == .pending
             && !isMaybe
             && riskEnum != .high
             && (kindEnum == .reply || kindEnum == .ack)
             && !isExternalProposal
+            && !isUserComposed
+    }
+
+    /// A reply the user wrote. Normal risk and full confidence; replies and
+    /// follow-ups are never delegatable (AgentDelegation.delegatableKinds), never
+    /// "low" risk (batchApproveLowRisk) and never batch-eligible (above).
+    static func userComposed(service: String,
+                             conversationId: String,
+                             conversationName: String,
+                             text: String,
+                             commitmentId: Int64?,
+                             now: Date = Date()) -> AgentAction {
+        AgentAction(
+            id: nil,
+            kind: (commitmentId == nil ? AgentActionKind.reply : .followUp).rawValue,
+            service: service,
+            conversationId: conversationId,
+            conversationName: conversationName,
+            title: "Your reply",
+            payload: encodeReplyPayload(text),
+            reasoning: userComposedReasoning,
+            confidence: 1,
+            riskLevel: AgentActionRisk.normal.rawValue,
+            status: AgentActionStatus.pending.rawValue,
+            createdAt: now,
+            resolvedAt: nil,
+            commitmentId: commitmentId,
+            isMaybe: false)
     }
 
     mutating func didInsert(_ inserted: InsertionSuccess) {

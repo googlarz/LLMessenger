@@ -1,4 +1,5 @@
 // LLMessenger/UI/ContentView.swift
+import Combine
 import SwiftUI
 
 struct ContentView: View {
@@ -73,11 +74,22 @@ struct ContentView: View {
         // Routine success is a floating toast that never displaces content;
         // it auto-dismisses and carries its optional follow-up action.
         .overlay(alignment: .bottom) {
-            if let receipt = appState.userReceipt {
-                ReceiptToast(receipt: receipt, onDismiss: { appState.clearReceipt() })
-                    .padding(.bottom, 16)
+            VStack(spacing: 8) {
+                // A send staged from anywhere stays undoable from wherever the
+                // user is — Act rows carry their own countdown, so not there.
+                if selectedSection != .act, let staged = AgentAction.mostRecentlyStaged(in: appState.agentActions) {
+                    StagedSendBar(action: staged,
+                                  othersCount: appState.agentActions.filter { $0.statusEnum == .scheduled }.count - 1) {
+                        appState.undoStagedSend(staged)
+                    }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                if let receipt = appState.userReceipt {
+                    ReceiptToast(receipt: receipt, onDismiss: { appState.clearReceipt() })
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .padding(.bottom, 16)
         }
         .animation(Theme.spring, value: appState.userReceipt?.id)
         // The one-time "first real digest" moment fires as a toast instead of a
@@ -138,6 +150,16 @@ struct ContentView: View {
         .sheet(isPresented: $showShortcuts) {
             KeyboardShortcutsSheet(isPresented: $showShortcuts)
         }
+        // The one place a message to a person is written — opened by every reply
+        // entry point through appState.openReplyComposer.
+        .sheet(item: $appState.replyComposer) { request in
+            ReplyComposerView(request: request, appState: appState)
+        }
+        .onChange(of: appState.requestedSection) { _, section in
+            guard let section else { return }
+            selectedSection = section
+            appState.requestedSection = nil
+        }
         .animation(Theme.spring, value: deskCollapsed)
         .animation(Theme.spring, value: showMedia)
         .animation(Theme.spring, value: selectedSection)
@@ -169,7 +191,7 @@ struct ContentView: View {
         case .error(let text):
             NoticeBanner(
                 text: text,
-                onRetry: { appState.onRequestRefresh?() },
+                onRefresh: { appState.onRequestRefresh?() },
                 onDismiss: { appState.lastError = nil }
             )
         case .pipeline:
@@ -561,7 +583,7 @@ private struct SetupCheck: Identifiable {
 /// plain sentence). Mirrors BriefHeaderView.noticeRow.
 private struct NoticeBanner: View {
     let text: String
-    var onRetry: (() -> Void)?
+    var onRefresh: (() -> Void)?
     let onDismiss: () -> Void
 
     var body: some View {
@@ -576,9 +598,12 @@ private struct NoticeBanner: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            if let onRetry {
-                Button("Retry", action: onRetry)
+            // Labelled for what it does: check every service and rebuild the
+            // digest now. It does not resend anything.
+            if let onRefresh {
+                Button("Refresh now", action: onRefresh)
                     .buttonStyle(WireActionStyle())
+                    .help("Check your services and update the digest now")
             }
             Button { onDismiss() } label: {
                 Image(systemName: "xmark")
@@ -661,9 +686,9 @@ private struct ReceiptToast: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: receipt.tone == .problem ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 12))
-                .foregroundStyle(Theme.ok)
+                .foregroundStyle(receipt.tone == .problem ? Theme.signal : Theme.ok)
             Text(receipt.text)
                 .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textPrimary)
@@ -673,7 +698,7 @@ private struct ReceiptToast: View {
                     action()
                     onDismiss()
                 }
-                .buttonStyle(WireActionStyle(tint: Theme.ok))
+                .buttonStyle(WireActionStyle(tint: receipt.tone == .problem ? Theme.signal : Theme.ok))
             }
             Button {
                 onDismiss()
@@ -712,6 +737,54 @@ private struct ReceiptToast: View {
             if !hovering { onDismiss() }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Saved: \(receipt.text)")
+        .accessibilityLabel(receipt.text)
+    }
+}
+
+/// "Sending to Anna · Signal in 4s — Undo", shown outside Act so a send staged
+/// from the composer can be taken back from wherever the user is.
+private struct StagedSendBar: View {
+    let action: AgentAction
+    let othersCount: Int
+    let onUndo: () -> Void
+    @State private var now = Date()
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var secondsRemaining: Int {
+        guard let fireAt = action.scheduledAt else { return 0 }
+        return max(0, Int(fireAt.timeIntervalSince(now).rounded(.up)))
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("SENDING IN \(secondsRemaining)s")
+                .font(Theme.mono(10.5, weight: .semibold))
+                .tracking(0.7)
+                .foregroundStyle(Theme.signal)
+                .monospacedDigit()
+            Text("to \(action.conversationName) · \(Theme.serviceName(action.service))"
+                 + (othersCount > 0 ? " and \(othersCount) more" : ""))
+                .font(Theme.sans(12.5))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1)
+            Button("UNDO", action: onUndo)
+                .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
+                .accessibilityLabel("Undo — cancel the send to \(action.conversationName)")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radius + 2)
+                .fill(Theme.surfaceHigh)
+                .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius + 2)
+                .strokeBorder(Theme.border, lineWidth: Theme.hairline)
+        )
+        .frame(maxWidth: 520)
+        .onReceive(ticker) { now = $0 }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Sending to \(action.conversationName) on \(Theme.serviceName(action.service)) in \(secondsRemaining) seconds")
     }
 }

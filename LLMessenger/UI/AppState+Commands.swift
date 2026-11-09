@@ -113,8 +113,11 @@ extension AppState {
         productLoveMetrics = ProductLoveMetricStore.acknowledgeFirstRealDigest(defaults: defaults)
     }
 
-    func showReceipt(_ text: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {
-        userReceipt = UserReceipt(text: text, actionTitle: actionTitle, action: action)
+    func showReceipt(_ text: String,
+                     actionTitle: String? = nil,
+                     tone: UserReceipt.Tone = .done,
+                     action: (() -> Void)? = nil) {
+        userReceipt = UserReceipt(text: text, actionTitle: actionTitle, tone: tone, action: action)
     }
 
     func clearReceipt() {
