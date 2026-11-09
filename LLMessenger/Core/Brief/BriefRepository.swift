@@ -1578,3 +1578,69 @@ struct BriefRepository: Sendable {
         }
     }
 }
+
+// MARK: - Digest provenance
+
+extension BriefRepository {
+    /// Stores which conversations fed a brief's prompt. Call inside the transaction
+    /// that inserts the brief so a brief never exists without its provenance.
+    static func insertBriefProvenance(_ provenance: BriefProvenance, briefID: Int64, db: Database) throws {
+        for key in provenance.conversations {
+            try BriefProvenanceRecord(
+                briefId: briefID, service: key.service,
+                conversationId: key.conversationID, isIncompleteMarker: false
+            ).insert(db, onConflict: .ignore)
+        }
+        if provenance.incomplete {
+            try BriefProvenanceRecord(
+                briefId: briefID, service: "", conversationId: "", isIncompleteMarker: true
+            ).insert(db, onConflict: .ignore)
+        }
+    }
+
+    func fetchBriefProvenance(briefID: Int64) throws -> BriefProvenance {
+        try database.dbQueue.read { db in try Self.provenance(forBriefID: briefID, db: db) }
+    }
+
+    private static func provenance(forBriefID briefID: Int64, db: Database) throws -> BriefProvenance {
+        var result = BriefProvenance()
+        for record in try BriefProvenanceRecord.filter(Column("briefId") == briefID).fetchAll(db) {
+            if record.isIncompleteMarker {
+                result.incomplete = true
+            } else {
+                result.conversations.insert(
+                    BriefConversationKey(service: record.service, conversationID: record.conversationId))
+            }
+        }
+        return result
+    }
+
+    /// Same selection as `recentEpisodicSummaries`, read in one transaction together
+    /// with the provenance of the briefs those summaries came from. A summary is
+    /// compressed from its brief's own messages, so it can only contain conversations
+    /// that fed that brief. A source brief without provenance rows (created before
+    /// provenance existed) makes the result incomplete.
+    func recentEpisodicSummarySources(
+        service: String, limit: Int
+    ) throws -> (summaries: [(summary: String, createdAt: Date)], provenance: BriefProvenance) {
+        try database.dbQueue.read { db in
+            let pattern = "%\"" + service + "\"%"
+            let briefs = try Brief
+                .filter(Column("episodicSummary") != nil)
+                .filter(sql: "services LIKE ?", arguments: [pattern])
+                .order(Column("createdAt").desc)
+                .limit(limit)
+                .fetchAll(db)
+            var provenance = BriefProvenance()
+            var summaries: [(summary: String, createdAt: Date)] = []
+            for brief in briefs {
+                guard let summary = brief.episodicSummary else { continue }
+                summaries.append((summary, brief.createdAt))
+                let source = try brief.id.map { try Self.provenance(forBriefID: $0, db: db) } ?? BriefProvenance()
+                if source.conversations.isEmpty { provenance.incomplete = true }
+                provenance.conversations.formUnion(source.conversations)
+            }
+            return (summaries, provenance)
+        }
+    }
+}

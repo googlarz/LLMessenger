@@ -47,8 +47,9 @@ final class MCPServerTests: XCTestCase {
                               openingSummary: "mixed summary", notificationText: "mixed notification")
             try brief.insert(grdb)
             // The digest was built from "open" only: Local-only chats are excluded at build time.
-            try grdb.execute(sql: "UPDATE messages SET briefId = ? WHERE conversationId = 'open'",
-                             arguments: [brief.id!])
+            try BriefRepository.insertBriefProvenance(
+                BriefProvenance(conversations: [BriefConversationKey(service: "imessage", conversationID: "open")]),
+                briefID: brief.id!, db: grdb)
             for (conv, title) in [("open", "Alice"), ("secret", "Therapist")] {
                 try BriefCardRecord(id: "card-\(conv)", briefId: brief.id!, service: "imessage",
                                     conversationId: conv, conversationTitle: title,
@@ -257,6 +258,7 @@ final class MCPServerTests: XCTestCase {
         let result = try digestCount()
         XCTAssertEqual(result.count, 0)
         XCTAssertTrue(result.note?.contains("first digest generated after") == true)
+        XCTAssertTrue(result.note?.contains("before this update") == true)
     }
 
     func testDigestsCreatedAtOrAfterEnablingAreServed() throws {
@@ -413,22 +415,22 @@ final class MCPServerTests: XCTestCase {
         try seed()
         flags.enabledSince = Date().addingTimeInterval(-3600)
         XCTAssertEqual(try digestCount().count, 1)
-        // e.g. a history summary: no messages are attached to it, so nothing shows
-        // which conversations it was built from.
-        try db.dbQueue.write { try $0.execute(sql: "UPDATE messages SET briefId = NULL") }
+        // e.g. a digest made before provenance was recorded: no rows at all.
+        try db.dbQueue.write { try $0.execute(sql: "DELETE FROM briefProvenance") }
         XCTAssertEqual(try digestCount().count, 0)
     }
 
     func testDigestFedByAConversationThatIsNowLocalOnlyIsWithheld() throws {
         try seed()
         flags.enabledSince = Date().addingTimeInterval(-3600)
-        // "later" was summarized into the digest (its messages are attached to it) and
-        // may be quoted inside any card — then the user marked it Local-only.
+        // "later" was in the digest's prompt and may be quoted inside any card — then
+        // the user marked it Local-only.
         try insertMessage(conv: "later", name: "Bob", text: "private detail", offset: -900)
         try db.dbQueue.write { grdb in
             let briefID = try XCTUnwrap(try Brief.fetchOne(grdb)?.id)
-            try grdb.execute(sql: "UPDATE messages SET briefId = ? WHERE conversationId IN ('open', 'later')",
-                             arguments: [briefID])
+            try BriefRepository.insertBriefProvenance(
+                BriefProvenance(conversations: [BriefConversationKey(service: "imessage", conversationID: "later")]),
+                briefID: briefID, db: grdb)
         }
         XCTAssertEqual(try digestCount().count, 1, "served while nothing that fed it is Local-only")
         try setPrivacy("later", "local_only")

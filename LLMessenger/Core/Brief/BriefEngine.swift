@@ -250,6 +250,7 @@ final class BriefEngine {
         var failedServices: Set<String> = []
         var sourceMessagesByService: [String: [String: Message]] = [:]
         var succeededMessages: [Message] = []
+        var promptProvenance = BriefProvenance()
 
         struct ServiceResult {
             let service: String
@@ -258,6 +259,8 @@ final class BriefEngine {
             let sourceMessages: [String: Message]
             let succeededMessages: [Message]
             let hadFailures: Bool
+            /// Conversations whose content was in this service's prompt.
+            var provenance = BriefProvenance()
         }
 
         // Snapshot @MainActor properties before entering the task group so child tasks
@@ -273,7 +276,9 @@ final class BriefEngine {
         let results = await withTaskGroup(of: ServiceResult?.self) { group in
             for service in services {
                 let serviceMessages = messagesByService[service] ?? []
-                let recent = (try? repository.recentEpisodicSummaries(service: service, limit: 3)) ?? []
+                let episodic = try? repository.recentEpisodicSummarySources(service: service, limit: 3)
+                let recent = episodic?.summaries ?? []
+                let episodicProvenance = episodic?.provenance ?? BriefProvenance()
                 let signalAdapter = adapters[service] as? SignalCLIAdapter
 
                 group.addTask {
@@ -361,6 +366,12 @@ final class BriefEngine {
                             )
                             conversationBlocks.append(block)
                         }
+                        // Exactly the conversations that have a block in the prompt, plus
+                        // whatever the stored episodic summaries were built from.
+                        var servicePromptProvenance = episodicProvenance
+                        servicePromptProvenance.conversations.formUnion(
+                            rankedConvIds.map { BriefConversationKey(service: service, conversationID: $0) }
+                        )
                         // Every conversation for this service was excluded by the privacy gate —
                         // make no LLM call (an empty prompt would send nothing useful to the cloud).
                         guard !conversationBlocks.isEmpty else { return nil }
@@ -410,7 +421,8 @@ final class BriefEngine {
                                 ),
                                 sourceMessages: sourceMessages,
                                 succeededMessages: coveredMessages,
-                                hadFailures: coveredMessages.count != serviceMessages.count
+                                hadFailures: coveredMessages.count != serviceMessages.count,
+                                provenance: servicePromptProvenance
                             )
                         } else {
                             return ServiceResult(
@@ -447,6 +459,7 @@ final class BriefEngine {
                 parsedServices.insert(res.service)
                 sourceMessagesByService[res.service] = res.sourceMessages
                 succeededMessages.append(contentsOf: res.succeededMessages)
+                promptProvenance.formUnion(res.provenance)
                 totalMessages += res.stats.messages
                 totalThreads += res.stats.threads
                 totalPeople += res.stats.people
@@ -515,11 +528,13 @@ final class BriefEngine {
             now: now()
         )
         let failedServicesSnapshot = failedServices
+        let provenanceSnapshot = promptProvenance
 
         // Atomic transaction: Brief row + all cards + all sources + message attachment.
         // If any step throws, the entire transaction rolls back — no partial brief is committed.
         let briefID = try await database.dbQueue.write { db in
             let insertedID = try BriefRepository.insertBrief(brief, db: db)
+            try BriefRepository.insertBriefProvenance(provenanceSnapshot, briefID: insertedID, db: db)
             // Re-stamp briefId now that we have a real ID.
             let stampedCards = cardRecords.map { card -> BriefCardRecord in
                 var c = card
@@ -597,6 +612,7 @@ final class BriefEngine {
         var failedServices: [String] = []
         var messagesToAttach: [Message] = []
         var sourceMessagesByService: [String: [String: Message]] = [:]
+        var promptProvenance = BriefProvenance()
 
         struct ServiceResult {
             let service: String
@@ -608,6 +624,8 @@ final class BriefEngine {
             /// Only unattached messages (briefId == nil) — used to set briefId on this new brief.
             let newlyStored: [Message]
             let success: Bool
+            /// Conversations whose content was in this service's prompt.
+            var provenance = BriefProvenance()
         }
 
         // Snapshot @MainActor properties before entering the task group.
@@ -724,8 +742,23 @@ final class BriefEngine {
                             .prefix(maximumManualConversations)
                         guard !allowedConversations.isEmpty else { return nil }
 
-                        let recent = try self.repository.recentEpisodicSummaries(service: serviceID, limit: 3)
-                        let corrections = (try? self.repository.fetchRecentPriorityCorrections(limit: 6)) ?? []
+                        let episodic = try self.repository.recentEpisodicSummarySources(service: serviceID, limit: 3)
+                        let recent = episodic.summaries
+                        // A correction carries the headline of a card from another conversation,
+                        // so it is held to the same privacy gate as the conversations themselves.
+                        let allCorrections = (try? self.repository.fetchRecentPriorityCorrections(limit: 6)) ?? []
+                        let correctionContexts = try self.repository.fetchConversationContexts(
+                            for: allCorrections.map {
+                                BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+                            })
+                        let corrections = allCorrections.filter {
+                            !BriefPromptAssembler.isExcludedByPrivacy(
+                                context: correctionContexts[
+                                    BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+                                ],
+                                clientIsCloud: isCloud
+                            )
+                        }
                         let correctionTuples = corrections.map {
                             (headline: $0.cardHeadline, llmPriority: $0.llmPriority, userPriority: $0.userPriority)
                         }
@@ -828,6 +861,14 @@ final class BriefEngine {
                             briefLanguage: briefLanguage2
                         )
 
+                        // Exactly what is in the prompt: the conversation blocks, the headlines of
+                        // the priority corrections, and what the episodic summaries were built from.
+                        var servicePromptProvenance = episodic.provenance
+                        servicePromptProvenance.conversations.formUnion(promptedKeys)
+                        servicePromptProvenance.conversations.formUnion(corrections.map {
+                            BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
+                        })
+
                         let response = try await client2.complete(
                             model: model2,
                             messages: [
@@ -862,7 +903,8 @@ final class BriefEngine {
                                 ),
                                 sourceMessages: allPromptMessages,
                                 newlyStored: succeededMessages,
-                                success: true
+                                success: true,
+                                provenance: servicePromptProvenance
                             )
                         } catch {
                             print("[BriefEngine] \(serviceID) validation failed: \(error)")
@@ -886,6 +928,7 @@ final class BriefEngine {
             if res.success {
                 activeServices.append(res.service)
                 messagesToAttach.append(contentsOf: res.newlyStored)
+                promptProvenance.formUnion(res.provenance)
                 sourceMessagesByService[res.service] = Dictionary(res.sourceMessages.map { ($0.messageId, $0) }, uniquingKeysWith: { a, _ in a })
                 totalMessages += res.stats.messages
                 totalThreads += res.stats.threads
@@ -931,10 +974,12 @@ final class BriefEngine {
 
         // Capture messagesToAttach in a local let so the @Sendable write closure can capture it.
         let messagesToAttachSnapshot = messagesToAttach
+        let provenanceSnapshot = promptProvenance
 
         // Atomic transaction: Brief row + all cards + all sources + message attachment.
         let briefID = try await database.dbQueue.write { db in
             let insertedID = try BriefRepository.insertBrief(brief, db: db)
+            try BriefRepository.insertBriefProvenance(provenanceSnapshot, briefID: insertedID, db: db)
             let stampedCards = cardRecords2.map { card -> BriefCardRecord in
                 var c = card
                 c.briefId = insertedID

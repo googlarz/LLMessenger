@@ -51,7 +51,8 @@ final class MCPToolbox {
     static let globalLocalOnlyMessage =
         "LLMessenger is in Local-only mode, so message data is not shared with external agents."
     static let noDigestsNote =
-        "No digest is available yet. The first digest generated after MCP access was turned on will appear here."
+        "No digest is available yet. The first digest generated after MCP access was turned on will appear here. "
+        + "Digests created before this update, and the first ones built on their summaries, are never shared."
     static let maxReplyLength = 4000
     static let maxPendingExternalProposals = 20
 
@@ -64,11 +65,16 @@ final class MCPToolbox {
     private let openReader: () throws -> AppDatabase
     private let openWriter: () throws -> AppDatabase
     private let now: () -> Date
+    private let activity: MCPActivityLog?
 
+    /// `activity` is nil by default so a toolbox built in a test never writes to the
+    /// real UserDefaults; `production` passes the app's own log.
     init(settings: MCPSettingsReader,
          openReader: @escaping () throws -> AppDatabase,
          openWriter: @escaping () throws -> AppDatabase,
-         now: @escaping () -> Date = Date.init) {
+         now: @escaping () -> Date = Date.init,
+         activity: MCPActivityLog? = nil) {
+        self.activity = activity
         self.settings = settings
         self.openReader = openReader
         self.openWriter = openWriter
@@ -86,7 +92,8 @@ final class MCPToolbox {
         }
         return MCPToolbox(settings: settings,
                           openReader: { try open(readOnly: true) },
-                          openWriter: { try open(readOnly: false) })
+                          openWriter: { try open(readOnly: false) },
+                          activity: MCPActivityLog())
     }
 
     // MARK: - Dispatch
@@ -97,6 +104,8 @@ final class MCPToolbox {
         }
         guard settings.isEnabled() else { return Self.failure(Self.disabledMessage) }
         if def.isRead && settings.isGlobalLocalOnly() { return Self.failure(Self.globalLocalOnlyMessage) }
+        // The call has reached a tool: remember when and which (never its arguments).
+        activity?.record(tool: def.name, at: now())
 
         do {
             let payload: [String: Any]
@@ -211,17 +220,22 @@ final class MCPToolbox {
         let digests: [[String: Any]] = try eligible.compactMap { brief in
             guard let id = brief.id else { return nil }
             // All of a digest's cards come from one shared prompt, so any card may quote
-            // any conversation that was in it. If a conversation that fed this digest is
-            // Local-only now — marked later, or summarized while MCP was being switched
-            // on — withhold the whole digest rather than filter card by card.
-            let fedBy = try db.dbQueue.read { grdb in
-                try Row.fetchAll(grdb, sql: "SELECT DISTINCT service, conversationId FROM messages WHERE briefId = ?",
-                                 arguments: [id])
-                    .map { ConvKey($0["service"], $0["conversationId"]) }
+            // any conversation that was in it. The engine records those conversations
+            // when it commits the digest. If one is Local-only now — marked later, or
+            // summarized while MCP was being switched on — withhold the whole digest
+            // rather than filter card by card.
+            let provenance = try db.dbQueue.read { grdb -> [(key: ConvKey, incomplete: Bool)] in
+                // A database the app has not migrated yet has no table: nothing is proven.
+                guard try grdb.tableExists("briefProvenance") else { return [] }
+                return try Row.fetchAll(
+                    grdb, sql: "SELECT service, conversationId, isIncompleteMarker FROM briefProvenance WHERE briefId = ?",
+                    arguments: [id]
+                ).map { (ConvKey($0["service"], $0["conversationId"]), $0["isIncompleteMarker"]) }
             }
-            // No attached messages means unknown provenance (history summaries re-read
-            // messages that stay attached to their original digest): fail closed.
-            if fedBy.isEmpty || fedBy.contains(where: hidden.contains) { return nil }
+            // No rows (made before provenance was recorded) or an incomplete marker
+            // (the prompt drew on content that cannot be traced to conversations): fail closed.
+            if provenance.isEmpty || provenance.contains(where: { $0.incomplete }) { return nil }
+            if provenance.contains(where: { hidden.contains($0.key) }) { return nil }
             let cards: [[String: Any]] = try repo.fetchBriefCards(briefID: id)
                 .filter { !hidden.contains(ConvKey($0.service, $0.conversationId)) }
                 .map { card in
