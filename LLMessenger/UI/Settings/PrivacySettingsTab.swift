@@ -246,7 +246,7 @@ struct PrivacySettingsTab: View {
         VStack(alignment: .leading, spacing: 12) {
             WireLabel("Updates")
 
-            SettingsToggleRow(title: "Check GitHub for new versions once a day", caption: "When LLMessenger starts, it asks GitHub for the latest release, at most once a day. The request carries no message content or account details; GitHub sees your IP address and the app and macOS versions, as with any web request. Updates are never installed for you.", isOn: $updateChecksEnabled)
+            SettingsToggleRow(title: "Check GitHub for new versions once a day", caption: "While LLMessenger is open, it asks GitHub for the latest release, at most once a day. The request carries no message content or account details; GitHub sees your IP address and the app and macOS versions, as with any web request. Updates are never installed for you.", isOn: $updateChecksEnabled)
             .onChange(of: updateChecksEnabled) { _, enabled in
                 repo.saveUpdateChecksEnabled(enabled)
             }
