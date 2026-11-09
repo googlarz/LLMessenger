@@ -244,7 +244,7 @@ final class ChatViewModel: ObservableObject {
             case .listActions, .findWaitingReplies, .summarizeChanges, .extractTasks, .compareConversations,
                  .catchMeUp, .handleEasy, .whatDoIOwe, .draftAllWaiting:
                 // The agent-queue commands (catchMeUp etc.) are executed from the Act
-                // surface's CommandBar, not the chat composer. Here in chat we just
+                // command surface, not the chat composer. Here in chat we just
                 // answer conversationally, never approving or sending.
                 let question = actionFocusedQuestion(for: action, originalText: originalText)
                 await answerQuestion(brief: brief, rawInput: question, echoUserMessage: false)
@@ -389,7 +389,7 @@ final class ChatViewModel: ObservableObject {
             title = "Here are the recent messages from \(conversation.name):"
         } else {
             sourceMessages = Array(context.messages.suffix(6))
-            title = "Here are the most relevant recent messages I can show from this brief:"
+            title = "Here are the most relevant recent messages I can show from this digest:"
         }
 
         let sources = sourceMessages.map {
@@ -413,13 +413,13 @@ final class ChatViewModel: ObservableObject {
         }
         switch action.type {
         case .listActions:
-            return "List the concrete actions I should take from this brief. Prioritize urgent replies and decisions."
+            return "List the concrete actions I should take from this digest. Prioritize urgent replies and decisions."
         case .findWaitingReplies:
-            return "Who appears to be waiting for a reply from me in this brief? Include why and suggested reply direction."
+            return "Who appears to be waiting for a reply from me in this digest? Include why and suggested reply direction."
         case .summarizeChanges:
-            return "What changed since the last brief or recent context? Focus on new information and changed decisions."
+            return "What changed since the last digest or recent context? Focus on new information and changed decisions."
         case .extractTasks:
-            return "Extract tasks, deadlines, promises, and follow-ups from this brief. Be concrete."
+            return "Extract tasks, deadlines, promises, and follow-ups from this digest. Be concrete."
         case .compareConversations:
             return "Compare the referenced conversations and explain whether they are related."
         default:

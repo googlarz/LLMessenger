@@ -11,7 +11,7 @@
 import Foundation
 
 /// The agent-queue operation a command maps to. A pure value — execution is the
-/// caller's job (CommandBar → AppState), keeping classification testable.
+/// caller's job (a UI → AppState), keeping classification testable.
 enum CommandIntent: String, Equatable {
     case catchMeUp
     case handleEasy

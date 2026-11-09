@@ -216,10 +216,9 @@ extension AppState {
     }
 
     func failureReason(for action: AgentAction) -> String {
-        guard let id = action.id, let reason = sendFailureReasons[id], !reason.isEmpty else {
-            return "\(Theme.serviceName(action.service)) didn't accept the message."
-        }
-        return reason
+        if let id = action.id, let reason = sendFailureReasons[id], !reason.isEmpty { return reason }
+        // After a restart the in-memory reason is gone; the row carries its own.
+        return action.failureReason ?? "\(Theme.serviceName(action.service)) didn't accept the message."
     }
 
     /// Called from reloadAgentActions with tracked sends that left the active queue.
@@ -237,8 +236,13 @@ extension AppState {
                 trackedSendIDs.remove(id)
                 // The send path stores its error in lastError just before reloading;
                 // the failed row in Act now carries it, so the banner doesn't repeat it.
+                // That runs on the main actor with no suspension between the status
+                // write and the error, so this read always sees this send's error.
                 if let reason = lastError, !reason.isEmpty {
                     sendFailureReasons[id] = reason
+                    if let payload = row.payloadRecordingFailure(reason) {
+                        try? repository.updateAgentActionPayload(id: id, payload: payload)
+                    }
                     lastError = nil
                 }
                 showReceipt("Couldn't send to \(row.conversationName) · \(Theme.serviceName(row.service))",

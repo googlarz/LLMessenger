@@ -282,8 +282,8 @@ struct BriefListView: View {
         // auto-cancel-on-rapid-retap behavior a manual Task here used to
         // hand-roll. A second, independent loadBrief call from this function
         // just duplicated that fetch on every single digest switch. Clearing
-        // inputText/pendingTarget also moved: AppState.selectedBriefID's
-        // didSet now does that for every selection path, not just this one.
+        // the question field also moved: AppState.selectedBriefID's didSet
+        // (onBriefSelectionChanged) does that for every selection path.
     }
 
     @ViewBuilder

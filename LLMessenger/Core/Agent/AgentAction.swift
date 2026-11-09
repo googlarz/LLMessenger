@@ -177,6 +177,23 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
     /// Typed payload for a "reply" action.
     struct ReplyPayload: Codable {
         var draftText: String
+        /// Plain-language reason the last send failed, kept with the row so the
+        /// "Couldn't send" line survives a restart. Older rows simply lack it.
+        var failureReason: String? = nil
+    }
+
+    var failureReason: String? {
+        let reason = replyPayload?.failureReason
+        return (reason?.isEmpty ?? true) ? nil : reason
+    }
+
+    /// This row's payload with the failure reason recorded, draft text untouched.
+    /// Returns nil if the payload isn't a reply payload (nothing to record on).
+    func payloadRecordingFailure(_ reason: String) -> String? {
+        guard var decoded = replyPayload else { return nil }
+        decoded.failureReason = reason
+        guard let data = try? JSONEncoder().encode(decoded) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     var replyPayload: ReplyPayload? {
