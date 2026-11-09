@@ -52,11 +52,12 @@ struct BriefListView: View {
                     Spacer()
                     Button { dateFrom = nil; dateTo = nil } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(dateClearHovered ? Theme.textSecondary : Theme.textTertiary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.icon)
                     .help("Clear date filter")
+                    .accessibilityLabel("Clear date filter")
                     .animation(Theme.quick, value: dateClearHovered)
                     .onHover { dateClearHovered = $0 }
                 }
@@ -100,6 +101,7 @@ struct BriefListView: View {
                             VStack(spacing: 8) {
                                 Spacer().frame(height: 32)
                                 Image(systemName: "newspaper")
+                                    .accessibilityHidden(true)
                                     .font(.system(size: 28, weight: .thin))
                                     .foregroundStyle(Theme.textTertiary.opacity(0.4))
                                     .padding(.bottom, 4)
@@ -128,7 +130,7 @@ struct BriefListView: View {
                                     BriefRowView(brief: brief,
                                                  isSelected: appState.selectedBriefID == brief.id)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.quiet)
                                 .accessibilityLabel(brief.notificationText)
                                 .contextMenu { briefContextMenu(brief) }
                                 .swipeActions(edge: .trailing) { briefSwipeActions(brief) }
@@ -143,7 +145,7 @@ struct BriefListView: View {
                                     BriefRowView(brief: brief,
                                                  isSelected: appState.selectedBriefID == brief.id)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.quiet)
                                 .accessibilityLabel(brief.notificationText)
                                 .contextMenu { briefContextMenu(brief) }
                                 .swipeActions(edge: .trailing) { briefSwipeActions(brief) }
@@ -158,7 +160,8 @@ struct BriefListView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 8, weight: .bold))
+                                        .accessibilityHidden(true)
+                                        .font(.system(size: 10, weight: .bold))
                                         .foregroundStyle(archiveToggleHovered ? Theme.textSecondary : Theme.textTertiary)
                                         .rotationEffect(.degrees(showArchivedSection ? 90 : 0))
                                     WireLabel("Filed away (\(archived.count))",
@@ -170,7 +173,7 @@ struct BriefListView: View {
                                 .padding(.bottom, 4)
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.quiet)
                             .animation(Theme.quick, value: archiveToggleHovered)
                             .onHover { archiveToggleHovered = $0 }
 
@@ -180,7 +183,7 @@ struct BriefListView: View {
                                         BriefRowView(brief: brief,
                                                      isSelected: appState.selectedBriefID == brief.id)
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(.quiet)
                                     .accessibilityLabel(brief.notificationText)
                                     .swipeActions(edge: .trailing) {
                                         Button {
@@ -202,6 +205,7 @@ struct BriefListView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "clock.arrow.circlepath")
+                                        .accessibilityHidden(true)
                                         .font(.system(size: 11, weight: .medium))
                                     Text("Load older digests")
                                         .font(Theme.sans(11, weight: .medium))
@@ -210,7 +214,7 @@ struct BriefListView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.quiet)
                             .accessibilityLabel("Load older digests")
                             .accessibilityHint("Loads 500 more archived and recent digests into the sidebar.")
                         }
@@ -389,7 +393,7 @@ private struct DateFilterButton: View {
                 .foregroundStyle(isActive || isHovered ? Theme.textPrimary : Theme.textTertiary)
                 .frame(width: 28, height: 28)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .background(
             RoundedRectangle(cornerRadius: Theme.controlRadius)
                 .fill(isActive || isHovered ? Theme.surfaceHigh : Color.clear)
@@ -397,6 +401,8 @@ private struct DateFilterButton: View {
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
         .help("Filter by date range")
+        .accessibilityLabel(isActive ? "Date filter, on" : "Date filter")
+        .accessibilityHint("Filter by date range")
     }
 }
 
@@ -516,14 +522,16 @@ private struct BriefRowView: View {
                         .foregroundStyle(isSelected ? Theme.textSecondary : Theme.textTertiary)
                     if brief.pinned {
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 7))
+                            .font(.system(size: 10))
                             .foregroundStyle(Theme.textTertiary)
+                            .accessibilityLabel("Pinned")
                     }
                     Spacer(minLength: 4)
                     if isUnread {
                         Circle()
                             .fill(Theme.signal)
                             .frame(width: 6, height: 6)
+                            .accessibilityHidden(true)
                     }
                 }
                 Text(brief.notificationText)
@@ -539,6 +547,10 @@ private struct BriefRowView: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .animation(Theme.quick, value: hovering)
+        // The dot is colour-only; unread titles are also semibold, and VoiceOver
+        // hears the state as a value.
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isUnread ? "Unread" : "")
     }
 
     private var timeLabel: String {
@@ -558,6 +570,7 @@ struct SettingsButtonView: View {
         Button { appState.onOpenSettings?() } label: {
             HStack(spacing: 8) {
                 Image(systemName: "gearshape")
+                    .accessibilityHidden(true)
                     .font(.system(size: 11))
                     .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
                 WireLabel("Settings", color: isHovered ? Theme.textPrimary : Theme.textSecondary)
@@ -568,7 +581,7 @@ struct SettingsButtonView: View {
             .background(isHovered ? Theme.surface : Color.clear)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }
@@ -623,7 +636,7 @@ private struct SnoozeOptionRow: View {
                 .background(RoundedRectangle(cornerRadius: Theme.controlRadius).fill(isHovered ? Theme.surface : Color.clear))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }
@@ -703,7 +716,7 @@ private struct NeedsReplyRow: View {
             .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }

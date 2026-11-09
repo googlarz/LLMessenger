@@ -23,10 +23,10 @@ struct MediaPanelView: View {
                     Image(systemName: "xmark")
                         .font(Theme.sans(11, weight: .medium))
                         .foregroundStyle(closeHovered ? Theme.textSecondary : Theme.textTertiary)
-                        .frame(width: 22, height: 22)
+                        .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.icon)
                 .help("Close")
                 .accessibilityLabel("Close media panel")
                 .animation(Theme.quick, value: closeHovered)
@@ -78,7 +78,7 @@ private struct EmptyMediaState: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: icon)
+            Image(systemName: icon).accessibilityHidden(true)
                 .font(Theme.sans(32, weight: .thin))
                 .foregroundStyle(Theme.textTertiary)
             Text(label)
@@ -100,7 +100,7 @@ private struct MediaTabButton: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 3) {
-                Image(systemName: symbol)
+                Image(systemName: symbol).accessibilityHidden(true)
                     .font(Theme.sans(11))
                 Text(label)
                     .font(Theme.sans(10.5, weight: selected ? .semibold : .medium))
@@ -113,7 +113,7 @@ private struct MediaTabButton: View {
                     .frame(height: 1)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }

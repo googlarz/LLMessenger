@@ -101,7 +101,7 @@ struct DeskView: View {
                     Button("ALL") {
                         withAnimation(Theme.quick) { appState.serviceQuickFilter = nil }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.quiet)
                     .font(Theme.mono(10, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
                     .help("Clear the service filter")
@@ -174,11 +174,11 @@ private struct ServiceFilterButton: View {
                     .font(Theme.sans(12, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(textColor)
                 Spacer(minLength: 4)
-                if count > 0 {
-                    Text("\(count)")
-                        .font(Theme.mono(10, weight: .semibold))
-                        .foregroundStyle(isSelected ? Theme.textPrimary : Theme.textTertiary)
-                }
+                // Always a numeral: "0" says "nothing waiting" in words, so the
+                // quieter colour of an empty service is never the only cue.
+                Text("\(count)")
+                    .font(Theme.mono(10, weight: .semibold))
+                    .foregroundStyle(count == 0 && !isSelected ? Theme.textDisabled : (isSelected ? Theme.textPrimary : Theme.textTertiary))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -189,12 +189,13 @@ private struct ServiceFilterButton: View {
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .opacity(count == 0 && !isSelected ? 0.55 : 1)
+        .buttonStyle(.quiet)
         .help(isSelected
               ? "Show all services"
               : "Show only \(Theme.serviceName(service)) in Act and the open digest")
-        .accessibilityLabel("\(Theme.serviceName(service)), \(count) item\(count == 1 ? "" : "s")")
+        .accessibilityLabel(count == 0
+                            ? "\(Theme.serviceName(service)), nothing waiting"
+                            : "\(Theme.serviceName(service)), \(count) item\(count == 1 ? "" : "s")")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(isSelected ? "Clears the service filter" : "Filters to this service only")
         .animation(Theme.quick, value: isHovered)
@@ -202,7 +203,9 @@ private struct ServiceFilterButton: View {
     }
 
     private var textColor: Color {
-        isSelected ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary)
+        if isSelected { return Theme.textPrimary }
+        if count == 0 { return isHovered ? Theme.textSecondary : Theme.textDisabled }
+        return isHovered ? Theme.textSecondary : Theme.textTertiary
     }
 }
 
@@ -221,7 +224,7 @@ private struct DeskRailButton: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
-                Image(systemName: section.icon)
+                Image(systemName: section.icon).accessibilityHidden(true)
                     .font(.system(size: 12, weight: .medium))
                     .frame(width: 16)
                     .foregroundStyle(iconColor)
@@ -233,11 +236,11 @@ private struct DeskRailButton: View {
                     if isUrgent {
                         Text(badge)
                             .font(Theme.mono(10, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Theme.onTint)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(
-                                Capsule().fill(isSelected ? Theme.signal : Theme.signal.opacity(0.7))
+                                Capsule().fill(Theme.signal)
                             )
                     } else {
                         Text(badge)
@@ -255,7 +258,7 @@ private struct DeskRailButton: View {
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .keyboardShortcut(keyEquivalent, modifiers: .command)
         .help(section.helpText)
         .accessibilityHint(section.helpText)

@@ -132,13 +132,13 @@ struct ChatPanelView: View {
                             // ScrollViewProxy and scrollTo would silently no-op. Only scroll
                             // for AI thread items (drafts, responses, pickers, etc.).
                             if case .message = last { return }
-                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                            withAnimation(Theme.quick) { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
                     }
                 }
                 .onChange(of: chatViewModel.isLoading) { _, loading in
                     if loading {
-                        withAnimation { proxy.scrollTo("loading", anchor: .bottom) }
+                        withAnimation(Theme.quick) { proxy.scrollTo("loading", anchor: .bottom) }
                     }
                 }
             }

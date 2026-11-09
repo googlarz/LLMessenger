@@ -250,12 +250,12 @@ struct BriefProseView: View {
         }
         .onAppear {
             refreshCaches()
-            withAnimation { appeared = true }
+            withAnimation(Theme.quick) { appeared = true }
         }
         .onChange(of: brief.id) {
             refreshCaches()
             appeared = false
-            withAnimation { appeared = true }
+            withAnimation(Theme.quick) { appeared = true }
         }
         .onChange(of: canonicalJSON?.cards.map(\.id)) {
             refreshCaches()
@@ -333,6 +333,7 @@ struct BriefProseView: View {
                         }
                         .buttonStyle(WireActionStyle())
                         .help("Mark every visible card in this digest as handled")
+                        .accessibilityHint("Mark every visible card in this digest as handled")
                     }
                     .padding(.horizontal, Theme.gutter)
                     .padding(.top, 10)
@@ -525,8 +526,8 @@ private struct NoiseStripView: View {
                     WireLabel("FYI · \(cards.count) quiet item\(cards.count == 1 ? "" : "s")",
                               color: headerHovered ? Theme.textPrimary : Theme.textSecondary)
                     Rule()
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .semibold))
+                    Image(systemName: "chevron.down").accessibilityHidden(true)
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(headerHovered ? Theme.textPrimary : Theme.textSecondary)
                         .rotationEffect(.degrees(expanded ? 180 : 0))
                         .animation(Theme.spring, value: expanded)
@@ -535,7 +536,7 @@ private struct NoiseStripView: View {
                 .padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .onHover { headerHovered = $0 }
             .animation(Theme.quick, value: headerHovered)
             .accessibilityLabel("FYI, \(cards.count) quiet item\(cards.count == 1 ? "" : "s")")
@@ -603,8 +604,8 @@ private struct NoiseRowButton: View {
                             .font(Theme.mono(11))
                             .foregroundStyle(Theme.textTertiary)
                     }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 7, weight: .semibold))
+                    Image(systemName: "chevron.right").accessibilityHidden(true)
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
                         .rotationEffect(.degrees(rowExpanded ? 90 : 0))
                 }
@@ -622,7 +623,7 @@ private struct NoiseRowButton: View {
             }
             .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 7)
         .animation(Theme.quick, value: isHovered)
@@ -667,7 +668,7 @@ private struct FilterTabButton: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.quiet)
         .animation(Theme.quick, value: isHovered)
         .onHover { isHovered = $0 }
     }

@@ -51,7 +51,7 @@ private struct TaskRowView: View {
                     .font(.system(size: 12, weight: .light))
                     .foregroundStyle(checkHovered ? Theme.textSecondary : Theme.textTertiary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .padding(.top, 2)
             .help("Mark done")
             .accessibilityLabel("Mark task complete")

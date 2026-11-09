@@ -20,14 +20,14 @@ struct ReplyDraftView: View {
                     Spacer()
                     Button { chatViewModel.discardDraft(id: draftID) } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(discardHovered ? Theme.textSecondary : Theme.textTertiary)
                             .frame(minWidth: 22, minHeight: 22)
                             .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Discard draft")
                     .help("Discard this draft")
-                    .buttonStyle(.plain)
+                    .buttonStyle(.quiet)
                     .animation(Theme.quick, value: discardHovered)
                     .onHover { discardHovered = $0 }
                 }
@@ -49,7 +49,7 @@ struct ReplyDraftView: View {
 
                 if let provenance = draft.provenance, !provenance.isEmpty {
                     HStack(alignment: .top, spacing: 7) {
-                        Image(systemName: "checkmark.shield")
+                        Image(systemName: "checkmark.shield").accessibilityHidden(true)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Theme.ok)
                             .padding(.top, 1)
@@ -81,6 +81,7 @@ struct ReplyDraftView: View {
                         .buttonStyle(PaperButtonStyle(prominent: true))
                         .disabled(!ChatViewModel.isAddressable(draft))
                         .help("Open this text in the Reply window, where you check it and send it")
+                        .accessibilityHint("Open this text in the Reply window, where you check it and send it")
                 }
             }
 

@@ -66,7 +66,7 @@ struct TelegramSignInView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(closeHovered ? Theme.textSecondary : Theme.textTertiary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .padding(12)
             .keyboardShortcut("w", modifiers: .command)
             .animation(Theme.quick, value: closeHovered)

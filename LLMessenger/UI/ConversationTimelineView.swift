@@ -39,7 +39,7 @@ struct ConversationTimelineView: View {
             } else if entries.isEmpty {
                 Spacer()
                 VStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath")
+                    Image(systemName: "clock.arrow.circlepath").accessibilityHidden(true)
                         .font(Theme.sans(28, weight: .thin))
                         .foregroundStyle(Theme.textTertiary)
                     Text("No history found for this conversation")
@@ -127,6 +127,19 @@ private struct TimelineEntryRow: View {
     }
 
     var body: some View {
+        // A real button: focusable and activatable with Space/Return, not just
+        // clickable. The row has no nested controls, so one button is correct.
+        Button { withAnimation(Theme.spring) { expanded.toggle() } } label: {
+            rowContent
+        }
+        .buttonStyle(.quiet)
+        .onHover { isHovered = $0 }
+        .animation(Theme.quick, value: isHovered)
+        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+        .accessibilityHint(expanded ? "Collapse details" : "Expand details")
+    }
+
+    private var rowContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Headline is the anchor — the day group header already carries the
             // date, so this row only needs to say what happened.
@@ -140,6 +153,7 @@ private struct TimelineEntryRow: View {
                     .font(Theme.sans(10, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
                     .padding(.top, 3)
+                    .accessibilityHidden(true)
             }
 
             // Metadata demoted to one quiet line beneath the headline.
@@ -165,6 +179,7 @@ private struct TimelineEntryRow: View {
                                 Image(systemName: "circle")
                                     .font(Theme.sans(10))
                                     .foregroundStyle(Theme.signal)
+                                    .accessibilityHidden(true)
                                 Text(action)
                                     .font(Theme.sans(12, weight: .medium))
                                     .foregroundStyle(Theme.textPrimary)
@@ -175,16 +190,11 @@ private struct TimelineEntryRow: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
         .padding(.vertical, 6)
         .background(isHovered ? Theme.surface.opacity(0.5) : Color.clear)
         .contentShape(Rectangle())
-        .onTapGesture { withAnimation(Theme.spring) { expanded.toggle() } }
-        .onHover { isHovered = $0 }
-        .animation(Theme.quick, value: isHovered)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint(expanded ? "Collapse details" : "Expand details")
     }
 
     private func priorityBadge(_ priority: String) -> some View {

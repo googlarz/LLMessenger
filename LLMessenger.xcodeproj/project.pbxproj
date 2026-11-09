@@ -19,6 +19,7 @@
 		0B970781C3D86D8A6F8F9D97 /* AccessibilityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D7AF88DAB2A13BF1136844 /* AccessibilityUITests.swift */; };
 		0CC29365B40814D25473FD1D /* BriefLearningRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918D3D372E9B04CAB5709F75 /* BriefLearningRow.swift */; };
 		0DA6045F22FBA3D8EC85C0AA /* AppState+Commitments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBCB2D19932EDC5AD99A0622 /* AppState+Commitments.swift */; };
+		0E2049F0EC0C24A6F3EBA6B9 /* UIFontFloorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55D86A8BD946AACB8BEA2AE2 /* UIFontFloorTests.swift */; };
 		0F1677BA5000493BBDB9598A /* PriorityRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1DB7019BFFC94553454E332 /* PriorityRule.swift */; };
 		0F820A2720B766AD8F46C688 /* MentionPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CBE24D05550B0F805958D37 /* MentionPickerView.swift */; };
 		10FDEC3A7ECBB49B4D3812E1 /* PinBriefTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0942C43F58EB4A94C42A00 /* PinBriefTests.swift */; };
@@ -102,6 +103,7 @@
 		517C487C27020779B4F6CCCD /* ProductionReadinessPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B9A2A0119C6CF2FBFB58EC /* ProductionReadinessPerformanceTests.swift */; };
 		5181AA7389C147B2D66E279E /* AgentFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8399559E74670E836329A4 /* AgentFoundationTests.swift */; };
 		54B9748C2278DB6D3818109C /* ContextBias.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA244AA90638FA48D795F7D2 /* ContextBias.swift */; };
+		55708C7588C2C5F9AD403AB0 /* Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF56E2586D9360AA1D197C7 /* Accessibility.swift */; };
 		55D5BEFF888909CDB585F8F2 /* DeepValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C2EEA87E1CE3CFC017BF0B /* DeepValidationTests.swift */; };
 		570A01C0F98874233CA618A5 /* MessengerAdapterTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF50F53B4EA1FE342BC9519 /* MessengerAdapterTypesTests.swift */; };
 		57A0A183DA4F04B687597823 /* AnthropicClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5505C31BEA21DA121B801309 /* AnthropicClient.swift */; };
@@ -408,6 +410,7 @@
 		5469628423737A3451DF997B /* WhatsAppAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsAppAdapterTests.swift; sourceTree = "<group>"; };
 		5505C31BEA21DA121B801309 /* AnthropicClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicClient.swift; sourceTree = "<group>"; };
 		55760F70DB3B8A0518F445AC /* LLMGatewayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMGatewayTests.swift; sourceTree = "<group>"; };
+		55D86A8BD946AACB8BEA2AE2 /* UIFontFloorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIFontFloorTests.swift; sourceTree = "<group>"; };
 		582B11F8D5DBBF872D8DDAF0 /* ConversationToneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationToneTests.swift; sourceTree = "<group>"; };
 		595169617BDF071C68E4B357 /* LLMessenger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LLMessenger.entitlements; sourceTree = "<group>"; };
 		5B7AAA3D7B964F21F64A8D29 /* BriefCardSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefCardSource.swift; sourceTree = "<group>"; };
@@ -524,6 +527,7 @@
 		CB8399559E74670E836329A4 /* AgentFoundationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFoundationTests.swift; sourceTree = "<group>"; };
 		CBCB2D19932EDC5AD99A0622 /* AppState+Commitments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppState+Commitments.swift"; sourceTree = "<group>"; };
 		CBF1E29FE25174068D1BB2B5 /* GlossaryPromptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlossaryPromptTests.swift; sourceTree = "<group>"; };
+		CBF56E2586D9360AA1D197C7 /* Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Accessibility.swift; sourceTree = "<group>"; };
 		CC0C225688D30EB64B17C503 /* PluginDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginDiscovery.swift; sourceTree = "<group>"; };
 		CC762565E52A3E618204CC24 /* BriefEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefEngine.swift; sourceTree = "<group>"; };
 		CC8AFC142FA3DB7BF2E8C360 /* ContextParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextParserTests.swift; sourceTree = "<group>"; };
@@ -877,6 +881,7 @@
 				5F69DC4F7EF352372B772592 /* ThemeContrastTests.swift */,
 				4AA482D96958E0318C90A65F /* TokenEstimatorTests.swift */,
 				C0A78EB37A3D1DA67AEAA44C /* TriageEngineTests.swift */,
+				55D86A8BD946AACB8BEA2AE2 /* UIFontFloorTests.swift */,
 				79D725694A67BD078C05B411 /* UpdateCheckerTests.swift */,
 				5469628423737A3451DF997B /* WhatsAppAdapterTests.swift */,
 			);
@@ -1078,6 +1083,7 @@
 		CFF5E8DAB84A19E3F26BD8A6 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				CBF56E2586D9360AA1D197C7 /* Accessibility.swift */,
 				EBC9C795B6AF02F77D298ED7 /* AppState.swift */,
 				79465D1CF8BC8C2A618D48F4 /* AppState+Briefs.swift */,
 				02351D67D82E35312AD3438E /* AppState+Commands.swift */,
@@ -1348,6 +1354,7 @@
 			files = (
 				D07715DAF3AA2A0DC40A76C7 /* AISettingsModel.swift in Sources */,
 				9B30345F5A5A20571E4BE12D /* AboutSettingsTab.swift in Sources */,
+				55708C7588C2C5F9AD403AB0 /* Accessibility.swift in Sources */,
 				1F656903F16B668B1D56C644 /* ActFeedView.swift in Sources */,
 				A05765E64251B1F1F9C4AAD0 /* ActQueueRules.swift in Sources */,
 				D5BE7C49EE846FE54C95A595 /* ActWorkspaceView.swift in Sources */,
@@ -1611,6 +1618,7 @@
 				584C3FF7AF2C12A31F171709 /* ThemeContrastTests.swift in Sources */,
 				14FE45F20B4DB3E6B9B229D5 /* TokenEstimatorTests.swift in Sources */,
 				3C7658D3BBAF61E5DB14CB07 /* TriageEngineTests.swift in Sources */,
+				0E2049F0EC0C24A6F3EBA6B9 /* UIFontFloorTests.swift in Sources */,
 				6697FB8260477417E96C5758 /* UpdateCheckerTests.swift in Sources */,
 				592223FCB3A929B4560E5345 /* WhatsAppAdapterTests.swift in Sources */,
 				0B8874C2588D57BA25D4E669 /* iMessageAdapterTests.swift in Sources */,

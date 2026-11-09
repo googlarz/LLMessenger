@@ -26,6 +26,7 @@ struct MainToolbar: ToolbarContent {
                 Label("Toggle Sidebar", systemImage: "sidebar.left")
             }
             .help("Show or hide the sidebar (⌥⌘S)")
+            .accessibilityHint("Show or hide the sidebar (⌥⌘S)")
             .keyboardShortcut("s", modifiers: [.command, .option])
         }
 
@@ -39,6 +40,7 @@ struct MainToolbar: ToolbarContent {
                 }
                 .disabled(!appState.canSelectOlderBrief)
                 .help("Older digest (⌘[)")
+                .accessibilityHint("Older digest (⌘[)")
                 .keyboardShortcut("[", modifiers: .command)
 
                 Button {
@@ -48,6 +50,7 @@ struct MainToolbar: ToolbarContent {
                 }
                 .disabled(!appState.canSelectNewerBrief)
                 .help("Newer digest (⌘])")
+                .accessibilityHint("Newer digest (⌘])")
                 .keyboardShortcut("]", modifiers: .command)
             }
         }
@@ -89,6 +92,7 @@ struct MainToolbar: ToolbarContent {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .help("Check messages and build a digest now (⌘R)")
+                .accessibilityHint("Check messages and build a digest now (⌘R)")
                 .keyboardShortcut("r", modifiers: .command)
             }
 
@@ -119,6 +123,7 @@ struct MainToolbar: ToolbarContent {
                 Label("More", systemImage: "ellipsis.circle")
             }
             .help("More actions")
+            .accessibilityHint("More actions")
         }
     }
 
@@ -146,7 +151,7 @@ struct MainToolbar: ToolbarContent {
                 }
                 .foregroundStyle(disabled ? Theme.textTertiary : Theme.standby)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet)
             .help(disabled ? "Auto-send paused — click to resume" : "Auto-send active — click to pause")
             .accessibilityLabel(disabled ? "Auto-send paused" : "Auto-send active")
             .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
@@ -316,10 +321,10 @@ struct ServiceStatusPopover: View {
                     if health[service] == .warning || health[service] == .error {
                         Button { onRetry?(service) } label: {
                             Image(systemName: "arrow.clockwise")
-                                .frame(width: 20, height: 20)
+                                .frame(width: 24, height: 24)
                                 .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.icon)
                         .help("Retry \(Theme.serviceName(service))")
                         .accessibilityLabel("Retry \(Theme.serviceName(service))")
                     }
