@@ -111,7 +111,7 @@ struct DeskView: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 4)
 
-            ForEach(["imessage", "signal", "telegram", "slack"], id: \.self) { service in
+            ForEach(["imessage", "signal", "telegram", "slack", "whatsapp"], id: \.self) { service in
                 ServiceFilterButton(
                     service: service,
                     // Activity is a global audit trail and deliberately doesn't

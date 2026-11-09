@@ -79,6 +79,34 @@ struct SettingsRepository: @unchecked Sendable {
         userDefaults.bool(forKey: "local_only_mode")
     }
 
+    /// Lets external MCP clients read LLMessenger data via `LLMessenger --mcp`. Off by default.
+    /// The MCP server process reads this fresh on every tool call.
+    /// Turning it on records the time; turning it off clears it. The MCP server serves
+    /// only digests created from that moment on, because an earlier digest may quote a
+    /// Local-only conversation inside another conversation's card.
+    func saveMCPServerEnabled(_ on: Bool, now: Date = Date()) {
+        let wasOn = userDefaults.bool(forKey: Self.mcpServerEnabledKey)
+        userDefaults.set(on, forKey: Self.mcpServerEnabledKey)
+        if !on {
+            userDefaults.removeObject(forKey: Self.mcpServerEnabledSinceKey)
+        } else if !wasOn {
+            userDefaults.set(now.timeIntervalSince1970, forKey: Self.mcpServerEnabledSinceKey)
+        }
+    }
+
+    /// When MCP was last turned on; nil if it is off or the timestamp is missing.
+    func loadMCPServerEnabledSince() -> Date? {
+        guard let seconds = userDefaults.object(forKey: Self.mcpServerEnabledSinceKey) as? Double else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    func loadMCPServerEnabled() -> Bool {
+        userDefaults.bool(forKey: Self.mcpServerEnabledKey)
+    }
+
+    static let mcpServerEnabledKey = "mcp_server_enabled"
+    static let mcpServerEnabledSinceKey = "mcp_server_enabled_since"
+
     /// Pre-send sanitization redacts patterns that match credit cards, SSNs, and emails
     /// before the prompt is sent to a cloud LLM. Off by default.
     func saveSanitizeBeforeSend(_ on: Bool) {

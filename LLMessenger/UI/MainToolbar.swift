@@ -173,7 +173,7 @@ struct MainToolbar: ToolbarContent {
     // MARK: - Service status helpers
 
     private var orderedServices: [String] {
-        ["imessage", "signal", "telegram", "slack"]
+        ["imessage", "signal", "telegram", "slack", "whatsapp"]
     }
 
     private var serviceIssueCount: Int {

@@ -6,7 +6,7 @@
 
 **Stop reading 200 messages. Read one digest — and let an agent handle the rest.**
 
-LLMessenger is a notification firewall *and a communications agent* for your Mac. It reads iMessage, Signal, Telegram, and Slack so you don't have to — silences the noise, interrupts you only when someone actually needs you, turns everything else into a 30-second digest, tracks who's still waiting on you, and **drafts the replies, follow-ups, and RSVPs you'd send — in your voice — and lines them up for one tap.**
+LLMessenger is a notification firewall *and a communications agent* for your Mac. It reads iMessage, Signal, Telegram, Slack, and WhatsApp so you don't have to — silences the noise, interrupts you only when someone actually needs you, turns everything else into a 30-second digest, tracks who's still waiting on you, and **drafts the replies, follow-ups, and RSVPs you'd send — in your voice — and lines them up for one tap.**
 
 Free. Open source. On-device AI. Your messages never have to leave your Mac, and it never sends anything without your say-so.
 
@@ -148,7 +148,8 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → Privacy) i
 - **Per-conversation privacy** — mark a conversation local-only (never touches the cloud) or never-draft. The relationship model stays entirely on your Mac.
 
 **Digests**
-- Unified inbox: iMessage, Signal, Telegram, Slack (multi-workspace).
+- Unified inbox: iMessage, Signal, Telegram, Slack (multi-workspace), and WhatsApp (read-only).
+- **MCP server mode** (opt-in) — let Claude, Cursor, or any MCP client ask "what do I owe people?" or search your messages locally. Off by default; Local-only conversations are never exposed; replies an agent proposes wait in your queue for approval.
 - Structured cards: headline, prose summary, action items, key quotes, priority, reply-needed state, and the reason it matters.
 - Actionability is explicit: `needsReply`, reason, and grounding chips separate "urgent" from "you should answer this."
 - Card-level trust: each expanded card shows reason, evidence count, memory/context use, and privacy posture.
@@ -268,7 +269,7 @@ By default, no. Quick replies and AI drafts wait for your tap. If you explicitly
 <details>
 <summary><strong>What about WhatsApp?</strong></summary>
 
-On the roadmap, pending a viable local API. The adapter protocol is designed for it — if you know a reliable local WhatsApp bridge, open an issue.
+Supported read-only since v2.4.0. LLMessenger reads WhatsApp Desktop's local history on your Mac (the same way it reads iMessage), so WhatsApp chats show up in digests and owed replies. There is no local send API, so you reply in WhatsApp itself — LLMessenger drafts the text and opens the chat. It's off by default; enable it in Settings → Services. Requires WhatsApp Desktop installed and signed in.
 </details>
 
 <details>
@@ -290,6 +291,7 @@ Code signing requires a paid Apple Developer account, and this is a free communi
 - **Signal** *(optional)* — [signal-mcp](https://github.com/googlarz/signal-mcp) running locally
 - **Telegram** *(optional)* — bundled adapter, interactive sign-in from Settings
 - **Slack** *(optional)* — your own Slack app's user token, multi-workspace supported
+- **WhatsApp** *(optional, read-only)* — WhatsApp Desktop installed and signed in
 
 ## Contributing
 
@@ -306,10 +308,15 @@ xcodebuild -scheme LLMessenger test    # keep them green
 
 - [ ] Cross-conversation people memory (link who's who across chats)
 - [ ] Email adapter (IMAP read-only — Proton Bridge, Gmail, iCloud)
-- [ ] WhatsApp adapter (pending viable local API)
 
 <details>
-<summary>Shipped (v1.4 – v2.3.3)</summary>
+<summary>Shipped (v1.4 – v2.4.0)</summary>
+
+**v2.4.0** — WhatsApp and MCP:
+- ✅ **WhatsApp (read-only)** — reads WhatsApp Desktop's local history so WhatsApp chats appear in digests and owed replies; you reply in WhatsApp, with the draft ready to copy
+- ✅ **MCP server mode (opt-in)** — `LLMessenger --mcp` lets Claude, Cursor, or any MCP client read owed replies, the latest digest, and search messages locally; proposed replies wait in your queue, labelled as coming from an external agent
+- ✅ Local-only conversations are never exposed over MCP, and are left out of digests while MCP is on
+- ✅ A database that fails to open is no longer silently replaced — the app asks before moving it aside
 
 **v2.3.3** — fixes from an adversarial re-review:
 - ✅ Refresh no longer clears a question you were mid-typing — only navigating to a different digest yourself clears the composer

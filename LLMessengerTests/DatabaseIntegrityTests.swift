@@ -410,4 +410,66 @@ final class DatabaseIntegrityTests: XCTestCase {
                            "Deleting a Brief must cascade through BriefCards to remove BriefCardSources")
         }
     }
+
+    // MARK: - Store recovery only on real corruption
+
+    func testOnlyCorruptionErrorsCountAsCorruption() {
+        XCTAssertTrue(AppDatabase.isCorruption(DatabaseError(resultCode: .SQLITE_CORRUPT)))
+        XCTAssertTrue(AppDatabase.isCorruption(DatabaseError(resultCode: .SQLITE_NOTADB)))
+        // A lock held by another process, a full disk or a permissions problem must
+        // never make the app move the user's database aside.
+        XCTAssertFalse(AppDatabase.isCorruption(DatabaseError(resultCode: .SQLITE_BUSY)))
+        XCTAssertFalse(AppDatabase.isCorruption(DatabaseError(resultCode: .SQLITE_LOCKED)))
+        XCTAssertFalse(AppDatabase.isCorruption(DatabaseError(resultCode: .SQLITE_FULL)))
+        XCTAssertFalse(AppDatabase.isCorruption(DatabaseError(resultCode: .SQLITE_CANTOPEN)))
+        XCTAssertFalse(AppDatabase.isCorruption(CocoaError(.fileReadNoPermission)))
+    }
+
+    func testGarbageFileIsRecognisedAsCorruption() throws {
+        let path = NSTemporaryDirectory() + "llm-garbage-\(UUID().uuidString).db"
+        try Data(repeating: 0x41, count: 4096).write(to: URL(fileURLWithPath: path))
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        XCTAssertThrowsError(try AppDatabase(path: path)) { error in
+            XCTAssertTrue(AppDatabase.isCorruption(error), "got \(error)")
+        }
+    }
+
+    // MARK: - Moving the store aside
+
+    func testMoveStoreAsideRenamesStoreAndSiblingsOnly() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("llm-aside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let db = dir.appendingPathComponent("llmessenger.db").path
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            try Data(Array(suffix.utf8) + [0x1]).write(to: URL(fileURLWithPath: db + suffix))
+        }
+        try Data("unrelated".utf8).write(to: dir.appendingPathComponent("other.txt"))
+
+        let moved = try AppDatabase.moveStoreAside(at: db, stamp: 1234)
+
+        XCTAssertEqual(moved.map { URL(fileURLWithPath: $0).lastPathComponent },
+                       ["llmessenger.db.corrupt-1234", "llmessenger.db.corrupt-1234-wal",
+                        "llmessenger.db.corrupt-1234-shm", "llmessenger.db.corrupt-1234-journal"])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path).sorted(),
+                       ["llmessenger.db.corrupt-1234", "llmessenger.db.corrupt-1234-journal",
+                        "llmessenger.db.corrupt-1234-shm", "llmessenger.db.corrupt-1234-wal", "other.txt"])
+        // Contents are preserved, not deleted.
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: db + ".corrupt-1234-wal")), Data(Array("-wal".utf8) + [0x1]))
+    }
+
+    func testMoveStoreAsideSkipsMissingSiblingsAndMissingStore() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("llm-aside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let db = dir.appendingPathComponent("llmessenger.db").path
+        XCTAssertTrue(try AppDatabase.moveStoreAside(at: db, stamp: 1).isEmpty)
+
+        try Data("x".utf8).write(to: URL(fileURLWithPath: db))
+        let moved = try AppDatabase.moveStoreAside(at: db, stamp: 2)
+        XCTAssertEqual(moved, [db + ".corrupt-2"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: db))
+    }
 }

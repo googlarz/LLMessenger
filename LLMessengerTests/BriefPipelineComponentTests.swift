@@ -177,6 +177,12 @@ final class BriefPipelineComponentTests: XCTestCase {
             context: neverDraft,
             clientIsCloud: false
         ))
+
+        // With MCP on, a local model's digest can still be read by an external
+        // agent — so local_only must be excluded exactly as for a cloud client.
+        let viaMCP = BriefPromptAssembler.contentMayLeaveDevice(clientIsCloud: false, mcpEnabled: true)
+        XCTAssertTrue(BriefPromptAssembler.isExcludedByPrivacy(context: localOnly, clientIsCloud: viaMCP))
+        XCTAssertFalse(BriefPromptAssembler.contentMayLeaveDevice(clientIsCloud: false, mcpEnabled: false))
     }
 
     private func message(

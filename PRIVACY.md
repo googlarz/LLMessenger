@@ -16,6 +16,7 @@ LLMessenger is a personal tool that reads your messages from the messaging servi
 | --- | --- | --- |
 | Briefs, messages, conversation state | `~/Library/Application Support/LLMessenger/llmessenger.db` (SQLite) | LLMessenger |
 | iMessage history | `~/Library/Messages/chat.db` | LLMessenger reads (requires Full Disk Access) |
+| WhatsApp history *(opt-in)* | `~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite` | LLMessenger reads, read-only (requires Full Disk Access); WhatsApp Desktop writes. LLMessenger never sends through WhatsApp. |
 | Signal history | `~/.local/share/signal-mcp/messages.db` | LLMessenger reads (signal-cli daemon writes) |
 | Telegram history | LLMessenger DB (synced via subprocess adapter) | LLMessenger |
 | Slack history | LLMessenger DB (synced via HTTPS) | LLMessenger |
@@ -82,6 +83,15 @@ Settings → About → **Local-only mode** disables every cloud egress path that
 * Telegram is opt-in to begin with; you can simply not connect it
 
 With Ollama running locally, no message content is sent to a cloud AI provider. Connected messaging services still receive the traffic inherent in using them, including replies you approve or delegated sends; disconnect Telegram as well if you want no non-local connector traffic.
+
+## MCP server mode (opt-in)
+
+Settings → AI & Privacy → Privacy → **Let AI agents read LLMessenger over MCP** is off by default. When you turn it on, `LLMessenger --mcp` lets an MCP client you configure (Claude Desktop, Cursor, …) read your owed replies, digests created after you enabled it, conversation lists and messages, and search them. That client may pass what it reads to its own model, which may be a cloud model — this is an egress path you control by choosing the client.
+
+* Conversations marked **Local-only** are never returned by any MCP tool, and are left out of digests entirely while MCP is on.
+* Global **Local-only mode** blocks every MCP read.
+* An agent can only *propose* a reply: it lands in your Act queue labelled as coming from an external agent, is never part of a batch send, and is sent only if you approve it.
+* The MCP server speaks over stdio to a process on your Mac; it opens no network port.
 
 ## Network audit log
 

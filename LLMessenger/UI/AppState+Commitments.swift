@@ -98,6 +98,10 @@ extension AppState {
     /// button) and surfaces it in the Act queue. Reuses the engine's pure builder.
     func draftFollowUp(for commitment: Commitment) {
         guard let action = AgentEngine.followUpAction(for: commitment) else { return }
+        guard ServiceCapabilities.canSend(service: action.service) else {
+            lastError = ServiceCapabilities.readOnlyMessage(for: action.service)
+            return
+        }
         do {
             try repository.insertAgentAction(action)
             reloadAgentActions()

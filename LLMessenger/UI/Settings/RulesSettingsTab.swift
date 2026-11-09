@@ -194,7 +194,7 @@ private struct AddRuleView: View {
     @State private var quietEnd = ""
     @State private var confirmSilenceEverything = false
 
-    private let serviceOptions = ["any", "signal", "telegram", "imessage", "slack"]
+    private let serviceOptions = ["any", "signal", "telegram", "imessage", "slack", "whatsapp"]
     private let priorityOptions = [("", "No change"), ("high", "High"), ("med", "Med"), ("low", "Low")]
 
     var body: some View {
@@ -213,6 +213,7 @@ private struct AddRuleView: View {
                     Text("Telegram").tag("telegram")
                     Text("iMessage").tag("imessage")
                     Text("Slack").tag("slack")
+                    Text("WhatsApp").tag("whatsapp")
                 }
                 .font(Theme.sans(13))
             }

@@ -109,7 +109,9 @@ final class BriefEngine {
 
         // Privacy-excluded conversations never enter a durable job snapshot: a
         // cloud client must not persist work that it is not allowed to process.
-        let clientIsCloud = self.client.isCloud
+        let clientIsCloud = BriefPromptAssembler.contentMayLeaveDevice(
+            clientIsCloud: self.client.isCloud,
+            mcpEnabled: SettingsRepository().loadMCPServerEnabled())
         let candidateKeys = Array(Set(candidateMessages.map {
             BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
         }))
@@ -698,7 +700,9 @@ final class BriefEngine {
                         // (no LLM ever) or local_only while the client is a cloud provider, BEFORE
                         // any text reaches the prompt. Their newly-stored messages are filtered out
                         // of the attach set below so they stay unattached rather than being lost.
-                        let isCloud = client2.isCloud
+                        let isCloud = BriefPromptAssembler.contentMayLeaveDevice(
+                            clientIsCloud: client2.isCloud,
+                            mcpEnabled: SettingsRepository().loadMCPServerEnabled())
                         let conversationKeys = conversations.map {
                             BriefConversationKey(service: serviceID, conversationID: $0.id)
                         }

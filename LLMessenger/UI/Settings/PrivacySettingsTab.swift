@@ -3,6 +3,7 @@ import SwiftUI
 struct PrivacySettingsTab: View {
     @State private var localOnlyMode: Bool = SettingsRepository().loadLocalOnlyMode()
     @State private var sanitizeBeforeSend: Bool = SettingsRepository().loadSanitizeBeforeSend()
+    @State private var mcpEnabled: Bool = SettingsRepository().loadMCPServerEnabled()
     @ObservedObject private var auditLog = NetworkAuditLog.shared
     private let repo = SettingsRepository()
 
@@ -10,6 +11,8 @@ struct PrivacySettingsTab: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 modesSection
+                Rule()
+                mcpSection
                 Rule()
                 dataFlowSection
                 Rule()
@@ -63,6 +66,54 @@ struct PrivacySettingsTab: View {
             .onChange(of: sanitizeBeforeSend) { _, enabled in
                 repo.saveSanitizeBeforeSend(enabled)
             }
+        }
+        .padding(.vertical, 14)
+    }
+
+    // MARK: - MCP
+
+    private var mcpClientConfig: String {
+        MCPToolbox.compactJSON([
+            "mcpServers": ["llmessenger": ["command": Bundle.main.executablePath ?? "LLMessenger",
+                                           "args": ["--mcp"]]]
+        ])
+    }
+
+    private var mcpSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            WireLabel("AI Agents")
+
+            Toggle(isOn: $mcpEnabled) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Let AI agents read LLMessenger over MCP")
+                        .font(Theme.sans(13, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("Exposes your owed replies, digests, conversations and message search to MCP clients you configure (Claude Desktop, Claude Code, Cursor). The connected AI client may send what it reads to its own, possibly cloud, model. Conversations marked Local-only are never readable, and Local-only mode blocks all reads. While this is on, Local-only conversations are left out of digests entirely, and digests created before you turned it on are not shared. Replies an agent proposes always wait for your approval in the Act queue and are labelled as coming from an external agent.")
+                        .font(Theme.sans(11))
+                        .foregroundStyle(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(Theme.ok)
+            .onChange(of: mcpEnabled) { _, enabled in
+                repo.saveMCPServerEnabled(enabled)
+            }
+
+            Text("Client config")
+                .font(Theme.sans(11, weight: .medium))
+                .foregroundStyle(Theme.textSecondary)
+            Text(mcpClientConfig)
+                .font(Theme.mono(11))
+                .foregroundStyle(Theme.textSecondary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Copy config") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(mcpClientConfig, forType: .string)
+            }
+            .buttonStyle(WireActionStyle())
         }
         .padding(.vertical, 14)
     }

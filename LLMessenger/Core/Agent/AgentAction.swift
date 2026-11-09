@@ -69,6 +69,21 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
 
     static let databaseTableName = "agentActions"
 
+    /// Written only by the MCP server (never taken from a client) so rows it queued
+    /// can be recognised without a schema change.
+    static let externalAgentReasoning = "Proposed by an external agent via MCP."
+
+    var isExternalProposal: Bool { reasoning == Self.externalAgentReasoning }
+
+    /// External proposals are approved one at a time, never in a multi-select batch.
+    var isBatchEligible: Bool {
+        statusEnum == .pending
+            && !isMaybe
+            && riskEnum != .high
+            && (kindEnum == .reply || kindEnum == .ack)
+            && !isExternalProposal
+    }
+
     mutating func didInsert(_ inserted: InsertionSuccess) {
         id = inserted.rowID
     }

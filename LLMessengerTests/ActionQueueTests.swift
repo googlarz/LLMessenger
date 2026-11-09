@@ -106,6 +106,30 @@ final class ActionQueueTests: XCTestCase {
         XCTAssertEqual(actions.count, 1)
     }
 
+    // External (MCP) proposals must not suppress the app's own draft for the same conversation,
+    // while the app's own pending rows still dedupe (test 4).
+    func testExternalProposalDoesNotBlockOwnDraft() async throws {
+        let db = try makeDB()
+        try await seedOwedConversation(db)
+        try await db.dbQueue.write { d in
+            var a = AgentAction(id: nil, kind: AgentActionKind.reply.rawValue, service: "imessage",
+                                conversationId: "c1", conversationName: "Alice", title: "ext",
+                                payload: AgentAction.encodeReplyPayload("external"),
+                                reasoning: AgentAction.externalAgentReasoning, confidence: 0.5,
+                                riskLevel: "normal", status: "pending", createdAt: Date(), resolvedAt: nil)
+            try a.insert(d)
+        }
+        let client = StubLLMClient(responses: [draftJSON("own draft")])
+        let engine = AgentEngine(db: db, llmClient: client, llmModel: "test",
+                                 repository: BriefRepository(database: db), rulesProvider: { [] })
+        let keys = try await engine.pendingActionKeys(kinds: [.reply])
+        XCTAssertTrue(keys.isEmpty)
+        await engine.trigger()
+        let actions = try await db.dbQueue.read { d in try AgentAction.fetchAll(d) }
+        XCTAssertEqual(actions.count, 2)
+        XCTAssertEqual(actions.filter { !$0.isExternalProposal }.first?.replyPayload?.draftText, "own draft")
+    }
+
     // 5: approve marks done (via repository, the path AppState uses)
     func testApproveMarksDone() async throws {
         let db = try makeDB()

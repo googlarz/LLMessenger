@@ -310,10 +310,7 @@ struct ActFeedView: View {
         items.compactMap { item -> AgentAction? in
             guard multiSelectedIds.contains(item.id),
                   case .agentAction(let action) = item,
-                  action.statusEnum == .pending,
-                  !action.isMaybe,
-                  action.riskEnum != .high,
-                  action.kindEnum == .reply || action.kindEnum == .ack
+                  action.isBatchEligible
             else { return nil }
             return action
         }
@@ -674,6 +671,10 @@ private struct ActCardRow: View {
             }
             if case .agentAction(let action) = item, action.isMaybe {
                 WireLabel("Maybe", color: Theme.standby)
+            }
+            if case .agentAction(let action) = item, action.isExternalProposal {
+                WireLabel("External agent", color: Theme.signal)
+                    .accessibilityLabel("Proposed by an external agent")
             }
         }
     }

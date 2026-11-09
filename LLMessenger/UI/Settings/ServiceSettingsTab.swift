@@ -1,7 +1,9 @@
 // LLMessenger/UI/Settings/ServiceSettingsTab.swift
 import SwiftUI
 
-private let kAllServices = ["imessage", "signal", "telegram", "slack"]
+private let kAllServices = ["imessage", "signal", "telegram", "slack", "whatsapp"]
+
+private let kWhatsAppNote = "Read-only: reads WhatsApp Desktop's local history. Requires WhatsApp Desktop installed and signed in, and Full Disk Access."
 
 struct ServiceSettingsTab: View {
     @State private var configs: [ServiceConfig] = kAllServices.map { ServiceConfig.default(for: $0) }
@@ -293,6 +295,11 @@ private struct ServiceCard: View {
                     .foregroundStyle(Theme.textSecondary)
                 Text("Off — not polling")
                     .font(Theme.sans(11)).foregroundStyle(Theme.textTertiary)
+                if service == WhatsAppAdapter.id {
+                    Text(kWhatsAppNote)
+                        .font(Theme.sans(11)).foregroundStyle(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer()
             Toggle("", isOn: $config.enabled)
@@ -362,6 +369,19 @@ private struct ServiceCard: View {
         case "imessage":
             VStack(alignment: .leading, spacing: 10) {
                 Text("macOS needs to allow LLMessenger to read your Messages database. Grant Full Disk Access, then tap Retry now.")
+                    .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Button("Grant Full Disk Access") {
+                        openFullDiskAccessSettings()
+                    }
+                    .buttonStyle(PaperButtonStyle(prominent: true))
+                    retryButton
+                }
+            }
+        case "whatsapp":
+            VStack(alignment: .leading, spacing: 10) {
+                Text(kWhatsAppNote)
                     .font(Theme.sans(12.5)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
@@ -514,6 +534,7 @@ private struct ServiceCard: View {
         let interval = intervalLabel(config.pollIntervalSeconds)
         switch service {
         case "imessage": return "Reading ~/Library/Messages — every \(interval)"
+        case "whatsapp": return "Read-only, from WhatsApp Desktop — every \(interval)"
         case "signal":   return "\(signalAccount) — every \(interval)"
         case "telegram": return "Signed in — every \(interval)"
         case "slack":
@@ -595,6 +616,7 @@ private struct ServiceCard: View {
     private var setupBlurb: String {
         switch service {
         case "imessage": return "Summarise your iMessage conversations. Requires Full Disk Access."
+        case "whatsapp": return kWhatsAppNote
         case "signal":   return "Summarise your Signal conversations. Requires the signal-mcp daemon and your phone number."
         case "telegram": return "Summarise your Telegram conversations. Requires API credentials from my.telegram.org and a one-time sign-in."
         case "slack":    return "Summarise messages across one or more Slack workspaces. You'll paste an OAuth token from a private Slack app you create."
@@ -605,7 +627,7 @@ private struct ServiceCard: View {
     @ViewBuilder
     private var primarySetupAction: some View {
         switch service {
-        case "imessage":
+        case "imessage", "whatsapp":
             Button("Grant Full Disk Access") {
                 openFullDiskAccessSettings()
             }
@@ -683,6 +705,7 @@ private struct ServiceCard: View {
         case "signal":   return "Signal"
         case "telegram": return "Telegram"
         case "slack":    return "Slack"
+        case "whatsapp": return "WhatsApp"
         default:         return service.capitalized
         }
     }
@@ -709,6 +732,9 @@ private struct ServiceCard: View {
             // Full Disk Access may still block a real query — surfaced via the health record.
             let path = NSHomeDirectory() + "/Library/Messages/chat.db"
             return FileManager.default.isReadableFile(atPath: path)
+        case "whatsapp":
+            // Existence only: without Full Disk Access the adapter's health check reports the real cause.
+            return FileManager.default.fileExists(atPath: WhatsAppAdapter.defaultStorePath)
         case "signal":
             return !signalAccount.trimmingCharacters(in: .whitespaces).isEmpty
         case "telegram":

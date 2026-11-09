@@ -103,7 +103,7 @@ struct CommitmentsView: View {
             HStack(spacing: 8) {
                 actionButton("Mark done") { appState.markCommitmentFulfilled(commitment) }
                 actionButton("Drop") { appState.dropCommitment(commitment) }
-                if isDue(commitment) {
+                if isDue(commitment), ServiceCapabilities.canSend(service: commitment.service) {
                     actionButton("Draft follow-up") { appState.draftFollowUp(for: commitment) }
                 }
                 Spacer()

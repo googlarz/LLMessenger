@@ -1,7 +1,7 @@
 // LLMessenger/LLMessengerApp.swift
 import SwiftUI
 
-@main
+// Entry point is main.swift: `--mcp` runs the stdio MCP server, otherwise the GUI.
 struct LLMessengerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 

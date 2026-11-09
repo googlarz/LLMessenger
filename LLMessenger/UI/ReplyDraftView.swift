@@ -107,6 +107,12 @@ struct ReplyDraftView: View {
             return URL(string: "tg://")
         case "signal":
             return URL(string: "sgnl://")
+        case "whatsapp":
+            // 1:1 chats can be opened pre-addressed; groups and LID chats have no phone number.
+            if let digits = WhatsAppAdapter.phoneDigits(fromJID: draft.conversationID) {
+                return URL(string: "whatsapp://send?phone=\(digits)")
+            }
+            return URL(string: "whatsapp://")
         case "imessage":
             // conversationID format from iMessage adapter: "any;-;+491234567890"
             // Extract the phone/email portion after the last ";-;"

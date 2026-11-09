@@ -208,7 +208,7 @@ enum DemoSeeder {
 
         // Keep every service quiet while the demo is active.
         let settings = SettingsRepository(database: database)
-        for service in ["imessage", "signal", "telegram", "slack"] {
+        for service in ["imessage", "signal", "telegram", "slack", "whatsapp"] {
             var config = ServiceConfig.default(for: service)
             config.enabled = false
             try settings.saveServiceConfig(config)

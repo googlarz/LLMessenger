@@ -9,6 +9,14 @@ struct BriefConversationPromptMetadata {
 /// Pure prompt-boundary helpers. User-controlled metadata and messages are
 /// sanitized here before they enter the structured summarization prompt.
 enum BriefPromptAssembler {
+    /// A digest's text can reach a cloud model two ways: the summarizing client is
+    /// cloud, or MCP is on and an external agent reads the stored cards. Cards come
+    /// from one shared prompt, so a local_only conversation must stay out of that
+    /// prompt entirely — per-card filtering can't catch it quoted in another card.
+    static func contentMayLeaveDevice(clientIsCloud: Bool, mcpEnabled: Bool) -> Bool {
+        clientIsCloud || mcpEnabled
+    }
+
     static func isExcludedByPrivacy(
         context: ConversationContext?,
         clientIsCloud: Bool

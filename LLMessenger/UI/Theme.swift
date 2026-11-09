@@ -135,12 +135,18 @@ enum Theme {
         dark: Color(red: 0.780, green: 0.620, blue: 0.820)
     )
 
+    static let serviceWhatsApp = Color(
+        light: Color(red: 0.130, green: 0.400, blue: 0.300),
+        dark: Color(red: 0.560, green: 0.840, blue: 0.700)
+    )
+
     static func serviceName(_ service: String) -> String {
         switch service {
         case "imessage": return "iMessage"
         case "telegram": return "Telegram"
         case "signal":   return "Signal"
         case "slack":    return "Slack"
+        case "whatsapp": return "WhatsApp"
         default:         return service.capitalized
         }
     }
@@ -151,6 +157,7 @@ enum Theme {
         case "telegram": return serviceTelegram
         case "signal":   return serviceSignal
         case "slack":    return serviceSlack
+        case "whatsapp": return serviceWhatsApp
         default:         return textTertiary
         }
     }
@@ -292,6 +299,7 @@ struct ServiceStamp: View {
         case "telegram": return "TG"
         case "signal":   return "SG"
         case "slack":    return "SL"
+        case "whatsapp": return "WA"
         default:         return String(service.prefix(2)).uppercased()
         }
     }

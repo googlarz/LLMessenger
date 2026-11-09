@@ -123,28 +123,31 @@ struct ContextEditor: View {
 
                 Rule()
 
-                VStack(alignment: .leading, spacing: 10) {
-                    WireLabel("Auto-send (optional)")
-                    Text("These low-risk action types will be sent automatically for this conversation, after a 30-second undo window. Everything else still requires your approval.")
-                        .font(Theme.sans(11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Toggle("Auto-acknowledge (\u{201C}got it\u{201D} / \u{201C}thanks\u{201D})", isOn: $autoAck)
-                        .font(Theme.sans(13))
-                        .foregroundStyle(Theme.textPrimary)
-                        .onChange(of: autoAck) { _, enabled in
-                            if enabled { requestAutoSendConfirmation(.ack) }
-                        }
-                    Toggle("Auto-RSVP (yes / no to invites)", isOn: $autoRSVP)
-                        .font(Theme.sans(13))
-                        .foregroundStyle(Theme.textPrimary)
-                        .onChange(of: autoRSVP) { _, enabled in
-                            if enabled { requestAutoSendConfirmation(.rsvp) }
-                        }
-                }
-                .padding(.vertical, 14)
+                // Nothing to auto-send for a service LLMessenger cannot send to (WhatsApp).
+                if ServiceCapabilities.canSend(service: service) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        WireLabel("Auto-send (optional)")
+                        Text("These low-risk action types will be sent automatically for this conversation, after a 30-second undo window. Everything else still requires your approval.")
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Toggle("Auto-acknowledge (\u{201C}got it\u{201D} / \u{201C}thanks\u{201D})", isOn: $autoAck)
+                            .font(Theme.sans(13))
+                            .foregroundStyle(Theme.textPrimary)
+                            .onChange(of: autoAck) { _, enabled in
+                                if enabled { requestAutoSendConfirmation(.ack) }
+                            }
+                        Toggle("Auto-RSVP (yes / no to invites)", isOn: $autoRSVP)
+                            .font(Theme.sans(13))
+                            .foregroundStyle(Theme.textPrimary)
+                            .onChange(of: autoRSVP) { _, enabled in
+                                if enabled { requestAutoSendConfirmation(.rsvp) }
+                            }
+                    }
+                    .padding(.vertical, 14)
 
-                Rule()
+                    Rule()
+                }
 
                 HStack {
                     Button("Cancel") { dismiss() }

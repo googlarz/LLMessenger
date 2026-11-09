@@ -8,35 +8,67 @@ final class AppDatabase: @unchecked Sendable {
     /// DataExporter to locate the live file for backup/restore.
     let path: String?
 
+    static var productionDirectory: URL {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LLMessenger")
+    }
+
+    static var productionPath: String {
+        productionDirectory.appendingPathComponent("llmessenger.db").path
+    }
+
     /// Production store in ~/Library/Application Support/LLMessenger/.
     /// If the store fails to open or fails PRAGMA quick_check, it is moved
     /// aside (preserved for forensics) and a fresh store is created — the app
     /// must never crash-loop on a corrupt database. Messages re-fetch from
     /// their source services; only brief history is lost.
     static func production() throws -> AppDatabase {
-        let appSupport = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("LLMessenger")
+        let appSupport = productionDirectory
         try FileManager.default.createDirectory(at: appSupport,
                                                 withIntermediateDirectories: true,
                                                 attributes: [FileAttributeKey.posixPermissions: 0o700])
-        let dbPath = appSupport.appendingPathComponent("llmessenger.db").path
+        let dbPath = productionPath
 
         do {
             let db = try AppDatabase(path: dbPath)
             try db.integrityCheck()
             return db
         } catch {
+            // Only real corruption justifies discarding the store. A lock held by
+            // another process (`--mcp`), a full disk or a permissions error must
+            // surface as a startup failure with the user's data left in place.
+            guard isCorruption(error) else { throw error }
             let stamp = Int(Date().timeIntervalSince1970)
-            for suffix in ["", "-wal", "-shm"] {
-                try? FileManager.default.moveItem(
-                    atPath: dbPath + suffix,
-                    toPath: dbPath + ".corrupt-\(stamp)" + suffix)
-            }
+            try moveStoreAside(at: dbPath, stamp: stamp)
             NSLog("[AppDatabase] store unusable (%@) — moved aside as .corrupt-%d, recreating",
                   String(describing: error), stamp)
             return try AppDatabase(path: dbPath)
         }
+    }
+
+    /// Renames the store and its `-wal`/`-shm`/`-journal` siblings to
+    /// `<path>.corrupt-<stamp><suffix>` so nothing is deleted. Absent files are skipped.
+    /// Shared by the automatic corruption recovery and the startup alert's explicit
+    /// "Move Aside and Start Fresh…" choice. Returns the destination paths.
+    @discardableResult
+    static func moveStoreAside(at dbPath: String,
+                               stamp: Int = Int(Date().timeIntervalSince1970),
+                               fileManager: FileManager = .default) throws -> [String] {
+        var moved: [String] = []
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            let source = dbPath + suffix
+            guard fileManager.fileExists(atPath: source) else { continue }
+            let destination = dbPath + ".corrupt-\(stamp)" + suffix
+            try fileManager.moveItem(atPath: source, toPath: destination)
+            moved.append(destination)
+        }
+        return moved
+    }
+
+    static func isCorruption(_ error: Error) -> Bool {
+        guard let code = (error as? DatabaseError)?.resultCode else { return false }
+        return code == .SQLITE_CORRUPT || code == .SQLITE_NOTADB
     }
 
     /// Throws if SQLite's quick_check reports anything but "ok".
@@ -58,8 +90,29 @@ final class AppDatabase: @unchecked Sendable {
         try migrate()
     }
 
+    /// Wait this long for a competing lock instead of failing at once. The store uses
+    /// the rollback journal (not WAL), so a second process (`--mcp`) holding a read
+    /// lock would otherwise make the app's writes fail with SQLITE_BUSY.
+    static let busyTimeoutSeconds: Double = 5
+
+    /// Opens an EXISTING store without migrating, repairing or touching its permissions.
+    /// For the `--mcp` helper process, which runs beside the app that owns the schema.
+    /// Throws if the file is missing (never creates one).
+    init(existingPath path: String, readOnly: Bool) throws {
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw DatabaseError(resultCode: .SQLITE_CANTOPEN, message: "no database at \(path)")
+        }
+        var config = Configuration()
+        config.readonly = readOnly
+        config.busyMode = .timeout(Self.busyTimeoutSeconds)
+        dbQueue = try DatabaseQueue(path: path, configuration: config)
+        self.path = path
+    }
+
     init(path: String) throws {
-        dbQueue = try DatabaseQueue(path: path)
+        var config = Configuration()
+        config.busyMode = .timeout(Self.busyTimeoutSeconds)
+        dbQueue = try DatabaseQueue(path: path, configuration: config)
         self.path = path
         try? FileManager.default.setAttributes([FileAttributeKey.posixPermissions: 0o600], ofItemAtPath: path)
         try migrate()

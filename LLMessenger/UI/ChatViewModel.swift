@@ -370,6 +370,11 @@ final class ChatViewModel: ObservableObject {
             }
             return
         }
+        guard ServiceCapabilities.canSend(service: draftRef.draft.serviceID) else {
+            threadItems.append(.assistantResponse(id: UUID(),
+                text: "\(ServiceCapabilities.readOnlyMessage(for: draftRef.draft.serviceID)). Use Copy or Open App on the draft."))
+            return
+        }
         threadItems.append(.sendConfirmation(id: UUID(), draft: draftRef.draft))
     }
 

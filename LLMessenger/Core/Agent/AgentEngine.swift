@@ -117,6 +117,9 @@ actor AgentEngine {
 
         for commitment in open {
             guard let id = commitment.id, Self.isDue(commitment, now: now) else { continue }
+            // A follow-up is a message; skip services LLMessenger cannot send to
+            // (the approval path would only reject it on every run).
+            guard ServiceCapabilities.canSend(service: commitment.service) else { continue }
             // Dedupe: one pending follow-up per commitment.
             if existingKeys.contains("commitment:\(id)") { continue }
             guard let action = Self.followUpAction(for: commitment) else { continue }
@@ -267,25 +270,28 @@ actor AgentEngine {
         )
 
         let items = Self.decodeSchedule(response.text)
+        // An RSVP is a sent reply; on a read-only service offer the calendar hold only.
+        let canReply = ServiceCapabilities.canSend(service: last.service)
         return items.compactMap { item in
+            let asInvite = item.isInvite && canReply
             let payload = AgentAction.CalendarPayload(
                 title: item.title,
                 startISO: item.startISO,
                 endISO: item.endISO,
                 notes: "From \(conversationName) (\(Theme.serviceName(last.service)))",
-                replyText: item.isInvite ? "Yes, that works for me — see you then." : nil)
+                replyText: asInvite ? "Yes, that works for me — see you then." : nil)
             // Validate the dates parse before proposing.
             guard payload.start != nil, payload.end != nil else { return nil }
 
             return AgentAction(
                 id: nil,
-                kind: (item.isInvite ? AgentActionKind.rsvp : AgentActionKind.calendarHold).rawValue,
+                kind: (asInvite ? AgentActionKind.rsvp : AgentActionKind.calendarHold).rawValue,
                 service: last.service,
                 conversationId: last.conversationId,
                 conversationName: conversationName,
                 title: item.title,
                 payload: AgentAction.encodeCalendarPayload(payload),
-                reasoning: item.isInvite ? "An invite that needs a yes/no." : "A proposed time you may want to hold.",
+                reasoning: asInvite ? "An invite that needs a yes/no." : "A proposed time you may want to hold.",
                 confidence: 0.6,
                 riskLevel: AgentActionRisk.normal.rawValue,
                 status: AgentActionStatus.pending.rawValue,
@@ -325,6 +331,8 @@ actor AgentEngine {
     // Internal (not private) so a unit test can verify the needsReply → isMaybe mapping
     // without driving a full owed-reply cycle.
     func proposeReply(for reply: OwedReply) async -> AgentAction? {
+        // Read-only services (WhatsApp) cannot send: an approvable reply would only fail.
+        guard ServiceCapabilities.canSend(service: reply.service) else { return nil }
         let ctx = (try? repository.fetchConversationContext(
             service: reply.service, conversationId: reply.conversationId)) ?? nil
 
@@ -457,13 +465,14 @@ actor AgentEngine {
     /// Conversation keys ("service|conversationId") that have a pending action of one
     /// of the given kinds. Kind-scoped so a pending reply doesn't suppress a calendar
     /// proposal in the same conversation (and vice-versa) — they are independent.
-    private func pendingActionKeys(kinds: Set<AgentActionKind>) throws -> Set<String> {
+    func pendingActionKeys(kinds: Set<AgentActionKind>) throws -> Set<String> {
         let raw = Set(kinds.map { $0.rawValue })
         return try db.dbQueue.read { grdb in
             let rows = try AgentAction
                 .filter(Column("status") == AgentActionStatus.pending.rawValue)
                 .fetchAll(grdb)
-            return Set(rows.filter { raw.contains($0.kind) }.map { "\($0.service)|\($0.conversationId)" })
+            // External (MCP) proposals never suppress the app's own drafting.
+            return Set(rows.filter { raw.contains($0.kind) && !$0.isExternalProposal }.map { "\($0.service)|\($0.conversationId)" })
         }
     }
 
@@ -479,6 +488,9 @@ actor AgentEngine {
     }
 
     private func persist(_ action: AgentAction) throws {
+        if ServiceCapabilities.sendsMessage(action.kindEnum), !ServiceCapabilities.canSend(service: action.service) {
+            throw ReadOnlyServiceError(service: action.service)
+        }
         try db.dbQueue.write { grdb in
             var a = action
             try a.insert(grdb)

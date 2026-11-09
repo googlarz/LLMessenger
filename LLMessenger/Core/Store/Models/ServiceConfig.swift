@@ -37,7 +37,8 @@ struct ServiceConfig: Codable, FetchableRecord, PersistableRecord {
     }
 
     static func `default`(for service: String) -> ServiceConfig {
-        return ServiceConfig(service: service, enabled: true,
+        // WhatsApp reads another app's private store, so it is opt-in.
+        return ServiceConfig(service: service, enabled: service != WhatsAppAdapter.id,
                              pollIntervalMinutes: 30, fetchMode: FetchMode.time.rawValue,
                              fetchLimit: 50, privacyMode: PrivacyMode.onDemand.rawValue)
     }

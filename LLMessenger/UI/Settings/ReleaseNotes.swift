@@ -17,6 +17,16 @@ struct ReleaseNote: Identifiable {
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
         ReleaseNote(
+            version: "2.4.0",
+            title: "WhatsApp and MCP",
+            highlights: [
+                "WhatsApp, read-only: LLMessenger can read WhatsApp Desktop's local history, so WhatsApp chats show up in digests and owed replies. You reply in WhatsApp itself, with the draft ready to copy. Off by default — enable it in Settings → Services.",
+                "MCP server mode, opt-in: let Claude, Cursor, or another MCP client ask what you owe people, read the latest digest, and search your messages locally. Enable it in Settings → AI & Privacy → Privacy.",
+                "Replies an outside agent proposes wait in your Act queue, labelled External Agent, and are never part of a batch send.",
+                "Conversations marked Local-only are never exposed over MCP, and are left out of digests while MCP is on.",
+                "If the database fails to open, the app now asks before moving it aside instead of silently starting fresh."
+            ]),
+        ReleaseNote(
             version: "2.3.3",
             title: "Fixes from an adversarial re-review",
             highlights: [

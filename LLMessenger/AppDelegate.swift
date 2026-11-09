@@ -62,8 +62,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         CrashGuard.install()
+        guard let db = openProductionDatabaseOrOfferRecovery() else {
+            NSApp.terminate(nil)
+            return
+        }
         do {
-            let db = try AppDatabase.production()
             database = db
 
             // One-time explanation shown before the first keychain read so the
@@ -296,7 +299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // prerequisites aren't met (Signal account empty, Telegram binary missing,
             // Slack workspace list empty, etc) — reregisterAdapter() re-runs the same
             // logic later when the user adds credentials in Settings or clicks Retry.
-            for svc in ["telegram", "signal", "imessage", "slack"] {
+            for svc in ["telegram", "signal", "imessage", "slack", "whatsapp"] {
                 self.registerAdapter(serviceID: svc, engine: engine, db: db, state: state)
             }
 
@@ -313,7 +316,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     // Adapters added after launch (e.g. user pastes Signal account or
                     // a Slack token) need to actually be instantiated and started.
                     // reload() only updates configs of already-registered adapters.
-                    for svc in ["telegram", "signal", "imessage", "slack"] {
+                    for svc in ["telegram", "signal", "imessage", "slack", "whatsapp"] {
                         self.registerAdapter(serviceID: svc, engine: engine, db: db, state: state)
                     }
                 }
@@ -470,12 +473,56 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 onboardingController.show()
             }
 
+        }
+    }
+
+    /// Opens the production store. If that fails (e.g. a migration error), explains why,
+    /// shows where the store is, and offers Quit or — after a second confirmation —
+    /// moving the store aside and starting fresh. Returns nil when the user quits.
+    private func openProductionDatabaseOrOfferRecovery() -> AppDatabase? {
+        var failure: Error
+        do {
+            return try AppDatabase.production()
         } catch {
+            failure = error
+        }
+        let path = AppDatabase.productionPath
+        while true {
+            let canMoveAside = FileManager.default.fileExists(atPath: path)
             let alert = NSAlert()
-            alert.messageText = "LLMessenger failed to start"
-            alert.informativeText = error.localizedDescription
-            alert.runModal()
-            NSApp.terminate(nil)
+            alert.alertStyle = .critical
+            alert.messageText = "LLMessenger couldn't open its database"
+            alert.informativeText = """
+                LLMessenger can't start because its local database could not be opened. \
+                Your messages are still in their original apps.
+
+                Database: \(path)
+
+                Error: \(failure.localizedDescription)
+                """
+            alert.addButton(withTitle: "Quit") // first button = default
+            if canMoveAside { alert.addButton(withTitle: "Move Aside and Start Fresh…") }
+            guard canMoveAside, alert.runModal() == .alertSecondButtonReturn else { return nil }
+
+            let confirm = NSAlert()
+            confirm.alertStyle = .warning
+            confirm.messageText = "Start with a fresh database?"
+            confirm.informativeText = """
+                The current database and its companion files will be renamed with a \
+                ".corrupt-<timestamp>" suffix next to the original, not deleted. LLMessenger \
+                will start empty: brief history and other data kept in that database will not \
+                be visible, and messages will be fetched again from your services.
+                """
+            confirm.addButton(withTitle: "Cancel")
+            confirm.addButton(withTitle: "Move Aside and Start Fresh")
+            guard confirm.runModal() == .alertSecondButtonReturn else { continue }
+
+            do {
+                try AppDatabase.moveStoreAside(at: path)
+                return try AppDatabase.production()
+            } catch {
+                failure = error
+            }
         }
     }
 
@@ -548,7 +595,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// the panel.
     private func didFinishOnboarding() {
         if DemoSeeder.isActive {
-            for service in ["imessage", "signal", "telegram", "slack"] {
+            for service in ["imessage", "signal", "telegram", "slack", "whatsapp"] {
                 var config = ServiceConfig.default(for: service)
                 config.enabled = false
                 pollEngine?.reload(config: config)
@@ -782,6 +829,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let adapter = SlackAdapter()
             engine.register(adapter: adapter, config: config)
             state.adapters["slack"] = adapter
+
+        case "whatsapp":
+            // Opt-in and read-only: the adapter only exists while the service is enabled,
+            // so a disabled WhatsApp never touches the store (the realtime monitor polls
+            // every registered adapter regardless of config).
+            if !config.enabled {
+                if state.adapters["whatsapp"] != nil {
+                    engine.unregister(serviceID: "whatsapp")
+                    state.adapters["whatsapp"] = nil
+                }
+                return
+            }
+            if state.adapters["whatsapp"] == nil {
+                let adapter = WhatsAppAdapter()
+                engine.register(adapter: adapter, config: config)
+                state.adapters["whatsapp"] = adapter
+            }
 
         default:
             break
