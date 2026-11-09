@@ -219,7 +219,9 @@ final class MCPToolbox {
                                  arguments: [id])
                     .map { ConvKey($0["service"], $0["conversationId"]) }
             }
-            if fedBy.contains(where: hidden.contains) { return nil }
+            // No attached messages means unknown provenance (history summaries re-read
+            // messages that stay attached to their original digest): fail closed.
+            if fedBy.isEmpty || fedBy.contains(where: hidden.contains) { return nil }
             let cards: [[String: Any]] = try repo.fetchBriefCards(briefID: id)
                 .filter { !hidden.contains(ConvKey($0.service, $0.conversationId)) }
                 .map { card in

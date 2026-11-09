@@ -46,6 +46,9 @@ final class MCPServerTests: XCTestCase {
             var brief = Brief(createdAt: Date(), status: "ready", services: "[]",
                               openingSummary: "mixed summary", notificationText: "mixed notification")
             try brief.insert(grdb)
+            // The digest was built from "open" only: Local-only chats are excluded at build time.
+            try grdb.execute(sql: "UPDATE messages SET briefId = ? WHERE conversationId = 'open'",
+                             arguments: [brief.id!])
             for (conv, title) in [("open", "Alice"), ("secret", "Therapist")] {
                 try BriefCardRecord(id: "card-\(conv)", briefId: brief.id!, service: "imessage",
                                     conversationId: conv, conversationTitle: title,
@@ -404,6 +407,16 @@ final class MCPServerTests: XCTestCase {
         let old = try XCTUnwrap(try db.dbQueue.read { try AgentAction.fetchOne($0, key: reviewed.id) })
         XCTAssertEqual(old.replyPayload?.draftText, "one")
         XCTAssertEqual(old.statusEnum, .skipped)
+    }
+
+    func testDigestWithUnknownProvenanceIsWithheld() throws {
+        try seed()
+        flags.enabledSince = Date().addingTimeInterval(-3600)
+        XCTAssertEqual(try digestCount().count, 1)
+        // e.g. a history summary: no messages are attached to it, so nothing shows
+        // which conversations it was built from.
+        try db.dbQueue.write { try $0.execute(sql: "UPDATE messages SET briefId = NULL") }
+        XCTAssertEqual(try digestCount().count, 0)
     }
 
     func testDigestFedByAConversationThatIsNowLocalOnlyIsWithheld() throws {
