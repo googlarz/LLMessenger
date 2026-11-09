@@ -158,67 +158,58 @@ final class ChatViewModelSendTests: XCTestCase {
                        "Tell me more about Alice: Alice asked for the address")
     }
 
-    func testPrepareReplyPrefillsComposerAndRequestsFocus() async throws {
+    func testMentionPickOpensReplyComposerForThatPersonWithoutCallingLLM() async throws {
         let db = try await makeDB()
         let briefId = try await insertBrief(db: db)
         try await insertMessage(db: db, briefId: briefId, convId: "c1", convName: "Alice")
 
         let mock = MockLLMClient()
-        let (vm, _) = try await makeVM(db: db, mock: mock, briefId: briefId)
-        let previousFocusRequest = vm.inputFocusRequest
+        let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
+        let vm = ChatViewModel(appState: appState)
+        try await vm.loadBrief(try XCTUnwrap(appState.repository.fetchBrief(id: briefId)))
+        vm.inputText = "what did Alice say about "
 
-        vm.prepareReply(service: "signal", conversationID: "c1", displayName: "Alice")
+        vm.openComposer(for: .init(service: "signal", conversationId: "c1", displayName: "Alice", isGroup: false))
 
-        XCTAssertEqual(vm.inputText, "write to Alice: ")
-        XCTAssertNotEqual(vm.inputFocusRequest, previousFocusRequest)
-        XCTAssertEqual(mock.calls.count, 0, "Preparing a reply must not call the LLM until the user sends")
+        let request = try XCTUnwrap(appState.replyComposer)
+        XCTAssertEqual(request.service, "signal")
+        XCTAssertEqual(request.conversationId, "c1")
+        XCTAssertEqual(request.recipientLine, "Alice · Signal")
+        XCTAssertEqual(request.initialText, "", "the @ picker must never turn the question into the message")
+        XCTAssertEqual(vm.inputText, "what did Alice say about ", "the Ask box keeps the user's question")
+        XCTAssertEqual(mock.calls.count, 0, "opening the composer must not call the LLM")
     }
 
-    func testMentionTargetDraftRespectsNeverDraftPrivacy() async throws {
+    func testComposerDraftWithAIRespectsNeverDraftPrivacy() async throws {
         let db = try await makeDB()
-        let briefId = try await insertBrief(db: db)
-        try await insertMessage(db: db, briefId: briefId, convId: "c1", convName: "Alice")
         try await saveContext(db: db, privacyOverride: "never_draft")
 
         let mock = MockLLMClient()
-        let (vm, _) = try await makeVM(db: db, mock: mock, briefId: briefId)
-        vm.setMentionTarget(.init(service: "signal", conversationId: "c1", displayName: "Alice", isGroup: false))
-        vm.inputText = "yes works"
+        let appState = AppState(database: db, llmClient: mock, llmModel: "test", basePrompt: "BASE")
+        appState.openReplyComposer(service: "signal", conversationId: "c1", conversationName: "Alice")
+        let model = ReplyComposerModel(request: try XCTUnwrap(appState.replyComposer), appState: appState)
 
-        await vm.send()
+        XCTAssertEqual(model.draftingBlockedReason, "AI drafting is off for this conversation.")
+        await model.draftWithAI()
 
         XCTAssertEqual(mock.calls.count, 0)
-        XCTAssertTrue(vm.threadItems.contains {
-            if case .assistantResponse(_, let text) = $0 {
-                return text.contains("Drafting is disabled")
-            }
-            return false
-        })
+        XCTAssertEqual(model.text, "")
     }
 
-    func testMentionTargetDraftRespectsLocalOnlyWhenUsingCloudClient() async throws {
+    func testComposerDraftWithAIRespectsLocalOnlyWhenUsingCloudClient() async throws {
         let db = try await makeDB()
-        let briefId = try await insertBrief(db: db)
-        try await insertMessage(db: db, briefId: briefId, convId: "c1", convName: "Alice")
         try await saveContext(db: db, privacyOverride: "local_only")
 
         let cloud = SendTestCloudLLMClient()
         let appState = AppState(database: db, llmClient: cloud, llmModel: "test", basePrompt: "BASE")
-        let brief = try appState.repository.fetchBrief(id: briefId)!
-        let vm = ChatViewModel(appState: appState)
-        try await vm.loadBrief(brief)
-        vm.setMentionTarget(.init(service: "signal", conversationId: "c1", displayName: "Alice", isGroup: false))
-        vm.inputText = "yes works"
+        appState.openReplyComposer(service: "signal", conversationId: "c1", conversationName: "Alice")
+        let model = ReplyComposerModel(request: try XCTUnwrap(appState.replyComposer), appState: appState)
 
-        await vm.send()
+        XCTAssertNotNil(model.draftingBlockedReason)
+        XCTAssertTrue(model.draftingBlockedReason?.contains("Local-only") == true)
+        await model.draftWithAI()
 
         XCTAssertEqual(cloud.callCount, 0)
-        XCTAssertTrue(vm.threadItems.contains {
-            if case .assistantResponse(_, let text) = $0 {
-                return text.contains("local-only")
-            }
-            return false
-        })
     }
 
     func testNaturalLanguageReplyAndDetailsRunsBothActions() async throws {
@@ -434,7 +425,7 @@ final class ChatViewModelSendTests: XCTestCase {
         XCTAssertTrue(conversationContext.contains("Can you confirm for today?"))
     }
 
-    func testSendDraftIntentRequiresConfirmationBeforeSending() async throws {
+    func testSendDraftIntentOpensComposerAndNeverSendsFromAsk() async throws {
         let db = try await makeDB()
         let briefId = try await insertBrief(db: db)
         try await insertMessage(db: db, briefId: briefId, convId: "asia-dm", convName: "Asia")
@@ -461,19 +452,14 @@ final class ChatViewModelSendTests: XCTestCase {
 
         await vm.send()
 
-        XCTAssertEqual(spy.sentMessages.count, 0)
-        let confirmations = vm.threadItems.compactMap { item -> (UUID, ReplyDraft)? in
-            if case .sendConfirmation(let id, let draft) = item { return (id, draft) }
-            return nil
-        }
-        XCTAssertEqual(confirmations.count, 1)
-        XCTAssertEqual(confirmations[0].1.text, "ok")
-
-        await vm.confirmSendDraft(id: confirmations[0].0)
-
-        XCTAssertEqual(spy.sentMessages.count, 1)
-        XCTAssertEqual(spy.sentMessages[0].conversationID, "asia-dm")
-        XCTAssertEqual(spy.sentMessages[0].text, "ok")
+        XCTAssertEqual(spy.sentMessages.count, 0, "the Ask panel never sends")
+        XCTAssertTrue(try appState.repository.fetchPendingAgentActions().isEmpty,
+                      "asking to send only opens the composer; nothing is queued")
+        let request = try XCTUnwrap(appState.replyComposer, "\"send it\" opens the Reply composer")
+        XCTAssertEqual(request.conversationId, "asia-dm")
+        XCTAssertEqual(request.service, "signal")
+        XCTAssertEqual(request.displayName, "Asia")
+        XCTAssertEqual(request.initialText, "ok")
     }
 
     func testShowSourcesForCardUsesSourceMessageIds() async throws {

@@ -64,16 +64,14 @@ final class ComposerDraftNavigationTests: XCTestCase {
         service: "imessage", conversationId: "old", displayName: "Old Contact", isGroup: false
     )
 
-    func testUserNavigationClearsDraftAndMentionTarget() throws {
+    func testUserNavigationClearsUnsentQuestion() throws {
         let (appState, chat) = try make()
         appState.selectedBriefID = 1
         chat.inputText = "half-typed question"
-        chat.pendingTarget = mention
 
         appState.selectedBriefID = 2
 
         XCTAssertEqual(chat.inputText, "")
-        XCTAssertNil(chat.pendingTarget)
     }
 
     func testRefreshSelectionKeepsDraft() throws {
@@ -87,14 +85,16 @@ final class ComposerDraftNavigationTests: XCTestCase {
         XCTAssertEqual(chat.inputText, "half-typed question")
     }
 
-    func testPrepareReplyDropsAbandonedMentionTarget() throws {
-        let (_, chat) = try make()
-        chat.pendingTarget = mention
+    func testMentionPickAddressesExactlyThePickedConversation() throws {
+        let (appState, chat) = try make()
 
-        chat.prepareReply(service: "imessage", conversationID: "new", displayName: "New Contact")
+        chat.openComposer(for: mention)
 
-        XCTAssertNil(chat.pendingTarget, "an old @-mention would redirect this reply to the wrong person")
-        XCTAssertEqual(chat.inputText, "write to New Contact: ")
+        let request = try XCTUnwrap(appState.replyComposer)
+        XCTAssertEqual(request.service, "imessage")
+        XCTAssertEqual(request.conversationId, "old")
+        XCTAssertEqual(request.displayName, "Old Contact")
+        XCTAssertEqual(chat.inputText, "", "the Ask box is never prefilled with a \"write to\" prompt")
     }
 }
 
