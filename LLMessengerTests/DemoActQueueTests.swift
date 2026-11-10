@@ -89,14 +89,21 @@ final class DemoActQueueTests: XCTestCase {
         let sections = Dictionary(grouping: p.actItems) { ActQueueRules.section(for: $0) }
 
         let decision = sections[.decision] ?? []
-        XCTAssertEqual(decision.count, 2, "Anna's question and one Maybe draft")
+        XCTAssertEqual(decision.count, 3, "Anna's question, the WhatsApp question and one Maybe draft")
         guard case .owedReply(let anna) = try XCTUnwrap(decision.first) else {
             return XCTFail("An unanswered question with no draft is ranked first")
         }
         XCTAssertEqual(anna.service, "signal")
         XCTAssertEqual(anna.conversationId, "demo-meridian")
         XCTAssertTrue(anna.triggerText.contains("cap table"))
-        guard case .agentAction(let maybe) = decision[1] else { return XCTFail("The Maybe draft follows") }
+        let owedWhatsApp = decision.compactMap { item -> OwedReply? in
+            if case .owedReply(let o) = item, o.service == "whatsapp" { return o }
+            return nil
+        }
+        XCTAssertEqual(owedWhatsApp.first?.conversationId, "demo-football",
+                       "A read-only service shows up as a question to answer, never as a sendable draft")
+        XCTAssertFalse(p.actItems.contains { if case .agentAction(let a) = $0 { return a.service == "whatsapp" }; return false })
+        guard case .agentAction(let maybe) = decision.last else { return XCTFail("The Maybe draft follows") }
         XCTAssertTrue(maybe.isMaybe)
         XCTAssertEqual(maybe.service, "slack")
 
@@ -118,9 +125,9 @@ final class DemoActQueueTests: XCTestCase {
         XCTAssertEqual(p.tasks.count, 1, "The cap-table task is still there")
         XCTAssertFalse(p.actItems.contains { $0.conversationId == "demo-sailing" },
                        "The noisy group needs nothing")
-        XCTAssertEqual(p.actItems.count, 5)
+        XCTAssertEqual(p.actItems.count, 6)
         // One obligation, not two: a drafted conversation does not also show as owed.
-        XCTAssertEqual(Set(p.actItems.map { "\($0.service)|\($0.conversationId)" }).count, 5)
+        XCTAssertEqual(Set(p.actItems.map { "\($0.service)|\($0.conversationId)" }).count, 6)
     }
 
     func testActAndDigestsTellTheSameStory() throws {
@@ -248,8 +255,8 @@ final class DemoActQueueTests: XCTestCase {
         await waitUntil { state.requestedSection == .act }
         XCTAssertEqual(state.requestedSection, .act)
         XCTAssertTrue(state.adapters.isEmpty)
-        await waitUntil { state.attentionProjection.actItems.count == 5 }
-        XCTAssertEqual(state.attentionProjection.actItems.count, 5)
+        await waitUntil { state.attentionProjection.actItems.count == 6 }
+        XCTAssertEqual(state.attentionProjection.actItems.count, 6)
     }
 
     // MARK: - Real contacts whose id looks like a sample id

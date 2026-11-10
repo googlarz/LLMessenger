@@ -287,10 +287,9 @@ struct BriefCardView: View {
 
             // Counts only where they help a decision — the expanded reading view.
             if isBodyExpanded, card.counts.messages > 1 {
-                Text("\(card.counts.messages)M · \(card.counts.people)P")
+                Text("\(card.counts.messages) messages · \(card.counts.people) \(card.counts.people == 1 ? "person" : "people")")
                     .font(Theme.mono(11))
                     .foregroundStyle(Theme.textTertiary)
-                    .help("\(card.counts.messages) messages · \(card.counts.people) \(card.counts.people == 1 ? "person" : "people")")
                     .accessibilityLabel("\(card.counts.messages) messages, \(card.counts.people) \(card.counts.people == 1 ? "person" : "people")")
             }
 
@@ -304,7 +303,7 @@ struct BriefCardView: View {
                 }
                 .buttonStyle(.quiet)
                 .fixedSize()
-                .help("Tap to correct this priority")
+                .help(priorityHelp)
                 .accessibilityLabel("\(priorityAccessibilityLabel) priority")
                 .accessibilityHint("Choose the priority to use for future digests.")
                 .popover(isPresented: $showPriorityEditor) {
@@ -351,6 +350,14 @@ struct BriefCardView: View {
         }
     }
 
+    private var priorityHelp: String {
+        switch card.priority {
+        case "high": return "Needs you: someone is waiting on you. Click to change."
+        case "med": return "Heads-up: worth knowing today. Click to change."
+        default: return "FYI: no action needed. Click to change."
+        }
+    }
+
     private var priorityAccessibilityLabel: String {
         switch card.priority {
         case "high": return "Needs you"
@@ -388,12 +395,12 @@ struct BriefCardView: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 6) {
                     ForEach(chips, id: \.label) { chip in
-                        ActionabilityChip(label: chip.label, color: chip.color)
+                        ActionabilityChip(label: chip.label, color: chip.color, help: chip.help)
                     }
                 }
                 VStack(alignment: .leading, spacing: 5) {
                     ForEach(chips, id: \.label) { chip in
-                        ActionabilityChip(label: chip.label, color: chip.color)
+                        ActionabilityChip(label: chip.label, color: chip.color, help: chip.help)
                     }
                 }
             }
@@ -404,18 +411,21 @@ struct BriefCardView: View {
     // "Reply needed"/"Review needed" chips were dropped: the priority stamp
     // (NEEDS YOU/HEADS-UP/FYI) in the header already carries that fact — this
     // row is for information the stamp doesn't encode, i.e. confidence.
-    private var actionabilityChips: [(label: String, color: Color)] {
-        [(confidenceLabel.text, confidenceLabel.color)]
+    private var actionabilityChips: [(label: String, color: Color, help: String)] {
+        [(confidenceLabel.text, confidenceLabel.color, confidenceLabel.help)]
     }
 
-    private var confidenceLabel: (text: String, color: Color) {
+    private var confidenceLabel: (text: String, color: Color, help: String) {
         if card.sourceMessageIds.isEmpty || card.grounding == "inferred" {
-            return ("Check sources", Theme.signal)
+            return ("Check sources", Theme.signal,
+                    "Includes a guess. Check the source messages before acting.")
         }
         if card.grounding == "context" {
-            return ("Context assisted", Theme.standby)
+            return ("Uses saved notes", Theme.standby,
+                    "Based on these messages plus notes you saved about this conversation.")
         }
-        return ("High confidence", Theme.ok)
+        return ("High confidence", Theme.ok,
+                "Based only on the messages in this conversation.")
     }
 
     // MARK: - Expanded body
@@ -956,6 +966,7 @@ private struct QuickReplyChip: View {
 private struct ActionabilityChip: View {
     let label: String
     let color: Color
+    let help: String
 
     var body: some View {
         Text(label)
@@ -969,6 +980,7 @@ private struct ActionabilityChip: View {
                 RoundedRectangle(cornerRadius: 3)
                     .strokeBorder(color.opacity(0.45), lineWidth: Theme.hairline)
             )
+            .help(help)
     }
 }
 

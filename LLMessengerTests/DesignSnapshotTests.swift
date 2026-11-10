@@ -23,9 +23,9 @@ final class DesignSnapshotTests: XCTestCase {
     /// heads-up, two FYIs. Shapes match PromptBuilder's summarizer schema.
     private static let fixtureBriefJSON = """
     {
-      "total_messages": 47,
-      "total_threads": 6,
-      "total_people": 14,
+      "total_messages": 53,
+      "total_threads": 7,
+      "total_people": 17,
       "cards": [
         {
           "id": "signal-ts-1",
@@ -46,6 +46,25 @@ final class DesignSnapshotTests: XCTestCase {
             {"messageId": "m102", "from": "Anna Keller", "time": "08:44", "text": "Also Marcus says he still can't open the data room."}
           ],
           "sourceMessageIds": ["m101", "m102", "m103"]
+        },
+        {
+          "id": "whatsapp-football-1",
+          "service": "whatsapp",
+          "conversationId": "football-1",
+          "conversationTitle": "Saturday Football Parents",
+          "headline": "Jonas asks if you can drive to the away game on the 21st",
+          "priority": "med",
+          "counts": {"messages": 6, "threads": 1, "people": 3},
+          "summary": "Kick-off is 10:00 on pitch 3 this Saturday and Mia is bringing the oranges. For the away game on the 21st they are one car short, and Jonas asked you directly.",
+          "callback": null,
+          "needsReply": true,
+          "reason": "Direct question about driving on the 21st",
+          "grounding": "direct",
+          "actionItems": ["Tell Jonas whether you can drive on the 21st"],
+          "quotes": [
+            {"messageId": "m501", "from": "Jonas", "time": "08:05", "text": "Can you drive to the away game on the 21st? We're one car short."}
+          ],
+          "sourceMessageIds": ["m501", "m502"]
         },
         {
           "id": "slack-ops-1",
@@ -123,7 +142,7 @@ final class DesignSnapshotTests: XCTestCase {
 
         state.briefs = [
             Brief(id: 1, createdAt: at(9, 12), status: "open",
-                  services: #"["signal","slack","imessage","telegram"]"#,
+                  services: #"["signal","whatsapp","slack","imessage","telegram"]"#,
                   openingSummary: Self.fixtureBriefJSON,
                   notificationText: "1 action needed",
                   windowStart: at(7, 0)),
@@ -138,7 +157,7 @@ final class DesignSnapshotTests: XCTestCase {
                   notificationText: "Quiet afternoon"),
         ]
         state.selectedBriefID = 1
-        state.serviceHealth = ["imessage": .ok, "signal": .ok, "telegram": .ok, "slack": .ok]
+        state.serviceHealth = ["imessage": .ok, "signal": .ok, "telegram": .ok, "slack": .ok, "whatsapp": .ok]
         state.nextPollDate = now.addingTimeInterval(23 * 60 + 14)
 
         // v2.0 Owed Replies fixture — people waiting on you, ranked by who matters.
@@ -152,6 +171,10 @@ final class DesignSnapshotTests: XCTestCase {
                       triggerMessageId: "o2",
                       triggerText: "Coach: training moved to Thursday 6pm this week — can your son make it?",
                       triggeredAt: ago(1), reason: "needs reply", priorityRank: 3),
+            OwedReply(service: "whatsapp", conversationId: "football-1", conversationName: "Saturday Football Parents",
+                      triggerMessageId: "o5",
+                      triggerText: "Can you drive to the away game on the 21st? We're one car short.",
+                      triggeredAt: ago(1), reason: "unanswered question", priorityRank: 2),
             OwedReply(service: "signal", conversationId: "ts-1", conversationName: "Anna — Meridian",
                       triggerMessageId: "o3",
                       triggerText: "Partner meeting moved to Thu 10:00 — can you get me the updated cap table by Wed EOD?",

@@ -424,6 +424,47 @@ final class ReplyFlowTests: XCTestCase {
         XCTAssertEqual(spy.sentMessages.map(\.text), ["Got it — reviewing now"])
     }
 
+    func testSendToDisconnectedServiceBecomesACouldntSendRow() async throws {
+        let state = try makeState()
+        state.adapters = [:]
+        state.openReplyComposer(service: "signal", conversationId: "c1", conversationName: "Alice")
+        let model = ReplyComposerModel(request: try XCTUnwrap(state.replyComposer), appState: state)
+        model.text = "hello"
+        guard case .staged(let id) = model.submit() else { return XCTFail("not staged") }
+        XCTAssertTrue(state.userStagedSendIDs.contains(id))
+
+        await state.fireManualApprovedSend(actionID: id)
+        state.reloadAgentActions()
+        await waitUntil { self.status(state, id) == .failed }
+
+        XCTAssertEqual(status(state, id), .failed)
+        let reason = "Signal isn't connected. Connect it in Settings → Services, then try again."
+        XCTAssertEqual(state.sendFailureReasons[id], reason)
+        XCTAssertEqual(try state.repository.fetchAgentAction(id: id)?.failureReason, reason)
+        XCTAssertTrue(state.userStagedSendIDs.isEmpty)
+        XCTAssertNotEqual(state.lastError, "Signal is not connected.")
+        await waitUntil { state.failedSends.map(\.id) == [id] }
+        XCTAssertEqual(state.failedSends.map(\.id), [id])
+        XCTAssertEqual(state.userReceipt?.text, "Couldn't send to Alice · Signal")
+        XCTAssertEqual(state.userReceipt?.actionTitle, "Open Settings")
+        XCTAssertEqual(state.userReceipt?.tone, .problem)
+    }
+
+    func testUndoBeforeTheWindowElapsesDoesNotMarkDisconnectedSendFailed() async throws {
+        let state = try makeState()
+        state.adapters = [:]
+        let action = try insertAction(state, text: "on my way")
+        state.stageSend(action)
+        state.undoStagedSend(try XCTUnwrap(state.repository.fetchAgentAction(id: action.id!)))
+        XCTAssertTrue(state.userStagedSendIDs.isEmpty)
+
+        state.reloadAgentActions()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(status(state, action.id!), .pending)
+        XCTAssertTrue(state.failedSends.isEmpty)
+    }
+
     func testDismissedFailedSendLeavesAct() throws {
         let state = try makeState()
         let action = try insertAction(state, text: "x")

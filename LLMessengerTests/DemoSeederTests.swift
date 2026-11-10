@@ -35,10 +35,10 @@ final class DemoSeederTests: XCTestCase {
         let json = try JSONDecoder().decode(BriefJSON.self, from: Data(newest.openingSummary!.utf8))
         XCTAssertEqual(json.cards.filter { $0.priority == "high" }.count, 1,
                        "Exactly one card is urgent — the demo's focal point")
-        XCTAssertEqual(json.cards.filter(\.needsReply).count, 3,
+        XCTAssertEqual(json.cards.filter(\.needsReply).count, 4,
                        "Actionability is separate from urgency in the demo")
-        XCTAssertEqual(Set(json.cards.map(\.service)).count, 4,
-                       "Morning brief shows all four services")
+        XCTAssertEqual(Set(json.cards.map(\.service)).count, 5,
+                       "Morning brief shows all five services, WhatsApp included")
     }
 
     func testEvidenceJoinsResolveForEveryCard() throws {
@@ -67,7 +67,7 @@ final class DemoSeederTests: XCTestCase {
 
         let repo = BriefRepository(database: db)
         let needsReply = try repo.fetchRecentHighPriorityCards(limit: 30)
-        XCTAssertEqual(needsReply.count, 3, "Reply-needed triage includes urgent and lightweight actionable cards")
+        XCTAssertEqual(needsReply.count, 4, "Reply-needed triage includes urgent and lightweight actionable cards")
 
         let tasks = try repo.fetchPendingTasks()
         XCTAssertEqual(tasks.count, 1)

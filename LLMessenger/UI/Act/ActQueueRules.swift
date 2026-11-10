@@ -23,7 +23,7 @@ enum ActQueueSection: String, CaseIterable {
     var caption: String {
         switch self {
         case .decision: return "Someone is waiting, or a draft needs a closer look"
-        case .ready: return "Nothing sends until you press Send"
+        case .ready: return "Sends after you press Send, with 5 seconds to undo"
         case .older: return "Still open after two days or more"
         }
     }

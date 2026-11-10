@@ -61,6 +61,8 @@ final class ReplyComposerModel: ObservableObject {
     @Published private(set) var draftError: String?
     /// The editor's text before the last AI draft replaced it, so it can be restored.
     @Published private(set) var textBeforeDraft: String?
+    /// The last text the AI produced; the editor still holding it means "Redraft".
+    private var lastAIDraft: String?
     @Published private(set) var sendError: String?
     let context: [Message]
 
@@ -82,6 +84,11 @@ final class ReplyComposerModel: ObservableObject {
                                                        conversationId: request.conversationId)
     }
 
+    var draftButtonTitle: String {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Draft with AI" }
+        return text == lastAIDraft ? "Redraft with AI" : "Replace with AI draft"
+    }
+
     func draftWithAI() async {
         guard !isDrafting, draftingBlockedReason == nil else { return }
         isDrafting = true
@@ -95,6 +102,7 @@ final class ReplyComposerModel: ObservableObject {
             }
             textBeforeDraft = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
             text = drafted
+            lastAIDraft = drafted
         } catch let blocked as ReplyDrafter.Blocked {
             draftError = blocked.reason
         } catch {
@@ -217,7 +225,7 @@ struct ReplyDrafter {
     /// in-memory cache, so a just-changed setting can't be bypassed.
     func blockedReason(service: String, conversationId: String) -> String? {
         guard appState.isLLMConfigured else {
-            return "Set up an AI provider in Settings to draft replies."
+            return "AI drafting is off. Set up an AI provider in Settings → AI & Privacy to use it."
         }
         let ctx: ConversationContext?
         do {

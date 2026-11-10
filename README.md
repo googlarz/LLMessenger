@@ -4,11 +4,11 @@
 
 # LLMessenger
 
-**Stop reading 200 messages. Read one digest — and let an agent handle the rest.**
+**Read one digest instead of 200 messages. Send the replies it drafts, or don't.**
 
-LLMessenger is a notification firewall *and a communications agent* for your Mac. It reads iMessage, Signal, Telegram, Slack, and WhatsApp so you don't have to — silences the noise, interrupts you only when someone actually needs you, turns everything else into a 30-second digest, tracks who's still waiting on you, and **drafts the replies, follow-ups, and RSVPs you'd send — in your voice — and lines them up for one tap.**
+LLMessenger is a menu-bar app for macOS 14+. It reads your messengers on your Mac (iMessage, Signal, Telegram, Slack, and WhatsApp read-only), turns the noise into one digest, and tells you who is still waiting on you. It also drafts replies in your voice and puts them in a queue. You approve, edit or skip each one, and every send waits 5 seconds so you can Undo it.
 
-Free. Open source. On-device AI. Your messages never have to leave your Mac, and it never sends anything without your say-so.
+Free and open source. Use a local model (Ollama, or Apple's on-device AI on macOS 26) and your messages never leave your Mac. Cloud AI is opt-in.
 
 [![CI](https://github.com/googlarz/LLMessenger/actions/workflows/ci.yml/badge.svg)](https://github.com/googlarz/LLMessenger/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/googlarz/LLMessenger)](https://github.com/googlarz/LLMessenger/releases/latest)
@@ -16,90 +16,38 @@ Free. Open source. On-device AI. Your messages never have to leave your Mac, and
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)](https://github.com/googlarz/LLMessenger/releases/latest)
 [![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)](project.yml)
 
-[**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [Quick start](#quick-start) · [The agent](#it-doesnt-just-tell-you--it-acts) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
+[**Download**](https://github.com/googlarz/LLMessenger/releases/latest) · [At a glance](#at-a-glance) · [Quick start](#quick-start) · [The agent](#it-doesnt-just-tell-you--it-acts) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
 
-![LLMessenger digest — one card expanded, the rest compact until you ask](docs/screenshot.png)
-
-<sub>Screenshots in this README use synthetic demo conversations from the test fixture, not personal message data.</sub>
+![LLMessenger with sample messages: the Act queue across iMessage, Signal, Telegram, Slack and WhatsApp](docs/demo-mode.png)
 
 </div>
 
 ---
 
-## Why
+## At a glance
 
-You are in five group chats, two Slack workspaces, and a family iMessage thread. Most of those messages don't need you. A few really do — and they're buried.
-
-Every messaging app solves this by sending you *more* notifications. LLMessenger does the opposite:
-
-- Routine chatter is held back silently.
-- You get one notification when someone needs your reply.
-- Everything else lands in one digest you can clear and leave.
-
-It looks like this:
-
-> **iMessage** — *Dad confirmed Sunday lunch, asks if 1pm works* · `REPLY NEEDED`<br>
-> Two messages, one direct question, source-backed.<br>
-> **NEXT** → Confirm whether 1pm works.
-
-> **Slack** — *#launch-room resolved the staging incident* · `HEADS-UP`<br>
-> The outage was staging-only, postmortem due today, no customer impact.<br>
-> **NEXT** → Review Priya's postmortem.
-
-Every card explains why it is there, which local source messages back it, whether prior context affected it, and what privacy posture applies. Click any card to inspect sources, ask follow-up questions, teach the app "more like this" or "quiet this", or have the AI draft a response you review before sending.
-
-![Synthetic demo mode — open the real command center without connecting accounts](docs/demo-mode.png)
-
-## It doesn't just tell you — it acts
-
-Older versions *told you* what needed doing. Now an agent runs quietly in the background and **prepares the doing** — it drafts each reply in your voice for that conversation, lines up follow-ups and RSVPs, and ranks them into one queue: **Needs your decision → Ready to send → Waiting on others → Later.** Each row shows who, what, and why now. **Approve**, **Edit**, or **Skip** — nothing is ever sent without you.
-
-![The Act queue — ranked, one primary action per row](docs/act.png)
-
-- **Reply from one place.** Every Reply button opens the same composer with the recipient and service shown. Write it yourself or press **Draft with AI**; every send waits 5 seconds so you can **Undo** it. The Ask panel answers questions about your messages and never sends.
-- **Delegate the boring lanes (optional).** Turn on auto-send for a specific conversation and a specific low-risk action — "auto-acknowledge from my team", "auto-RSVP". It's **off by default**, restricted to safe templated replies, never a new recipient or anything with a link or money, and every auto-send waits 30 seconds with an **Undo** and lands in an audit log. A crafted message *can't* trigger or grant it — delegation is something only you set.
-- **Commitments.** It tracks promises both ways — yours (*"I'll send the photos"*) and theirs (*"review by Friday"*) — and chases them when they're due.
-
-## Never drop someone who matters
-
-The firewall protects you from what's coming *in*. The queue's **Needs your decision** and **Ready to send** sections protect the relationships going *out* — the people still waiting on you surface there, ranked by who counts, so a question from Mum or your kid's coach never gets buried under work chatter. **Waiting on others** flips it: what you're still owed.
-
-Digest cards separate **urgency** from **actionability**: a low-stakes family question can still be marked reply-needed without being inflated into an emergency.
-
-![The same queue, scrolled further — who's waiting on you, and who you're waiting on](docs/owed.png)
-
-It learns who matters from your own behavior, or you can just tell it: *"this is my son's basketball team — the coach posts about training and games, flag those, ignore the rest."* That per-conversation **context** then sharpens every triage decision and every digest. Conversations you mark private are never sent to a cloud model.
-
-<details>
-<summary>Light mode, too (follows your system, or set it manually)</summary>
-
-![LLMessenger in light mode](docs/light-mode.png)
-
-</details>
+- **Who it's for:** people on a Mac who live in several chats and miss the few messages that matter.
+- **Is it safe?** There is no LLMessenger server and no telemetry. Nothing is sent without you pressing Send, except an optional per-conversation auto-send that is off by default. Details in [Privacy](#privacy) and [`PRIVACY.md`](PRIVACY.md).
+- **Try it:** first launch starts with sample messages. You don't need to grant any access or add an API key to look around. See [Quick start](#quick-start).
+- **Optional MCP server:** `LLMessenger --mcp` lets Claude, Cursor or another MCP client read owed replies and search your messages locally. Off by default. Replies an agent proposes wait in your queue.
+- **Limits, up front:**
+  - macOS 14+ only.
+  - The app is **not signed or notarized**. First launch needs right-click → **Open**.
+  - iMessage and WhatsApp need **Full Disk Access**, because the app reads their local databases.
+  - WhatsApp is **read-only**. You reply in WhatsApp itself.
+  - No Homebrew cask. Install from the GitHub release or build from source.
 
 ## Quick start
 
-**Open once, clear what matters, leave.**
+1. **[Download the latest release](https://github.com/googlarz/LLMessenger/releases/latest)**, unzip it, move it to Applications.
+2. **First launch:** right-click the app → **Open** → **Open**. (Or System Settings → Privacy & Security → **Open Anyway**.) This is needed because the build is unsigned.
+3. **Look around first.** Onboarding starts with sample messages. Nothing is sent while you're in the sample, and you can wipe it before connecting real services.
+4. **Connect a service when you're ready.** For iMessage, grant Full Disk Access when prompted. The screen detects the grant live, no restart needed. Signal, Telegram, Slack and WhatsApp are added in Settings → Services.
+5. **Pick your AI** ([options below](#choose-your-ai)), then clear your first digest.
 
-You can try the full command center first with synthetic demo messages. No account, no message access, no API key required for the demo.
-
-1. **[Download the latest release](https://github.com/googlarz/LLMessenger/releases/latest)**, unzip, move to Applications.
-   > The binary is unsigned — right-click → **Open** → **Open** on first launch (or System Settings → Privacy & Security → **Open Anyway**).
-2. **Try the demo command center** from onboarding, or connect iMessage when you are ready.
-3. **Choose your AI** — on-device on macOS 26, Ollama for local macOS 14+, or an explicit Anthropic/OpenAI key.
-4. **Clear the first digest** — inspect sources, mark one card done, mark a VIP or quiet a low-signal thread.
-
-When you connect real services, grant Full Disk Access for iMessage when prompted; the screen detects the grant live, no restart needed. Telegram, Signal, and Slack can be added from Settings.
-
-## Try demo first
-
-The fastest way to judge LLMessenger is the built-in demo. It opens the real app chrome with synthetic conversations, prepared actions, source citations, VIP/quiet controls, and the same privacy surfaces used for your real inbox.
-
-| 1. Open the demo | 2. Clear the Act queue | 3. Inspect sources |
+| 1. Read the digest | 2. Clear the Act queue | 3. Inspect sources |
 |---|---|---|
-| ![Synthetic demo command center](docs/demo-mode.png) | ![Synthetic Act queue](docs/act.png) | ![Synthetic source-grounding proof](docs/sources.png) |
-
-The demo can be wiped from the app chrome before connecting real services.
+| ![Digest: one card expanded, the rest compact until you ask](docs/screenshot.png) | ![Synthetic Act queue](docs/act.png) | ![Synthetic source-grounding proof](docs/sources.png) |
 
 <details>
 <summary><strong>Build from source instead</strong></summary>
@@ -116,6 +64,59 @@ CI runs security checks, the full test suite, static analysis, and an unsigned u
 
 </details>
 
+---
+
+## Why
+
+You are in five group chats, two Slack workspaces, and a family iMessage thread. Most of those messages don't need you. A few really do — and they're buried.
+
+Messaging apps answer this with more notifications. LLMessenger goes the other way:
+
+- Routine chatter is held back silently.
+- You get one notification when someone needs your reply.
+- Everything else lands in one digest you can clear and leave.
+
+Here is what a digest card looks like:
+
+> **iMessage** — *Dad confirmed Sunday lunch, asks if 1pm works* · `NEEDS YOU`<br>
+> Two messages, one direct question, source-backed.<br>
+> **NEXT** → Confirm whether 1pm works.
+
+> **Slack** — *#launch-room resolved the staging incident* · `HEADS-UP`<br>
+> The outage was staging-only, postmortem due today, no customer impact.<br>
+> **NEXT** → Review Priya's postmortem.
+
+Every card explains why it is there, which local source messages back it, whether prior context affected it, and what privacy posture applies. Click any card to inspect sources, ask follow-up questions, teach the app "more like this" or "quiet this", or have the AI draft a response you review before sending.
+
+![Synthetic demo mode — open the real command center without connecting accounts](docs/demo-mode.png)
+
+## It doesn't just tell you — it acts
+
+An agent runs in the background and prepares the work. It drafts each reply in your voice for that conversation, lines up follow-ups and RSVPs, and ranks them into one queue: **Needs your decision → Ready to send → Older → Waiting on others.** Each row shows who, what, and why now. **Send**, **Edit**, or **Skip**.
+
+![The Act queue — ranked, one primary action per row](docs/act.png)
+
+- **One Reply window.** Every Reply button opens the same window with the recipient and service shown. Write it yourself or press **Draft with AI**. It sends exactly the text you see, and every send waits 5 seconds so you can **Undo** it. The Ask panel only answers questions about your messages. It never sends.
+- **Auto-send for boring lanes (optional, off by default).** You can turn on auto-send for one conversation and one low-risk action, like "auto-acknowledge from my team" or "auto-RSVP". It only does safe templated replies, never to a new recipient, never with a link or money. Every auto-send waits 30 seconds with an **Undo** and lands in an audit log. A message can't trigger or grant this. Only you can set it.
+- **Commitments.** It tracks promises both ways — yours (*"I'll send the photos"*) and theirs (*"review by Friday"*) — and chases them when they're due.
+
+## Never drop someone who matters
+
+The firewall handles what comes in. The queue handles who is waiting on you. **Needs your decision** and **Ready to send** are ranked by who counts, so a question from Mum or your kid's coach doesn't get buried under work chatter. **Waiting on others** is the reverse: what you're still owed.
+
+Digest cards separate **urgency** from **actionability**: a low-stakes family question can still be marked as needing a reply without being treated as urgent.
+
+![The same queue, scrolled further — who's waiting on you, and who you're waiting on](docs/owed.png)
+
+It learns who matters from your own behavior, or you can just tell it: *"this is my son's basketball team — the coach posts about training and games, flag those, ignore the rest."* That per-conversation **context** then sharpens every triage decision and every digest. Conversations you mark private are never sent to a cloud model.
+
+<details>
+<summary>Light mode, too (follows your system, or set it manually)</summary>
+
+![LLMessenger in light mode](docs/light-mode.png)
+
+</details>
+
 ## Choose your AI
 
 | Backend | Setup | Cost | Privacy |
@@ -129,16 +130,19 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → AI & Priva
 
 ## What it does
 
+<details>
+<summary>Full feature list</summary>
+
 **Attention protection**
-- **Notification firewall** (on by default) — routine digests generate silently; only `REPLY NEEDED` breaks through. Held-back count surfaces in your next digest.
+- **Notification firewall** (on by default) — routine digests generate silently; only `NEEDS YOU` breaks through. Held-back count surfaces in your next digest.
 - **Owed Replies** — a running, ranked list of people still waiting on your reply, so nothing important slips. Reply in place, snooze, or dismiss.
 - **Morning Digest** — one scheduled daily digest with everything the firewall held back, ordered by who matters to you.
 - **Notification Center widget** — latest headline + priority counts at a glance (macOS 14+).
 
 **Acts for you**
-- **Action queue** — the agent drafts replies (in your per-conversation voice), follow-ups, and RSVPs and ranks them for one-tap Approve / Edit / Skip. ⌘-click several compatible sends to approve them together.
+- **Action queue** — the agent drafts replies (in your per-conversation voice), follow-ups, and RSVPs and ranks them for one-tap Send / Edit / Skip. ⌘-click several compatible sends to send them together.
 - **Scoped delegation** — opt a single conversation into auto-sending a single low-risk action type. Off by default, 30-second Undo, audit log, global kill switch; never triggerable by message content.
-- **One Reply composer** — recipient and service always shown; write the reply or Draft with AI, edit it, and every send waits 5 seconds with an Undo. The Ask panel answers questions about your messages and never sends.
+- **One Reply window** — recipient and service always shown; write the reply or Draft with AI, edit it, and every send waits 5 seconds with an Undo. The Ask panel only answers questions and never sends.
 - **Commitments ledger** — promises tracked both ways and chased when due.
 - **Calendar holds** — proposes local calendar events and RSVPs from scheduling threads (EventKit, on your Mac).
 
@@ -155,7 +159,7 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → AI & Priva
 - Card-level trust: each expanded card shows reason, evidence count, memory/context use, and privacy posture.
 - One-click teaching: mark a conversation VIP, quiet it, or correct priority from the card itself.
 - One conversation can produce multiple cards when a thread contains distinct asks, decisions, and FYIs.
-- **Source-grounded** — every card cites exact message IDs; quotes are validated against real messages. No hallucinated summaries.
+- **Source-grounded** — every card cites exact message IDs; quotes are validated against real messages.
 - Conversation memory: rolling per-conversation summaries and unresolved actions carry across digest cycles, and older digests compress into episodic context.
 - Your own replies are captured as context, so the AI knows when you've already responded.
 
@@ -165,13 +169,19 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → AI & Priva
 - `@` mention picker — pick a person and the Reply composer opens addressed to them, with their service shown; nothing is sent until you press Send.
 - AI reply drafts you review, edit, send, or discard.
 
+</details>
+
 ## How it works
+
+<details>
+<summary>Architecture diagram</summary>
 
 ```
   Adapters ──► iMessage   ~/Library/Messages/chat.db (FSEvents, real-time)
                Signal     local signal-mcp daemon         │
                Telegram   bundled adapter binary          │  poll (30s)
                Slack      Web API, multi-workspace        │
+               WhatsApp   WhatsApp Desktop's local store (read-only)
                                         │                 │
                                         ▼                 ▼
                           SQLite (GRDB) — everything stays local
@@ -194,11 +204,13 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → AI & Priva
                                  │
                   ┌──────────────┴───────────────────┐
                   ▼                                   ▼
-        Action Queue → you Approve            AgentDelegation.decide()
+        Action Queue → you press Send           AgentDelegation.decide()
         (Edit / Skip / one tap)               the ONLY gate that may auto-send:
                                               user-delegated · low-risk · known
                                               recipient · no links/money → 30s Undo
 ```
+
+</details>
 
 Per-conversation **context** (who's a key sender, what's important, what's noise) feeds the TriageEngine, the summarizer, and the agent's drafting — and a conversation marked local-only never reaches a cloud model. **`AgentDelegation.decide()` is the single chokepoint for any automatic send**; it reads only structured action fields and your settings — never message content — so a crafted message can't make the app send anything. Each service is summarized in parallel; one adapter failing never drops the rest. The adapter contract is a 6-method protocol ([`MessengerAdapter.swift`](LLMessenger/Core/Adapters/MessengerAdapter.swift)) — also frozen as a [subprocess plugin API](docs/PLUGIN-API.md), so new services are a contribution (or a plugin) away.
 
@@ -219,15 +231,15 @@ Don't trust the README? The [reproducible release workflow](.github/workflows/re
 ## FAQ
 
 <details>
-<summary><strong>Does the agent send messages on its own?</strong></summary>
+<summary><strong>Does the agent send messages on its own? Will it ever auto-send?</strong></summary>
 
-By default, **no** — it only *prepares* actions; you tap Approve to send. The one exception is opt-in: you can delegate a single low-risk action type (acknowledgements, RSVPs) for a single conversation, and then it auto-sends those — but with a 30-second Undo, an audit log, and a global kill switch. It is off until you turn it on, never applies to a brand-new recipient or anything containing a link or money, and **cannot be enabled or triggered by the content of a message** — delegation is something only you set, and the decision that authorizes a send reads only your settings, never message text. Everything else always waits for your tap.
+By default, **no**. It only prepares actions, and you press Send. Quick replies and AI drafts wait for your tap too. The one exception is opt-in: you can delegate a single low-risk action type (acknowledgements, RSVPs) for a single conversation, and then it auto-sends those — but with a 30-second Undo, an audit log, and a global kill switch. It is off until you turn it on, never applies to a brand-new recipient or anything containing a link or money, and **cannot be enabled or triggered by the content of a message** — delegation is something only you set, and the decision that authorizes a send reads only your settings, never message text. Everything else always waits for your tap.
 </details>
 
 <details>
 <summary><strong>Can I try it without connecting accounts?</strong></summary>
 
-Yes. On first launch, choose **Open demo first**. It seeds synthetic conversations into the local database and opens the same command center, Act queue, source viewer, and learning controls used by the real app. No account, message permission, or API key is needed for the demo.
+Yes. First launch starts with sample messages (onboarding button: **See it with sample messages**). They are synthetic conversations seeded into the local database, shown in the same command center, Act queue and source viewer as the real app. No account, message permission, or API key is needed, and nothing is sent in the sample.
 </details>
 
 <details>
@@ -257,13 +269,7 @@ A conversation shows up when its latest inbound message was a question or got fl
 <details>
 <summary><strong>Why does it need Full Disk Access?</strong></summary>
 
-iMessage history lives in `~/Library/Messages/chat.db`, which macOS protects behind Full Disk Access. LLMessenger reads that database directly — there is no iMessage API. It's the only permission required, and you can see exactly what's done with it in [`iMessageAdapter.swift`](LLMessenger/Core/Adapters/iMessageAdapter.swift).
-</details>
-
-<details>
-<summary><strong>Will it ever auto-send a message?</strong></summary>
-
-By default, no. Quick replies and AI drafts wait for your tap. If you explicitly enable scoped delegation for one conversation and one low-risk action type, the app can auto-send that narrow class only after the same safety checks described above: known recipient, no links or money, 30-second Undo, audit log, and global kill switch.
+iMessage history lives in `~/Library/Messages/chat.db`, which macOS protects behind Full Disk Access. LLMessenger reads that database directly, because there is no iMessage API. WhatsApp Desktop's local history needs the same permission. You can see exactly what's done with it in [`iMessageAdapter.swift`](LLMessenger/Core/Adapters/iMessageAdapter.swift).
 </details>
 
 <details>
@@ -286,12 +292,13 @@ Code signing requires a paid Apple Developer account, and this is a free communi
 
 ## Requirements
 
-- macOS 14 Sonoma or later (On-Device AI needs macOS 26+ with Apple Intelligence)
-- **iMessage** — works out of the box with Full Disk Access
+- macOS 14 Sonoma or later. macOS only. (On-Device AI needs macOS 26+ with Apple Intelligence.)
+- An AI backend: Ollama, On-Device AI, or an Anthropic/OpenAI key
+- **iMessage** — needs Full Disk Access
 - **Signal** *(optional)* — [signal-mcp](https://github.com/googlarz/signal-mcp) running locally
 - **Telegram** *(optional)* — bundled adapter, interactive sign-in from Settings
 - **Slack** *(optional)* — your own Slack app's user token, multi-workspace supported
-- **WhatsApp** *(optional, read-only)* — WhatsApp Desktop installed and signed in
+- **WhatsApp** *(optional, read-only)* — WhatsApp Desktop installed and signed in, plus Full Disk Access
 
 ## Contributing
 
@@ -315,11 +322,13 @@ xcodebuild -scheme LLMessenger test    # keep them green
 **v2.5.0** — easier to reply, easier to start:
 - ✅ **One Reply window** — shows who you're writing to and on which service, and sends exactly the text you see; every send still waits 5 seconds for Undo
 - ✅ The Ask panel only answers questions and can no longer send anything
-- ✅ A failed send stays in the Act queue with Try again
+- ✅ A failed send stays in the Act queue with Try again, including when the service isn't connected
 - ✅ **First launch starts with sample messages** — try the whole app before granting any access; nothing is sent in the sample
 - ✅ Settings: service switches save right away, unsaved fields survive closing the window, the WhatsApp card says what is missing
 - ✅ MCP: confirmation before turning on, setup steps for Claude and Cursor, and a "last agent request" line
 - ✅ MCP privacy fixes: digests drawing on Local-only conversations are withheld; an outside agent can't change a reply you already reviewed
+- ✅ Plainer labels in digests and the Act queue ("3 messages · 1 person", "Uses saved notes", "Optional")
+- ✅ The sample now includes a WhatsApp chat
 - ✅ Better VoiceOver announcements, visible keyboard focus, larger small text, stronger contrast
 - ✅ No more microphone or speech recognition permission
 

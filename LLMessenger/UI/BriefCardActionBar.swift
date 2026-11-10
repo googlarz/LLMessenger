@@ -55,10 +55,9 @@ struct BriefCardActionBar: View {
     private var evidenceButton: some View {
         Button(action: onToggleEvidence) {
             HStack(spacing: 5) {
-                Text("\(sourceCount) \(sourceCount == 1 ? "SOURCE" : "SOURCES")")
-                if quoteCount > 0 {
-                    Text("· \(quoteCount) QUOTED")
-                }
+                Text(evidenceExpanded
+                     ? "HIDE SOURCE MESSAGES"
+                     : "SHOW \(sourceCount) SOURCE \(sourceCount == 1 ? "MESSAGE" : "MESSAGES")")
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
                     .rotationEffect(.degrees(evidenceExpanded ? 180 : 0))
@@ -67,6 +66,9 @@ struct BriefCardActionBar: View {
         }
         .buttonStyle(WireActionStyle(tint: evidenceExpanded ? Theme.textPrimary : Theme.textTertiary))
         .help(evidenceExpanded ? "Hide the source messages" : "Show the source messages behind this card")
+        .accessibilityLabel(evidenceExpanded
+                            ? "Hide source messages"
+                            : "Show \(sourceCount) source \(sourceCount == 1 ? "message" : "messages")\(quoteCount > 0 ? ", \(quoteCount) quoted" : "")")
         .accessibilityHint(evidenceExpanded ? "Hides the source messages" : "Shows the source messages behind this card")
     }
 

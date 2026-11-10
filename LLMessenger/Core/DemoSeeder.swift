@@ -29,6 +29,7 @@ enum DemoSeeder {
         ("signal", "demo-meridian"), ("slack", "demo-launch-room"),
         ("imessage", "demo-dad"), ("telegram", "demo-sailing"),
         ("signal", "demo-marcus"), ("imessage", "demo-mum"),
+        ("whatsapp", "demo-football"),
     ]
 
     private static let sampleKeys: Set<String> =
@@ -119,6 +120,22 @@ enum DemoSeeder {
                 DemoMessage(sender: "Dad", text: "Sunday lunch still on? 1pm at the usual place?", minutesAgo: 198),
             ],
             quoteIndexes: []
+        ),
+        DemoCard(
+            service: "whatsapp",
+            conversationId: "demo-football",
+            title: "Saturday Football Parents",
+            headline: "Jonas asks if you can drive to the away game on the 21st",
+            priority: "med",
+            summary: "Kick-off is 10:00 on pitch 3 this Saturday and Mia is bringing oranges. For the away game on the 21st the group is one car short, and Jonas asked you directly whether you can drive. WhatsApp is read-only here, so the reply goes in WhatsApp.",
+            callback: nil,
+            actions: ["Tell Jonas whether you can drive on the 21st"],
+            messages: [
+                DemoMessage(sender: "Jonas", text: "Pitch 3 again on Saturday, kick-off 10:00.", minutesAgo: 240),
+                DemoMessage(sender: "Mia", text: "I'll bring the oranges for half time.", minutesAgo: 235),
+                DemoMessage(sender: "Jonas", text: "Can you drive to the away game on the 21st? We're one car short.", minutesAgo: 230, role: .quote),
+            ],
+            quoteIndexes: [2]
         ),
         DemoCard(
             service: "telegram",

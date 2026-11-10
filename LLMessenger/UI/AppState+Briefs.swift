@@ -129,6 +129,7 @@ extension AppState {
                 self.failedSends = failed
                 self.trackedSendIDs.formUnion(actions.filter { $0.statusEnum == .scheduled }.compactMap(\.id))
                 self.noteSettledSends(settled)
+                self.noteBouncedSends(actions)
                 self.mergeConversationContexts(contexts)
                 // "Maybe" proposals are the user's call, not part of the ready-to-send count.
                 self.actionsReadyCount = actions.filter { !$0.isMaybe }.count

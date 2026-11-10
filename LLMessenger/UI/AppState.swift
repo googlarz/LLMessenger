@@ -295,6 +295,8 @@ final class AppState: ObservableObject {
     @Published var sendFailureReasons: [Int64: String] = [:]
     /// Staged sends whose outcome (sent / couldn't send) has not been reported yet.
     var trackedSendIDs: Set<Int64> = []
+    /// Sends the user staged in this session; lets a send that bounced back to pending (service not connected) be reported as failed.
+    var userStagedSendIDs: Set<Int64> = []
     /// Lets non-view code (a toast's "Show") switch the main window's section.
     @Published var requestedSection: AppSection?
     /// Read-only hand-off: copy the text, then open the service's app. Replaced in tests.

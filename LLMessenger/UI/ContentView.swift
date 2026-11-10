@@ -97,7 +97,8 @@ struct ContentView: View {
         // themselves in AppState.showReceipt.)
         .onChange(of: appState.lastError) { _, error in
             guard let error, !error.isEmpty else { return }
-            A11y.announce("Notice. \(error) Refresh now and Dismiss are available.", urgent: true)
+            let action = error.hasSuffix(" is not connected.") ? "Open Settings" : "Refresh now"
+            A11y.announce("Notice. \(error) \(action) and Dismiss are available.", urgent: true)
         }
         // The one-time "first real digest" moment fires as a toast instead of a
         // persistent banner — its stat narration ("4 cards · 3 need you...")
@@ -197,7 +198,9 @@ struct ContentView: View {
 
     private func fireFirstRealDigestMomentIfNeeded() {
         guard shouldShowFirstRealDigestMoment else { return }
-        appState.showReceipt("First digest ready.")
+        // Never stack on an Undo bar; stays unacknowledged, so it is retried on a later appear.
+        guard AgentAction.mostRecentlyStaged(in: appState.agentActions) == nil else { return }
+        appState.showReceipt("Your first digest is ready.")
         appState.acknowledgeFirstRealDigest()
     }
 
@@ -205,9 +208,13 @@ struct ContentView: View {
     private func bannerView(_ banner: TopBanner) -> some View {
         switch banner {
         case .error(let text):
+            let notConnected = text.hasSuffix(" is not connected.")
             NoticeBanner(
                 text: text,
-                onRefresh: { appState.onRequestRefresh?() },
+                actionTitle: notConnected ? "Open Settings" : "Refresh now",
+                actionHelp: notConnected ? "Open Settings to connect this service"
+                                         : "Check your services and update the digest now",
+                onRefresh: { notConnected ? appState.onOpenSettings?() : appState.onRequestRefresh?() },
                 onDismiss: { appState.lastError = nil }
             )
         case .pipeline:
@@ -599,6 +606,8 @@ private struct SetupCheck: Identifiable {
 /// plain sentence). Mirrors BriefHeaderView.noticeRow.
 private struct NoticeBanner: View {
     let text: String
+    var actionTitle = "Refresh now"
+    var actionHelp = "Check your services and update the digest now"
     var onRefresh: (() -> Void)?
     let onDismiss: () -> Void
 
@@ -617,10 +626,10 @@ private struct NoticeBanner: View {
             // Labelled for what it does: check every service and rebuild the
             // digest now. It does not resend anything.
             if let onRefresh {
-                Button("Refresh now", action: onRefresh)
+                Button(actionTitle, action: onRefresh)
                     .buttonStyle(WireActionStyle())
-                    .help("Check your services and update the digest now")
-                    .accessibilityHint("Check your services and update the digest now")
+                    .help(actionHelp)
+                    .accessibilityHint(actionHelp)
             }
             Button { onDismiss() } label: {
                 Image(systemName: "xmark")

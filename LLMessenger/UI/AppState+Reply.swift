@@ -156,6 +156,7 @@ extension AppState {
     func stageSend(_ action: AgentAction) {
         guard let id = action.id else { return }
         trackedSendIDs.insert(id)
+        userStagedSendIDs.insert(id)
         // Sample (demo) rows count down and settle like real ones but never reach
         // an adapter — see AppState+SampleSend.swift.
         if action.isSample {
@@ -192,6 +193,7 @@ extension AppState {
         switch current.statusEnum {
         case .pending:
             trackedSendIDs.remove(id)
+            userStagedSendIDs.remove(id)
             recordUndo()
             guard current.isUserComposed else { return .undone }
             try? repository.updateAgentActionStatus(id: id, status: .skipped, resolvedAt: Date())
@@ -213,6 +215,7 @@ extension AppState {
             return .tooLate
         case .skipped, .approved:
             trackedSendIDs.remove(id)
+            userStagedSendIDs.remove(id)
             return .notStaged
         }
     }
@@ -270,11 +273,13 @@ extension AppState {
             switch row.statusEnum {
             case .done:
                 trackedSendIDs.remove(id)
+                userStagedSendIDs.remove(id)
                 showReceipt(row.isSample
                             ? "This is a sample, so nothing was sent to \(row.conversationName)."
                             : "Sent to \(row.conversationName) · \(Theme.serviceName(row.service))")
             case .failed:
                 trackedSendIDs.remove(id)
+                userStagedSendIDs.remove(id)
                 // The send path's own error text is not observable per action: it goes
                 // into the app-wide `lastError`, and this runs after an asynchronous
                 // refresh, so by now that banner can belong to a poll error, a second
@@ -295,7 +300,41 @@ extension AppState {
                 continue
             case .pending, .skipped, .approved:
                 trackedSendIDs.remove(id)
+                userStagedSendIDs.remove(id)
             }
         }
+    }
+
+    /// A staged send whose adapter is missing is returned to `pending` by the send
+    /// path, so the card would silently offer SEND again. Report it as failed instead.
+    /// Each id is removed from `userStagedSendIDs` before the extra reload, so this
+    /// cannot repeat.
+    func noteBouncedSends(_ actions: [AgentAction]) {
+        var bounced = false
+        for row in actions {
+            guard let id = row.id,
+                  row.statusEnum == .pending,
+                  userStagedSendIDs.contains(id),
+                  adapters[row.service] == nil,
+                  !row.isSample,
+                  row.kindEnum != .calendarHold else { continue }
+            trackedSendIDs.remove(id)
+            userStagedSendIDs.remove(id)
+            let serviceName = Theme.serviceName(row.service)
+            let reason = "\(serviceName) isn't connected. Connect it in Settings → Services, then try again."
+            sendFailureReasons[id] = reason
+            if let payload = row.payloadRecordingFailure(reason) {
+                try? repository.updateAgentActionPayload(id: id, payload: payload)
+            }
+            try? repository.updateAgentActionStatus(id: id, status: .failed, resolvedAt: Date())
+            if lastError == "\(serviceName) is not connected." { lastError = nil }
+            showReceipt("Couldn't send to \(row.conversationName) · \(serviceName)",
+                        actionTitle: "Open Settings",
+                        tone: .problem) { [weak self] in
+                self?.onOpenSettings?()
+            }
+            bounced = true
+        }
+        if bounced { reloadAgentActions() }
     }
 }

@@ -236,7 +236,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menuBarController?.setArmedAutoSendCount(self.appState?.armedAutoSendCount ?? 0)
                 self.menuBarController?.setHasDelegatedLanes(self.appState?.hasDelegatedLanes ?? false)
             }
-            menuBar.onUndoAutoSends = { [weak self] in self?.appState?.undoAllAutoSends() }
+            menuBar.onUndoAutoSends = { [weak self] in
+                // An undone send must never be reported later as "couldn't send".
+                self?.appState?.userStagedSendIDs.removeAll()
+                self?.appState?.undoAllAutoSends()
+            }
 
             menuBar.onRestartSignalWatch = { [weak self] in
                 guard let self else { return }

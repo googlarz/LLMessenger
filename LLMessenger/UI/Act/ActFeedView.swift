@@ -778,7 +778,9 @@ private struct ActCardRow: View {
                 .fixedSize()
             Spacer(minLength: 4)
             if case .agentAction(let action) = item, action.isMaybe {
-                WireLabel("Maybe", color: Theme.standby)
+                WireLabel("Optional", color: Theme.standby)
+                    .help("The message might not need an answer. Send it, edit it, or skip it.")
+                    .accessibilityLabel("Optional: may not need a reply")
             }
             if case .agentAction(let action) = item, action.isExternalProposal {
                 WireLabel("External agent", color: Theme.signal)
@@ -977,10 +979,6 @@ private struct ActCardRow: View {
             .help("Send to \(action.conversationName) on \(Theme.serviceName(action.service)) — you'll have 5 seconds to undo")
             .accessibilityLabel("Send to \(action.conversationName) on \(Theme.serviceName(action.service))")
             .accessibilityHint("Sends in 5 seconds unless undone. Keyboard: select the row, then Command Return.")
-            Text("5s to undo")
-                .font(Theme.sans(11))
-                .foregroundStyle(Theme.textTertiary)
-                .accessibilityHidden(true)
         }
     }
 
