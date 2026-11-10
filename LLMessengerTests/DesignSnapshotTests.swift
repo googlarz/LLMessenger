@@ -115,7 +115,7 @@ final class DesignSnapshotTests: XCTestCase {
         )
 
         let cal = Calendar.current
-        let now = SnapshotClock.anchor
+        let now = Date()
         func at(_ hour: Int, _ minute: Int, daysAgo: Int = 0) -> Date {
             let day = cal.date(byAdding: .day, value: -daysAgo, to: now)!
             return cal.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
