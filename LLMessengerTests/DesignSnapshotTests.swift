@@ -115,7 +115,7 @@ final class DesignSnapshotTests: XCTestCase {
         )
 
         let cal = Calendar.current
-        let now = Date()
+        let now = SnapshotClock.anchor
         func at(_ hour: Int, _ minute: Int, daysAgo: Int = 0) -> Date {
             let day = cal.date(byAdding: .day, value: -daysAgo, to: now)!
             return cal.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
@@ -218,6 +218,7 @@ final class DesignSnapshotTests: XCTestCase {
 
     private func render<V: View>(_ view: V, size: NSSize, name: String,
                                  appearance: NSAppearance.Name = .darkAqua) throws {
+        Theme.forceReduceMotion = true
         let hosting = NSHostingView(rootView: view)
         hosting.frame = NSRect(origin: .zero, size: size)
 
@@ -333,7 +334,7 @@ final class DesignSnapshotTests: XCTestCase {
     func testSnapshotDemoMode() async throws {
         defer { UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey) }
         let db = try AppDatabase(inMemory: true)
-        try DemoSeeder.seed(into: db)
+        try DemoSeeder.seed(into: db, now: SnapshotClock.anchor)
 
         let state = AppState(database: db, llmClient: UnconfiguredLLMClient(),
                              llmModel: "demo", isLLMConfigured: false, basePrompt: "")
@@ -488,7 +489,7 @@ final class DesignSnapshotTests: XCTestCase {
     func testSnapshotSources() throws {
         defer { UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey) }
         let db = try AppDatabase(inMemory: true)
-        try DemoSeeder.seed(into: db)
+        try DemoSeeder.seed(into: db, now: SnapshotClock.anchor)
         let repo = BriefRepository(database: db)
         let briefID = try XCTUnwrap(repo.latestBriefID())
         let brief = try XCTUnwrap(repo.fetchBrief(id: briefID))

@@ -33,7 +33,7 @@ final class ReplyFlowSnapshotTests: XCTestCase {
                 var m = Message(id: nil, briefId: nil, service: service, conversationId: conv,
                                 conversationName: name, messageId: "\(conv)-\(UUID().uuidString)",
                                 sender: line.sender, text: line.text,
-                                timestamp: Date().addingTimeInterval(-line.minutesAgo * 60), isSent: line.sent)
+                                timestamp: SnapshotClock.anchor.addingTimeInterval(-line.minutesAgo * 60), isSent: line.sent)
                 try m.insert(d)
             }
         }
@@ -71,6 +71,7 @@ final class ReplyFlowSnapshotTests: XCTestCase {
 
     private func render<V: View>(_ view: V, size: NSSize, name: String,
                                  appearance: NSAppearance.Name = .darkAqua) throws {
+        Theme.forceReduceMotion = true
         let hosting = NSHostingView(rootView: view)
         hosting.frame = NSRect(origin: .zero, size: size)
         let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless],
@@ -165,7 +166,7 @@ final class ReplyFlowSnapshotTests: XCTestCase {
         let state = try makeState()
         var failed = action("#launch-room", "slack", "ops-1", "Got it — reviewing now, will sign off by 3.", id: 11)
         failed.status = AgentActionStatus.failed.rawValue
-        failed.resolvedAt = Date()
+        failed.resolvedAt = Date() // shown relative to now ("just now"), so it must be now
         state.failedSends = [failed]
         state.sendFailureReasons = [11: "Slack refused the request — reconnect it in Settings."]
         state.agentActions = [action("Mum", "imessage", "fam-mum", "yeah 1pm works! i'll grab the wine on the way 🙂", id: 12)]
@@ -199,7 +200,7 @@ final class ReplyFlowSnapshotTests: XCTestCase {
 
     func testSnapshotActCaughtUp() throws {
         let state = try makeState()
-        state.briefs = [Brief(id: 1, createdAt: Date(), status: "open", services: #"["signal"]"#,
+        state.briefs = [Brief(id: 1, createdAt: SnapshotClock.anchor, status: "open", services: #"["signal"]"#,
                               notificationText: "x")]
         state.agentActions = [action("Old group", "telegram", "club-1", "Sounds good, count me in for the 28th.",
                                      reasoning: "Unanswered question.", id: 41, minutesAgo: 3 * 24 * 60)]

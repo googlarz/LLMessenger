@@ -1262,7 +1262,9 @@ private struct ScheduledCountdownBar: View {
     private var progress: Double {
         guard let fireAt = action.scheduledAt else { return 0 }
         let remaining = fireAt.timeIntervalSince(now)
-        return max(0, min(1, remaining / action.scheduledUndoWindow))
+        // Steps of 2%: invisible to the eye, and a render a few milliseconds later
+        // draws the same bar (the committed screenshots depend on it).
+        return (max(0, min(1, remaining / action.scheduledUndoWindow)) * 50).rounded() / 50
     }
 }
 

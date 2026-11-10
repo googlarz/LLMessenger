@@ -44,6 +44,7 @@ final class SettingsSnapshotTests: XCTestCase {
 
     private func render<V: View>(_ view: V, size: NSSize, name: String,
                                  appearance: NSAppearance.Name = .darkAqua) throws {
+        Theme.forceReduceMotion = true
         let framed = view.frame(width: size.width, height: size.height).background(Theme.bg)
         let hosting = NSHostingView(rootView: framed)
         hosting.frame = NSRect(origin: .zero, size: size)

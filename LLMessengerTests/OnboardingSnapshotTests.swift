@@ -36,6 +36,7 @@ final class OnboardingSnapshotTests: XCTestCase {
     }
 
     private func render<V: View>(_ view: V, size: NSSize, name: String, light: Bool = false) throws {
+        Theme.forceReduceMotion = true
         let appearance = NSAppearance(named: light ? .aqua : .darkAqua)
         let hosting = NSHostingView(rootView: view.frame(width: size.width, height: size.height).background(Theme.bg))
         hosting.frame = NSRect(origin: .zero, size: size)
@@ -172,15 +173,15 @@ final class OnboardingSnapshotTests: XCTestCase {
 
         // Ready: the digest exists and was created after the build started.
         let seedDB = try AppDatabase(inMemory: true)
-        try DemoSeeder.seed(into: seedDB, activateDemoMode: false)
+        try DemoSeeder.seed(into: seedDB, activateDemoMode: false, now: SnapshotClock.anchor)
         let readyState = AppState(database: seedDB, llmClient: UnconfiguredLLMClient(), llmModel: "x",
                                   isLLMConfigured: true, basePrompt: "")
         await readyState.refreshBriefs().value
         let past = Probes(); past.apple = true; past.fda = true
-        past.now = Date().addingTimeInterval(-7200)
+        past.now = SnapshotClock.anchor.addingTimeInterval(-7200)
         let done = try await finishModel(past, appState: readyState)
         done.startBuilding()
-        past.now = Date()
+        past.now = SnapshotClock.anchor
         done.tick()
         XCTAssertEqual(done.digestStatus, .ready)
         try screen(done, name: "onboarding-finish-done")
@@ -194,7 +195,7 @@ final class OnboardingSnapshotTests: XCTestCase {
 
     func testMainWindowWithSampleDataRibbon() async throws {
         let db = try AppDatabase(inMemory: true)
-        try DemoSeeder.seed(into: db)
+        try DemoSeeder.seed(into: db, now: SnapshotClock.anchor)
         let state = AppState(database: db, llmClient: UnconfiguredLLMClient(), llmModel: "demo",
                              isLLMConfigured: false, basePrompt: "")
         await state.refreshBriefs().value

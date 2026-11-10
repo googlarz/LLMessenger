@@ -241,8 +241,11 @@ enum Theme {
     /// Honors Reduce Motion: springs collapse to an imperceptible linear step
     /// so state still updates without movement.
     static var reduceMotion: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        forceReduceMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
+
+    /// Set by snapshot tests so repeating animations render the same frame every run.
+    nonisolated(unsafe) static var forceReduceMotion = false
 
     static var spring: Animation {
         reduceMotion ? .linear(duration: 0.01) : .spring(response: 0.32, dampingFraction: 0.86)

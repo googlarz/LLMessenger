@@ -195,7 +195,7 @@ private struct StatusLine: View {
                 .foregroundStyle(kind == .ok ? Theme.ok : Theme.textSecondary)
         }
         .onAppear {
-            guard !reduceMotion, kind != .ok else { return }
+            guard !reduceMotion, !Theme.reduceMotion, kind != .ok else { return }
             withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) { pulse = true }
         }
     }

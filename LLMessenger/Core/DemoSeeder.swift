@@ -174,11 +174,11 @@ enum DemoSeeder {
     /// disabled ServiceConfig rows for every service so the poll engine and
     /// health UI stay quiet while demo data is on screen.
     static func seed(into database: AppDatabase, activateDemoMode: Bool = true,
-                     defaults: UserDefaults = .standard) throws {
+                     defaults: UserDefaults = .standard, now: Date = Date()) throws {
         // Before anything is overwritten: the user's own service settings.
         let tookSnapshot = try snapshotServiceConfigs(in: database)
         do {
-            try seedContent(into: database, activateDemoMode: activateDemoMode, defaults: defaults)
+            try seedContent(into: database, activateDemoMode: activateDemoMode, defaults: defaults, now: now)
         } catch {
             // A failed seed must not leave stand-ins behind. (If the sample data was
             // already in place, the configs are the demo's and the snapshot stays.)
@@ -228,8 +228,7 @@ enum DemoSeeder {
     }
 
     private static func seedContent(into database: AppDatabase, activateDemoMode: Bool,
-                                    defaults: UserDefaults) throws {
-        let now = Date()
+                                    defaults: UserDefaults, now: Date) throws {
 
         // Yesterday evening's quiet brief first, so it sits below today's in
         // the archive and gives the conversation timeline two entries.
