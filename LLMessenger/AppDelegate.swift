@@ -198,6 +198,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindowController = settingsController
             let runSetupWizard: () -> Void = { [weak self] in self?.resumeOnboarding() }
             settingsController.onRunSetup = runSetupWizard
+            state.onDemoModeStarted = { [weak self] in self?.pollEngine?.suspendAllForDemo() }
             state.onExitDemo = { [weak state, weak self] in
                 state?.selectedBriefID = nil
                 // The setup wizard opens over the sample data, so the user keeps seeing

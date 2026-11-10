@@ -15,10 +15,11 @@ extension AppState {
         SettingsRepository(database: database)
     }
 
-    func startDemoMode() {
+    func startDemoMode(activateDemoMode: Bool = true) {
         do {
             detachAdaptersForDemo()
-            try DemoSeeder.seed(into: database)
+            try DemoSeeder.seed(into: database, activateDemoMode: activateDemoMode)
+            onDemoModeStarted?()
             productLoveMetrics = ProductLoveMetricStore.recordDemoStart(defaults: defaults)
             let task = refreshBriefs()
             Task { @MainActor in

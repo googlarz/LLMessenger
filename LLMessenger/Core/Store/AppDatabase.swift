@@ -696,6 +696,14 @@ final class AppDatabase: @unchecked Sendable {
                 table.primaryKey(["briefId", "service", "conversationId"])
             }
         }
+        // The user's own service settings, set aside while sample data is on screen
+        // (DemoSeeder) so leaving the demo can put back exactly what was there.
+        migrator.registerMigration("v37_demo_service_config_snapshot") { db in
+            try db.create(table: "demoServiceConfigSnapshot") { table in
+                table.column("id", .integer).primaryKey()
+                table.column("configsJSON", .text).notNull()
+            }
+        }
         return migrator
     }
 

@@ -41,6 +41,15 @@ final class PollEngine {
         }
     }
 
+    /// Demo mode shows sample data only: stop every timer and drop every adapter so
+    /// nothing polls (or could be asked to poll) a real account while it is on screen.
+    /// Setup registers the adapters again when the user leaves the demo.
+    func suspendAllForDemo() {
+        for serviceID in Set(adapters.keys).union(configs.keys).union(timers.keys) {
+            unregister(serviceID: serviceID)
+        }
+    }
+
     // Apply updated config for a running service without restarting the engine.
     func reload(config: ServiceConfig) {
         let serviceID = config.service

@@ -173,7 +173,62 @@ enum DemoSeeder {
     /// Seeds demo briefs, messages, cards, sources, and tasks. Also writes
     /// disabled ServiceConfig rows for every service so the poll engine and
     /// health UI stay quiet while demo data is on screen.
-    static func seed(into database: AppDatabase, activateDemoMode: Bool = true) throws {
+    static func seed(into database: AppDatabase, activateDemoMode: Bool = true,
+                     defaults: UserDefaults = .standard) throws {
+        // Before anything is overwritten: the user's own service settings.
+        let tookSnapshot = try snapshotServiceConfigs(in: database)
+        do {
+            try seedContent(into: database, activateDemoMode: activateDemoMode, defaults: defaults)
+        } catch {
+            // A failed seed must not leave stand-ins behind. (If the sample data was
+            // already in place, the configs are the demo's and the snapshot stays.)
+            if tookSnapshot { _ = try? restoreServiceConfigs(in: database) }
+            throw error
+        }
+    }
+
+    // MARK: - Service settings snapshot
+
+    /// Sets the real serviceConfig rows aside so the demo's disabled stand-ins can be
+    /// undone exactly. Kept in the database (not memory or defaults) so a relaunch
+    /// in the middle of the demo still restores. If the sample data is already in
+    /// place the snapshot is the real one and must not be replaced by the stand-ins.
+    private static func snapshotServiceConfigs(in database: AppDatabase) throws -> Bool {
+        try database.dbQueue.write { db in
+            let alreadySeeded = try Bool.fetchOne(
+                db, sql: "SELECT EXISTS(SELECT 1 FROM messages WHERE \(sampleMatchSQL))",
+                arguments: sampleMatchArgs) ?? false
+            let hasSnapshot = try Bool.fetchOne(
+                db, sql: "SELECT EXISTS(SELECT 1 FROM demoServiceConfigSnapshot)") ?? false
+            if alreadySeeded && hasSnapshot { return false }
+            let configs = try ServiceConfig.order(Column("service")).fetchAll(db)
+            let json = String(data: try JSONEncoder().encode(configs), encoding: .utf8) ?? "[]"
+            try db.execute(sql: "DELETE FROM demoServiceConfigSnapshot")
+            try db.execute(sql: "INSERT INTO demoServiceConfigSnapshot (id, configsJSON) VALUES (1, ?)",
+                           arguments: [json])
+            return true
+        }
+    }
+
+    /// Puts the snapshot back as the whole serviceConfig table and drops it. Returns
+    /// false when there is no snapshot (a demo started by an earlier version).
+    @discardableResult
+    private static func restoreServiceConfigs(in database: AppDatabase) throws -> Bool {
+        try database.dbQueue.write { db in try restoreServiceConfigs(db) }
+    }
+
+    private static func restoreServiceConfigs(_ db: Database) throws -> Bool {
+        guard let json = try String.fetchOne(db, sql: "SELECT configsJSON FROM demoServiceConfigSnapshot WHERE id = 1"),
+              let data = json.data(using: .utf8) else { return false }
+        let configs = try JSONDecoder().decode([ServiceConfig].self, from: data)
+        try db.execute(sql: "DELETE FROM serviceConfig")
+        for config in configs { try config.insert(db) }
+        try db.execute(sql: "DELETE FROM demoServiceConfigSnapshot")
+        return true
+    }
+
+    private static func seedContent(into database: AppDatabase, activateDemoMode: Bool,
+                                    defaults: UserDefaults) throws {
         let now = Date()
 
         // Yesterday evening's quiet brief first, so it sits below today's in
@@ -245,13 +300,13 @@ enum DemoSeeder {
         }
 
         if activateDemoMode {
-            UserDefaults.standard.set(true, forKey: demoFlagKey)
+            defaults.set(true, forKey: demoFlagKey)
         }
     }
 
     /// Removes everything seed() created and clears the flag. Demo mode only
     /// exists on fresh installs, so a full wipe of content tables is safe.
-    static func wipe(from database: AppDatabase) throws {
+    static func wipe(from database: AppDatabase, defaults: UserDefaults = .standard) throws {
         var seededOwedIDs: Set<String> = []
         try database.dbQueue.write { db in
             let match = sampleMatchSQL, args = sampleMatchArgs
@@ -272,12 +327,15 @@ enum DemoSeeder {
             try db.execute(sql: "DELETE FROM conversationContexts WHERE \(match)", arguments: args)
             try db.execute(sql: "DELETE FROM agentActions WHERE \(match)", arguments: args)
             try db.execute(sql: "DELETE FROM commitments WHERE \(match)", arguments: args)
-            // The seeder writes a disabled config row per service; they carry no
-            // marker, and the setup flow that follows rewrites them.
-            try db.execute(sql: "DELETE FROM serviceConfig")
+            // The seeder overwrote every service's config with a disabled stand-in.
+            // Put back exactly the rows that were there before. (A demo started by an
+            // earlier version has no snapshot: its stand-ins carry no marker and the
+            // setup flow that follows rewrites them.)
+            if try !restoreServiceConfigs(db) {
+                try db.execute(sql: "DELETE FROM serviceConfig")
+            }
         }
         // Dismissing or snoozing a sample "owed reply" is remembered in defaults.
-        let defaults = UserDefaults.standard
         let dismissed = OwedReplyStore.dismissedIDs(defaults).subtracting(seededOwedIDs)
         defaults.set(Array(dismissed), forKey: OwedReplyStore.dismissedKey)
         defaults.set(OwedReplyStore.snoozedMap(defaults).filter { !seededOwedIDs.contains($0.key) },
