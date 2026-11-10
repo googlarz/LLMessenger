@@ -56,7 +56,7 @@ Older versions *told you* what needed doing. Now an agent runs quietly in the ba
 
 ![The Act queue — ranked, one primary action per row](docs/act.png)
 
-- **Talk to it.** Type or say *"handle the easy ones"*, *"what do I owe people?"*, *"catch me up"* — speech is recognized on-device.
+- **Reply from one place.** Every Reply button opens the same composer with the recipient and service shown. Write it yourself or press **Draft with AI**; every send waits 5 seconds so you can **Undo** it. The Ask panel answers questions about your messages and never sends.
 - **Delegate the boring lanes (optional).** Turn on auto-send for a specific conversation and a specific low-risk action — "auto-acknowledge from my team", "auto-RSVP". It's **off by default**, restricted to safe templated replies, never a new recipient or anything with a link or money, and every auto-send waits 30 seconds with an **Undo** and lands in an audit log. A crafted message *can't* trigger or grant it — delegation is something only you set.
 - **Commitments.** It tracks promises both ways — yours (*"I'll send the photos"*) and theirs (*"review by Friday"*) — and chases them when they're due.
 
@@ -136,9 +136,9 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → AI & Priva
 - **Notification Center widget** — latest headline + priority counts at a glance (macOS 14+).
 
 **Acts for you**
-- **Action queue** — the agent drafts replies (in your per-conversation voice), follow-ups, and RSVPs and ranks them for one-tap Approve / Edit / Skip. Batch-approve the low-risk ones.
+- **Action queue** — the agent drafts replies (in your per-conversation voice), follow-ups, and RSVPs and ranks them for one-tap Approve / Edit / Skip. ⌘-click several compatible sends to approve them together.
 - **Scoped delegation** — opt a single conversation into auto-sending a single low-risk action type. Off by default, 30-second Undo, audit log, global kill switch; never triggerable by message content.
-- **Conversational command** — drive it in natural language, typed or spoken (on-device speech): "handle the easy ones", "what do I owe people?"
+- **One Reply composer** — recipient and service always shown; write the reply or Draft with AI, edit it, and every send waits 5 seconds with an Undo. The Ask panel answers questions about your messages and never sends.
 - **Commitments ledger** — promises tracked both ways and chased when due.
 - **Calendar holds** — proposes local calendar events and RSVPs from scheduling threads (EventKit, on your Mac).
 
@@ -162,7 +162,7 @@ Cloud backends are strictly opt-in. **Local-only mode** (Settings → AI & Priva
 **Composing**
 - Ask questions about any conversation in plain language.
 - Quick-reply chips matched to your writing style — they populate the composer, never auto-send.
-- `@` mention picker to message anyone on any service from one input.
+- `@` mention picker — pick a person and the Reply composer opens addressed to them, with their service shown; nothing is sent until you press Send.
 - AI reply drafts you review, edit, send, or discard.
 
 ## How it works
@@ -396,7 +396,7 @@ xcodebuild -scheme LLMessenger test    # keep them green
 **v2.1 "Act"** — the app stops being a reader and becomes an agent:
 - ✅ **Action queue** — the agent drafts replies/follow-ups/RSVPs in your voice for one-tap Approve / Edit / Skip
 - ✅ **Scoped delegation** — opt-in per-conversation auto-send for low-risk actions, with 30s Undo + audit log + kill switch (never triggerable by message content)
-- ✅ **Conversational command** — drive it by typing or on-device speech ("handle the easy ones")
+- ✅ **One Reply composer** — recipient and service shown, Draft with AI, 5-second Undo; the Ask panel answers questions and never sends
 - ✅ **Commitments ledger** — two-way promise tracking, chased when due
 - ✅ **Calendar holds + RSVPs** from scheduling threads (local EventKit)
 

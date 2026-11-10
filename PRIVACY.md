@@ -72,7 +72,7 @@ There is exactly one way the app can send without a per-message tap, and it is e
 * **The decision to auto-send reads only your settings and structured action fields — never message content as authorization.** A single function (`AgentDelegation.decide`) is the only thing that can authorize an automatic send, and it requires *all* of: you delegated that action type for that conversation; the action is low-risk and high-confidence; the recipient is someone you already have a conversation with (never brand-new); and the draft contains no links, monetary amounts, or credential-like text. Incoming messages can naturally trigger an acknowledgement or RSVP within a scope you already delegated, but crafted content cannot enable delegation, widen it, bypass a guard, or authorize another action type.
 * **Every auto-send has a 30-second Undo** (cancellable from the menu bar) and is recorded in a local **action audit log** (what, where, why, when). Nothing about it is transmitted anywhere.
 * **A global kill switch** (the DELEGATED / PAUSED pill in the window toolbar) and the per-conversation toggle instantly revert the app to prepare-only — propose, never send.
-* **Voice commands are recognized on-device** (`requiresOnDeviceRecognition`); audio is not uploaded. **Calendar events** are written to your local calendar via EventKit; no calendar data leaves your Mac.
+* **The app does not use the microphone or speech recognition.** **Calendar events** are written to your local calendar via EventKit; no calendar data leaves your Mac.
 
 ## Local-only mode
 
