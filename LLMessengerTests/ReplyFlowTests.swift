@@ -411,7 +411,7 @@ final class ReplyFlowTests: XCTestCase {
         XCTAssertFalse(reason.localizedCaseInsensitiveContains("AI settings"), reason)
         XCTAssertFalse(reason.localizedCaseInsensitiveContains("API key"), reason)
         XCTAssertTrue(reason.contains("Slack"), reason)
-        XCTAssertNil(state.lastError, "the Act row carries the reason; the banner doesn't repeat it")
+        XCTAssertTrue(reason.hasSuffix("Check the connection in Settings → Services."), reason)
         XCTAssertEqual(state.userReceipt?.tone, .problem)
         XCTAssertEqual(state.userReceipt?.text, "Couldn't send to #launch-room · Slack")
 

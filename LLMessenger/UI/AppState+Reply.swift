@@ -126,9 +126,13 @@ extension AppState {
         guard let staged = try? repository.fetchAgentAction(id: actionID) else {
             return .failed("Couldn't save the reply.")
         }
+        let errorBefore = lastError
         stageSend(staged)
         guard (try? repository.fetchAgentAction(id: actionID))?.statusEnum == .scheduled else {
-            return .failed(lastError ?? "Couldn't start the send.")
+            // Only an error that appeared during this staging call belongs to it; an
+            // older banner is somebody else's.
+            let fresh = lastError.flatMap { $0 != errorBefore && !$0.isEmpty ? $0 : nil }
+            return .failed(fresh ?? "Couldn't start the send.")
         }
         savedReplyDrafts[request.conversationKey] = nil
         sendFailureReasons[actionID] = nil
@@ -250,7 +254,12 @@ extension AppState {
     func failureReason(for action: AgentAction) -> String {
         if let id = action.id, let reason = sendFailureReasons[id], !reason.isEmpty { return reason }
         // After a restart the in-memory reason is gone; the row carries its own.
-        return action.failureReason ?? "\(Theme.serviceName(action.service)) didn't accept the message."
+        return action.failureReason ?? Self.genericSendFailureReason(service: action.service)
+    }
+
+    /// The only reason that is always true of a failed send, whatever the cause.
+    static func genericSendFailureReason(service: String) -> String {
+        "\(Theme.serviceName(service)) didn't accept the message. Check the connection in Settings → Services."
     }
 
     /// Called from reloadAgentActions with tracked sends that left the active queue.
@@ -266,16 +275,16 @@ extension AppState {
                             : "Sent to \(row.conversationName) · \(Theme.serviceName(row.service))")
             case .failed:
                 trackedSendIDs.remove(id)
-                // The send path stores its error in lastError just before reloading;
-                // the failed row in Act now carries it, so the banner doesn't repeat it.
-                // That runs on the main actor with no suspension between the status
-                // write and the error, so this read always sees this send's error.
-                if let reason = lastError, !reason.isEmpty {
-                    sendFailureReasons[id] = reason
-                    if let payload = row.payloadRecordingFailure(reason) {
-                        try? repository.updateAgentActionPayload(id: id, payload: payload)
-                    }
-                    lastError = nil
+                // The send path's own error text is not observable per action: it goes
+                // into the app-wide `lastError`, and this runs after an asynchronous
+                // refresh, so by now that banner can belong to a poll error, a second
+                // failed send, or nothing at all (the user may have dismissed it).
+                // The row stores a truthful generic reason instead, and `lastError`
+                // is left to whoever set it.
+                let reason = Self.genericSendFailureReason(service: row.service)
+                sendFailureReasons[id] = reason
+                if let payload = row.payloadRecordingFailure(reason) {
+                    try? repository.updateAgentActionPayload(id: id, payload: payload)
                 }
                 showReceipt("Couldn't send to \(row.conversationName) · \(Theme.serviceName(row.service))",
                             actionTitle: "Show",
