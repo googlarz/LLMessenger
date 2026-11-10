@@ -73,7 +73,6 @@ Each step can also be run individually: `make archive`, `make export`, `make not
 | Entitlement | Reason |
 |---|---|
 | `com.apple.security.network.client` | Outbound HTTPS to Anthropic, OpenAI, Ollama; localhost Signal JSON-RPC |
-| `com.apple.security.device.audio-input` | On-device command dictation after user permission |
 
 Library validation remains enabled for the main app. Telegram and plugin adapters run as
 separate subprocesses, so their runtime libraries do not need a validation bypass in the

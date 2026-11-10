@@ -226,9 +226,6 @@ final class AppState: ObservableObject {
     /// Fires whenever `briefs` is reloaded. Used by AppDelegate to keep the menu bar
     /// unread badge in sync after the user opens a brief (which flips it to "open").
     var onBriefsChanged: (() -> Void)?
-    /// Runs one agent planning cycle now (wired by AppDelegate to AgentEngine.trigger).
-    /// Used by the command bar's "catch me up" / "draft all waiting" commands.
-    var onTriggerAgentCycle: (() async -> Void)?
 
     /// Shared contact directory — one instance app-wide. Lazily built so callers can
     /// always read it via @EnvironmentObject from the chat window or invoke `refresh()`

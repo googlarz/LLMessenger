@@ -241,11 +241,9 @@ final class ChatViewModel: ObservableObject {
                 openComposerForSendRequest(action, context: context)
             case .showSources:
                 showSources(action, context: context)
-            case .listActions, .findWaitingReplies, .summarizeChanges, .extractTasks, .compareConversations,
-                 .catchMeUp, .handleEasy, .whatDoIOwe, .draftAllWaiting:
-                // The agent-queue commands (catchMeUp etc.) are executed from the Act
-                // command surface, not the chat composer. Here in chat we just
-                // answer conversationally, never approving or sending.
+            case .listActions, .findWaitingReplies, .summarizeChanges, .extractTasks, .compareConversations:
+                // The Ask panel only answers questions about your messages. It never
+                // approves, queues or sends anything, whatever the user asked for.
                 let question = actionFocusedQuestion(for: action, originalText: originalText)
                 await answerQuestion(brief: brief, rawInput: question, echoUserMessage: false)
             case .clarify:

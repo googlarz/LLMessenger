@@ -1,54 +1,12 @@
 // AppState+Commands.swift
 //
-// P5 command execution, user receipts (undo toasts), and first-week guide state.
+// User receipts (undo toasts), card handling, and first-week guide state.
 
 import AppKit
 import Foundation
 import GRDB
 
 extension AppState {
-    // MARK: - P5 Command execution
-
-    /// Performs an already-classified command against the agent queue and returns a
-    /// short, user-facing result line. The classification (free text → CommandIntent)
-    /// happens in CommandRouter; this method only maps a known intent to an operation.
-    @discardableResult
-    func runCommand(_ command: ParsedCommand) async -> String {
-        switch command.intent {
-        case .catchMeUp:
-            await onTriggerAgentCycle?()
-            reloadAgentActions()
-            reloadCommitments()
-            reloadOwedReplies()
-            let pending = actionsReadyCount
-            let owed = owedCount
-            return "Caught up — \(pending) pending action\(pending == 1 ? "" : "s"), \(owed) reply\(owed == 1 ? "" : "ies") owed."
-
-        case .handleEasy:
-            let n = agentActions.filter {
-                $0.statusEnum == .pending && $0.riskEnum == .low && !$0.isMaybe
-            }.count
-            batchApproveLowRisk()
-            if n == 0 { return "No low-risk actions to approve." }
-            return "Staged \(n) low-risk action\(n == 1 ? "" : "s") with 5-second undo."
-
-        case .whatDoIOwe:
-            let iOwe = commitments.filter { $0.directionEnum == .iOwe }.count
-            let owed = owedCount
-            if iOwe == 0 && owed == 0 { return "You're clear — nothing owed." }
-            return "You owe \(owed) reply\(owed == 1 ? "" : "ies") and have \(iOwe) open commitment\(iOwe == 1 ? "" : "s")."
-
-        case .draftAllWaiting:
-            await onTriggerAgentCycle?()
-            reloadAgentActions()
-            let replies = agentActions.filter { $0.kindEnum == .reply }.count
-            return "Drafted \(replies) repl\(replies == 1 ? "y" : "ies") for review."
-
-        case .unknown:
-            return "Sorry — I didn't understand that command."
-        }
-    }
-
     /// Marks the matching brief card handled if a pending brief surfaces this conversation.
     func markCardHandledForConversation(service: String, conversationId: String) {
         for brief in briefs {

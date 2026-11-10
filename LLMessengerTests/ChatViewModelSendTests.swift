@@ -281,6 +281,10 @@ final class ChatViewModelSendTests: XCTestCase {
                                  notificationText: "older",
                                  episodicSummary: "Earlier Asia asked whether Thursday still works.")
             try previous.insert(d)
+            // A summary made from digests whose sources are recorded (cloud prompts drop unknown ones).
+            try BriefRepository.insertBriefProvenance(
+                BriefProvenance(conversations: [BriefConversationKey(service: "signal", conversationID: "asia-dm")]),
+                briefID: try XCTUnwrap(previous.id), db: d)
         }
 
         let mock = SequenceLLMClient(responses: [
@@ -389,6 +393,10 @@ final class ChatViewModelSendTests: XCTestCase {
                                  notificationText: "older",
                                  episodicSummary: "Asia and I were discussing whether today's timing still stands.")
             try previous.insert(d)
+            // A summary made from digests whose sources are recorded (cloud prompts drop unknown ones).
+            try BriefRepository.insertBriefProvenance(
+                BriefProvenance(conversations: [BriefConversationKey(service: "signal", conversationID: "asia-dm")]),
+                briefID: try XCTUnwrap(previous.id), db: d)
             let previousBriefId = previous.id ?? 0
             var oldMessage = Message(briefId: previousBriefId,
                                      service: "signal",

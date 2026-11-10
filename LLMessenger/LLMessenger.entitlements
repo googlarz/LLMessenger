@@ -5,9 +5,6 @@
     <!-- LLM API calls (Anthropic, OpenAI, Ollama) -->
     <key>com.apple.security.network.client</key>
     <true/>
-    <!-- Microphone access for on-device dictation of agent commands (P5). -->
-    <key>com.apple.security.device.audio-input</key>
-    <true/>
     <!-- Signal JSON-RPC daemon (localhost) is covered by network.client above -->
     <!-- App Groups entitlement is added here when code-signing with a team ID;
          it enables the Notification Center widget to read the brief snapshot.
