@@ -52,7 +52,6 @@ final class LateUndoTests: XCTestCase {
     nonisolated(unsafe) private var savedAgent: Any?
 
     override func setUp() async throws {
-        try await super.setUp()
         savedKill = UserDefaults.standard.object(forKey: AgentDelegation.killSwitchKey)
         savedAgent = UserDefaults.standard.object(forKey: AgentDelegation.agentDisabledKey)
         UserDefaults.standard.removeObject(forKey: AgentDelegation.killSwitchKey)
@@ -62,7 +61,6 @@ final class LateUndoTests: XCTestCase {
     override func tearDown() async throws {
         UserDefaults.standard.set(savedKill, forKey: AgentDelegation.killSwitchKey)
         UserDefaults.standard.set(savedAgent, forKey: AgentDelegation.agentDisabledKey)
-        try await super.tearDown()
     }
 
     private func makeState() throws -> AppState {

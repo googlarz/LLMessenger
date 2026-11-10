@@ -14,7 +14,6 @@ final class OnboardingSnapshotTests: XCTestCase {
     private var defaults: UserDefaults!
 
     override func setUp() async throws {
-        try await super.setUp()
         suiteName = "com.llmessenger.onboarding-snapshots.\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)
         UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey)
@@ -23,7 +22,6 @@ final class OnboardingSnapshotTests: XCTestCase {
     override func tearDown() async throws {
         defaults.removePersistentDomain(forName: suiteName)
         UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey)
-        try await super.tearDown()
     }
 
     // MARK: Renderer

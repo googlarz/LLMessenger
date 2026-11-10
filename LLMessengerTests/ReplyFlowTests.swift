@@ -32,7 +32,6 @@ final class ReplyFlowTests: XCTestCase {
     nonisolated(unsafe) private var savedAgent: Any?
 
     override func setUp() async throws {
-        try await super.setUp()
         // evaluateDelegation reads the kill switches from .standard; keep the
         // harness neutral and restore whatever was there.
         savedKill = UserDefaults.standard.object(forKey: AgentDelegation.killSwitchKey)
@@ -44,7 +43,6 @@ final class ReplyFlowTests: XCTestCase {
     override func tearDown() async throws {
         UserDefaults.standard.set(savedKill, forKey: AgentDelegation.killSwitchKey)
         UserDefaults.standard.set(savedAgent, forKey: AgentDelegation.agentDisabledKey)
-        try await super.tearDown()
     }
 
     // MARK: - Fixture
