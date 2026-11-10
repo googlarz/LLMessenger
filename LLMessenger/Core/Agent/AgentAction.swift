@@ -162,6 +162,15 @@ struct AgentAction: Codable, FetchableRecord, MutablePersistableRecord, Identifi
             }
     }
 
+    /// Undo is only real while the countdown has time left. The moment it reaches
+    /// zero the send path claims the row and sends; the list on screen can lag
+    /// behind that by as long as the network call takes, so the UI must not keep
+    /// offering Undo on a row that merely still *looks* scheduled.
+    func isUndoable(at now: Date = Date()) -> Bool {
+        guard statusEnum == .scheduled, let fireAt = scheduledAt else { return false }
+        return fireAt > now
+    }
+
     var scheduledUndoWindow: TimeInterval {
         if let scheduledWindow, scheduledWindow > 0 { return scheduledWindow }
         switch scheduledKindEnum {

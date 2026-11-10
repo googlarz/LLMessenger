@@ -160,6 +160,7 @@
 		7FC7070B75E31EE6BC03133D /* DataExporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38884CE0B819FB5A04405C77 /* DataExporterTests.swift */; };
 		807EED7934BE7878B34BF18E /* BriefCardActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AB9F12487EA1471EACE6D1 /* BriefCardActionBar.swift */; };
 		83536066417A02E9C79AD2B1 /* MainMenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B1B4F0711913B5565895859 /* MainMenuBuilder.swift */; };
+		83B6C77D40B55DE8D7007E20 /* LateUndoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 702CDF1275FFF9503A2E5C58 /* LateUndoTests.swift */; };
 		855341464B239E648E65A068 /* SlackAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB475651CD2CEBBB7A66D36 /* SlackAPIClient.swift */; };
 		85D75B32679B8196954EE50E /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C06B210F56BF4ED8F4EDD76 /* NotificationManager.swift */; };
 		865D22D879BF5D7535C614F5 /* BriefProvenance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B038280AA866B307266D7484 /* BriefProvenance.swift */; };
@@ -431,6 +432,7 @@
 		6BC84610C1FBB1A47EE9B2A4 /* SlackAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackAdapter.swift; sourceTree = "<group>"; };
 		6D17C2D5EC8848327EDBE6B1 /* BriefRepositoryExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefRepositoryExtendedTests.swift; sourceTree = "<group>"; };
 		6F00D8EE5FC549230BFB281E /* DemoSeederTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoSeederTests.swift; sourceTree = "<group>"; };
+		702CDF1275FFF9503A2E5C58 /* LateUndoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LateUndoTests.swift; sourceTree = "<group>"; };
 		724CEB5405989BE4B7824CA8 /* SlackWorkspacesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackWorkspacesView.swift; sourceTree = "<group>"; };
 		738353494D8A80CBB6F24424 /* BriefOutputProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefOutputProcessor.swift; sourceTree = "<group>"; };
 		748D805868C6F537868D8D7E /* ContactProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactProfile.swift; sourceTree = "<group>"; };
@@ -839,6 +841,7 @@
 				CBF1E29FE25174068D1BB2B5 /* GlossaryPromptTests.swift */,
 				8E475368B062471E6196742F /* iMessageAdapterTests.swift */,
 				97C7886911F46E51E0EE1B2B /* KeychainStoreTests.swift */,
+				702CDF1275FFF9503A2E5C58 /* LateUndoTests.swift */,
 				E0E83C3D7F5BA8B73D9EF54F /* LLMClientTypesTests.swift */,
 				04AD6FE9081C8C6745F970B3 /* LLMessengerTests.swift */,
 				55760F70DB3B8A0518F445AC /* LLMGatewayTests.swift */,
@@ -1581,6 +1584,7 @@
 				F92DDD612ED3726380106136 /* LLMProviderClientTests.swift in Sources */,
 				E76EA4B470CC880F2800F3F3 /* LLMProviderTests.swift in Sources */,
 				7B7A3506F3DF564A1595A4A8 /* LLMessengerTests.swift in Sources */,
+				83B6C77D40B55DE8D7007E20 /* LateUndoTests.swift in Sources */,
 				33E3073E3BA102BFD9993177 /* MCPActivityLogTests.swift in Sources */,
 				5DB356308B4763F6F21D761F /* MCPServerTests.swift in Sources */,
 				AEC6BDAAE9B2D3A6348B68CB /* MemoryCompressorTests.swift in Sources */,

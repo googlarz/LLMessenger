@@ -142,7 +142,8 @@ struct ContentView: View {
                 // only undo surface, so give it the same keyboard path the
                 // VoiceOver announcement promises.
                 if selectedSection != .act, event.hasCommandOnly, key == "z",
-                   let staged = AgentAction.mostRecentlyStaged(in: appState.agentActions) {
+                   let staged = AgentAction.mostRecentlyStaged(in: appState.agentActions),
+                   staged.isUndoable() {
                     appState.undoStagedSend(staged)
                     return true
                 }
@@ -774,16 +775,21 @@ private struct StagedSendBar: View {
     let othersCount: Int
     let onUndo: () -> Void
     @State private var now = Date()
-    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private let ticker = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
 
     private var secondsRemaining: Int {
         guard let fireAt = action.scheduledAt else { return 0 }
         return max(0, Int(fireAt.timeIntervalSince(now).rounded(.up)))
     }
 
+    /// Undo exists only while there is time left. At zero the send path has claimed
+    /// the row and the network call is in flight; the list on screen may still show
+    /// it as scheduled for as long as that takes.
+    private var undoable: Bool { action.isUndoable(at: now) }
+
     var body: some View {
         HStack(spacing: 10) {
-            Text("SENDING IN \(secondsRemaining)s")
+            Text(undoable ? "SENDING IN \(secondsRemaining)s" : "SENDING…")
                 .font(Theme.mono(10.5, weight: .semibold))
                 .tracking(0.7)
                 .foregroundStyle(Theme.signal)
@@ -793,9 +799,11 @@ private struct StagedSendBar: View {
                 .font(Theme.sans(12.5))
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
-            Button("UNDO", action: onUndo)
-                .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
-                .accessibilityLabel("Undo — cancel the send to \(action.conversationName)")
+            if undoable {
+                Button("UNDO", action: onUndo)
+                    .buttonStyle(WireActionStyle(tint: Theme.textPrimary))
+                    .accessibilityLabel("Undo — cancel the send to \(action.conversationName)")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -811,6 +819,8 @@ private struct StagedSendBar: View {
         .frame(maxWidth: 520)
         .onReceive(ticker) { now = $0 }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Sending to \(action.conversationName) on \(Theme.serviceName(action.service)) in \(secondsRemaining) seconds")
+        .accessibilityLabel(undoable
+            ? "Sending to \(action.conversationName) on \(Theme.serviceName(action.service)) in \(secondsRemaining) seconds"
+            : "Sending to \(action.conversationName) on \(Theme.serviceName(action.service)) now. It can no longer be undone.")
     }
 }

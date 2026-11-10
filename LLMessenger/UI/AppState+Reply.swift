@@ -161,24 +161,56 @@ extension AppState {
         stageManualApprove(action)
     }
 
+    /// What an Undo attempt actually did, read back from the row afterwards.
+    enum UndoOutcome: Equatable {
+        /// The row really went back; nothing will be sent.
+        case undone
+        /// The send had already been claimed (or finished). It is still tracked, so
+        /// its normal "Sent to …" / "Couldn't send" outcome follows.
+        case tooLate
+        /// There was nothing staged to undo.
+        case notStaged
+    }
+
     /// Undo a staged send. A reply the user wrote in the composer goes back into
     /// the composer (it never lingers as a queue item); an agent draft returns to
     /// the queue as before.
-    func undoStagedSend(_ action: AgentAction) {
-        guard let id = action.id else { return }
+    ///
+    /// Cancelling only works while the row is still `scheduled`. Once the window
+    /// has elapsed the send path claims it and sends, so after every attempt the row
+    /// is re-read: only a row that is really back to `pending` counts as undone.
+    /// Otherwise the send stays tracked and the user is told plainly.
+    @discardableResult
+    func undoStagedSend(_ action: AgentAction) -> UndoOutcome {
+        guard let id = action.id else { return .notStaged }
         undoAutoSend(action)
-        trackedSendIDs.remove(id)
-        recordUndo()
-        guard action.isUserComposed,
-              let current = try? repository.fetchAgentAction(id: id),
-              current.statusEnum == .pending else { return }
-        try? repository.updateAgentActionStatus(id: id, status: .skipped, resolvedAt: Date())
-        reloadAgentActions()
-        openReplyComposer(service: current.service,
-                          conversationId: current.conversationId,
-                          conversationName: current.conversationName,
-                          text: current.replyPayload?.draftText,
-                          commitmentId: current.commitmentId)
+        guard let current = try? repository.fetchAgentAction(id: id) else { return .notStaged }
+        switch current.statusEnum {
+        case .pending:
+            trackedSendIDs.remove(id)
+            recordUndo()
+            guard current.isUserComposed else { return .undone }
+            try? repository.updateAgentActionStatus(id: id, status: .skipped, resolvedAt: Date())
+            reloadAgentActions()
+            openReplyComposer(service: current.service,
+                              conversationId: current.conversationId,
+                              conversationName: current.conversationName,
+                              text: current.replyPayload?.draftText,
+                              commitmentId: current.commitmentId)
+            return .undone
+        case .executing, .done, .failed, .scheduled:
+            // Still tracked: the settle path reports "Sent to …" or "Couldn't send".
+            if current.statusEnum == .executing {
+                showReceipt("Too late — it's already sending.")
+            } else if current.statusEnum == .scheduled {
+                showReceipt("Couldn't cancel that send.", tone: .problem)
+            }
+            reloadAgentActions()
+            return .tooLate
+        case .skipped, .approved:
+            trackedSendIDs.remove(id)
+            return .notStaged
+        }
     }
 
     // MARK: - Couldn't send

@@ -620,10 +620,13 @@ struct ActFeedView: View {
 
     @discardableResult
     private func undoLastStaged() -> Bool {
-        guard let staged = AgentAction.mostRecentlyStaged(in: appState.agentActions) else { return false }
+        // Same bar as the row shows: past zero it reads "Sending…" and ⌘Z does nothing.
+        guard let staged = AgentAction.mostRecentlyStaged(in: appState.agentActions),
+              staged.isUndoable() else { return false }
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-        appState.undoStagedSend(staged)
-        resolvedInSession = max(0, resolvedInSession - 1)
+        if appState.undoStagedSend(staged) == .undone {
+            resolvedInSession = max(0, resolvedInSession - 1)
+        }
         return true
     }
 }
@@ -1088,7 +1091,7 @@ private struct ActCardRow: View {
     private var primaryAccessibilityActionName: String {
         switch item {
         case .agentAction(let a):
-            if a.statusEnum == .scheduled { return "Undo scheduled send" }
+            if a.statusEnum == .scheduled { return a.isUndoable() ? "Undo scheduled send" : "Sending" }
             return ActQueueRules.sendsFromRow(a) ? "Send" : "Review"
         case .owedReply:
             return "Reply"
@@ -1099,7 +1102,7 @@ private struct ActCardRow: View {
         switch item {
         case .agentAction(let a):
             if a.statusEnum == .scheduled {
-                appState.undoStagedSend(a)
+                if a.isUndoable() { appState.undoStagedSend(a) }
             } else if ActQueueRules.sendsFromRow(a) {
                 onSend(a)
             } else {
@@ -1207,19 +1210,25 @@ private struct ScheduledCountdownBar: View {
     let onUndo: () -> Void
 
     @State private var now = Date()
-    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private let ticker = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
+
+    /// At zero the send has been claimed; Undo would change nothing, so it is not
+    /// offered while the row waits for the network call to finish.
+    private var undoable: Bool { action.isUndoable(at: now) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
-                Text("SENDING IN \(secondsRemaining)s")
+                Text(undoable ? "SENDING IN \(secondsRemaining)s" : "SENDING…")
                     .font(Theme.mono(10.5, weight: .semibold))
                     .tracking(0.7)
                     .foregroundStyle(Theme.signal)
                     .monospacedDigit()
-                Button("UNDO", action: onUndo)
-                    .buttonStyle(WireActionStyle())
-                    .accessibilityLabel("Undo — cancel this send to \(action.conversationName)")
+                if undoable {
+                    Button("UNDO", action: onUndo)
+                        .buttonStyle(WireActionStyle())
+                        .accessibilityLabel("Undo — cancel this send to \(action.conversationName)")
+                }
             }
             // Draining progress bar: full → empty as time ticks down
             GeometryReader { geo in
@@ -1241,7 +1250,7 @@ private struct ScheduledCountdownBar: View {
         // the one control a VoiceOver user must be able to reach in time.
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Scheduled send")
-        .accessibilityValue("\(secondsRemaining) seconds remaining")
+        .accessibilityValue(undoable ? "\(secondsRemaining) seconds remaining" : "Sending now")
     }
 
     private var secondsRemaining: Int {
