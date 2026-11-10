@@ -20,7 +20,7 @@ struct RuleEvaluator {
         rules: [PriorityRule],
         at date: Date = Date()
     ) -> RuleMatch? {
-        let sorted = rules.sorted { $0.sortOrder < $1.sortOrder }
+        let sorted = PriorityRuleOrdering.normalised(rules)
         for rule in sorted {
             if let ruleService = rule.service, let msgService = service, ruleService != msgService {
                 continue

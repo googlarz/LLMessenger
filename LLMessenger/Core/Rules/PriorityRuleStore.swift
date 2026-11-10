@@ -89,26 +89,47 @@ struct PriorityRuleStore {
         return PriorityRuleOrdering.normalised(rules)
     }
 
+    /// Every write below runs in one transaction and ends by persisting the whole
+    /// visible order as a dense 0…n-1. Rules saved before ordering existed all share
+    /// sortOrder 0; the list shows them renumbered, so writing only the edited rule's
+    /// number would silently reshuffle the rest.
+    private static func persistDense(_ db: Database, _ rules: [PriorityRule]) throws -> [PriorityRule] {
+        let dense = PriorityRuleOrdering.normalised(rules)
+        for rule in dense { try rule.update(db) }
+        return dense
+    }
+
     /// Adds a rule at the bottom of the list.
     func add(_ rule: PriorityRule) async throws {
         try await database.dbQueue.write { db in
+            let existing = PriorityRuleOrdering.normalised(try PriorityRule.fetchAll(db))
+            _ = try Self.persistDense(db, existing)
             var new = rule
-            let existing = try PriorityRule.fetchAll(db)
             new.id = nil
-            new.sortOrder = PriorityRuleOrdering.nextSortOrder(after: existing)
+            new.sortOrder = existing.count
             try new.insert(db)
         }
     }
 
-    /// Saves changes to an existing rule, keeping its place in the list.
+    /// Saves changes to an existing rule, keeping its place in the list. The place is
+    /// the one the list showed (normalised order), not whatever number the caller holds.
     func update(_ rule: PriorityRule) async throws {
-        guard rule.id != nil else { return try await add(rule) }
-        try await database.dbQueue.write { db in try rule.update(db) }
+        guard let id = rule.id else { return try await add(rule) }
+        try await database.dbQueue.write { db in
+            var current = PriorityRuleOrdering.normalised(try PriorityRule.fetchAll(db))
+            guard let index = current.firstIndex(where: { $0.id == id }) else { return }
+            var edited = rule
+            edited.sortOrder = index
+            current[index] = edited
+            for r in current { try r.update(db) }
+        }
     }
 
     func delete(id: Int64) async throws {
         try await database.dbQueue.write { db in
+            let current = PriorityRuleOrdering.normalised(try PriorityRule.fetchAll(db))
             _ = try PriorityRule.deleteOne(db, key: id)
+            _ = try Self.persistDense(db, current.filter { $0.id != id })
         }
     }
 
