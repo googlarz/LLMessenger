@@ -96,6 +96,49 @@ final class OnboardingModelTests: XCTestCase {
         XCTAssertEqual(model.step, .ai, "Cloud without a key must not advance")
     }
 
+    /// Re-running setup on a Mac that already uses a cloud model must start from that
+    /// choice, not replace it with the auto-detected local one.
+    func testRerunningSetupKeepsAnExistingCloudChoice() async throws {
+        defaults.set(LLMProvider.anthropic.rawValue, forKey: "selected_llm_provider")
+        let probes = Probes(); probes.apple = true; probes.ollama = ["llama3.2"]
+        let (model, _) = try makeModel(probes, startAt: .ai)
+        await model.refreshAIDetection()
+
+        XCTAssertEqual(model.aiChoice, .cloud(.anthropic), "detection must not override the earlier choice")
+        XCTAssertEqual(model.aiViewMode, .current)
+        XCTAssertEqual(model.cloudProvider, .anthropic)
+
+        model.useAutomaticAI()
+        XCTAssertEqual(model.aiChoice, .cloud(.anthropic))
+        model.startBuilding()
+        XCTAssertEqual(defaults.string(forKey: "selected_llm_provider"), LLMProvider.anthropic.rawValue,
+                       "finishing setup without touching the AI step leaves the provider alone")
+    }
+
+    func testChoosingADifferentModelAfterAnExistingCloudChoiceStillWorks() async throws {
+        defaults.set(LLMProvider.openai.rawValue, forKey: "selected_llm_provider")
+        let probes = Probes(); probes.apple = true
+        let (model, _) = try makeModel(probes, startAt: .ai)
+        await model.refreshAIDetection()
+        XCTAssertEqual(model.aiViewMode, .current)
+
+        model.showAIAlternatives = true
+        XCTAssertEqual(model.aiViewMode, .options)
+        model.aiChoice = .appleIntelligence
+        model.useAutomaticAI()
+        model.startBuilding()
+
+        XCTAssertEqual(defaults.string(forKey: "selected_llm_provider"), LLMProvider.appleIntelligence.rawValue)
+    }
+
+    func testFirstRunStillAutoPicksTheLocalModel() async throws {
+        let probes = Probes(); probes.apple = true
+        let (model, _) = try makeModel(probes, startAt: .ai)
+        await model.refreshAIDetection()
+        XCTAssertEqual(model.aiChoice, .appleIntelligence)
+        XCTAssertEqual(model.aiViewMode, .apple)
+    }
+
     func testOllamaStartedWhileWatchingIsPickedUp() async throws {
         let probes = Probes()
         let (model, _) = try makeModel(probes, startAt: .ai)
@@ -168,6 +211,31 @@ final class OnboardingModelTests: XCTestCase {
         model.onFinish = { outcome = $0 }
         model.skipSetup()
         XCTAssertEqual(outcome, .skipped)
+    }
+
+    /// "Skip setup for now" from a wizard opened over the sample data: demo mode stays on
+    /// (real adapters stay unregistered), setup counts as dealt with, and the main window
+    /// says plainly that it is showing sample data. No silent half-state.
+    func testSkippingSetupFromTheDemoLeavesTheAppClearlyInDemo() throws {
+        let (demoModel, db) = try makeModel(Probes())
+        demoModel.startDemo()
+        XCTAssertTrue(DemoSeeder.isActive)
+
+        let (wizard, _) = try makeModel(Probes(), startAt: .services, db: db)
+        var outcome: OnboardingOutcome?
+        wizard.onFinish = { outcome = $0 }
+        wizard.skipSetup()
+        let skipped = try XCTUnwrap(outcome)
+        OnboardingFlag.apply(skipped, to: defaults)
+
+        XCTAssertEqual(skipped, .skipped)
+        XCTAssertTrue(defaults.bool(forKey: OnboardingFlag.completedKey))
+        XCTAssertTrue(DemoSeeder.isActive, "skipping does not silently leave or wipe the demo")
+        XCTAssertEqual(StatusRibbonKind.resolve(demoActive: DemoSeeder.isActive,
+                                                setupUnfinished: !defaults.bool(forKey: OnboardingFlag.completedKey),
+                                                needsAIChoice: true),
+                       .sampleData, "the sample-data ribbon, with its set-up button, explains why nothing real is read")
+        XCTAssertNotNil(try BriefRepository(database: db).latestBriefID(), "the sample digests are still there")
     }
 
     func testSampleMessagesSeedDemoAndReportDemo() throws {

@@ -176,7 +176,7 @@ enum AIChoice: Equatable {
     }
 }
 
-enum AIViewMode: Equatable { case apple, ollama, options }
+enum AIViewMode: Equatable { case apple, ollama, options, current }
 
 // MARK: - First digest status
 
@@ -312,6 +312,9 @@ final class OnboardingModel: ObservableObject {
     @Published private(set) var notificationsRequested = false
     @Published var demoError: String?
     private var aiUserPicked = false
+    /// A cloud provider the user already chose in an earlier setup or in Settings. Re-running
+    /// setup starts from it instead of replacing it with an automatically detected local model.
+    private(set) var existingCloudProvider: LLMProvider?
 
     weak var appState: AppState?
     var onFinish: ((OnboardingOutcome) -> Void)?
@@ -332,6 +335,12 @@ final class OnboardingModel: ObservableObject {
         self.settings = settings ?? SettingsRepository(database: database, userDefaults: defaults)
         self.step = startAt
         self.whatsAppDetected = environment.whatsAppDesktopInstalled()
+        if let current = self.settings.loadSelectedLLMProvider(), current.requiresAPIKey {
+            existingCloudProvider = current
+            cloudProvider = current
+            aiChoice = .cloud(current)
+            aiUserPicked = true // detection must never override what the user already chose
+        }
     }
 
     // MARK: Derived
@@ -349,6 +358,7 @@ final class OnboardingModel: ObservableObject {
 
     var aiViewMode: AIViewMode {
         if showAIAlternatives { return .options }
+        if let existing = existingCloudProvider, aiChoice == .cloud(existing) { return .current }
         if aiDetection.appleIntelligence { return .apple }
         if let models = aiDetection.ollamaModels, !models.isEmpty { return .ollama }
         return .options
@@ -559,10 +569,14 @@ final class OnboardingModel: ObservableObject {
             settings.saveSelectedLLMProvider(.ollama)
             settings.saveOllamaModel(model)
         case .cloud(let provider):
-            try? settings.saveLLMKey(provider: provider, key: cloudKey.trimmingCharacters(in: .whitespaces))
+            let typedKey = cloudKey.trimmingCharacters(in: .whitespaces)
+            // Keeping the provider chosen earlier: its saved key and consent stay as they are.
+            if !typedKey.isEmpty {
+                try? settings.saveLLMKey(provider: provider, key: typedKey)
+                // The disclosure is shown next to the key field; pressing "Use <provider>" is the consent.
+                settings.saveCloudAutoBriefsConsent(true)
+            }
             settings.saveSelectedLLMProvider(provider)
-            // The disclosure is shown next to the key field; pressing "Use <provider>" is the consent.
-            settings.saveCloudAutoBriefsConsent(true)
         case .later, nil:
             settings.saveSelectedLLMProvider(nil)
         }

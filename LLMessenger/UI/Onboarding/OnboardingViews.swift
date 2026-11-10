@@ -457,6 +457,7 @@ private struct AIStep: View {
             case .apple:   apple
             case .ollama:  ollama
             case .options: options
+            case .current: current
             }
         }
         .task { await model.refreshAIDetection() }
@@ -469,6 +470,17 @@ private struct AIStep: View {
         StepFrame(kicker: "Step 3 \u{00B7} AI model", title: "Digests will use Apple Intelligence",
                   subtitle: "It runs on this Mac. No account, no key, and nothing is sent anywhere.") {
             StatusLine(kind: .ok, text: "Chosen automatically")
+        } footer: {
+            WizardButton(title: "Continue") { model.useAutomaticAI() }
+            QuietLink(title: "Choose a different model") { model.showAIAlternatives = true }
+        }
+    }
+
+    private var current: some View {
+        let name = model.existingCloudProvider?.displayName ?? "your cloud model"
+        return StepFrame(kicker: "Step 3 \u{00B7} AI model", title: "Digests will keep using \(name)",
+                  subtitle: "You chose it earlier. Your message text is sent to \(name); nothing changes unless you pick something else.") {
+            StatusLine(kind: .ok, text: "Already set up")
         } footer: {
             WizardButton(title: "Continue") { model.useAutomaticAI() }
             QuietLink(title: "Choose a different model") { model.showAIAlternatives = true }
