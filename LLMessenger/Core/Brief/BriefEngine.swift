@@ -369,9 +369,12 @@ final class BriefEngine {
                         // Exactly the conversations that have a block in the prompt, plus
                         // whatever the stored episodic summaries were built from.
                         var servicePromptProvenance = episodicProvenance
-                        servicePromptProvenance.conversations.formUnion(
-                            rankedConvIds.map { BriefConversationKey(service: service, conversationID: $0) }
-                        )
+                        let promptedKeys = rankedConvIds.map { BriefConversationKey(service: service, conversationID: $0) }
+                        servicePromptProvenance.conversations.formUnion(promptedKeys)
+                        // The stored state and previous card injected above were themselves
+                        // produced from earlier digests; count where those came from.
+                        servicePromptProvenance.formUnion(
+                            self.repository.provenanceOfPromptHistory(for: promptedKeys, in: promptData))
                         // Every conversation for this service was excluded by the privacy gate —
                         // make no LLM call (an empty prompt would send nothing useful to the cloud).
                         guard !conversationBlocks.isEmpty else { return nil }
@@ -865,6 +868,8 @@ final class BriefEngine {
                         // the priority corrections, and what the episodic summaries were built from.
                         var servicePromptProvenance = episodic.provenance
                         servicePromptProvenance.conversations.formUnion(promptedKeys)
+                        servicePromptProvenance.formUnion(
+                            self.repository.provenanceOfPromptHistory(for: Array(promptedKeys), in: promptData))
                         servicePromptProvenance.conversations.formUnion(corrections.map {
                             BriefConversationKey(service: $0.service, conversationID: $0.conversationId)
                         })

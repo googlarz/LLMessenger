@@ -1697,6 +1697,43 @@ extension BriefRepository {
         }
     }
 
+    /// Provenance of the earlier digests whose output is injected into a prompt as a
+    /// conversation's stored state and previous card. Their text was written from
+    /// whatever fed those digests, so those conversations count too. A digest with no
+    /// provenance rows (or an untraceable state) can't be proven free of a Local-only
+    /// chat, so the result is incomplete. Fails closed on a read error.
+    func provenanceOfPromptHistory(
+        for keys: [BriefConversationKey], in data: BriefPromptData
+    ) -> BriefProvenance {
+        do {
+            return try database.dbQueue.read { db in
+                var result = BriefProvenance()
+                for key in keys {
+                    var briefIDs = Set<Int64>()
+                    if let card = data.previousCards[key] { briefIDs.insert(card.briefId) }
+                    if let state = data.states[key] {
+                        let hasStoredText = !(state.rollingSummary ?? "").isEmpty || !(state.unresolvedActions ?? "").isEmpty
+                        if let cardID = state.lastBriefCardId,
+                           let briefID = try Int64.fetchOne(db, sql: "SELECT briefId FROM briefCards WHERE id = ?",
+                                                            arguments: [cardID]) {
+                            briefIDs.insert(briefID)
+                        } else if hasStoredText {
+                            result.incomplete = true
+                        }
+                    }
+                    for briefID in briefIDs {
+                        let source = try Self.provenance(forBriefID: briefID, db: db)
+                        if source.conversations.isEmpty && !source.incomplete { result.incomplete = true }
+                        result.formUnion(source)
+                    }
+                }
+                return result
+            }
+        } catch {
+            return BriefProvenance(conversations: [], incomplete: true)
+        }
+    }
+
     /// Same selection as `recentEpisodicSummaries`, read in one transaction together
     /// with the provenance of the briefs those summaries came from. A summary is
     /// compressed from its brief's own messages, so it can only contain conversations

@@ -319,4 +319,53 @@ final class DigestProvenanceTests: XCTestCase {
         XCTAssertEqual(stored.conversations.count, 1)
         XCTAssertTrue(stored.incomplete)
     }
+
+    // MARK: - Second-order: stored state and previous card
+
+    /// An earlier brief with one card for `conversation`, as the prompt's "previous card"
+    /// and state. `sources` nil = no provenance rows (a brief from before provenance).
+    private func seedEarlierCard(conversation: String, sources: [String]?) async throws {
+        try await db.dbQueue.write { d in
+            var earlier = Brief(createdAt: Date().addingTimeInterval(-7200), status: "ready", services: "[\"signal\"]",
+                                openingSummary: nil, notificationText: "old", episodicSummary: nil)
+            try earlier.insert(d)
+            let briefID = try XCTUnwrap(earlier.id)
+            try BriefCardRecord(id: "signal-\(conversation)-old", briefId: briefID, service: "signal",
+                                conversationId: conversation, conversationTitle: nil, headline: "Old headline",
+                                priority: "medium", summary: "Old card summary.", actionItems: "[]",
+                                callbackText: nil, sourceMessageIds: "[]",
+                                createdAt: Date().addingTimeInterval(-7200)).insert(d)
+            if let sources {
+                let keys = Set(sources.map { BriefConversationKey(service: "signal", conversationID: $0) })
+                try BriefRepository.insertBriefProvenance(BriefProvenance(conversations: keys), briefID: briefID, db: d)
+            }
+        }
+    }
+
+    func testPreviousCardFromABriefWithoutProvenanceMakesTheNewDigestIncomplete() async throws {
+        try await seedEarlierCard(conversation: "x", sources: nil)
+        try addMessage("x", id: "x1")
+        let briefID = try await build()
+
+        XCTAssertTrue(client.briefPrompts.last?.user.contains("Old headline") == true,
+                      "test premise: the previous card's headline is in the prompt")
+        let recorded = try provenance(of: briefID)
+        XCTAssertTrue(recorded.incomplete, "the previous card's sources are unknown")
+        XCTAssertEqual(try servedDigestIDs(), [], "an incomplete digest is withheld from MCP")
+    }
+
+    func testPreviousCardsSourcesAreCountedInTheNewDigest() async throws {
+        try addMessage("y", id: "y0")
+        try await seedEarlierCard(conversation: "x", sources: ["x", "y"])
+        try addMessage("x", id: "x1")
+        try setPrivacy("y", "local_only")
+        // y is Local-only now and is excluded from this prompt; the old card for x was
+        // written while y fed the same digest, so the new digest must reflect that.
+        let briefID = try await build()
+
+        let recorded = try provenance(of: briefID)
+        XCTAssertFalse(recorded.incomplete)
+        XCTAssertTrue(recorded.conversations.contains(key("y")))
+        XCTAssertEqual(try servedDigestIDs(), [], "withheld: its history involves a Local-only chat")
+    }
 }
