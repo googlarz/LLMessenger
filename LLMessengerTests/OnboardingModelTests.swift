@@ -40,17 +40,17 @@ final class OnboardingModelTests: XCTestCase {
     private var suiteName = ""
     private var defaults: UserDefaults!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         suiteName = "com.llmessenger.onboarding-tests.\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)
         UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         defaults.removePersistentDomain(forName: suiteName)
         UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func makeModel(_ probes: Probes, startAt: OnboardingStep = .welcome,

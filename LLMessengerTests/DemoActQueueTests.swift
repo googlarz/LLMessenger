@@ -33,15 +33,15 @@ final class DemoActQueueTests: XCTestCase {
 
     private var savedWindow: TimeInterval = 5
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         savedWindow = AppState.sampleSendWindow
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         AppState.sampleSendWindow = savedWindow
         UserDefaults.standard.removeObject(forKey: DemoSeeder.demoFlagKey)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Fixtures

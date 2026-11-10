@@ -78,8 +78,8 @@ final class DigestProvenanceTests: XCTestCase {
     private var engine: BriefEngine!
     private var toolbox: MCPToolbox!
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() async throws {
+        try await super.setUp()
         db = try AppDatabase(inMemory: true)
         client = RecordingLLMClient()
         engine = BriefEngine(database: db, client: client, model: "m", basePrompt: "B")
