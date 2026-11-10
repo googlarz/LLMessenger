@@ -1660,6 +1660,43 @@ extension BriefRepository {
         return result
     }
 
+    /// Recent summaries that may go into a prompt for this kind of client. A summary
+    /// is distilled from the conversations that fed its brief, so for a cloud client
+    /// it is dropped when any of those conversations is Local-only (or never-draft),
+    /// or when its sources are unknown (a brief that predates provenance). Fails
+    /// closed: a cloud client gets nothing if the privacy settings cannot be read.
+    /// A local client keeps every summary except those from never-draft chats.
+    func recentEpisodicSummaries(
+        service: String, limit: Int, clientIsCloud: Bool
+    ) throws -> [(summary: String, createdAt: Date)] {
+        try database.dbQueue.read { db in
+            let pattern = "%\"" + service + "\"%"
+            let briefs = try Brief
+                .filter(Column("episodicSummary") != nil)
+                .filter(sql: "services LIKE ?", arguments: [pattern])
+                .order(Column("createdAt").desc)
+                .fetchCursor(db)
+            // Filter first, then count: excluded summaries must not use up the limit.
+            var kept: [(summary: String, createdAt: Date)] = []
+            while kept.count < limit, let brief = try briefs.next() {
+                guard let summary = brief.episodicSummary else { continue }
+                let source = try brief.id.map { try Self.provenance(forBriefID: $0, db: db) } ?? BriefProvenance()
+                if clientIsCloud && (source.incomplete || source.conversations.isEmpty) { continue }
+                var excluded = false
+                for key in source.conversations {
+                    let context = try ConversationContext.fetchOne(
+                        db, key: ["service": key.service, "conversationId": key.conversationID])
+                    if BriefPromptAssembler.isExcludedByPrivacy(context: context, clientIsCloud: clientIsCloud) {
+                        excluded = true
+                        break
+                    }
+                }
+                if !excluded { kept.append((summary, brief.createdAt)) }
+            }
+            return kept
+        }
+    }
+
     /// Same selection as `recentEpisodicSummaries`, read in one transaction together
     /// with the provenance of the briefs those summaries came from. A summary is
     /// compressed from its brief's own messages, so it can only contain conversations

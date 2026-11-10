@@ -323,6 +323,12 @@ final class ChatViewModel: ObservableObject {
         } else {
             instruction = originalText
         }
+        // The privacy setting may have changed since the draft was written.
+        if let blocked = readDraftingContext(service: draftRef.draft.serviceID,
+                                             convId: draftRef.draft.conversationID).blocked {
+            threadItems.append(.assistantResponse(id: UUID(), text: blocked))
+            return
+        }
         isLoading = true
         defer { isLoading = false }
 
@@ -488,7 +494,8 @@ final class ChatViewModel: ObservableObject {
         do {
             let services = briefServices(for: brief)
             let recent: [(summary: String, createdAt: Date)] = services.flatMap {
-                (try? appState.repository.recentEpisodicSummaries(service: $0, limit: 2)) ?? []
+                (try? appState.repository.recentEpisodicSummaries(
+                    service: $0, limit: 2, clientIsCloud: appState.llmClient.isCloud)) ?? []
             }
             let convDescriptors = briefConvs.map { "\(Theme.serviceName($0.service)) — \($0.name)" }
             let systemPrompt = PromptBuilder.build(
@@ -607,8 +614,7 @@ final class ChatViewModel: ObservableObject {
         guard let brief = currentBrief else { return }
         guard !quickRepliesLoading.contains(cardID) else { return }
 
-        let ctx = (try? appState.repository.fetchConversationContext(service: service, conversationId: convId)) ?? nil
-        if let blocked = draftingBlockedMessage(context: ctx) {
+        if let blocked = readDraftingContext(service: service, convId: convId).blocked {
             quickRepliesFailed.insert(cardID)
             threadItems.append(.assistantResponse(id: UUID(), text: blocked))
             return
@@ -721,8 +727,8 @@ final class ChatViewModel: ObservableObject {
 
         // Auto-learn the user's voice in this thread: fetch the persistent context
         // and a sample of recent sent messages (same window/filter as quick replies).
-        let ctx = (try? appState.repository.fetchConversationContext(service: service, conversationId: convId)) ?? nil
-        if let blocked = draftingBlockedMessage(context: ctx) {
+        let (ctx, blocked) = readDraftingContext(service: service, convId: convId)
+        if let blocked {
             threadItems.append(.assistantResponse(id: UUID(), text: blocked))
             return
         }
@@ -864,7 +870,9 @@ final class ChatViewModel: ObservableObject {
         var seen = Set<String>()
 
         for service in services {
-            let entries = (try? appState.repository.recentEpisodicSummaries(service: service, limit: limitPerService)) ?? []
+            // Privacy-filtered: no summary distilled from a Local-only chat reaches a cloud model.
+            let entries = (try? appState.repository.recentEpisodicSummaries(
+                service: service, limit: limitPerService, clientIsCloud: appState.llmClient.isCloud)) ?? []
             for entry in entries {
                 let key = "\(service)|\(entry.createdAt.timeIntervalSince1970)|\(entry.summary)"
                 if seen.insert(key).inserted {
@@ -1153,6 +1161,18 @@ final class ChatViewModel: ObservableObject {
         }
         parts.append("nothing has been sent")
         return parts.joined(separator: " · ") + "."
+    }
+
+    /// Reads the conversation's privacy setting and says whether drafting is allowed.
+    /// Fails closed: when the setting cannot be read nothing is drafted, rather than
+    /// treating "unreadable" as "no restriction".
+    private func readDraftingContext(service: String, convId: String) -> (context: ConversationContext?, blocked: String?) {
+        do {
+            let ctx = try appState.repository.fetchConversationContext(service: service, conversationId: convId)
+            return (ctx, draftingBlockedMessage(context: ctx))
+        } catch {
+            return (nil, "Couldn't read this conversation's privacy setting, so nothing was drafted.")
+        }
     }
 
     private func draftingBlockedMessage(context: ConversationContext?) -> String? {

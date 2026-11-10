@@ -268,7 +268,9 @@ struct ReplyDrafter {
             mode: .chat(conversations: ["\(Theme.serviceName(service)) — \(request.displayName)"]),
             basePrompt: appState.basePrompt,
             services: [service],
-            episodicSummaries: (try? appState.repository.recentEpisodicSummaries(service: service, limit: 3)) ?? [],
+            // Summaries from other conversations can carry Local-only text: filtered for cloud clients.
+            episodicSummaries: (try? appState.repository.recentEpisodicSummaries(
+                service: service, limit: 3, clientIsCloud: appState.llmClient.isCloud)) ?? [],
             now: Date(),
             conversationContexts: [ctx].compactMap { $0 }
         )
