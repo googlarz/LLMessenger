@@ -17,6 +17,20 @@ struct ReleaseNote: Identifiable {
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
         ReleaseNote(
+            version: "2.5.0",
+            title: "Easier to reply, easier to start",
+            highlights: [
+                "One Reply window: it shows who you're writing to and on which service, and sends exactly the text you see. Every send still waits 5 seconds so you can undo it.",
+                "The Ask panel only answers questions now. It can no longer send anything.",
+                "A send that fails stays in your Act queue with Try again, instead of disappearing.",
+                "First launch starts with sample messages, so you can try the whole app before granting any access. Nothing is sent while you're in the sample.",
+                "Settings: service switches save right away, unsaved fields are no longer lost when you close the window, and the WhatsApp card says exactly what is missing.",
+                "MCP: turning it on asks you to confirm, shows setup steps for Claude and Cursor, and shows when an agent last asked for something.",
+                "Privacy fixes for MCP: digests that draw on Local-only conversations are withheld, and an outside agent can no longer change a reply you already reviewed.",
+                "Better VoiceOver announcements, visible keyboard focus, larger small text and stronger contrast.",
+                "LLMessenger no longer asks for microphone or speech recognition access."
+            ]),
+        ReleaseNote(
             version: "2.4.0",
             title: "WhatsApp and MCP",
             highlights: [

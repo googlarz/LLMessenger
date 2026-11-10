@@ -310,7 +310,18 @@ xcodebuild -scheme LLMessenger test    # keep them green
 - [ ] Email adapter (IMAP read-only — Proton Bridge, Gmail, iCloud)
 
 <details>
-<summary>Shipped (v1.4 – v2.4.0)</summary>
+<summary>Shipped (v1.4 – v2.5.0)</summary>
+
+**v2.5.0** — easier to reply, easier to start:
+- ✅ **One Reply window** — shows who you're writing to and on which service, and sends exactly the text you see; every send still waits 5 seconds for Undo
+- ✅ The Ask panel only answers questions and can no longer send anything
+- ✅ A failed send stays in the Act queue with Try again
+- ✅ **First launch starts with sample messages** — try the whole app before granting any access; nothing is sent in the sample
+- ✅ Settings: service switches save right away, unsaved fields survive closing the window, the WhatsApp card says what is missing
+- ✅ MCP: confirmation before turning on, setup steps for Claude and Cursor, and a "last agent request" line
+- ✅ MCP privacy fixes: digests drawing on Local-only conversations are withheld; an outside agent can't change a reply you already reviewed
+- ✅ Better VoiceOver announcements, visible keyboard focus, larger small text, stronger contrast
+- ✅ No more microphone or speech recognition permission
 
 **v2.4.0** — WhatsApp and MCP:
 - ✅ **WhatsApp (read-only)** — reads WhatsApp Desktop's local history so WhatsApp chats appear in digests and owed replies; you reply in WhatsApp, with the draft ready to copy
