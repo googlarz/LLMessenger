@@ -107,7 +107,7 @@ final class ServiceSettingsModelTests: XCTestCase {
 
     func testEnableToggleSavesAtOnceAndTellsTheApp() throws {
         let (model, repo) = try makeModel()
-        var notified = 0
+        nonisolated(unsafe) var notified = 0
         let token = fx.center.addObserver(forName: .serviceConfigDidChange, object: nil, queue: nil) { _ in notified += 1 }
         defer { fx.center.removeObserver(token) }
 
@@ -132,7 +132,7 @@ final class ServiceSettingsModelTests: XCTestCase {
 
     func testUnchangedConfigIsNotSavedOrAnnounced() throws {
         let (model, _) = try makeModel()
-        var notified = 0
+        nonisolated(unsafe) var notified = 0
         let token = fx.center.addObserver(forName: .serviceConfigDidChange, object: nil, queue: nil) { _ in notified += 1 }
         defer { fx.center.removeObserver(token) }
         model.reload()
@@ -216,7 +216,7 @@ final class AISettingsModelTests: XCTestCase {
         XCTAssertNil(repo.loadSelectedLLMProvider(), "choosing a cloud provider is not saved on the way out")
         XCTAssertNil(try repo.loadLLMKey(provider: .anthropic))
 
-        var providerNotified = false
+        nonisolated(unsafe) var providerNotified = false
         let token = fx.center.addObserver(forName: .llmProviderDidChange, object: nil, queue: nil) { _ in providerNotified = true }
         defer { fx.center.removeObserver(token) }
         model.save()
