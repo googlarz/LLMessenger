@@ -633,6 +633,8 @@ private struct NoticeBanner: View {
             .help("Dismiss")
             .accessibilityLabel("Dismiss notice")
         }
+        // The rule is a bare Color, which would otherwise take all offered height.
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 9)
         .background(Theme.signalWash)

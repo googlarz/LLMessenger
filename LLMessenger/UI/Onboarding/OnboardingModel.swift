@@ -280,7 +280,7 @@ struct OnboardingEnvironment {
                 process.executableURL = URL(fileURLWithPath: "/bin/sh")
                 process.arguments = ["-c", "sleep 1; /usr/bin/open -n \"$1\"", "sh", Bundle.main.bundlePath]
                 try? process.run()
-                NSApp.terminate(nil)
+                DispatchQueue.main.async { NSApp.terminate(nil) }
             },
             requestNotifications: {
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }

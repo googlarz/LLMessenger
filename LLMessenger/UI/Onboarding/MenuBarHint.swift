@@ -109,7 +109,7 @@ enum MenuBarHint {
         DispatchQueue.main.asyncAfter(deadline: .now() + 9) { [weak panel] in
             guard let panel, MenuBarHint.panel === panel else { return }
             NSAnimationContext.runAnimationGroup({ $0.duration = 0.3; panel.animator().alphaValue = 0 },
-                                                 completionHandler: { panel.close() })
+                                                 completionHandler: { MainActor.assumeIsolated { panel.close() } })
         }
     }
 }
