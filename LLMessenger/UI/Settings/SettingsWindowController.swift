@@ -13,6 +13,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
     var onSyncContacts: (() async -> Void)?
     var onRetryService: ((String) async -> Void)?
     var onScheduleChanged: (() -> Void)?
+    let unsavedGuard = SettingsUnsavedGuard()
 
     init(database: AppDatabase) {
         self.database = database
@@ -53,6 +54,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
             onSyncContacts: { [weak self] in await self?.onSyncContacts?() },
             onRetryService: { [weak self] svc in await self?.onRetryService?(svc) },
             onScheduleChanged: { [weak self] in self?.onScheduleChanged?() },
+            unsavedGuard: unsavedGuard,
             selection: paneSelection
         ))
 
@@ -71,6 +73,25 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
         if window?.isVisible == false { window?.center() }
         showWindow(nil)
         window?.orderFrontRegardless()
+    }
+
+    /// Typed-but-unsaved credentials, prompts and AI settings are not dropped silently.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        unsavedGuard.shouldClose(ask: Self.askAboutUnsavedChanges)
+    }
+
+    private static func askAboutUnsavedChanges() -> SettingsUnsavedGuard.Choice {
+        let alert = NSAlert()
+        alert.messageText = "Save your changes to Settings?"
+        alert.informativeText = "You have changes that haven\u{2019}t been saved. Discarding them removes what you typed."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Discard")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: return .save
+        case .alertSecondButtonReturn: return .discard
+        default: return .cancel
+        }
     }
 
     func windowWillClose(_ notification: Notification) {

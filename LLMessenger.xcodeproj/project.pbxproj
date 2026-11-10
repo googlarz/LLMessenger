@@ -106,6 +106,7 @@
 		5125EF7EC0F2348B9C4B684A /* SlackAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BC84610C1FBB1A47EE9B2A4 /* SlackAdapter.swift */; };
 		517C487C27020779B4F6CCCD /* ProductionReadinessPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B9A2A0119C6CF2FBFB58EC /* ProductionReadinessPerformanceTests.swift */; };
 		5181AA7389C147B2D66E279E /* AgentFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8399559E74670E836329A4 /* AgentFoundationTests.swift */; };
+		549AAB4B4153A253277FFC56 /* SettingsUnsavedGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B45241F4C7F39D73FBAF81C5 /* SettingsUnsavedGuard.swift */; };
 		54B9748C2278DB6D3818109C /* ContextBias.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA244AA90638FA48D795F7D2 /* ContextBias.swift */; };
 		55708C7588C2C5F9AD403AB0 /* Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF56E2586D9360AA1D197C7 /* Accessibility.swift */; };
 		55D5BEFF888909CDB585F8F2 /* DeepValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C2EEA87E1CE3CFC017BF0B /* DeepValidationTests.swift */; };
@@ -181,6 +182,7 @@
 		933227B527680C13109CBE86 /* DemoActQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EAF6BD0FE63D5F50BE83CFD /* DemoActQueueTests.swift */; };
 		94D87E437489209C34A52596 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD49D8511186D6C7D97DCE1 /* ChatViewModel.swift */; };
 		95A2593B4891EC65019E1568 /* SignalCLIAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4B8C1E7C4BDF5C7E5490F0 /* SignalCLIAdapter.swift */; };
+		95FB37B0926B81538D57352F /* SettingsUnsavedGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1593B3B5C752DF5C26DFBE5 /* SettingsUnsavedGuardTests.swift */; };
 		96B0A25872C98352FB478F86 /* SettingsSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB886E99E1E0B621B30727D /* SettingsSnapshotTests.swift */; };
 		971400B9159EBF05EFC2A79C /* DelegationPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5230D262494DD38D07479380 /* DelegationPipelineTests.swift */; };
 		981C570684559A9F91E3BC2B /* AppState+Commands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02351D67D82E35312AD3438E /* AppState+Commands.swift */; };
@@ -513,6 +515,7 @@
 		B038280AA866B307266D7484 /* BriefProvenance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefProvenance.swift; sourceTree = "<group>"; };
 		B0638D99CC1DF540F470F50E /* CommandRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRouterTests.swift; sourceTree = "<group>"; };
 		B0E3E5C7F80F5E5EACF5E3E9 /* ChatPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPanelView.swift; sourceTree = "<group>"; };
+		B45241F4C7F39D73FBAF81C5 /* SettingsUnsavedGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUnsavedGuard.swift; sourceTree = "<group>"; };
 		B4E0C2BDE4D0C62F27A1106B /* TokenEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenEstimator.swift; sourceTree = "<group>"; };
 		B57689D52EE13193D4E86993 /* DataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExporter.swift; sourceTree = "<group>"; };
 		B66620DE37E240D22F45957F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -565,6 +568,7 @@
 		DF6366D0E1F8A72B71A9F530 /* ServiceSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceSettingsTab.swift; sourceTree = "<group>"; };
 		DFC689A6D5F7D05E452154B4 /* MediaPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPanelView.swift; sourceTree = "<group>"; };
 		E0E83C3D7F5BA8B73D9EF54F /* LLMClientTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMClientTypesTests.swift; sourceTree = "<group>"; };
+		E1593B3B5C752DF5C26DFBE5 /* SettingsUnsavedGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUnsavedGuardTests.swift; sourceTree = "<group>"; };
 		E310D3698200C661D0937036 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		E3C5381692DFFC5AF4B8A0F6 /* PromptBuilderContextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilderContextTests.swift; sourceTree = "<group>"; };
 		E3EB5DE5DDEE98CA023C438D /* LLMessengerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMessengerApp.swift; sourceTree = "<group>"; };
@@ -885,6 +889,7 @@
 				D375CCA30EA1A7BE26C8F209 /* SearchTests.swift */,
 				309F6600675F13496583B3AA /* SettingsRepositoryTests.swift */,
 				DDB886E99E1E0B621B30727D /* SettingsSnapshotTests.swift */,
+				E1593B3B5C752DF5C26DFBE5 /* SettingsUnsavedGuardTests.swift */,
 				D42AF6860962D1D125E33AC9 /* SettingsUXTests.swift */,
 				3CEF84891E1C875158D7F4B4 /* SignalCLIAdapterTests.swift */,
 				09F863A1D7C0B0D2C9C06967 /* SlackAdapterTests.swift */,
@@ -1161,6 +1166,7 @@
 				DF6366D0E1F8A72B71A9F530 /* ServiceSettingsTab.swift */,
 				7FF2D52275F91F8583D8C40E /* SettingsSaveFooter.swift */,
 				D9CC1BE9A909A6F792467852 /* SettingsToggleRow.swift */,
+				B45241F4C7F39D73FBAF81C5 /* SettingsUnsavedGuard.swift */,
 				E310D3698200C661D0937036 /* SettingsView.swift */,
 				874EAADE41BC00D431B7655A /* SettingsWindowController.swift */,
 				724CEB5405989BE4B7824CA8 /* SlackWorkspacesView.swift */,
@@ -1513,6 +1519,7 @@
 				A0DE7BCCB584415E32B6B38A /* SettingsRepository.swift in Sources */,
 				FF38422EF9AE58D2261307F0 /* SettingsSaveFooter.swift in Sources */,
 				7BEDA4EFB9866FCA8B3DB755 /* SettingsToggleRow.swift in Sources */,
+				549AAB4B4153A253277FFC56 /* SettingsUnsavedGuard.swift in Sources */,
 				478DEBF976DFFFF26DB08556 /* SettingsView.swift in Sources */,
 				6515871374A6975B0B2432DF /* SettingsWindowController.swift in Sources */,
 				95A2593B4891EC65019E1568 /* SignalCLIAdapter.swift in Sources */,
@@ -1627,6 +1634,7 @@
 				502774F71461059F83BA8C05 /* SettingsRepositoryTests.swift in Sources */,
 				96B0A25872C98352FB478F86 /* SettingsSnapshotTests.swift in Sources */,
 				AF8813F92552BA5FCD9C99EC /* SettingsUXTests.swift in Sources */,
+				95FB37B0926B81538D57352F /* SettingsUnsavedGuardTests.swift in Sources */,
 				EE574346F9B9265CA3795AB7 /* SignalCLIAdapterTests.swift in Sources */,
 				0B6747556DAC812373FD0745 /* SlackAdapterTests.swift in Sources */,
 				0AA8FC1D3F625AABF5777C9F /* SubprocessAdapterTests.swift in Sources */,

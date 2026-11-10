@@ -51,6 +51,7 @@ struct SettingsView: View {
     var onSyncContacts: (() async -> Void)? = nil
     var onRetryService: ((String) async -> Void)? = nil
     var onScheduleChanged: (() -> Void)? = nil
+    var unsavedGuard: SettingsUnsavedGuard? = nil
     @ObservedObject var selection: SettingsPaneSelection
     // Owned here, not inside SubTabbedPane: tabContent below is `.id(selection.pane)`,
     // so navigating to another pane and back recreates SubTabbedPane from scratch —
@@ -72,6 +73,7 @@ struct SettingsView: View {
          onSyncContacts: (() async -> Void)? = nil,
          onRetryService: ((String) async -> Void)? = nil,
          onScheduleChanged: (() -> Void)? = nil,
+         unsavedGuard: SettingsUnsavedGuard? = nil,
          selection: SettingsPaneSelection) {
         self.database = database
         self.onRunSetup = onRunSetup
@@ -79,6 +81,7 @@ struct SettingsView: View {
         self.onSyncContacts = onSyncContacts
         self.onRetryService = onRetryService
         self.onScheduleChanged = onScheduleChanged
+        self.unsavedGuard = unsavedGuard
         self.selection = selection
         _servicesModel = StateObject(wrappedValue: ServiceSettingsModel(repo: SettingsRepository(database: database)))
     }
@@ -90,6 +93,21 @@ struct SettingsView: View {
             .id(selection.pane)
         .frame(minWidth: 640, idealWidth: 720, minHeight: 520, idealHeight: 560)
         .background(Theme.bg)
+        .onAppear {
+            guard let unsavedGuard else { return }
+            let services = servicesModel, ai = aiModel, instructions = instructionsModel
+            unsavedGuard.hasUnsaved = { services.hasUnsavedCredentials || ai.isDirty || instructions.isDirty }
+            unsavedGuard.saveAll = {
+                if services.hasUnsavedCredentials { services.saveCredentials() }
+                if ai.isDirty { ai.save() }
+                if instructions.isDirty { instructions.save() }
+            }
+            unsavedGuard.discardAll = {
+                services.discardCredentials()
+                ai.discard()
+                instructions.discard()
+            }
+        }
     }
 
     @ViewBuilder
